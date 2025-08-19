@@ -34,13 +34,58 @@ class ExtractionHome extends StatefulWidget {
   State<ExtractionHome> createState() => _ExtractionHomeState();
 }
 
-class _ExtractionHomeState extends State<ExtractionHome> {
+class _ExtractionHomeState extends State<ExtractionHome> with SingleTickerProviderStateMixin {
   String? extractedText;
   Map<String, dynamic>? structuredData;
   bool isLoading = false;
   String? errorMessage;
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
   String? userApiKey;
+  
+  late TabController _tabController;
+  
+  // Manual entry form controllers
+  final _formKey = GlobalKey<FormState>();
+  final _eventNameController = TextEditingController();
+  final _clientNameController = TextEditingController();
+  final _dateController = TextEditingController();
+  final _startTimeController = TextEditingController();
+  final _endTimeController = TextEditingController();
+  final _venueNameController = TextEditingController();
+  final _venueAddressController = TextEditingController();
+  final _cityController = TextEditingController();
+  final _stateController = TextEditingController();
+  final _contactNameController = TextEditingController();
+  final _contactPhoneController = TextEditingController();
+  final _contactEmailController = TextEditingController();
+  final _headcountController = TextEditingController();
+  final _notesController = TextEditingController();
+  
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+  
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _eventNameController.dispose();
+    _clientNameController.dispose();
+    _dateController.dispose();
+    _startTimeController.dispose();
+    _endTimeController.dispose();
+    _venueNameController.dispose();
+    _venueAddressController.dispose();
+    _cityController.dispose();
+    _stateController.dispose();
+    _contactNameController.dispose();
+    _contactPhoneController.dispose();
+    _contactEmailController.dispose();
+    _headcountController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
 
   Future<void> _pickAndProcessFile() async {
     setState(() {
@@ -303,6 +348,46 @@ class _ExtractionHomeState extends State<ExtractionHome> {
     }
   }
 
+  void _submitManualEntry() {
+    if (_formKey.currentState!.validate()) {
+      final manualData = {
+        'event_name': _eventNameController.text.trim(),
+        'client_name': _clientNameController.text.trim(),
+        'date': _dateController.text.trim(),
+        'start_time': _startTimeController.text.trim(),
+        'end_time': _endTimeController.text.trim(),
+        'venue_name': _venueNameController.text.trim(),
+        'venue_address': _venueAddressController.text.trim(),
+        'city': _cityController.text.trim(),
+        'state': _stateController.text.trim(),
+        'country': 'USA',
+        'contact_name': _contactNameController.text.trim(),
+        'contact_phone': _contactPhoneController.text.trim(),
+        'contact_email': _contactEmailController.text.trim(),
+        'headcount_total': int.tryParse(_headcountController.text.trim()),
+        'notes': _notesController.text.trim(),
+        'roles': [],
+      };
+      
+      // Remove empty fields
+      manualData.removeWhere((key, value) => 
+        value == null || value == '' || (value is int && value == 0));
+      
+      setState(() {
+        structuredData = manualData;
+        extractedText = 'Manually entered data';
+        errorMessage = null;
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Event details saved successfully!'),
+          backgroundColor: Color(0xFF059669),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -317,13 +402,40 @@ class _ExtractionHomeState extends State<ExtractionHome> {
         elevation: 0,
         shadowColor: Colors.transparent,
         centerTitle: true,
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(
+              icon: Icon(Icons.upload_file),
+              text: 'Upload Document',
+            ),
+            Tab(
+              icon: Icon(Icons.edit),
+              text: 'Manual Entry',
+            ),
+          ],
+          labelColor: const Color(0xFF6366F1),
+          unselectedLabelColor: Colors.grey,
+          indicatorColor: const Color(0xFF6366F1),
+        ),
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildUploadTab(),
+          _buildManualEntryTab(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUploadTab() {
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
               // Header Card
               Container(
                 padding: const EdgeInsets.all(24),
@@ -520,6 +632,372 @@ class _ExtractionHomeState extends State<ExtractionHome> {
             ],
           ),
         ),
+      ),
+    )
+  }
+
+  Widget _buildManualEntryTab() {
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Header Card
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF059669), Color(0xFF10B981)],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF059669).withOpacity(0.2),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    const Icon(
+                      Icons.edit_note,
+                      color: Colors.white,
+                      size: 32,
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Manual Entry',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Enter event details manually for precise control',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 14,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Event Information Section
+              _buildFormSection(
+                title: 'Event Information',
+                icon: Icons.event,
+                children: [
+                  _buildTextField(
+                    controller: _eventNameController,
+                    label: 'Event Name',
+                    icon: Icons.celebration,
+                    required: true,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    controller: _clientNameController,
+                    label: 'Client Name',
+                    icon: Icons.person,
+                    required: true,
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildTextField(
+                          controller: _dateController,
+                          label: 'Date (YYYY-MM-DD)',
+                          icon: Icons.calendar_today,
+                          required: true,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildTextField(
+                          controller: _headcountController,
+                          label: 'Headcount',
+                          icon: Icons.people,
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildTextField(
+                          controller: _startTimeController,
+                          label: 'Start Time',
+                          icon: Icons.access_time,
+                          placeholder: 'HH:MM',
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildTextField(
+                          controller: _endTimeController,
+                          label: 'End Time',
+                          icon: Icons.access_time_filled,
+                          placeholder: 'HH:MM',
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // Venue Information Section
+              _buildFormSection(
+                title: 'Venue Information',
+                icon: Icons.location_on,
+                children: [
+                  _buildTextField(
+                    controller: _venueNameController,
+                    label: 'Venue Name',
+                    icon: Icons.business,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    controller: _venueAddressController,
+                    label: 'Address',
+                    icon: Icons.place,
+                    maxLines: 2,
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: _buildTextField(
+                          controller: _cityController,
+                          label: 'City',
+                          icon: Icons.location_city,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildTextField(
+                          controller: _stateController,
+                          label: 'State',
+                          icon: Icons.map,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // Contact Information Section
+              _buildFormSection(
+                title: 'Contact Information',
+                icon: Icons.contact_phone,
+                children: [
+                  _buildTextField(
+                    controller: _contactNameController,
+                    label: 'Contact Name',
+                    icon: Icons.person_outline,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    controller: _contactPhoneController,
+                    label: 'Phone Number',
+                    icon: Icons.phone,
+                    keyboardType: TextInputType.phone,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    controller: _contactEmailController,
+                    label: 'Email',
+                    icon: Icons.email,
+                    keyboardType: TextInputType.emailAddress,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // Notes Section
+              _buildFormSection(
+                title: 'Additional Notes',
+                icon: Icons.note,
+                children: [
+                  _buildTextField(
+                    controller: _notesController,
+                    label: 'Notes',
+                    icon: Icons.notes,
+                    maxLines: 3,
+                    placeholder: 'Special requirements, setup details, etc.',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              // Submit Button
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: ElevatedButton.icon(
+                  onPressed: _submitManualEntry,
+                  icon: const Icon(Icons.save, size: 20),
+                  label: const Text(
+                    'Save Event Details',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF059669),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 32,
+                      vertical: 16,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 0,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Results Display
+              if (structuredData != null) ...[
+                _buildCard(
+                  title: 'Event Details',
+                  icon: Icons.event_note,
+                  child: _buildEventDetails(structuredData!),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFormSection({
+    required String title,
+    required IconData icon,
+    required List<Widget> children,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF059669).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, color: const Color(0xFF059669), size: 20),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ...children,
+                      ],
+          ),
+        ),
+      ),
+    )
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    String? placeholder,
+    bool required = false,
+    TextInputType? keyboardType,
+    int maxLines = 1,
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      validator: required
+          ? (value) {
+              if (value == null || value.trim().isEmpty) {
+                return '$label is required';
+              }
+              return null;
+            }
+          : null,
+      decoration: InputDecoration(
+        labelText: label + (required ? ' *' : ''),
+        hintText: placeholder,
+        prefixIcon: Icon(icon, color: const Color(0xFF059669)),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFF059669), width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFEF4444), width: 2),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFEF4444), width: 2),
+        ),
+        filled: true,
+        fillColor: const Color(0xFFF8FAFC),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       ),
     );
   }
