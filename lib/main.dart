@@ -34,16 +34,17 @@ class ExtractionHome extends StatefulWidget {
   State<ExtractionHome> createState() => _ExtractionHomeState();
 }
 
-class _ExtractionHomeState extends State<ExtractionHome> with SingleTickerProviderStateMixin {
+class _ExtractionHomeState extends State<ExtractionHome>
+    with SingleTickerProviderStateMixin {
   String? extractedText;
   Map<String, dynamic>? structuredData;
   bool isLoading = false;
   String? errorMessage;
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
   String? userApiKey;
-  
+
   late TabController _tabController;
-  
+
   // Manual entry form controllers
   final _formKey = GlobalKey<FormState>();
   final _eventNameController = TextEditingController();
@@ -60,13 +61,13 @@ class _ExtractionHomeState extends State<ExtractionHome> with SingleTickerProvid
   final _contactEmailController = TextEditingController();
   final _headcountController = TextEditingController();
   final _notesController = TextEditingController();
-  
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
   }
-  
+
   @override
   void dispose() {
     _tabController.dispose();
@@ -368,17 +369,19 @@ class _ExtractionHomeState extends State<ExtractionHome> with SingleTickerProvid
         'notes': _notesController.text.trim(),
         'roles': [],
       };
-      
+
       // Remove empty fields
-      manualData.removeWhere((key, value) => 
-        value == null || value == '' || (value is int && value == 0));
-      
+      manualData.removeWhere(
+        (key, value) =>
+            value == null || value == '' || (value is int && value == 0),
+      );
+
       setState(() {
         structuredData = manualData;
         extractedText = 'Manually entered data';
         errorMessage = null;
       });
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Event details saved successfully!'),
@@ -405,14 +408,8 @@ class _ExtractionHomeState extends State<ExtractionHome> with SingleTickerProvid
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
-            Tab(
-              icon: Icon(Icons.upload_file),
-              text: 'Upload Document',
-            ),
-            Tab(
-              icon: Icon(Icons.edit),
-              text: 'Manual Entry',
-            ),
+            Tab(icon: Icon(Icons.upload_file), text: 'Upload Document'),
+            Tab(icon: Icon(Icons.edit), text: 'Manual Entry'),
           ],
           labelColor: const Color(0xFF6366F1),
           unselectedLabelColor: Colors.grey,
@@ -421,10 +418,7 @@ class _ExtractionHomeState extends State<ExtractionHome> with SingleTickerProvid
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [
-          _buildUploadTab(),
-          _buildManualEntryTab(),
-        ],
+        children: [_buildUploadTab(), _buildManualEntryTab()],
       ),
     );
   }
@@ -436,57 +430,97 @@ class _ExtractionHomeState extends State<ExtractionHome> with SingleTickerProvid
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-              // Header Card
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF6366F1).withOpacity(0.2),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
+            // Header Card
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
                 ),
-                child: Column(
-                  children: [
-                    const Icon(
-                      Icons.auto_awesome,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF6366F1).withOpacity(0.2),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  const Icon(Icons.auto_awesome, color: Colors.white, size: 32),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Event Data Extractor',
+                    style: TextStyle(
                       color: Colors.white,
-                      size: 32,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
                     ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Event Data Extractor',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
-                      ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Upload a PDF or image to extract catering event details',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.9),
+                      fontSize: 14,
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Upload a PDF or image to extract catering event details',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.9),
-                        fontSize: 14,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Upload Button
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: ElevatedButton.icon(
+                onPressed: isLoading ? null : _pickAndProcessFile,
+                icon: Icon(
+                  isLoading ? Icons.hourglass_empty : Icons.upload_file,
+                  size: 20,
+                ),
+                label: Text(
+                  isLoading ? 'Processing...' : 'Pick PDF or Image',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: const Color(0xFF6366F1),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 16,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  elevation: 0,
                 ),
               ),
-              const SizedBox(height: 24),
+            ),
+            const SizedBox(height: 20),
 
-              // Upload Button
+            // Loading indicator
+            if (isLoading) ...[
               Container(
+                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
@@ -496,144 +530,99 @@ class _ExtractionHomeState extends State<ExtractionHome> with SingleTickerProvid
                     ),
                   ],
                 ),
-                child: ElevatedButton.icon(
-                  onPressed: isLoading ? null : _pickAndProcessFile,
-                  icon: Icon(
-                    isLoading ? Icons.hourglass_empty : Icons.upload_file,
-                    size: 20,
+                child: Column(
+                  children: [
+                    const CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        Color(0xFF6366F1),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Analyzing document with AI...',
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+
+            // Error message
+            if (errorMessage != null) ...[
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFFECACA)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      color: Color(0xFFEF4444),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        errorMessage!,
+                        style: const TextStyle(
+                          color: Color(0xFFEF4444),
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+
+            // Extracted text preview
+            if (extractedText != null &&
+                !extractedText!.startsWith('[[IMAGE_BASE64]]')) ...[
+              _buildCard(
+                title: 'Extracted Text Preview',
+                icon: Icons.text_snippet,
+                child: Container(
+                  height: 200,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  label: Text(
-                    isLoading ? 'Processing...' : 'Pick PDF or Image',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
+                  child: SingleChildScrollView(
+                    child: Text(
+                      extractedText!,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade700,
+                        fontFamily: 'monospace',
+                      ),
                     ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFF6366F1),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 32,
-                      vertical: 16,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    elevation: 0,
                   ),
                 ),
               ),
               const SizedBox(height: 20),
-
-              // Loading indicator
-              if (isLoading) ...[
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      const CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          Color(0xFF6366F1),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Analyzing document with AI...',
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-              ],
-
-              // Error message
-              if (errorMessage != null) ...[
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFEF2F2),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFFECACA)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.error_outline,
-                        color: Color(0xFFEF4444),
-                        size: 20,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          errorMessage!,
-                          style: const TextStyle(
-                            color: Color(0xFFEF4444),
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-              ],
-
-              // Extracted text preview
-              if (extractedText != null &&
-                  !extractedText!.startsWith('[[IMAGE_BASE64]]')) ...[
-                _buildCard(
-                  title: 'Extracted Text Preview',
-                  icon: Icons.text_snippet,
-                  child: Container(
-                    height: 200,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: SingleChildScrollView(
-                      child: Text(
-                        extractedText!,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade700,
-                          fontFamily: 'monospace',
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-              ],
-
-              // Structured result
-              if (structuredData != null) ...[
-                _buildCard(
-                  title: 'Event Details',
-                  icon: Icons.event_note,
-                  child: _buildEventDetails(structuredData!),
-                ),
-              ],
             ],
-          ),
+
+            // Structured result
+            if (structuredData != null) ...[
+              _buildCard(
+                title: 'Event Details',
+                icon: Icons.event_note,
+                child: _buildEventDetails(structuredData!),
+              ),
+            ],
+          ],
         ),
       ),
-    )
+    );
   }
 
   Widget _buildManualEntryTab() {
@@ -665,11 +654,7 @@ class _ExtractionHomeState extends State<ExtractionHome> with SingleTickerProvid
                 ),
                 child: Column(
                   children: [
-                    const Icon(
-                      Icons.edit_note,
-                      color: Colors.white,
-                      size: 32,
-                    ),
+                    const Icon(Icons.edit_note, color: Colors.white, size: 32),
                     const SizedBox(height: 12),
                     const Text(
                       'Manual Entry',
@@ -862,10 +847,7 @@ class _ExtractionHomeState extends State<ExtractionHome> with SingleTickerProvid
                   icon: const Icon(Icons.save, size: 20),
                   label: const Text(
                     'Save Event Details',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF059669),
@@ -943,11 +925,10 @@ class _ExtractionHomeState extends State<ExtractionHome> with SingleTickerProvid
             ),
             const SizedBox(height: 16),
             ...children,
-                      ],
-          ),
+          ],
         ),
       ),
-    )
+    );
   }
 
   Widget _buildTextField({
@@ -997,7 +978,10 @@ class _ExtractionHomeState extends State<ExtractionHome> with SingleTickerProvid
         ),
         filled: true,
         fillColor: const Color(0xFFF8FAFC),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
       ),
     );
   }
