@@ -7,12 +7,13 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nexa/main.dart';
+import 'package:nexa/app.dart';
 
 void main() {
   testWidgets('App builds and shows extractor UI', (WidgetTester tester) async {
     await tester.pumpWidget(const NexaApp());
-    expect(find.text('Nexa - Event Data Extractor'), findsOneWidget);
-    expect(find.byIcon(Icons.upload_file), findsOneWidget);
+    expect(find.text('Nexa'), findsOneWidget);
+    expect(find.text('Upload Document'), findsOneWidget);
+    expect(find.byIcon(Icons.upload_file), findsWidgets);
   });
 }

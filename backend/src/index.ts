@@ -1,12 +1,13 @@
-import express from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
 import compression from 'compression';
+import cors from 'cors';
+import express from 'express';
+import helmet from 'helmet';
 import pino from 'pino';
 import pinoHttp from 'pino-http';
 
 import { ENV } from './config/env';
 import { connectToDatabase } from './db/mongoose';
+import eventsRouter from './routes/events';
 import healthRouter from './routes/health';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
@@ -21,6 +22,7 @@ async function createServer() {
   app.use(pinoHttp({ logger }));
 
   app.use('/api', healthRouter);
+  app.use('/api', eventsRouter);
 
   app.get('/', (_req, res) => {
     res.send('Nexa backend is running');
