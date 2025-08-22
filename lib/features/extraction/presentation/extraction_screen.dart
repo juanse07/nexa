@@ -342,43 +342,15 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               ),
             ),
             const SizedBox(height: 24),
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: ElevatedButton.icon(
-                onPressed: isLoading ? null : _pickAndProcessFile,
-                icon: Icon(
-                  isLoading ? Icons.hourglass_empty : Icons.upload_file,
-                  size: 20,
-                ),
-                label: Text(
-                  isLoading ? 'Processing...' : 'Pick PDF or Image',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: const Color(0xFF6366F1),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 32,
-                    vertical: 16,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  elevation: 0,
-                ),
-              ),
+            ActionCard(
+              title: 'Upload Document',
+              description:
+                  'Select a PDF or image file to extract event details automatically using AI',
+              icon: Icons.upload_file,
+              actionText: isLoading ? 'Processing...' : 'Choose File',
+              onPressed: _pickAndProcessFile,
+              isLoading: isLoading,
+              color: const Color(0xFF6366F1),
             ),
             const SizedBox(height: 20),
             if (isLoading) ...[
@@ -555,37 +527,89 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 ],
                 if (!_isEventsLoading && items.isEmpty && _eventsError == null)
                   Container(
-                    padding: const EdgeInsets.all(24),
+                    padding: const EdgeInsets.all(32),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.grey.shade100, width: 1),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 20,
+                          offset: const Offset(0, 8),
+                          spreadRadius: -4,
                         ),
                       ],
                     ),
                     child: Column(
                       children: [
-                        Icon(
-                          Icons.inbox,
-                          color: Colors.grey.shade400,
-                          size: 28,
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: const Color(
+                              0xFF6366F1,
+                            ).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Icon(
+                            Icons.event_available_outlined,
+                            color: const Color(0xFF6366F1),
+                            size: 48,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          'No Events Yet',
+                          style: TextStyle(
+                            color: const Color(0xFF0F172A),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 20,
+                            letterSpacing: -0.5,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'No events found',
+                          'Create your first event by uploading a document or entering details manually.',
                           style: TextStyle(
-                            color: Colors.grey.shade700,
-                            fontWeight: FontWeight.w600,
+                            color: Colors.grey.shade600,
+                            fontSize: 15,
+                            height: 1.5,
                           ),
+                          textAlign: TextAlign.center,
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Create an event from the other tabs or pull to refresh.',
-                          style: TextStyle(color: Colors.grey.shade600),
+                        const SizedBox(height: 24),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.grey.shade200,
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.refresh,
+                                size: 16,
+                                color: Colors.grey.shade500,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Pull to refresh',
+                                style: TextStyle(
+                                  color: Colors.grey.shade500,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -596,9 +620,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     physics: const NeverScrollableScrollPhysics(),
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: crossAxisCount,
-                      mainAxisSpacing: 12,
-                      crossAxisSpacing: 12,
-                      childAspectRatio: 1.8,
+                      mainAxisSpacing: 20,
+                      crossAxisSpacing: 20,
+                      childAspectRatio: crossAxisCount == 1 ? 1.1 : 0.85,
                     ),
                     itemCount: items.length,
                     itemBuilder: (context, index) =>
@@ -617,10 +641,13 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         .toString();
     String subtitle = (e['client_name'] ?? '').toString();
     String dateStr = '';
+    bool isUpcoming = false;
     final dynamic rawDate = e['date'];
     if (rawDate is String && rawDate.isNotEmpty) {
       try {
         final d = DateTime.parse(rawDate);
+        final now = DateTime.now();
+        isUpcoming = !d.isBefore(DateTime(now.year, now.month, now.day));
         dateStr =
             '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
       } catch (_) {
@@ -638,117 +665,251 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         ? (e['roles'] as List)
         : const [];
 
+    final statusColor = isUpcoming
+        ? const Color(0xFF059669)
+        : const Color(0xFF6B7280);
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey.shade100, width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+            spreadRadius: -2,
+          ),
+          BoxShadow(
+            color: const Color(0xFF6366F1).withValues(alpha: 0.04),
             blurRadius: 8,
-            offset: const Offset(0, 4),
+            offset: const Offset(0, 2),
           ),
         ],
       ),
-      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF6366F1).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  Icons.event,
-                  color: Color(0xFF6366F1),
-                  size: 18,
-                ),
+          // Header with gradient background
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  const Color(0xFF6366F1).withValues(alpha: 0.08),
+                  const Color(0xFF8B5CF6).withValues(alpha: 0.05),
+                ],
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1E293B),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            runSpacing: 6,
-            spacing: 10,
-            children: [
-              if (subtitle.isNotEmpty)
-                _miniInfo(icon: Icons.person, text: subtitle),
-              if (dateStr.isNotEmpty)
-                _miniInfo(icon: Icons.calendar_today, text: dateStr),
-              if (location.isNotEmpty)
-                _miniInfo(icon: Icons.place, text: location),
-              if (headcount != null)
-                _miniInfo(icon: Icons.people, text: 'HC $headcount'),
-            ],
-          ),
-          if (roles.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            SizedBox(
-              height: 24,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemBuilder: (context, index) {
-                  final r = roles[index] as Map<String, dynamic>? ?? {};
-                  final String rName = (r['role'] ?? 'Role').toString();
-                  final String rCount = (r['count'] ?? '').toString();
-                  return Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      rCount.isNotEmpty ? '$rName ($rCount)' : rName,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF334155),
-                      ),
-                    ),
-                  );
-                },
-                separatorBuilder: (context, _) => const SizedBox(width: 8),
-                itemCount: roles.length,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(20),
+                topRight: Radius.circular(20),
               ),
             ),
-          ],
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF6366F1).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: const Color(0xFF6366F1).withValues(alpha: 0.2),
+                      width: 1,
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.event,
+                    color: Color(0xFF6366F1),
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF0F172A),
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      if (subtitle.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (dateStr.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: statusColor.withValues(alpha: 0.2),
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      isUpcoming ? 'Upcoming' : 'Past',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: statusColor,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          // Content
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Event details with modern info cards
+                Wrap(
+                  runSpacing: 12,
+                  spacing: 12,
+                  children: [
+                    if (dateStr.isNotEmpty)
+                      _modernMiniInfo(
+                        icon: Icons.calendar_today,
+                        text: dateStr,
+                        color: const Color(0xFF6366F1),
+                      ),
+                    if (location.isNotEmpty)
+                      _modernMiniInfo(
+                        icon: Icons.place,
+                        text: location,
+                        color: const Color(0xFF059669),
+                      ),
+                    if (headcount != null)
+                      _modernMiniInfo(
+                        icon: Icons.people,
+                        text: '$headcount guests',
+                        color: const Color(0xFFEF4444),
+                      ),
+                  ],
+                ),
+                // Roles section
+                if (roles.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    'Roles Needed',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade700,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: roles.take(3).map((role) {
+                      final r = role as Map<String, dynamic>? ?? {};
+                      final String rName = (r['role'] ?? 'Role').toString();
+                      final String rCount = (r['count'] ?? '').toString();
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: Colors.grey.shade200,
+                            width: 1,
+                          ),
+                        ),
+                        child: Text(
+                          rCount.isNotEmpty ? '$rName ($rCount)' : rName,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF475569),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  if (roles.length > 3) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      '+${roles.length - 3} more roles',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey.shade500,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ],
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _miniInfo({required IconData icon, required String text}) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 14, color: Colors.grey.shade600),
-        const SizedBox(width: 6),
-        Text(
-          text,
-          style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ],
+  Widget _modernMiniInfo({
+    required IconData icon,
+    required String text,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.15), width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
     );
   }
 
