@@ -30,6 +30,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
   late TabController _tabController;
 
+  // Events listing state
+  List<Map<String, dynamic>>? _events;
+  bool _isEventsLoading = false;
+  String? _eventsError;
+
   final _formKey = GlobalKey<FormState>();
   final _eventNameController = TextEditingController();
   final _clientNameController = TextEditingController();
@@ -52,9 +57,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _extractionService = ExtractionService();
     _eventService = EventService();
+    _loadEvents();
   }
 
   @override
@@ -269,6 +275,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           tabs: const [
             Tab(icon: Icon(Icons.upload_file), text: 'Upload Document'),
             Tab(icon: Icon(Icons.edit), text: 'Manual Entry'),
+            Tab(icon: Icon(Icons.view_module), text: 'Events'),
           ],
           labelColor: const Color(0xFF6366F1),
           unselectedLabelColor: Colors.grey,
@@ -277,7 +284,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [_buildUploadTab(), _buildManualEntryTab()],
+        children: [
+          _buildUploadTab(),
+          _buildManualEntryTab(),
+          _buildEventsTab(),
+        ],
       ),
     );
   }
@@ -442,6 +453,302 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _loadEvents() async {
+    setState(() {
+      _isEventsLoading = true;
+      _eventsError = null;
+    });
+    try {
+      final items = await _eventService.fetchEvents();
+      // Sort: upcoming soonest -> oldest past -> no date
+      DateTime? parseDate(Map<String, dynamic> e) {
+        final dynamic v = e['date'];
+        if (v is String && v.isNotEmpty) {
+          try {
+            return DateTime.parse(v);
+          } catch (_) {}
+        }
+        return null;
+      }
+
+      final DateTime now = DateTime.now();
+      final List<Map<String, dynamic>> upcoming = [];
+      final List<Map<String, dynamic>> past = [];
+      final List<Map<String, dynamic>> noDate = [];
+
+      for (final e in items) {
+        final d = parseDate(e);
+        if (d == null) {
+          noDate.add(e);
+        } else if (!d.isBefore(DateTime(now.year, now.month, now.day))) {
+          upcoming.add(e);
+        } else {
+          past.add(e);
+        }
+      }
+
+      int ascByDate(Map<String, dynamic> a, Map<String, dynamic> b) {
+        final DateTime da = parseDate(a)!;
+        final DateTime db = parseDate(b)!;
+        return da.compareTo(db);
+      }
+
+      upcoming.sort(ascByDate); // soonest first
+      past.sort((a, b) => ascByDate(b, a)); // most recent past first
+
+      final List<Map<String, dynamic>> sorted = [
+        ...upcoming,
+        ...past,
+        ...noDate,
+      ];
+      setState(() {
+        _events = sorted;
+        _isEventsLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _eventsError = e.toString();
+        _isEventsLoading = false;
+      });
+    }
+  }
+
+  Widget _buildEventsTab() {
+    return SafeArea(
+      child: RefreshIndicator(
+        onRefresh: _loadEvents,
+        color: const Color(0xFF6366F1),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final double width = constraints.maxWidth;
+            int crossAxisCount = 1;
+            if (width >= 1200) {
+              crossAxisCount = 4;
+            } else if (width >= 900) {
+              crossAxisCount = 3;
+            } else if (width >= 600) {
+              crossAxisCount = 2;
+            }
+
+            final List<Map<String, dynamic>> items = _events ?? const [];
+
+            if (_isEventsLoading && items.isEmpty) {
+              return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(20),
+                children: const [
+                  Center(child: LoadingIndicator(text: 'Loading events...')),
+                ],
+              );
+            }
+
+            return ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(20),
+              children: [
+                if (_eventsError != null) ...[
+                  ErrorBanner(message: _eventsError!),
+                  const SizedBox(height: 12),
+                ],
+                if (!_isEventsLoading && items.isEmpty && _eventsError == null)
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.inbox,
+                          color: Colors.grey.shade400,
+                          size: 28,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'No events found',
+                          style: TextStyle(
+                            color: Colors.grey.shade700,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Create an event from the other tabs or pull to refresh.',
+                          style: TextStyle(color: Colors.grey.shade600),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (items.isNotEmpty)
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: crossAxisCount,
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: 1.8,
+                    ),
+                    itemCount: items.length,
+                    itemBuilder: (context, index) =>
+                        _buildEventCard(items[index]),
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEventCard(Map<String, dynamic> e) {
+    String title = (e['event_name'] ?? e['venue_name'] ?? 'Untitled Event')
+        .toString();
+    String subtitle = (e['client_name'] ?? '').toString();
+    String dateStr = '';
+    final dynamic rawDate = e['date'];
+    if (rawDate is String && rawDate.isNotEmpty) {
+      try {
+        final d = DateTime.parse(rawDate);
+        dateStr =
+            '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      } catch (_) {
+        dateStr = rawDate;
+      }
+    }
+    final String location = [
+      e['city'],
+      e['state'],
+    ].where((v) => v != null && v.toString().isNotEmpty).join(', ');
+    final int? headcount = (e['headcount_total'] is int)
+        ? e['headcount_total'] as int
+        : int.tryParse((e['headcount_total'] ?? '').toString());
+    final List<dynamic> roles = (e['roles'] is List)
+        ? (e['roles'] as List)
+        : const [];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6366F1).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.event,
+                  color: Color(0xFF6366F1),
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            runSpacing: 6,
+            spacing: 10,
+            children: [
+              if (subtitle.isNotEmpty)
+                _miniInfo(icon: Icons.person, text: subtitle),
+              if (dateStr.isNotEmpty)
+                _miniInfo(icon: Icons.calendar_today, text: dateStr),
+              if (location.isNotEmpty)
+                _miniInfo(icon: Icons.place, text: location),
+              if (headcount != null)
+                _miniInfo(icon: Icons.people, text: 'HC $headcount'),
+            ],
+          ),
+          if (roles.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 24,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemBuilder: (context, index) {
+                  final r = roles[index] as Map<String, dynamic>? ?? {};
+                  final String rName = (r['role'] ?? 'Role').toString();
+                  final String rCount = (r['count'] ?? '').toString();
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      rCount.isNotEmpty ? '$rName ($rCount)' : rName,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF334155),
+                      ),
+                    ),
+                  );
+                },
+                separatorBuilder: (context, _) => const SizedBox(width: 8),
+                itemCount: roles.length,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _miniInfo({required IconData icon, required String text}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: Colors.grey.shade600),
+        const SizedBox(width: 6),
+        Text(
+          text,
+          style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
     );
   }
 
@@ -806,7 +1113,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       } catch (_) {}
     }
     try {
-      final result = await _eventService.createEvent(payload);
+      await _eventService.createEvent(payload);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

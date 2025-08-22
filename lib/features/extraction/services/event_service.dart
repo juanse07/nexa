@@ -7,6 +7,25 @@ class EventService {
   String get _baseUrl =>
       (dotenv.env['BACKEND_BASE_URL'] ?? 'http://localhost:4000/api').trim();
 
+  Future<List<Map<String, dynamic>>> fetchEvents() async {
+    final uri = Uri.parse('$_baseUrl/events');
+    final response = await http.get(
+      uri,
+      headers: const {'Accept': 'application/json'},
+    );
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      final List<dynamic> decoded = jsonDecode(response.body) as List<dynamic>;
+      return decoded
+          .whereType<Map<String, dynamic>>()
+          .map((e) => e)
+          .toList(growable: false);
+    }
+    throw Exception(
+      'Failed to load events (${response.statusCode}): ${response.body}',
+    );
+  }
+
   Future<Map<String, dynamic>> createEvent(Map<String, dynamic> event) async {
     final uri = Uri.parse('$_baseUrl/events');
     final response = await http.post(
