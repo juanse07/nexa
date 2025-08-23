@@ -28,6 +28,11 @@ async function createServer() {
     res.send('Nexa backend is running');
   });
 
+  // Health check route
+app.get('/healthz', (_req, res) => {
+  res.status(200).send('ok');
+});
+
   return app;
 }
 
