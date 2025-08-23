@@ -5,7 +5,6 @@ import helmet from 'helmet';
 import pino from 'pino';
 import pinoHttp from 'pino-http';
 
-import mongoose from 'mongoose';
 import { ENV } from './config/env';
 import { connectToDatabase } from './db/mongoose';
 import eventsRouter from './routes/events';
@@ -39,15 +38,7 @@ app.listen(port, '0.0.0.0', () => console.log(`Server on ${port}`));
 
 // connect to Mongo after server starts; don't exit on error
 
-(async () => {
-  try {
-    await mongoose.connect(process.env.MONGODB_URI!);
-    console.log('Mongo connected');
-  } catch (e:any) {
-    console.error('Mongo connect failed:', e.message);
-    // optionally: retry later instead of exiting
-  }
-})();
+connectToDatabase();
   return app;
 }
 
