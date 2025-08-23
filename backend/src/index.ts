@@ -7,10 +7,10 @@ import pinoHttp from 'pino-http';
 
 import { ENV } from './config/env';
 import { connectToDatabase } from './db/mongoose';
+import { EventModel } from './models/event';
 import authRouter from './routes/auth';
 import eventsRouter from './routes/events';
 import healthRouter from './routes/health';
-import { EventModel } from './models/event';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 
