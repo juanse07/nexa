@@ -40,6 +40,7 @@ export interface EventDocument extends Document {
   roles?: RoleRequirement[];
   pay_rate_info?: string;
   accepted_staff?: AcceptedStaffMember[];
+  declined_staff?: AcceptedStaffMember[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -91,6 +92,7 @@ const EventSchema = new Schema<EventDocument>(
     roles: { type: [RoleRequirementSchema], default: [] },
     pay_rate_info: { type: String, trim: true },
     accepted_staff: { type: [AcceptedStaffMemberSchema], default: [] },
+    declined_staff: { type: [AcceptedStaffMemberSchema], default: [] },
   },
   { timestamps: true }
 );

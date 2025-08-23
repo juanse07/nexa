@@ -1,5 +1,7 @@
 import { Router } from 'express';
+import mongoose from 'mongoose';
 import { z } from 'zod';
+import { requireAuth } from '../middleware/requireAuth';
 import { EventModel } from '../models/event';
 
 const router = Router();
@@ -96,6 +98,68 @@ router.get('/events', async (_req, res) => {
   }
 });
 
+router.post('/events/:id/respond', requireAuth, async (req, res) => {
+  try {
+    const eventId = req.params.id ?? '';
+    const responseVal = (req.body?.response ?? '') as string;
+    if (!mongoose.Types.ObjectId.isValid(eventId)) {
+      return res.status(400).json({ message: 'Invalid event id' });
+    }
+    if (responseVal !== 'accept' && responseVal !== 'decline') {
+      return res.status(400).json({ message: "response must be 'accept' or 'decline'" });
+    }
+    if (!req.user?.provider || !req.user?.sub) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const userKey = `${req.user.provider}:${req.user.sub}`;
+
+    const firstName = req.user.name
+      ? req.user.name.trim().split(/\s+/).slice(0, -1).join(' ') || undefined
+      : undefined;
+    const lastName = req.user.name
+      ? req.user.name.trim().split(/\s+/).slice(-1)[0] || undefined
+      : undefined;
+
+    const staffDoc = {
+      userKey,
+      provider: req.user.provider,
+      subject: req.user.sub,
+      email: req.user.email,
+      name: req.user.name,
+      first_name: firstName,
+      last_name: lastName,
+      picture: req.user.picture,
+      response: responseVal,
+      respondedAt: new Date(),
+    };
+
+    // Clear prior responses
+    await EventModel.updateOne(
+      { _id: new mongoose.Types.ObjectId(eventId) },
+      { $pull: { accepted_staff: userKey, declined_staff: userKey } as any }
+    );
+    await EventModel.updateOne(
+      { _id: new mongoose.Types.ObjectId(eventId) },
+      { $pull: { accepted_staff: { userKey }, declined_staff: { userKey } } as any }
+    );
+
+    const targetField = responseVal === 'accept' ? 'accepted_staff' : 'declined_staff';
+    const result = await EventModel.updateOne(
+      { _id: new mongoose.Types.ObjectId(eventId) },
+      { $push: { [targetField]: staffDoc } as any, $set: { updatedAt: new Date() } }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    const updated = await EventModel.findById(eventId).lean();
+    return res.json(updated);
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to update response' });
+  }
+});
 export default router;
 
 
