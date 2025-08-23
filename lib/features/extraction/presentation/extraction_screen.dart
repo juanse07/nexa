@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+// import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:mime/mime.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
@@ -25,7 +25,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   Map<String, dynamic>? structuredData;
   bool isLoading = false;
   String? errorMessage;
-  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
+  // Removed: we no longer prompt or store user keys on-device
   String? userApiKey;
 
   late TabController _tabController;
@@ -96,7 +96,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       if (!ok) {
         setState(() {
           isLoading = false;
-          errorMessage = 'Please enter a valid OpenAI API key to continue.';
+          errorMessage =
+              'Missing OPENAI_API_KEY in .env. Please set it and restart the app.';
         });
         return;
       }
@@ -153,55 +154,16 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   Future<bool> _ensureApiKey() async {
-    userApiKey = await _secureStorage.read(key: 'OPENAI_API_KEY');
-    if (userApiKey != null && userApiKey!.isNotEmpty) return true;
-
-    final envKey = dotenv.env['OPENAI_API_KEY'];
-    if (envKey != null && envKey.isNotEmpty) {
+    // Always use project-level .env key; never prompt end users
+    final envKey = (dotenv.env['OPENAI_API_KEY'] ?? '').trim();
+    if (envKey.isNotEmpty) {
       userApiKey = envKey;
-      return true;
-    }
-
-    if (!mounted) return false;
-    final entered = await _promptForApiKey(context);
-    if (entered != null && entered.isNotEmpty) {
-      await _secureStorage.write(key: 'OPENAI_API_KEY', value: entered);
-      userApiKey = entered;
       return true;
     }
     return false;
   }
 
-  Future<String?> _promptForApiKey(BuildContext context) async {
-    final controller = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Enter OpenAI API Key'),
-          content: TextField(
-            controller: controller,
-            decoration: const InputDecoration(
-              hintText: 'sk-... (stored securely on this device)',
-            ),
-            obscureText: true,
-            enableSuggestions: false,
-            autocorrect: false,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
-    );
-  }
+  // Removed manual prompt for API key: app uses .env OPENAI_API_KEY exclusively
 
   Future<String> _extractTextFromPdf(File file) async {
     final bytes = await file.readAsBytes();

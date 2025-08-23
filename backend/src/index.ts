@@ -7,6 +7,7 @@ import pinoHttp from 'pino-http';
 
 import { ENV } from './config/env';
 import { connectToDatabase } from './db/mongoose';
+import authRouter from './routes/auth';
 import eventsRouter from './routes/events';
 import healthRouter from './routes/health';
 
@@ -23,6 +24,7 @@ async function createServer() {
 
   app.use('/api', healthRouter);
   app.use('/api', eventsRouter);
+  app.use('/api/auth', authRouter);
 
   app.get('/', (_req, res) => {
     res.send('Nexa backend is running');
