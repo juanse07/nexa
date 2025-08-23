@@ -34,27 +34,16 @@ async function createServer() {
 app.get('/healthz', (_req, res) => {
   res.status(200).send('ok');
 });
-
-const port = Number(process.env.PORT || 4000);
-app.listen(port, '0.0.0.0', () => console.log(`Server on ${port}`));
-
-// connect to Mongo after server starts; don't exit on error
-
-connectToDatabase();
   return app;
 }
 
 async function start() {
   try {
-    if (ENV.mongoUri) {
-      await connectToDatabase();
-      logger.info('Connected to MongoDB');
-    } else {
-      logger.warn('MONGO_URI not set. Starting without DB connection.');
-    }
+    await connectToDatabase();
+    logger.info('DB initialized');
 
     const app = await createServer();
-    app.listen(ENV.port, () => {
+    app.listen(ENV.port, '0.0.0.0', () => {
       logger.info(`Server listening on http://localhost:${ENV.port}`);
     });
   } catch (err) {

@@ -103,12 +103,18 @@ router.post('/events/:id/respond', requireAuth, async (req, res) => {
     const eventId = req.params.id ?? '';
     const responseVal = (req.body?.response ?? '') as string;
     if (!mongoose.Types.ObjectId.isValid(eventId)) {
+      // eslint-disable-next-line no-console
+      console.warn('[respond] invalid event id', { eventId });
       return res.status(400).json({ message: 'Invalid event id' });
     }
     if (responseVal !== 'accept' && responseVal !== 'decline') {
+      // eslint-disable-next-line no-console
+      console.warn('[respond] invalid response value', { responseVal });
       return res.status(400).json({ message: "response must be 'accept' or 'decline'" });
     }
     if (!req.user?.provider || !req.user?.sub) {
+      // eslint-disable-next-line no-console
+      console.warn('[respond] unauthorized: missing user claims');
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
@@ -151,12 +157,19 @@ router.post('/events/:id/respond', requireAuth, async (req, res) => {
     );
 
     if (result.matchedCount === 0) {
+      // eslint-disable-next-line no-console
+      console.warn('[respond] event not found', { eventId });
       return res.status(404).json({ message: 'Event not found' });
     }
 
     const updated = await EventModel.findById(eventId).lean();
-    return res.json(updated);
+    if (!updated) return res.status(404).json({ message: 'Event not found' });
+    const mapped = { id: String(updated._id), ...updated } as any;
+    delete mapped._id;
+    return res.json(mapped);
   } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[respond] failed', err);
     return res.status(500).json({ message: 'Failed to update response' });
   }
 });
