@@ -249,7 +249,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Event details saved successfully!'),
+          content: Text("Details captured. Tap 'Save to Database' to persist."),
           backgroundColor: Color(0xFF059669),
         ),
       );
@@ -1430,9 +1430,33 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         payload['date'] = parsed.toIso8601String();
       } catch (_) {}
     }
+    // Sanitize and validate contact_email locally to avoid backend 400
+    if (payload.containsKey('contact_email')) {
+      final dynamic raw = payload['contact_email'];
+      final String email = (raw?.toString() ?? '').trim();
+      if (email.isEmpty) {
+        payload.remove('contact_email');
+      } else {
+        final RegExp emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+        if (!emailRegex.hasMatch(email)) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please enter a valid email address'),
+              backgroundColor: Color(0xFFDC2626),
+            ),
+          );
+          return;
+        }
+        payload['contact_email'] = email.toLowerCase();
+      }
+    }
     try {
       await _eventService.createEvent(payload);
+      // Refresh events list and navigate to Events tab so the user can see it immediately
+      await _loadEvents();
       if (!mounted) return;
+      _tabController.animateTo(2);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Event saved to database'),
