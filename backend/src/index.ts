@@ -10,6 +10,7 @@ import { connectToDatabase } from './db/mongoose';
 import authRouter from './routes/auth';
 import eventsRouter from './routes/events';
 import healthRouter from './routes/health';
+import { EventModel } from './models/event';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 
@@ -23,6 +24,15 @@ async function createServer() {
   app.use(pinoHttp({ logger }));
 
   app.use('/api', healthRouter);
+  // Direct handler for listing events to avoid any routing ambiguity
+  app.get('/api/events', async (_req, res) => {
+    try {
+      const events = await EventModel.find().sort({ createdAt: -1 }).lean();
+      res.json(events);
+    } catch (err) {
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
+  });
   app.use('/api', eventsRouter);
   app.use('/api/auth', authRouter);
 
