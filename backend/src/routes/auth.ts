@@ -16,14 +16,16 @@ type VerifiedProfile = {
 const router = Router();
 
 const GOOGLE_CLIENT_ID_IOS = ENV.googleClientIdIos;
-const GOOGLE_CLIENT_ID_ANDROID = ENV.googleClientIdAndroid;
-const GOOGLE_CLIENT_ID_WEB = ENV.googleClientIdWeb;
 const APPLE_BUNDLE_ID = ENV.appleBundleId;
 const JWT_SECRET = ENV.jwtSecret;
 
 if (!JWT_SECRET) {
   // eslint-disable-next-line no-console
   console.warn('[auth] BACKEND_JWT_SECRET is not set. Using auth routes will fail.');
+}
+if (!GOOGLE_CLIENT_ID_IOS) {
+  // eslint-disable-next-line no-console
+  console.warn('[auth] GOOGLE_CLIENT_ID_IOS is not set. Google sign-in will fail.');
 }
 
 function issueAppJwt(profile: VerifiedProfile): string {
@@ -54,7 +56,7 @@ async function upsertUser(profile: VerifiedProfile) {
 }
 
 async function verifyGoogleIdToken(idToken: string): Promise<VerifiedProfile> {
-  const audience = [GOOGLE_CLIENT_ID_IOS, GOOGLE_CLIENT_ID_ANDROID, GOOGLE_CLIENT_ID_WEB].filter(Boolean);
+  const audience = [GOOGLE_CLIENT_ID_IOS].filter(Boolean);
   const client = new OAuth2Client();
   const ticket = await client.verifyIdToken({ idToken, audience });
   const payload = ticket.getPayload();
@@ -99,6 +101,8 @@ router.post('/google', async (req, res) => {
     const token = issueAppJwt(profile);
     res.json({ token, user: profile });
   } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[auth] Google verification failed:', err);
     res.status(401).json({ message: 'Google auth failed' });
   }
 });
@@ -113,6 +117,8 @@ router.post('/apple', async (req, res) => {
     const token = issueAppJwt(profile);
     res.json({ token, user: profile });
   } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[auth] Apple verification failed:', err);
     res.status(401).json({ message: 'Apple auth failed' });
   }
 });
