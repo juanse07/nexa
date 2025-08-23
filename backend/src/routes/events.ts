@@ -10,6 +10,19 @@ const roleSchema = z.object({
   call_time: z.string().nullish(),
 });
 
+const acceptedStaffSchema = z.object({
+  userKey: z.string().nullish(),
+  provider: z.string().nullish(),
+  subject: z.string().nullish(),
+  email: z.string().email().nullish(),
+  name: z.string().nullish(),
+  first_name: z.string().nullish(),
+  last_name: z.string().nullish(),
+  picture: z.string().url().nullish(),
+  response: z.string().nullish(),
+  respondedAt: z.union([z.string(), z.date()]).nullish(),
+});
+
 const eventSchema = z.object({
   event_name: z.string().nullish(),
   client_name: z.string().nullish(),
@@ -23,13 +36,14 @@ const eventSchema = z.object({
   country: z.string().nullish(),
   contact_name: z.string().nullish(),
   contact_phone: z.string().nullish(),
-  contact_email: z.string().nullish(),
+  contact_email: z.string().email().nullish(),
   setup_time: z.string().nullish(),
   uniform: z.string().nullish(),
   notes: z.string().nullish(),
   headcount_total: z.number().int().nullish(),
   roles: z.array(roleSchema).nullish(),
   pay_rate_info: z.string().nullish(),
+  accepted_staff: z.array(acceptedStaffSchema).nullish(),
 });
 
 router.post('/events', async (req, res) => {
@@ -50,7 +64,19 @@ router.post('/events', async (req, res) => {
         raw.date != null
           ? new Date(typeof raw.date === 'string' ? raw.date : raw.date)
           : undefined,
-    };
+      accepted_staff:
+        raw.accepted_staff?.map((m) => ({
+          ...m,
+          respondedAt:
+            m?.respondedAt != null
+              ? new Date(
+                  typeof m.respondedAt === 'string'
+                    ? m.respondedAt
+                    : (m.respondedAt as Date)
+                )
+              : undefined,
+        })) ?? undefined,
+    } as typeof raw;
 
     const created = await EventModel.create(normalized);
     return res.status(201).json(created);

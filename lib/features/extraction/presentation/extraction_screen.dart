@@ -622,7 +622,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       crossAxisCount: crossAxisCount,
                       mainAxisSpacing: 20,
                       crossAxisSpacing: 20,
-                      childAspectRatio: crossAxisCount == 1 ? 1.1 : 0.85,
+                      childAspectRatio: crossAxisCount == 1 ? 0.95 : 0.85,
                     ),
                     itemCount: items.length,
                     itemBuilder: (context, index) =>
@@ -663,6 +663,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         : int.tryParse((e['headcount_total'] ?? '').toString());
     final List<dynamic> roles = (e['roles'] is List)
         ? (e['roles'] as List)
+        : const [];
+    final List<dynamic> acceptedStaff = (e['accepted_staff'] is List)
+        ? (e['accepted_staff'] as List)
         : const [];
 
     final statusColor = isUpcoming
@@ -814,6 +817,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         text: '$headcount guests',
                         color: const Color(0xFFEF4444),
                       ),
+                    if (acceptedStaff.isNotEmpty)
+                      _modernMiniInfo(
+                        icon: Icons.group,
+                        text: '${acceptedStaff.length} team',
+                        color: const Color(0xFF0EA5E9),
+                      ),
                   ],
                 ),
                 // Roles section
@@ -867,6 +876,87 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
+                        color: Colors.grey.shade500,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ],
+                if (acceptedStaff.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    'Accepted Staff',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade700,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: acceptedStaff.take(6).map((member) {
+                      String displayName;
+                      if (member is Map<String, dynamic>) {
+                        final m = member;
+                        displayName =
+                            (m['name'] ??
+                                    m['first_name'] ??
+                                    m['email'] ??
+                                    m['subject'] ??
+                                    m['userKey'] ??
+                                    'Member')
+                                .toString();
+                      } else if (member is String) {
+                        displayName = member;
+                      } else {
+                        displayName = member.toString();
+                      }
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF0F9FF),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: const Color(
+                              0xFF0EA5E9,
+                            ).withValues(alpha: 0.2),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.person,
+                              size: 14,
+                              color: Color(0xFF0EA5E9),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              displayName,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF0369A1),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  if (acceptedStaff.length > 6) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      '+${acceptedStaff.length - 6} more',
+                      style: TextStyle(
+                        fontSize: 11,
                         color: Colors.grey.shade500,
                         fontStyle: FontStyle.italic,
                       ),
@@ -1124,6 +1214,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   Widget _buildEventDetails(Map<String, dynamic> data) {
+    final List<dynamic> acceptedStaff = (data['accepted_staff'] is List)
+        ? (data['accepted_staff'] as List)
+        : const [];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1226,6 +1320,69 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               ),
             ),
           )),
+        ],
+        if (acceptedStaff.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          const Text(
+            'Accepted Staff',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1E293B),
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...acceptedStaff.map((member) {
+            String displayName;
+            String? status;
+            if (member is Map<String, dynamic>) {
+              final m = member;
+              displayName =
+                  (m['name'] ??
+                          m['first_name'] ??
+                          m['email'] ??
+                          m['subject'] ??
+                          m['userKey'] ??
+                          'Member')
+                      .toString();
+              status = m['response']?.toString();
+            } else if (member is String) {
+              displayName = member;
+            } else {
+              displayName = member.toString();
+            }
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0F9FF),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.person, color: Color(0xFF0EA5E9), size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      displayName,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  if (status != null)
+                    Text(
+                      status,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                ],
+              ),
+            );
+          }),
         ],
         const SizedBox(height: 16),
         TextButton.icon(

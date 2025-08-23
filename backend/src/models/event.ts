@@ -6,6 +6,19 @@ export interface RoleRequirement {
   call_time?: string;
 }
 
+export interface AcceptedStaffMember {
+  userKey?: string;
+  provider?: string;
+  subject?: string;
+  email?: string;
+  name?: string;
+  first_name?: string;
+  last_name?: string;
+  picture?: string;
+  response?: string;
+  respondedAt?: Date | string;
+}
+
 export interface EventDocument extends Document {
   event_name?: string;
   client_name?: string;
@@ -26,6 +39,7 @@ export interface EventDocument extends Document {
   headcount_total?: number;
   roles?: RoleRequirement[];
   pay_rate_info?: string;
+  accepted_staff?: AcceptedStaffMember[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -35,6 +49,22 @@ const RoleRequirementSchema = new Schema<RoleRequirement>(
     role: { type: String },
     count: { type: Number },
     call_time: { type: String },
+  },
+  { _id: false }
+);
+
+const AcceptedStaffMemberSchema = new Schema<AcceptedStaffMember>(
+  {
+    userKey: { type: String, trim: true },
+    provider: { type: String, trim: true },
+    subject: { type: String, trim: true },
+    email: { type: String, trim: true },
+    name: { type: String, trim: true },
+    first_name: { type: String, trim: true },
+    last_name: { type: String, trim: true },
+    picture: { type: String, trim: true },
+    response: { type: String, trim: true },
+    respondedAt: { type: Date },
   },
   { _id: false }
 );
@@ -60,6 +90,7 @@ const EventSchema = new Schema<EventDocument>(
     headcount_total: { type: Number },
     roles: { type: [RoleRequirementSchema], default: [] },
     pay_rate_info: { type: String, trim: true },
+    accepted_staff: { type: [AcceptedStaffMemberSchema], default: [] },
   },
   { timestamps: true }
 );
