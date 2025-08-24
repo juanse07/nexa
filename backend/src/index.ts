@@ -28,7 +28,29 @@ async function createServer() {
   app.get('/api/events', async (_req, res) => {
     try {
       const events = await EventModel.find().sort({ createdAt: -1 }).lean();
-      res.json(events);
+      const withStats = (events || []).map((ev: any) => {
+        const accepted = ev.accepted_staff || [];
+        const roleToAcceptedCount = accepted.reduce((acc: Record<string, number>, m: any) => {
+          const key = (m?.role || '').toLowerCase();
+          if (!key) return acc;
+          acc[key] = (acc[key] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+        const stats = (ev.roles || []).map((r: any) => {
+          const key = (r?.role || '').toLowerCase();
+          const capacity = r?.count || 0;
+          const taken = roleToAcceptedCount[key] || 0;
+          const remaining = Math.max(capacity - taken, 0);
+          return {
+            role: r.role,
+            capacity,
+            taken,
+            remaining,
+          };
+        });
+        return { ...ev, role_stats: stats };
+      });
+      res.json(withStats);
     } catch (err) {
       res.status(500).json({ error: 'Internal Server Error' });
     }
