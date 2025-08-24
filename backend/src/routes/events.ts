@@ -51,6 +51,22 @@ const eventSchema = z.object({
   accepted_staff: z.array(acceptedStaffSchema).nullish(),
 });
 
+function computeRoleStats(roles: any[], accepted: any[]) {
+  const acceptedCounts = (accepted || []).reduce((acc: Record<string, number>, m: any) => {
+    const key = (m?.role || '').toLowerCase();
+    if (!key) return acc;
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  return (roles || []).map((r: any) => {
+    const key = (r?.role || '').toLowerCase();
+    const capacity = r?.count || 0;
+    const taken = acceptedCounts[key] || 0;
+    const remaining = Math.max(capacity - taken, 0);
+    return { role: r.role, capacity, taken, remaining, is_full: remaining === 0 && capacity > 0 };
+  });
+}
+
 router.post('/events', async (req, res) => {
   try {
     const parsed = eventSchema.safeParse(req.body);
@@ -71,7 +87,7 @@ router.post('/events', async (req, res) => {
           : undefined,
       accepted_staff:
         raw.accepted_staff?.map((m) => {
-          const roleFromPayload = (m?.role || m?.position || '').trim();
+          const roleFromPayload = (m?.role || (m as any)?.position || '').trim();
           return {
             ...m,
             role: roleFromPayload || undefined,
@@ -82,7 +98,7 @@ router.post('/events', async (req, res) => {
                     typeof m.respondedAt === 'string'
                       ? m.respondedAt
                       : (m.respondedAt as Date)
-                )
+                  )
                 : undefined,
           };
         }) ?? undefined,
@@ -111,7 +127,10 @@ router.post('/events', async (req, res) => {
       }
     }
 
-    const created = await EventModel.create(normalized);
+    // Persist initial role_stats
+    const role_stats = computeRoleStats(normalized.roles as any[], (normalized.accepted_staff as any[]) || []);
+
+    const created = await EventModel.create({ ...normalized, role_stats });
     return res.status(201).json(created);
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -177,9 +196,11 @@ router.patch('/events/:id/roles', async (req, res) => {
       }
     }
 
+    const role_stats = computeRoleStats(roles as any[], accepted as any[]);
+
     const result = await EventModel.updateOne(
       { _id: new mongoose.Types.ObjectId(eventId) },
-      { $set: { roles, updatedAt: new Date() } }
+      { $set: { roles, role_stats, updatedAt: new Date() } }
     );
 
     if (result.matchedCount === 0) {
@@ -275,6 +296,8 @@ router.post('/events/:id/respond', requireAuth, async (req, res) => {
       ? req.user.name.trim().split(/\s+/).slice(-1)[0] || undefined
       : undefined;
 
+    const roleVal = roleValRaw;
+
     const staffDoc = {
       userKey,
       provider: req.user.provider,
@@ -285,7 +308,7 @@ router.post('/events/:id/respond', requireAuth, async (req, res) => {
       last_name: lastName,
       picture: req.user.picture,
       response: responseVal,
-      role: roleValRaw || undefined,
+      role: roleVal || undefined,
       respondedAt: new Date(),
     };
 
@@ -304,14 +327,14 @@ router.post('/events/:id/respond', requireAuth, async (req, res) => {
       const event = await EventModel.findById(eventId).lean();
       if (!event) return res.status(404).json({ message: 'Event not found' });
 
-      const roleReq = (event.roles || []).find((r: any) => (r?.role || '').toLowerCase() === roleValRaw.toLowerCase());
+      const roleReq = (event.roles || []).find((r: any) => (r?.role || '').toLowerCase() === roleVal.toLowerCase());
       if (!roleReq) {
-        return res.status(400).json({ message: `role '${roleValRaw}' not found for this event` });
+        return res.status(400).json({ message: `role '${roleVal}' not found for this event` });
       }
 
-      const acceptedForRole = (event.accepted_staff || []).filter((m: any) => (m?.role || '').toLowerCase() === roleValRaw.toLowerCase());
+      const acceptedForRole = (event.accepted_staff || []).filter((m: any) => (m?.role || '').toLowerCase() === roleVal.toLowerCase());
       if (acceptedForRole.length >= (roleReq.count || 0)) {
-        return res.status(409).json({ message: `No spots left for role '${roleValRaw}'` });
+        return res.status(409).json({ message: `No spots left for role '${roleVal}'` });
       }
     }
 
@@ -327,9 +350,18 @@ router.post('/events/:id/respond', requireAuth, async (req, res) => {
       return res.status(404).json({ message: 'Event not found' });
     }
 
-    const updated = await EventModel.findById(eventId).lean();
-    if (!updated) return res.status(404).json({ message: 'Event not found' });
-    const mapped = { id: String(updated._id), ...updated } as any;
+    // Recompute and persist role_stats
+    const updatedAfter = await EventModel.findById(eventId).lean();
+    if (!updatedAfter) return res.status(404).json({ message: 'Event not found' });
+    const role_stats = computeRoleStats((updatedAfter.roles as any[]) || [], (updatedAfter.accepted_staff as any[]) || []);
+    await EventModel.updateOne(
+      { _id: new mongoose.Types.ObjectId(eventId) },
+      { $set: { role_stats, updatedAt: new Date() } }
+    );
+
+    const finalDoc = await EventModel.findById(eventId).lean();
+    if (!finalDoc) return res.status(404).json({ message: 'Event not found' });
+    const mapped = { id: String(finalDoc._id), ...finalDoc } as any;
     delete mapped._id;
     return res.json(mapped);
   } catch (err) {

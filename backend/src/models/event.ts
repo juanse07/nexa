@@ -20,6 +20,14 @@ export interface AcceptedStaffMember {
   respondedAt?: Date | string;
 }
 
+export interface RoleStat {
+  role: string;
+  capacity: number;
+  taken: number;
+  remaining: number;
+  is_full: boolean;
+}
+
 export interface EventDocument extends Document {
   event_name?: string;
   client_name?: string;
@@ -42,6 +50,7 @@ export interface EventDocument extends Document {
   pay_rate_info?: string;
   accepted_staff?: AcceptedStaffMember[];
   declined_staff?: AcceptedStaffMember[];
+  role_stats?: RoleStat[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -68,6 +77,17 @@ const AcceptedStaffMemberSchema = new Schema<AcceptedStaffMember>(
     response: { type: String, trim: true },
     role: { type: String, trim: true },
     respondedAt: { type: Date },
+  },
+  { _id: false }
+);
+
+const RoleStatSchema = new Schema<RoleStat>(
+  {
+    role: { type: String, required: true, trim: true },
+    capacity: { type: Number, required: true, min: 0 },
+    taken: { type: Number, required: true, min: 0 },
+    remaining: { type: Number, required: true, min: 0 },
+    is_full: { type: Boolean, required: true },
   },
   { _id: false }
 );
@@ -104,6 +124,7 @@ const EventSchema = new Schema<EventDocument>(
     pay_rate_info: { type: String, trim: true },
     accepted_staff: { type: [AcceptedStaffMemberSchema], default: [] },
     declined_staff: { type: [AcceptedStaffMemberSchema], default: [] },
+    role_stats: { type: [RoleStatSchema], default: [] },
   },
   { timestamps: true }
 );
