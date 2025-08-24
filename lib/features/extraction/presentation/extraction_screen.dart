@@ -165,6 +165,151 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
   // Removed manual prompt for API key: app uses .env OPENAI_API_KEY exclusively
 
+  int _extractRoleCount(List<dynamic> roles, String keyword) {
+    for (final dynamic item in roles) {
+      if (item is Map<String, dynamic>) {
+        final String name = (item['role'] ?? '').toString().toLowerCase();
+        if (name.contains(keyword)) {
+          final dynamic raw = item['count'];
+          if (raw is int) return raw;
+          final int? parsed = int.tryParse(raw?.toString() ?? '');
+          if (parsed != null) return parsed;
+        }
+      }
+    }
+    return 0;
+  }
+
+  Future<Map<String, int>?> _promptStaffCounts(
+    Map<String, dynamic> payload,
+  ) async {
+    final List<dynamic> roles = (payload['roles'] is List)
+        ? (payload['roles'] as List)
+        : const [];
+
+    final int defaultBartenders = _extractRoleCount(roles, 'bartender');
+    final int defaultServers = _extractRoleCount(roles, 'server');
+    final int defaultDishwashers = _extractRoleCount(roles, 'dishwasher');
+
+    final TextEditingController bartendersCtrl = TextEditingController(
+      text: defaultBartenders.toString(),
+    );
+    final TextEditingController serversCtrl = TextEditingController(
+      text: defaultServers.toString(),
+    );
+    final TextEditingController dishwashersCtrl = TextEditingController(
+      text: defaultDishwashers.toString(),
+    );
+
+    Map<String, int>? result = await showDialog<Map<String, int>>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Staff needed'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Please confirm counts before saving. You can set 0 if not needed.',
+                  style: TextStyle(fontSize: 13),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: bartendersCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Bartenders',
+                    prefixIcon: Icon(Icons.local_bar),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: serversCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Servers',
+                    prefixIcon: Icon(Icons.room_service),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: dishwashersCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Dishwashers',
+                    prefixIcon: Icon(Icons.wash),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(null),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final int bartenders =
+                    int.tryParse(bartendersCtrl.text.trim()) ??
+                    defaultBartenders;
+                final int servers =
+                    int.tryParse(serversCtrl.text.trim()) ?? defaultServers;
+                final int dishwashers =
+                    int.tryParse(dishwashersCtrl.text.trim()) ??
+                    defaultDishwashers;
+                Navigator.of(ctx).pop({
+                  'bartender': bartenders < 0 ? 0 : bartenders,
+                  'server': servers < 0 ? 0 : servers,
+                  'dishwasher': dishwashers < 0 ? 0 : dishwashers,
+                });
+              },
+              child: const Text('Continue'),
+            ),
+          ],
+        );
+      },
+    );
+
+    return result;
+  }
+
+  List<Map<String, dynamic>> _mergeStaffCountsIntoRoles(
+    List<dynamic> existing,
+    Map<String, int> counts,
+  ) {
+    final List<Map<String, dynamic>> roles = existing
+        .whereType<Map<String, dynamic>>()
+        .toList(growable: true);
+
+    bool matches(String? role, String key) {
+      if (role == null) return false;
+      final String r = role.toLowerCase();
+      return r.contains(key);
+    }
+
+    roles.removeWhere(
+      (r) =>
+          matches(r['role']?.toString(), 'bartender') ||
+          matches(r['role']?.toString(), 'server') ||
+          matches(r['role']?.toString(), 'dishwasher'),
+    );
+
+    void addIfPositive(String name, int value) {
+      if (value > 0) {
+        roles.add({'role': name, 'count': value});
+      }
+    }
+
+    addIfPositive('Bartender', counts['bartender'] ?? 0);
+    addIfPositive('Server', counts['server'] ?? 0);
+    addIfPositive('Dishwasher', counts['dishwasher'] ?? 0);
+
+    return roles;
+  }
+
   Future<String> _extractTextFromPdf(File file) async {
     final bytes = await file.readAsBytes();
     final document = PdfDocument(inputBytes: bytes);
@@ -273,7 +418,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF6366F1).withValues(alpha: 0.2),
+                    color: const Color(0xFF6366F1).withOpacity(0.2),
                     blurRadius: 20,
                     offset: const Offset(0, 10),
                   ),
@@ -295,7 +440,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   Text(
                     'Upload a PDF or image to extract catering event details',
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.9),
+                      color: Colors.white.withOpacity(0.9),
                       fontSize: 14,
                     ),
                     textAlign: TextAlign.center,
@@ -323,7 +468,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
+                      color: Colors.black.withOpacity(0.05),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -496,7 +641,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       border: Border.all(color: Colors.grey.shade100, width: 1),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.04),
+                          color: Colors.black.withOpacity(0.04),
                           blurRadius: 20,
                           offset: const Offset(0, 8),
                           spreadRadius: -4,
@@ -508,9 +653,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         Container(
                           padding: const EdgeInsets.all(20),
                           decoration: BoxDecoration(
-                            color: const Color(
-                              0xFF6366F1,
-                            ).withValues(alpha: 0.1),
+                            color: const Color(0xFF6366F1).withOpacity(0.1),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Icon(
@@ -641,13 +784,13 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         border: Border.all(color: Colors.grey.shade100, width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: Colors.black.withOpacity(0.04),
             blurRadius: 16,
             offset: const Offset(0, 6),
             spreadRadius: -2,
           ),
           BoxShadow(
-            color: const Color(0xFF6366F1).withValues(alpha: 0.04),
+            color: const Color(0xFF6366F1).withOpacity(0.04),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -665,8 +808,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  const Color(0xFF6366F1).withValues(alpha: 0.08),
-                  const Color(0xFF8B5CF6).withValues(alpha: 0.05),
+                  const Color(0xFF6366F1).withOpacity(0.08),
+                  const Color(0xFF8B5CF6).withOpacity(0.05),
                 ],
               ),
               borderRadius: const BorderRadius.only(
@@ -679,10 +822,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF6366F1).withValues(alpha: 0.15),
+                    color: const Color(0xFF6366F1).withOpacity(0.15),
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: const Color(0xFF6366F1).withValues(alpha: 0.2),
+                      color: const Color(0xFF6366F1).withOpacity(0.2),
                       width: 1,
                     ),
                   ),
@@ -731,10 +874,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       vertical: 5,
                     ),
                     decoration: BoxDecoration(
-                      color: statusColor.withValues(alpha: 0.1),
+                      color: statusColor.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: statusColor.withValues(alpha: 0.2),
+                        color: statusColor.withOpacity(0.2),
                         width: 1,
                       ),
                     ),
@@ -751,181 +894,207 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             ),
           ),
           // Content
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Event details with modern info cards
-                Wrap(
-                  runSpacing: 12,
-                  spacing: 12,
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (dateStr.isNotEmpty)
-                      _modernMiniInfo(
-                        icon: Icons.calendar_today,
-                        text: dateStr,
-                        color: const Color(0xFF6366F1),
-                      ),
-                    if (location.isNotEmpty)
-                      _modernMiniInfo(
-                        icon: Icons.place,
-                        text: location,
-                        color: const Color(0xFF059669),
-                      ),
-                    if (headcount != null)
-                      _modernMiniInfo(
-                        icon: Icons.people,
-                        text: '$headcount guests',
-                        color: const Color(0xFFEF4444),
-                      ),
-                    if (acceptedStaff.isNotEmpty)
-                      _modernMiniInfo(
-                        icon: Icons.group,
-                        text: '${acceptedStaff.length} team',
-                        color: const Color(0xFF0EA5E9),
-                      ),
-                  ],
-                ),
-                // Roles section
-                if (roles.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    'Roles Needed',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey.shade700,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: roles.take(3).map((role) {
-                      final r = role as Map<String, dynamic>? ?? {};
-                      final String rName = (r['role'] ?? 'Role').toString();
-                      final String rCount = (r['count'] ?? '').toString();
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: Colors.grey.shade200,
-                            width: 1,
+                    // Event details with modern info cards
+                    Wrap(
+                      runSpacing: 12,
+                      spacing: 12,
+                      children: [
+                        if (dateStr.isNotEmpty)
+                          _modernMiniInfo(
+                            icon: Icons.calendar_today,
+                            text: dateStr,
+                            color: const Color(0xFF6366F1),
                           ),
-                        ),
-                        child: Text(
-                          rCount.isNotEmpty ? '$rName ($rCount)' : rName,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF475569),
+                        if (location.isNotEmpty)
+                          _modernMiniInfo(
+                            icon: Icons.place,
+                            text: location,
+                            color: const Color(0xFF059669),
                           ),
+                        if (headcount != null)
+                          _modernMiniInfo(
+                            icon: Icons.people,
+                            text: '$headcount guests',
+                            color: const Color(0xFFEF4444),
+                          ),
+                        if (acceptedStaff.isNotEmpty)
+                          _modernMiniInfo(
+                            icon: Icons.group,
+                            text: '${acceptedStaff.length} team',
+                            color: const Color(0xFF0EA5E9),
+                          ),
+                      ],
+                    ),
+                    // Roles section
+                    if (roles.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        'Roles Needed',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade700,
+                          letterSpacing: 0.3,
                         ),
-                      );
-                    }).toList(),
-                  ),
-                  if (roles.length > 3) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      '+${roles.length - 3} more roles',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.grey.shade500,
-                        fontStyle: FontStyle.italic,
                       ),
-                    ),
-                  ],
-                ],
-                if (acceptedStaff.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    'Accepted Staff',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey.shade700,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: acceptedStaff.take(6).map((member) {
-                      String displayName;
-                      if (member is Map<String, dynamic>) {
-                        final m = member;
-                        displayName =
-                            (m['name'] ??
-                                    m['first_name'] ??
-                                    m['email'] ??
-                                    m['subject'] ??
-                                    m['userKey'] ??
-                                    'Member')
-                                .toString();
-                      } else if (member is String) {
-                        displayName = member;
-                      } else {
-                        displayName = member.toString();
-                      }
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF0F9FF),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: const Color(
-                              0xFF0EA5E9,
-                            ).withValues(alpha: 0.2),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.person,
-                              size: 14,
-                              color: Color(0xFF0EA5E9),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: roles.take(3).map((role) {
+                          final r = role as Map<String, dynamic>? ?? {};
+                          final String rName = (r['role'] ?? 'Role').toString();
+                          final int rCount =
+                              int.tryParse((r['count'] ?? '').toString()) ??
+                              (r['count'] is int ? (r['count'] as int) : 0);
+                          // Compute accepted count for this role
+                          final int acceptedForRole = acceptedStaff.where((m) {
+                            if (m is Map<String, dynamic>) {
+                              final roleVal = (m['role'] ?? '')
+                                  .toString()
+                                  .toLowerCase();
+                              return roleVal == rName.toLowerCase();
+                            }
+                            return false;
+                          }).length;
+                          final int vacanciesLeft = (rCount - acceptedForRole)
+                              .clamp(0, 1 << 30);
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
                             ),
-                            const SizedBox(width: 6),
-                            Text(
-                              displayName,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: Colors.grey.shade200,
+                                width: 1,
+                              ),
+                            ),
+                            child: Text(
+                              rCount > 0
+                                  ? "$rName ($acceptedForRole/$rCount, $vacanciesLeft left)"
+                                  : rName,
                               style: const TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                                color: Color(0xFF0369A1),
+                                color: Color(0xFF475569),
                               ),
                             ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  if (acceptedStaff.length > 6) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      '+${acceptedStaff.length - 6} more',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey.shade500,
-                        fontStyle: FontStyle.italic,
+                          );
+                        }).toList(),
                       ),
-                    ),
+                      if (roles.length > 3) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          '+${roles.length - 3} more roles',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.grey.shade500,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
+                    ],
+                    if (acceptedStaff.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        'Accepted Staff',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade700,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: acceptedStaff.take(6).map((member) {
+                          String displayName;
+                          String? roleLabel;
+                          if (member is Map<String, dynamic>) {
+                            final m = member;
+                            displayName =
+                                (m['name'] ??
+                                        m['first_name'] ??
+                                        m['email'] ??
+                                        m['subject'] ??
+                                        m['userKey'] ??
+                                        'Member')
+                                    .toString();
+                            final r = (m['role'] ?? '').toString();
+                            roleLabel = r.isNotEmpty ? r : null;
+                          } else if (member is String) {
+                            displayName = member;
+                          } else {
+                            displayName = member.toString();
+                          }
+
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF0F9FF),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: const Color(
+                                  0xFF0EA5E9,
+                                ).withValues(alpha: 0.2),
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.person,
+                                  size: 14,
+                                  color: Color(0xFF0EA5E9),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  roleLabel != null
+                                      ? "$displayName — $roleLabel"
+                                      : displayName,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF0369A1),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      if (acceptedStaff.length > 6) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          '+${acceptedStaff.length - 6} more',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey.shade500,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
+                    ],
                   ],
-                ],
-              ],
+                ),
+              ),
             ),
           ),
         ],
@@ -1297,6 +1466,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           ...acceptedStaff.map((member) {
             String displayName;
             String? status;
+            String? roleLabel;
             if (member is Map<String, dynamic>) {
               final m = member;
               displayName =
@@ -1308,6 +1478,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           'Member')
                       .toString();
               status = m['response']?.toString();
+              final r = (m['role'] ?? '').toString();
+              roleLabel = r.isNotEmpty ? r : null;
             } else if (member is String) {
               displayName = member;
             } else {
@@ -1326,7 +1498,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      displayName,
+                      roleLabel != null
+                          ? "$displayName — $roleLabel"
+                          : displayName,
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
@@ -1384,6 +1558,16 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final Map<String, dynamic> payload = Map<String, dynamic>.from(
       structuredData!,
     );
+
+    // Ask for staff counts (bartenders/servers/dishwashers) before saving
+    final Map<String, int>? counts = await _promptStaffCounts(payload);
+    if (counts == null) {
+      return; // user cancelled
+    }
+    final List<dynamic> existingRoles = (payload['roles'] is List)
+        ? (payload['roles'] as List)
+        : const [];
+    payload['roles'] = _mergeStaffCountsIntoRoles(existingRoles, counts);
     // Normalize date: backend accepts ISO or Date; try to ensure ISO string
     final date = payload['date'];
     if (date is String && date.isNotEmpty) {

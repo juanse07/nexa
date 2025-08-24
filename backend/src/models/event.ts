@@ -1,8 +1,8 @@
 import mongoose, { Document, Model, Schema } from 'mongoose';
 
 export interface RoleRequirement {
-  role?: string;
-  count?: number;
+  role: string;
+  count: number;
   call_time?: string;
 }
 
@@ -16,6 +16,7 @@ export interface AcceptedStaffMember {
   last_name?: string;
   picture?: string;
   response?: string;
+  role?: string;
   respondedAt?: Date | string;
 }
 
@@ -37,7 +38,7 @@ export interface EventDocument extends Document {
   uniform?: string;
   notes?: string;
   headcount_total?: number;
-  roles?: RoleRequirement[];
+  roles: RoleRequirement[];
   pay_rate_info?: string;
   accepted_staff?: AcceptedStaffMember[];
   declined_staff?: AcceptedStaffMember[];
@@ -47,8 +48,8 @@ export interface EventDocument extends Document {
 
 const RoleRequirementSchema = new Schema<RoleRequirement>(
   {
-    role: { type: String },
-    count: { type: Number },
+    role: { type: String, required: true, trim: true },
+    count: { type: Number, required: true, min: 1 },
     call_time: { type: String },
   },
   { _id: false }
@@ -65,6 +66,7 @@ const AcceptedStaffMemberSchema = new Schema<AcceptedStaffMember>(
     last_name: { type: String, trim: true },
     picture: { type: String, trim: true },
     response: { type: String, trim: true },
+    role: { type: String, trim: true },
     respondedAt: { type: Date },
   },
   { _id: false }
@@ -89,7 +91,16 @@ const EventSchema = new Schema<EventDocument>(
     uniform: { type: String, trim: true },
     notes: { type: String, trim: true },
     headcount_total: { type: Number },
-    roles: { type: [RoleRequirementSchema], default: [] },
+    roles: {
+      type: [RoleRequirementSchema],
+      required: true,
+      validate: {
+        validator: function (arr: unknown) {
+          return Array.isArray(arr) && arr.length > 0;
+        },
+        message: 'At least one role is required',
+      },
+    },
     pay_rate_info: { type: String, trim: true },
     accepted_staff: { type: [AcceptedStaffMemberSchema], default: [] },
     declined_staff: { type: [AcceptedStaffMemberSchema], default: [] },
