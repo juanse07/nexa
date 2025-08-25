@@ -12,4 +12,6 @@ export const ENV = {
   googleClientIdAndroid: process.env.GOOGLE_CLIENT_ID_ANDROID || '',
   googleClientIdWeb: process.env.GOOGLE_CLIENT_ID_WEB || '',
   appleBundleId: process.env.APPLE_BUNDLE_ID || '',
+  // Admin
+  adminKey: process.env.ADMIN_KEY || '',
 };

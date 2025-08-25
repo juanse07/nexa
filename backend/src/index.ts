@@ -58,6 +58,40 @@ async function createServer() {
   app.use('/api', eventsRouter);
   app.use('/api/auth', authRouter);
 
+  // Admin maintenance: recompute role_stats for all events
+  app.post('/api/admin/recompute-role-stats', async (req, res) => {
+    try {
+      const provided = (req.headers['x-admin-key'] as string) || (req.query.key as string) || '';
+      if (!ENV.adminKey || provided !== ENV.adminKey) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+
+      const events = await EventModel.find().lean();
+      let updated = 0;
+      for (const ev of events as any[]) {
+        const accepted = ev.accepted_staff || [];
+        const roleToAcceptedCount = accepted.reduce((acc: Record<string, number>, m: any) => {
+          const key = (m?.role || '').toLowerCase();
+          if (!key) return acc;
+          acc[key] = (acc[key] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+        const stats = (ev.roles || []).map((r: any) => {
+          const key = (r?.role || '').toLowerCase();
+          const capacity = r?.count || 0;
+          const taken = roleToAcceptedCount[key] || 0;
+          const remaining = Math.max(capacity - taken, 0);
+          return { role: r.role, capacity, taken, remaining, is_full: remaining === 0 && capacity > 0 };
+        });
+        await EventModel.updateOne({ _id: ev._id }, { $set: { role_stats: stats } });
+        updated += 1;
+      }
+      return res.json({ updated });
+    } catch (err) {
+      return res.status(500).json({ message: 'Failed to recompute role stats' });
+    }
+  });
+
   app.get('/', (_req, res) => {
     res.send('Nexa backend is running');
   });
