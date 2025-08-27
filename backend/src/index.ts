@@ -17,7 +17,17 @@ const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 async function createServer() {
   const app = express();
 
-  app.use(cors());
+  // CORS
+  const origins = (ENV.allowedOrigins || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  app.use(
+    cors({
+      origin: origins.length > 0 ? origins : undefined,
+      credentials: true,
+    })
+  );
   app.use(helmet());
   app.use(compression());
   app.use(express.json({ limit: '2mb' }));
