@@ -180,7 +180,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     return 0;
   }
 
-  Future<Map<String, int>?> _promptStaffCounts(
+  Future<Map<String, dynamic>?> _promptStaffCounts(
     Map<String, dynamic> payload,
   ) async {
     final List<dynamic> roles = (payload['roles'] is List)
@@ -200,8 +200,15 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final TextEditingController dishwashersCtrl = TextEditingController(
       text: defaultDishwashers.toString(),
     );
+    final TextEditingController thirdPartyCompanyCtrl = TextEditingController(
+      text:
+          (payload['third_party_company_name'] ??
+                  payload['client_company_name'] ??
+                  '')
+              .toString(),
+    );
 
-    Map<String, int>? result = await showDialog<Map<String, int>>(
+    Map<String, dynamic>? result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (ctx) {
         return AlertDialog(
@@ -214,6 +221,15 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 const Text(
                   'Please confirm counts before saving. You can set 0 if not needed.',
                   style: TextStyle(fontSize: 13),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: thirdPartyCompanyCtrl,
+                  keyboardType: TextInputType.text,
+                  decoration: const InputDecoration(
+                    labelText: 'Client company name (third-party)',
+                    prefixIcon: Icon(Icons.business),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -260,10 +276,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 final int dishwashers =
                     int.tryParse(dishwashersCtrl.text.trim()) ??
                     defaultDishwashers;
+                final String company = thirdPartyCompanyCtrl.text.trim();
                 Navigator.of(ctx).pop({
-                  'bartender': bartenders < 0 ? 0 : bartenders,
-                  'server': servers < 0 ? 0 : servers,
-                  'dishwasher': dishwashers < 0 ? 0 : dishwashers,
+                  'counts': {
+                    'bartender': bartenders < 0 ? 0 : bartenders,
+                    'server': servers < 0 ? 0 : servers,
+                    'dishwasher': dishwashers < 0 ? 0 : dishwashers,
+                  },
+                  'third_party_company_name': company,
                 });
               },
               child: const Text('Continue'),
@@ -1560,9 +1580,22 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     );
 
     // Ask for staff counts (bartenders/servers/dishwashers) before saving
-    final Map<String, int>? counts = await _promptStaffCounts(payload);
-    if (counts == null) {
+    final Map<String, dynamic>? promptResult = await _promptStaffCounts(
+      payload,
+    );
+    if (promptResult == null) {
       return; // user cancelled
+    }
+    final Map<String, int> counts =
+        (promptResult['counts'] as Map?)?.map<String, int>(
+          (key, value) =>
+              MapEntry(key.toString(), int.tryParse(value.toString()) ?? 0),
+        ) ??
+        <String, int>{};
+    final String thirdPartyCompanyName =
+        (promptResult['third_party_company_name']?.toString() ?? '').trim();
+    if (thirdPartyCompanyName.isNotEmpty) {
+      payload['third_party_company_name'] = thirdPartyCompanyName;
     }
     final List<dynamic> existingRoles = (payload['roles'] is List)
         ? (payload['roles'] as List)

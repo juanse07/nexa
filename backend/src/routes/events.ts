@@ -31,6 +31,7 @@ const acceptedStaffSchema = z.object({
 const eventSchema = z.object({
   event_name: z.string().nullish(),
   client_name: z.string().nullish(),
+  third_party_company_name: z.string().nullish(),
   date: z.union([z.string(), z.date()]).nullish(),
   start_time: z.string().nullish(),
   end_time: z.string().nullish(),
@@ -78,6 +79,11 @@ router.post('/events', async (req, res) => {
     }
 
     const raw = parsed.data;
+    // Backwards compatibility: accept client_company_name and map to new field
+    if ((raw as any).client_company_name && !(raw as any).third_party_company_name) {
+      (raw as any).third_party_company_name = (raw as any).client_company_name;
+      delete (raw as any).client_company_name;
+    }
     // Normalize date to Date type if provided
     const normalized = {
       ...raw,

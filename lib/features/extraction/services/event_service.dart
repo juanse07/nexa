@@ -4,8 +4,15 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
 class EventService {
-  String get _baseUrl =>
-      (dotenv.env['BACKEND_BASE_URL'] ?? 'http://localhost:4000/api').trim();
+  String get _baseUrl {
+    final fromEnv = (dotenv.env['BACKEND_BASE_URL'] ?? '').trim();
+    if (fromEnv.isEmpty) {
+      throw StateError(
+        'BACKEND_BASE_URL is not set. Please set it in your .env to your deployed server URL.',
+      );
+    }
+    return fromEnv;
+  }
 
   Future<List<Map<String, dynamic>>> fetchEvents() async {
     final uri = Uri.parse('$_baseUrl/events');

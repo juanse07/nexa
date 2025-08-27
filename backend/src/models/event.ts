@@ -31,6 +31,7 @@ export interface RoleStat {
 export interface EventDocument extends Document {
   event_name?: string;
   client_name?: string;
+  third_party_company_name?: string;
   date?: Date | string;
   start_time?: string;
   end_time?: string;
@@ -96,6 +97,7 @@ const EventSchema = new Schema<EventDocument>(
   {
     event_name: { type: String, trim: true },
     client_name: { type: String, trim: true },
+    third_party_company_name: { type: String, trim: true },
     date: { type: Date },
     start_time: { type: String, trim: true },
     end_time: { type: String, trim: true },
