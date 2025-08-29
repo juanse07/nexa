@@ -74,6 +74,14 @@ class _ModernAddressFieldState extends State<ModernAddressField> {
         _isLoading = false;
       });
       _removeOverlay();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Address search failed: ${e.toString()}'),
+            backgroundColor: const Color(0xFFDC2626),
+          ),
+        );
+      }
     }
   }
 

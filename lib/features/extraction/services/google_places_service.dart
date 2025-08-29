@@ -23,6 +23,11 @@ class GooglePlacesService {
     );
 
     try {
+      // Minimal debug signal without exposing the key
+      // ignore: avoid_print
+      print(
+        '[places] autocomplete request q="${input.substring(0, input.length.clamp(0, 20))}"',
+      );
       final response = await http.get(url);
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -32,11 +37,21 @@ class GooglePlacesService {
               .toList();
           return predictions;
         }
+        // ignore: avoid_print
+        print(
+          '[places] autocomplete status=${data['status']} msg=${data['error_message'] ?? ''}',
+        );
+        throw Exception(
+          'Places autocomplete failed: ${data['status']} ${data['error_message'] ?? ''}',
+        );
       }
-      return [];
+      // ignore: avoid_print
+      print('[places] HTTP ${response.statusCode}: ${response.body}');
+      throw Exception('HTTP ${response.statusCode} from Places');
     } catch (e) {
+      // ignore: avoid_print
       print('Error getting place predictions: $e');
-      return [];
+      rethrow;
     }
   }
 
@@ -47,17 +62,31 @@ class GooglePlacesService {
     );
 
     try {
+      // ignore: avoid_print
+      print(
+        '[places] details request id=${placeId.substring(0, placeId.length.clamp(0, 12))}...',
+      );
       final response = await http.get(url);
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['status'] == 'OK') {
           return PlaceDetails.fromJson(data['result']);
         }
+        // ignore: avoid_print
+        print(
+          '[places] details status=${data['status']} msg=${data['error_message'] ?? ''}',
+        );
+        throw Exception(
+          'Places details failed: ${data['status']} ${data['error_message'] ?? ''}',
+        );
       }
-      return null;
+      // ignore: avoid_print
+      print('[places] details HTTP ${response.statusCode}: ${response.body}');
+      throw Exception('HTTP ${response.statusCode} from Places details');
     } catch (e) {
+      // ignore: avoid_print
       print('Error getting place details: $e');
-      return null;
+      rethrow;
     }
   }
 }

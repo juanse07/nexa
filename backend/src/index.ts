@@ -114,8 +114,7 @@ app.get('/healthz', (_req, res) => {
 
 
 
-  return app;
-}
+
 
 async function start() {
   try {
