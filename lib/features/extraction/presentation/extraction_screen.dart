@@ -376,6 +376,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         if (_selectedVenuePlace != null) ...{
           'venue_latitude': _selectedVenuePlace!.latitude,
           'venue_longitude': _selectedVenuePlace!.longitude,
+          'google_maps_url':
+              'https://www.google.com/maps/search/?api=1&query='
+              '${Uri.encodeComponent(_selectedVenuePlace!.formattedAddress.isNotEmpty ? _selectedVenuePlace!.formattedAddress : '${_selectedVenuePlace!.latitude},${_selectedVenuePlace!.longitude}')}'
+              '&query_place_id=${Uri.encodeComponent(_selectedVenuePlace!.placeId)}',
         },
         'contact_name': _contactNameController.text.trim(),
         'contact_phone': _contactPhoneController.text.trim(),
@@ -1976,5 +1980,3 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     return months[month - 1];
   }
 }
-
-

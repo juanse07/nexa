@@ -18,9 +18,31 @@ class GooglePlacesService {
   static Future<List<PlacePrediction>> getPlacePredictions(String input) async {
     if (input.isEmpty) return [];
 
-    final url = Uri.parse(
-      '$_baseUrl/place/autocomplete/json?input=${Uri.encodeComponent(input)}&key=$_apiKey&types=address',
-    );
+    // Optional geo bias (defaults: Colorado, USA)
+    final biasLat =
+        double.tryParse(dotenv.env['PLACES_BIAS_LAT'] ?? '') ??
+        39.7392; // Denver
+    final biasLng =
+        double.tryParse(dotenv.env['PLACES_BIAS_LNG'] ?? '') ?? -104.9903;
+    final biasRadiusM =
+        int.tryParse(dotenv.env['PLACES_BIAS_RADIUS_M'] ?? '') ??
+        450000; // ~450km
+    final components = (dotenv.env['PLACES_COMPONENTS'] ?? 'country:us').trim();
+
+    final sessionToken = DateTime.now().millisecondsSinceEpoch.toString();
+    final queryParams = [
+      'input=${Uri.encodeComponent(input)}',
+      'key=$_apiKey',
+      // Do not hard-filter to address only; allow establishments to match well-known venues
+      if (components.isNotEmpty)
+        'components=${Uri.encodeComponent(components)}',
+      'location=$biasLat,$biasLng',
+      'radius=$biasRadiusM',
+      'region=us',
+      'sessiontoken=$sessionToken',
+    ].join('&');
+
+    final url = Uri.parse('$_baseUrl/place/autocomplete/json?$queryParams');
 
     try {
       // Minimal debug signal without exposing the key
@@ -70,7 +92,7 @@ class GooglePlacesService {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['status'] == 'OK') {
-          return PlaceDetails.fromJson(data['result']);
+          return PlaceDetails.fromJson(data['result'], placeId: placeId);
         }
         // ignore: avoid_print
         print(
@@ -115,19 +137,24 @@ class PlacePrediction {
 }
 
 class PlaceDetails {
+  final String placeId;
   final String formattedAddress;
   final double latitude;
   final double longitude;
   final Map<String, String> addressComponents;
 
   PlaceDetails({
+    required this.placeId,
     required this.formattedAddress,
     required this.latitude,
     required this.longitude,
     required this.addressComponents,
   });
 
-  factory PlaceDetails.fromJson(Map<String, dynamic> json) {
+  factory PlaceDetails.fromJson(
+    Map<String, dynamic> json, {
+    required String placeId,
+  }) {
     final geometry = json['geometry'] ?? {};
     final location = geometry['location'] ?? {};
 
@@ -165,6 +192,7 @@ class PlaceDetails {
     }
 
     return PlaceDetails(
+      placeId: placeId,
       formattedAddress: json['formatted_address'] ?? '',
       latitude: (location['lat'] ?? 0.0).toDouble(),
       longitude: (location['lng'] ?? 0.0).toDouble(),
