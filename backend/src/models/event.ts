@@ -43,6 +43,9 @@ export interface EventDocument extends Document {
   end_time?: string;
   venue_name?: string;
   venue_address?: string;
+  venue_latitude?: number;
+  venue_longitude?: number;
+  google_maps_url?: string;
   city?: string;
   state?: string;
   country?: string;
@@ -121,6 +124,9 @@ const EventSchema = new Schema<EventDocument>(
     end_time: { type: String, trim: true },
     venue_name: { type: String, trim: true },
     venue_address: { type: String, trim: true },
+    venue_latitude: { type: Number },
+    venue_longitude: { type: Number },
+    google_maps_url: { type: String, trim: true },
     city: { type: String, trim: true },
     state: { type: String, trim: true },
     country: { type: String, trim: true },
