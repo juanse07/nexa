@@ -110,6 +110,10 @@ async function createServer() {
 app.get('/healthz', (_req, res) => {
   res.status(200).send('ok');
 });
+
+
+
+
   return app;
 }
 

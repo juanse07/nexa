@@ -11,6 +11,8 @@ import 'package:syncfusion_flutter_pdf/pdf.dart';
 import '../../../shared/ui/widgets.dart';
 import '../services/event_service.dart';
 import '../services/extraction_service.dart';
+import '../services/google_places_service.dart';
+import '../widgets/modern_address_field.dart';
 
 class ExtractionScreen extends StatefulWidget {
   const ExtractionScreen({super.key});
@@ -41,6 +43,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   final _dateController = TextEditingController();
   final _startTimeController = TextEditingController();
   final _endTimeController = TextEditingController();
+
+  DateTime? _selectedDate;
+  TimeOfDay? _selectedStartTime;
+  TimeOfDay? _selectedEndTime;
+  PlaceDetails? _selectedVenuePlace;
   final _venueNameController = TextEditingController();
   final _venueAddressController = TextEditingController();
   final _cityController = TextEditingController();
@@ -343,6 +350,17 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   void _submitManualEntry() {
+    // Custom validation for date picker
+    if (_selectedDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a date for the event'),
+          backgroundColor: Color(0xFFEF4444),
+        ),
+      );
+      return;
+    }
+
     if (_formKey.currentState!.validate()) {
       final manualData = {
         'event_name': _eventNameController.text.trim(),
@@ -355,6 +373,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         'city': _cityController.text.trim(),
         'state': _stateController.text.trim(),
         'country': 'USA',
+        if (_selectedVenuePlace != null) ...{
+          'venue_latitude': _selectedVenuePlace!.latitude,
+          'venue_longitude': _selectedVenuePlace!.longitude,
+        },
         'contact_name': _contactNameController.text.trim(),
         'contact_phone': _contactPhoneController.text.trim(),
         'contact_email': _contactEmailController.text.trim(),
@@ -1188,23 +1210,35 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     isRequired: true,
                   ),
                   const SizedBox(height: 16),
+                  _buildModernDatePicker(),
+                  const SizedBox(height: 16),
                   Row(
                     children: [
                       Expanded(
-                        child: LabeledTextField(
-                          controller: _dateController,
-                          label: 'Date (YYYY-MM-DD)',
-                          icon: Icons.calendar_today,
-                          isRequired: true,
+                        child: _buildModernTimePicker(
+                          label: 'Start Time',
+                          icon: Icons.access_time,
+                          selectedTime: _selectedStartTime,
+                          onTimeSelected: (time) {
+                            setState(() {
+                              _selectedStartTime = time;
+                              _startTimeController.text = time.format(context);
+                            });
+                          },
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: LabeledTextField(
-                          controller: _headcountController,
-                          label: 'Headcount',
-                          icon: Icons.people,
-                          keyboardType: TextInputType.number,
+                        child: _buildModernTimePicker(
+                          label: 'End Time',
+                          icon: Icons.access_time_filled,
+                          selectedTime: _selectedEndTime,
+                          onTimeSelected: (time) {
+                            setState(() {
+                              _selectedEndTime = time;
+                              _endTimeController.text = time.format(context);
+                            });
+                          },
                         ),
                       ),
                     ],
@@ -1213,20 +1247,16 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   Row(
                     children: [
                       Expanded(
-                        child: LabeledTextField(
-                          controller: _startTimeController,
-                          label: 'Start Time',
-                          icon: Icons.access_time,
-                          placeholder: 'HH:MM',
-                        ),
+                        flex: 2,
+                        child: Container(), // Spacer
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: LabeledTextField(
-                          controller: _endTimeController,
-                          label: 'End Time',
-                          icon: Icons.access_time_filled,
-                          placeholder: 'HH:MM',
+                          controller: _headcountController,
+                          label: 'Headcount',
+                          icon: Icons.people,
+                          keyboardType: TextInputType.number,
                         ),
                       ),
                     ],
@@ -1244,11 +1274,59 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     icon: Icons.business,
                   ),
                   const SizedBox(height: 16),
-                  LabeledTextField(
+                  ModernAddressField(
                     controller: _venueAddressController,
                     label: 'Address',
                     icon: Icons.place,
-                    maxLines: 2,
+                    onPlaceSelected: (placeDetails) {
+                      setState(() {
+                        _selectedVenuePlace = placeDetails;
+                        // Auto-fill city and state from the selected place
+                        if (placeDetails
+                                .addressComponents['city']
+                                ?.isNotEmpty ==
+                            true) {
+                          _cityController.text =
+                              placeDetails.addressComponents['city']!;
+                        }
+                        if (placeDetails
+                                .addressComponents['state']
+                                ?.isNotEmpty ==
+                            true) {
+                          _stateController.text =
+                              placeDetails.addressComponents['state']!;
+                        }
+                      });
+
+                      // Show success feedback
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Row(
+                            children: [
+                              const Icon(
+                                Icons.check_circle,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Address selected and city/state auto-filled',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          backgroundColor: const Color(0xFF059669),
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 16),
                   Row(
@@ -1652,4 +1730,251 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       );
     }
   }
+
+  Widget _buildModernDatePicker() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.calendar_today, size: 16, color: Colors.grey.shade600),
+            const SizedBox(width: 8),
+            Text(
+              'Date',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade700,
+                letterSpacing: 0.1,
+              ),
+            ),
+            const Text(
+              ' *',
+              style: TextStyle(
+                color: Color(0xFFEF4444),
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        InkWell(
+          onTap: () async {
+            final date = await showDatePicker(
+              context: context,
+              initialDate: _selectedDate ?? DateTime.now(),
+              firstDate: DateTime.now().subtract(const Duration(days: 30)),
+              lastDate: DateTime.now().add(const Duration(days: 365)),
+              builder: (context, child) {
+                return Theme(
+                  data: Theme.of(context).copyWith(
+                    colorScheme: const ColorScheme.light(
+                      primary: Color(0xFF6366F1),
+                      onPrimary: Colors.white,
+                      surface: Colors.white,
+                      onSurface: Color(0xFF0F172A),
+                    ),
+                    dialogTheme: DialogThemeData(backgroundColor: Colors.white),
+                  ),
+                  child: child!,
+                );
+              },
+            );
+            if (date != null) {
+              setState(() {
+                _selectedDate = date;
+                _dateController.text =
+                    '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+              });
+            }
+          },
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: _selectedDate != null
+                    ? const Color(0xFF6366F1).withValues(alpha: 0.3)
+                    : Colors.grey.shade300,
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF6366F1).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.calendar_today,
+                    size: 20,
+                    color: Color(0xFF6366F1),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    _selectedDate != null
+                        ? '${_getMonthName(_selectedDate!.month)} ${_selectedDate!.day}, ${_selectedDate!.year}'
+                        : 'Select a date',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: _selectedDate != null
+                          ? const Color(0xFF0F172A)
+                          : Colors.grey.shade500,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.arrow_drop_down,
+                  color: Colors.grey.shade400,
+                  size: 24,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildModernTimePicker({
+    required String label,
+    required IconData icon,
+    required TimeOfDay? selectedTime,
+    required void Function(TimeOfDay) onTimeSelected,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 16, color: Colors.grey.shade600),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade700,
+                letterSpacing: 0.1,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        InkWell(
+          onTap: () async {
+            final time = await showTimePicker(
+              context: context,
+              initialTime: selectedTime ?? TimeOfDay.now(),
+              builder: (context, child) {
+                return Theme(
+                  data: Theme.of(context).copyWith(
+                    colorScheme: const ColorScheme.light(
+                      primary: Color(0xFF6366F1),
+                      onPrimary: Colors.white,
+                      surface: Colors.white,
+                      onSurface: Color(0xFF0F172A),
+                    ),
+                    dialogTheme: DialogThemeData(backgroundColor: Colors.white),
+                  ),
+                  child: child!,
+                );
+              },
+            );
+            if (time != null) {
+              onTimeSelected(time);
+            }
+          },
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: selectedTime != null
+                    ? const Color(0xFF6366F1).withValues(alpha: 0.3)
+                    : Colors.grey.shade300,
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF6366F1).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, size: 20, color: const Color(0xFF6366F1)),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    selectedTime != null
+                        ? selectedTime.format(context)
+                        : 'Select time',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: selectedTime != null
+                          ? const Color(0xFF0F172A)
+                          : Colors.grey.shade500,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.arrow_drop_down,
+                  color: Colors.grey.shade400,
+                  size: 24,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _getMonthName(int month) {
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return months[month - 1];
+  }
 }
+
+

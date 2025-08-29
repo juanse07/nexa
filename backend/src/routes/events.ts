@@ -376,6 +376,125 @@ router.post('/events/:id/respond', requireAuth, async (req, res) => {
     return res.status(500).json({ message: 'Failed to update response' });
   }
 });
+
+// Get current user's attendance record for an event
+router.get('/events/:id/attendance/me', requireAuth, async (req, res) => {
+  try {
+    const eventId = req.params.id ?? '';
+    if (!mongoose.Types.ObjectId.isValid(eventId)) {
+      return res.status(400).json({ message: 'Invalid event id' });
+    }
+    if (!req.user?.provider || !req.user?.sub) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+    const userKey = `${req.user.provider}:${req.user.sub}`;
+    const event = await EventModel.findById(eventId).lean();
+    if (!event) return res.status(404).json({ message: 'Event not found' });
+    const member = (event.accepted_staff || []).find((m: any) => (m?.userKey || '') === userKey);
+    if (!member) return res.status(404).json({ message: 'Attendance record not found' });
+    const attendance = (member.attendance || []) as any[];
+    const last = attendance.length > 0 ? attendance[attendance.length - 1] : undefined;
+    const isClockedIn = !!(last && !last.clockOutAt);
+    return res.json({
+      eventId,
+      userKey,
+      isClockedIn,
+      lastClockInAt: last?.clockInAt || null,
+      lastClockOutAt: last?.clockOutAt || null,
+      attendance,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[attendance/me] failed', err);
+    return res.status(500).json({ message: 'Failed to get attendance' });
+  }
+});
+
+// Clock in to an event
+router.post('/events/:id/clock-in', requireAuth, async (req, res) => {
+  try {
+    const eventId = req.params.id ?? '';
+    if (!mongoose.Types.ObjectId.isValid(eventId)) {
+      return res.status(400).json({ message: 'Invalid event id' });
+    }
+    if (!req.user?.provider || !req.user?.sub) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+    const userKey = `${req.user.provider}:${req.user.sub}`;
+
+    const event = await EventModel.findById(eventId).lean();
+    if (!event) return res.status(404).json({ message: 'Event not found' });
+    const accepted = (event.accepted_staff || []) as any[];
+    const idx = accepted.findIndex((m: any) => (m?.userKey || '') === userKey);
+    if (idx === -1) {
+      return res.status(403).json({ message: 'You are not accepted for this event' });
+    }
+
+    const attendance = (accepted[idx].attendance || []) as any[];
+    const last = attendance.length > 0 ? attendance[attendance.length - 1] : undefined;
+    if (last && !last.clockOutAt) {
+      return res.status(409).json({ message: 'Already clocked in' });
+    }
+
+    const newAttendance = [...attendance, { clockInAt: new Date() }];
+    const result = await EventModel.updateOne(
+      { _id: new mongoose.Types.ObjectId(eventId), 'accepted_staff.userKey': userKey },
+      { $set: { 'accepted_staff.$.attendance': newAttendance, updatedAt: new Date() } }
+    );
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    return res.status(200).json({ message: 'Clocked in', attendance: newAttendance });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[clock-in] failed', err);
+    return res.status(500).json({ message: 'Failed to clock in' });
+  }
+});
+
+// Clock out from an event
+router.post('/events/:id/clock-out', requireAuth, async (req, res) => {
+  try {
+    const eventId = req.params.id ?? '';
+    if (!mongoose.Types.ObjectId.isValid(eventId)) {
+      return res.status(400).json({ message: 'Invalid event id' });
+    }
+    if (!req.user?.provider || !req.user?.sub) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+    const userKey = `${req.user.provider}:${req.user.sub}`;
+
+    const event = await EventModel.findById(eventId).lean();
+    if (!event) return res.status(404).json({ message: 'Event not found' });
+    const accepted = (event.accepted_staff || []) as any[];
+    const idx = accepted.findIndex((m: any) => (m?.userKey || '') === userKey);
+    if (idx === -1) {
+      return res.status(403).json({ message: 'You are not accepted for this event' });
+    }
+
+    const attendance = (accepted[idx].attendance || []) as any[];
+    const last = attendance.length > 0 ? attendance[attendance.length - 1] : undefined;
+    if (!last || last.clockOutAt) {
+      return res.status(409).json({ message: 'Not clocked in' });
+    }
+
+    const newAttendance = attendance.slice(0, -1).concat({ ...last, clockOutAt: new Date() });
+    const result = await EventModel.updateOne(
+      { _id: new mongoose.Types.ObjectId(eventId), 'accepted_staff.userKey': userKey },
+      { $set: { 'accepted_staff.$.attendance': newAttendance, updatedAt: new Date() } }
+    );
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    return res.status(200).json({ message: 'Clocked out', attendance: newAttendance });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[clock-out] failed', err);
+    return res.status(500).json({ message: 'Failed to clock out' });
+  }
+});
 export default router;
 
 

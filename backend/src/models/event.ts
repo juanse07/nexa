@@ -6,6 +6,11 @@ export interface RoleRequirement {
   call_time?: string;
 }
 
+export interface AttendanceSession {
+  clockInAt: Date;
+  clockOutAt?: Date;
+}
+
 export interface AcceptedStaffMember {
   userKey?: string;
   provider?: string;
@@ -18,6 +23,7 @@ export interface AcceptedStaffMember {
   response?: string;
   role?: string;
   respondedAt?: Date | string;
+  attendance?: AttendanceSession[];
 }
 
 export interface RoleStat {
@@ -78,6 +84,18 @@ const AcceptedStaffMemberSchema = new Schema<AcceptedStaffMember>(
     response: { type: String, trim: true },
     role: { type: String, trim: true },
     respondedAt: { type: Date },
+    attendance: {
+      type: [
+        new Schema<AttendanceSession>(
+          {
+            clockInAt: { type: Date, required: true },
+            clockOutAt: { type: Date },
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
+    },
   },
   { _id: false }
 );
