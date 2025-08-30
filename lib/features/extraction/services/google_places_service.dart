@@ -111,6 +111,24 @@ class GooglePlacesService {
       rethrow;
     }
   }
+
+  /// Convenience: Resolve a free-form address string to place details by
+  /// querying autocomplete and returning the top candidate's details.
+  static Future<PlaceDetails?> resolveAddressToPlaceDetails(
+    String address,
+  ) async {
+    final input = address.trim();
+    if (input.isEmpty) return null;
+    try {
+      final preds = await getPlacePredictions(input);
+      if (preds.isEmpty) return null;
+      // Prefer a candidate with a placeId and meaningful description
+      final PlacePrediction first = preds.first;
+      return getPlaceDetails(first.placeId);
+    } catch (_) {
+      return null;
+    }
+  }
 }
 
 class PlacePrediction {

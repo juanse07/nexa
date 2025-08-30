@@ -1661,6 +1661,40 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       structuredData!,
     );
 
+    // If payload came from file extraction (no interactive place pick), try to
+    // enrich address fields using Places: add lat/lng and a google_maps_url
+    // so downstream flows can open the exact place.
+    try {
+      final hasCoords =
+          payload.containsKey('venue_latitude') ||
+          payload.containsKey('venue_longitude');
+      final String addr = (payload['venue_address'] ?? payload['venue'] ?? '')
+          .toString()
+          .trim();
+      if (!hasCoords && addr.isNotEmpty && _selectedVenuePlace == null) {
+        final details = await GooglePlacesService.resolveAddressToPlaceDetails(
+          addr,
+        );
+        if (details != null) {
+          payload['venue_latitude'] = details.latitude;
+          payload['venue_longitude'] = details.longitude;
+          payload['google_maps_url'] =
+              'https://www.google.com/maps/search/?api=1&query='
+              '${Uri.encodeComponent(details.formattedAddress.isNotEmpty ? details.formattedAddress : '${details.latitude},${details.longitude}')}'
+              '&query_place_id=${Uri.encodeComponent(details.placeId)}';
+          // Optionally backfill city/state if missing
+          if ((payload['city'] ?? '').toString().trim().isEmpty &&
+              (details.addressComponents['city'] ?? '').isNotEmpty) {
+            payload['city'] = details.addressComponents['city'];
+          }
+          if ((payload['state'] ?? '').toString().trim().isEmpty &&
+              (details.addressComponents['state'] ?? '').isNotEmpty) {
+            payload['state'] = details.addressComponents['state'];
+          }
+        }
+      }
+    } catch (_) {}
+
     // Ask for staff counts (bartenders/servers/dishwashers) before saving
     final Map<String, dynamic>? promptResult = await _promptStaffCounts(
       payload,
