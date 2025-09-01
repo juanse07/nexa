@@ -14,6 +14,7 @@ import '../services/event_service.dart';
 import '../services/extraction_service.dart';
 import '../services/google_places_service.dart';
 import '../services/roles_service.dart';
+import '../services/tariffs_service.dart';
 import '../widgets/modern_address_field.dart';
 
 class ExtractionScreen extends StatefulWidget {
@@ -890,26 +891,257 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   Widget _buildCatalogTab() {
     return SafeArea(
       child: DefaultTabController(
-        length: 2,
+        length: 3,
         child: Column(
           children: [
             const TabBar(
               tabs: [
                 Tab(text: 'Clients'),
                 Tab(text: 'Roles'),
+                Tab(text: 'Tariffs'),
               ],
               labelColor: Color(0xFF6366F1),
               unselectedLabelColor: Colors.grey,
             ),
             Expanded(
               child: TabBarView(
-                children: [_buildClientsTab(), _buildRolesTab()],
+                children: [
+                  _buildClientsTab(),
+                  _buildRolesTab(),
+                  _buildTariffsTab(),
+                ],
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  // Tariffs UI state
+  final TariffsService _tariffsService = TariffsService();
+  List<Map<String, dynamic>>? _tariffs;
+  bool _isTariffsLoading = false;
+  String? _tariffsError;
+  String? _selectedClientIdForTariffs;
+  String? _selectedRoleIdForTariffs;
+
+  Future<void> _loadTariffs() async {
+    setState(() {
+      _isTariffsLoading = true;
+      _tariffsError = null;
+    });
+    try {
+      final items = await _tariffsService.fetchTariffs(
+        clientId: _selectedClientIdForTariffs,
+        roleId: _selectedRoleIdForTariffs,
+      );
+      setState(() {
+        _tariffs = items;
+        _isTariffsLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _tariffsError = e.toString();
+        _isTariffsLoading = false;
+      });
+    }
+  }
+
+  Widget _buildTariffsTab() {
+    final clients = _clients ?? const [];
+    final roles = _roles ?? const [];
+    final tariffs = _tariffs ?? const [];
+    return RefreshIndicator(
+      onRefresh: () async {
+        await _loadClients();
+        await _loadRoles();
+        await _loadTariffs();
+      },
+      color: const Color(0xFF6366F1),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(20),
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  initialValue: _selectedClientIdForTariffs,
+                  items: clients
+                      .map(
+                        (c) => DropdownMenuItem(
+                          value: (c['id'] ?? '').toString(),
+                          child: Text((c['name'] ?? '').toString()),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) =>
+                      setState(() => _selectedClientIdForTariffs = v),
+                  decoration: const InputDecoration(labelText: 'Client'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  initialValue: _selectedRoleIdForTariffs,
+                  items: roles
+                      .map(
+                        (r) => DropdownMenuItem(
+                          value: (r['id'] ?? '').toString(),
+                          child: Text((r['name'] ?? '').toString()),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) =>
+                      setState(() => _selectedRoleIdForTariffs = v),
+                  decoration: const InputDecoration(labelText: 'Role'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              ElevatedButton(
+                onPressed: () async {
+                  await _loadTariffs();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6366F1),
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Load'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              ElevatedButton.icon(
+                onPressed: () async {
+                  final clientId = _selectedClientIdForTariffs;
+                  final roleId = _selectedRoleIdForTariffs;
+                  if (clientId == null || roleId == null) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Select client and role first'),
+                        backgroundColor: Color(0xFFDC2626),
+                      ),
+                    );
+                    return;
+                  }
+                  final rate = await _promptRate();
+                  if (rate == null) return;
+                  try {
+                    await _tariffsService.upsertTariff(
+                      clientId: clientId,
+                      roleId: roleId,
+                      rate: rate,
+                    );
+                    await _loadTariffs();
+                  } catch (e) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to save tariff: $e'),
+                        backgroundColor: const Color(0xFFDC2626),
+                      ),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.attach_money),
+                label: const Text('Set Rate'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF059669),
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (_isTariffsLoading && tariffs.isEmpty)
+            const Center(child: LoadingIndicator(text: 'Loading tariffs...')),
+          if (_tariffsError != null) ...[
+            ErrorBanner(message: _tariffsError!),
+            const SizedBox(height: 12),
+          ],
+          ...tariffs.map((t) => _tariffTile(t)),
+        ],
+      ),
+    );
+  }
+
+  Widget _tariffTile(Map<String, dynamic> t) {
+    final id = (t['id'] ?? '').toString();
+    final roleName = (_roles ?? [])
+        .firstWhere(
+          (r) => (r['id'] ?? '') == (t['roleId'] ?? ''),
+          orElse: () => const {},
+        )['name']
+        ?.toString();
+    final clientName = (_clients ?? [])
+        .firstWhere(
+          (c) => (c['id'] ?? '') == (t['clientId'] ?? ''),
+          orElse: () => const {},
+        )['name']
+        ?.toString();
+    final rate = (t['rate'] ?? 0).toString();
+    final currency = (t['currency'] ?? 'USD').toString();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200, width: 1),
+      ),
+      child: ListTile(
+        leading: const Icon(Icons.price_change, color: Color(0xFF6366F1)),
+        title: Text('$clientName — $roleName'),
+        subtitle: Text('$rate $currency'),
+        trailing: IconButton(
+          icon: const Icon(Icons.delete, color: Color(0xFFDC2626)),
+          onPressed: () async {
+            try {
+              await _tariffsService.deleteTariff(id);
+              await _loadTariffs();
+            } catch (e) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Failed to delete: $e'),
+                  backgroundColor: const Color(0xFFDC2626),
+                ),
+              );
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<double?> _promptRate() async {
+    final controller = TextEditingController();
+    final str = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Set rate'),
+        content: TextField(
+          controller: controller,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(labelText: 'Rate (e.g., 25.00)'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (str == null) return null;
+    return double.tryParse(str);
   }
 
   // Roles UI (similar to Clients)
