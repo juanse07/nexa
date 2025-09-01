@@ -16,6 +16,7 @@ import '../services/extraction_service.dart';
 import '../services/google_places_service.dart';
 import '../services/roles_service.dart';
 import '../services/tariffs_service.dart';
+import '../services/users_service.dart';
 import '../widgets/modern_address_field.dart';
 
 class ExtractionScreen extends StatefulWidget {
@@ -40,6 +41,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   List<Map<String, dynamic>>? _events;
   bool _isEventsLoading = false;
   String? _eventsError;
+  List<Map<String, dynamic>>? _eventsUpcoming;
+  List<Map<String, dynamic>>? _eventsPast;
 
   // Clients listing state
   List<Map<String, dynamic>>? _clients;
@@ -72,11 +75,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   late final ClientsService _clientsService;
   late final RolesService _rolesService;
   final DraftService _draftService = DraftService();
+  bool _lastStructuredFromUpload = false;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _extractionService = ExtractionService();
     _eventService = EventService();
     _clientsService = ClientsService();
@@ -187,13 +191,20 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         input: text,
         apiKey: userApiKey ?? dotenv.env['OPENAI_API_KEY'] ?? '',
       );
+      // Exclude any client fields from the AI output; user must pick from our DB
+      final sanitized = Map<String, dynamic>.from(response);
+      sanitized.remove('client_name');
+      sanitized.remove('client_company_name');
+      sanitized.remove('third_party_company_name');
+      _clientNameController.text = '';
       setState(() {
-        structuredData = response;
+        structuredData = sanitized;
         isLoading = false;
+        _lastStructuredFromUpload = true;
       });
       // Persist draft to allow switching tabs
       try {
-        await _draftService.saveDraft(response);
+        await _draftService.saveDraft(sanitized);
       } catch (_) {}
     } catch (e) {
       setState(() {
@@ -250,13 +261,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final TextEditingController dishwashersCtrl = TextEditingController(
       text: defaultDishwashers.toString(),
     );
-    final TextEditingController thirdPartyCompanyCtrl = TextEditingController(
-      text:
-          (payload['third_party_company_name'] ??
-                  payload['client_company_name'] ??
-                  '')
-              .toString(),
-    );
+    // Optional roles we don't staff by default
+    final TextEditingController captainCtrl = TextEditingController(text: '0');
+    final TextEditingController deliveryCtrl = TextEditingController(text: '0');
+    final String selectedClientName = _clientNameController.text.trim();
 
     Map<String, dynamic>? result = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -273,12 +281,30 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   style: TextStyle(fontSize: 13),
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  controller: thirdPartyCompanyCtrl,
-                  keyboardType: TextInputType.text,
-                  decoration: const InputDecoration(
-                    labelText: 'Client company name (third-party)',
-                    prefixIcon: Icon(Icons.business),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 14,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.business, color: Color(0xFF6366F1)),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          selectedClientName.isNotEmpty
+                              ? selectedClientName
+                              : 'No client selected',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -308,6 +334,24 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     prefixIcon: Icon(Icons.wash),
                   ),
                 ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: captainCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Catering Captain (optional)',
+                    prefixIcon: Icon(Icons.military_tech),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: deliveryCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Delivery Driver (optional)',
+                    prefixIcon: Icon(Icons.local_shipping),
+                  ),
+                ),
               ],
             ),
           ),
@@ -326,14 +370,21 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 final int dishwashers =
                     int.tryParse(dishwashersCtrl.text.trim()) ??
                     defaultDishwashers;
-                final String company = thirdPartyCompanyCtrl.text.trim();
+                final int captain = int.tryParse(captainCtrl.text.trim()) ?? 0;
+                final int delivery =
+                    int.tryParse(deliveryCtrl.text.trim()) ?? 0;
+                final String company = selectedClientName.isNotEmpty
+                    ? selectedClientName
+                    : (payload['client_name']?.toString() ?? '').trim();
                 Navigator.of(ctx).pop({
                   'counts': {
                     'bartender': bartenders < 0 ? 0 : bartenders,
                     'server': servers < 0 ? 0 : servers,
                     'dishwasher': dishwashers < 0 ? 0 : dishwashers,
+                    'captain': captain < 0 ? 0 : captain,
+                    'delivery': delivery < 0 ? 0 : delivery,
                   },
-                  'third_party_company_name': company,
+                  'client_name': company,
                 });
               },
               child: const Text('Continue'),
@@ -364,7 +415,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       (r) =>
           matches(r['role']?.toString(), 'bartender') ||
           matches(r['role']?.toString(), 'server') ||
-          matches(r['role']?.toString(), 'dishwasher'),
+          matches(r['role']?.toString(), 'dishwasher') ||
+          matches(r['role']?.toString(), 'captain') ||
+          matches(r['role']?.toString(), 'delivery'),
     );
 
     void addIfPositive(String name, int value) {
@@ -376,6 +429,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     addIfPositive('Bartender', counts['bartender'] ?? 0);
     addIfPositive('Server', counts['server'] ?? 0);
     addIfPositive('Dishwasher', counts['dishwasher'] ?? 0);
+    addIfPositive('Catering Captain', counts['captain'] ?? 0);
+    addIfPositive('Delivery Driver', counts['delivery'] ?? 0);
 
     return roles;
   }
@@ -441,6 +496,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         structuredData = manualData;
         extractedText = 'Manually entered data';
         errorMessage = null;
+        _lastStructuredFromUpload = false;
       });
       // Save draft for cross-tab persistence
       _draftService.saveDraft(manualData);
@@ -473,6 +529,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           tabs: const [
             Tab(icon: Icon(Icons.add_circle_outline), text: 'Create'),
             Tab(icon: Icon(Icons.view_module), text: 'Events'),
+            Tab(icon: Icon(Icons.group), text: 'Users'),
             Tab(icon: Icon(Icons.inventory_2), text: 'Catalog'),
           ],
           labelColor: const Color(0xFF6366F1),
@@ -482,7 +539,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [_buildCreateTab(), _buildEventsTab(), _buildCatalogTab()],
+        children: [
+          _buildCreateTab(),
+          _buildEventsTab(),
+          _buildUsersTab(),
+          _buildCatalogTab(),
+        ],
       ),
     );
   }
@@ -508,6 +570,142 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // Users tab with search + cursor pagination
+  final UsersService _usersService = UsersService();
+  final TextEditingController _userSearchCtrl = TextEditingController();
+  List<Map<String, dynamic>> _users = const [];
+  String? _usersNextCursor;
+  bool _isUsersLoading = false;
+
+  Future<void> _loadFirstUsersPage() async {
+    setState(() {
+      _isUsersLoading = true;
+      _users = const [];
+      _usersNextCursor = null;
+    });
+    try {
+      final res = await _usersService.fetchUsers(
+        q: _userSearchCtrl.text.trim(),
+        limit: 20,
+      );
+      final items =
+          (res['items'] as List?)?.whereType<Map<String, dynamic>>().toList() ??
+          const [];
+      setState(() {
+        _users = items;
+        _usersNextCursor = res['nextCursor']?.toString();
+        _isUsersLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isUsersLoading = false;
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to load users: $e'),
+          backgroundColor: const Color(0xFFDC2626),
+        ),
+      );
+    }
+  }
+
+  Future<void> _loadMoreUsers() async {
+    if (_usersNextCursor == null || _isUsersLoading) return;
+    setState(() => _isUsersLoading = true);
+    try {
+      final res = await _usersService.fetchUsers(
+        q: _userSearchCtrl.text.trim(),
+        cursor: _usersNextCursor,
+        limit: 20,
+      );
+      final items =
+          (res['items'] as List?)?.whereType<Map<String, dynamic>>().toList() ??
+          const [];
+      setState(() {
+        _users = [..._users, ...items];
+        _usersNextCursor = res['nextCursor']?.toString();
+        _isUsersLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isUsersLoading = false);
+    }
+  }
+
+  Widget _buildUsersTab() {
+    return SafeArea(
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _userSearchCtrl,
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.search),
+                      hintText: 'Search name or email',
+                    ),
+                    onSubmitted: (_) => _loadFirstUsersPage(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _loadFirstUsersPage,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6366F1),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Search'),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (n) {
+                if (n.metrics.pixels >= n.metrics.maxScrollExtent - 200) {
+                  _loadMoreUsers();
+                }
+                return false;
+              },
+              child: ListView.builder(
+                itemCount: _users.length + 1,
+                itemBuilder: (ctx, idx) {
+                  if (idx == _users.length) {
+                    if (_isUsersLoading)
+                      return const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Center(child: CircularProgressIndicator()),
+                      );
+                    if (_usersNextCursor == null)
+                      return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Center(
+                        child: TextButton(
+                          onPressed: _loadMoreUsers,
+                          child: const Text('Load more'),
+                        ),
+                      ),
+                    );
+                  }
+                  final u = _users[idx];
+                  return ListTile(
+                    leading: const CircleAvatar(child: Icon(Icons.person)),
+                    title: Text((u['name'] ?? u['email'] ?? 'User').toString()),
+                    subtitle: Text((u['email'] ?? '').toString()),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -596,31 +794,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               ErrorBanner(message: errorMessage!),
               const SizedBox(height: 20),
             ],
-            if (extractedText != null &&
-                !extractedText!.startsWith('[[IMAGE_BASE64]]')) ...[
-              InfoCard(
-                title: 'Extracted Text Preview',
-                icon: Icons.text_snippet,
-                child: Container(
-                  height: 200,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: SingleChildScrollView(
-                    child: Text(
-                      extractedText!,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontFamily: 'monospace',
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-            ],
+            // Hide extracted text preview in Upload flow
             if (structuredData != null) ...[
               InfoCard(
                 title: 'Event Details',
@@ -628,10 +802,87 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 child: _buildEventDetails(structuredData!),
               ),
               const SizedBox(height: 12),
+              // Allow quick adjustments for date and time before saving
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade200, width: 1),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Adjust Date & Time',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: _pickDateForUpload,
+                          icon: const Icon(Icons.calendar_today, size: 16),
+                          label: Text(
+                            _dateController.text.isNotEmpty
+                                ? _dateController.text
+                                : (structuredData!['date']?.toString() ??
+                                      'Pick date'),
+                          ),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () => _pickTimeForUpload(isStart: true),
+                          icon: const Icon(Icons.access_time, size: 16),
+                          label: Text(
+                            _startTimeController.text.isNotEmpty
+                                ? _startTimeController.text
+                                : (structuredData!['start_time']?.toString() ??
+                                      'Start time'),
+                          ),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () => _pickTimeForUpload(isStart: false),
+                          icon: const Icon(Icons.access_time_filled, size: 16),
+                          label: Text(
+                            _endTimeController.text.isNotEmpty
+                                ? _endTimeController.text
+                                : (structuredData!['end_time']?.toString() ??
+                                      'End time'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
               Align(
                 alignment: Alignment.centerRight,
                 child: ElevatedButton.icon(
-                  onPressed: () => _saveCurrentEvent(),
+                  onPressed: () async {
+                    if (_lastStructuredFromUpload) {
+                      await _openClientPicker();
+                      if (_clientNameController.text.trim().isEmpty) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Please choose a client before saving',
+                            ),
+                            backgroundColor: Color(0xFFDC2626),
+                          ),
+                        );
+                        return;
+                      }
+                    }
+                    await _saveCurrentEvent();
+                  },
                   icon: const Icon(Icons.cloud_upload, size: 18),
                   label: const Text('Save to Database'),
                   style: ElevatedButton.styleFrom(
@@ -645,6 +896,70 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         ),
       ),
     );
+  }
+
+  // Helpers for adjusting date/time in Upload flow
+  DateTime? _parseStructuredDate() {
+    final v = structuredData?["date"]?.toString();
+    if (v == null || v.isEmpty) return null;
+    try {
+      return DateTime.parse(v);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  TimeOfDay? _parseStructuredTime(String key) {
+    final v = structuredData?[key]?.toString();
+    if (v == null || v.isEmpty) return null;
+    final parts = v.split(':');
+    if (parts.length >= 2) {
+      final h = int.tryParse(parts[0]);
+      final m = int.tryParse(parts[1]);
+      if (h != null && m != null) return TimeOfDay(hour: h, minute: m);
+    }
+    return null;
+  }
+
+  String _fmtDate(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  Future<void> _pickDateForUpload() async {
+    final initial = _parseStructuredDate() ?? DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime.now().subtract(const Duration(days: 365 * 5)),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+    );
+    if (picked != null) {
+      setState(() {
+        structuredData = {...?structuredData, 'date': _fmtDate(picked)};
+        _selectedDate = picked;
+        _dateController.text = _fmtDate(picked);
+      });
+      _draftService.saveDraft(structuredData!);
+    }
+  }
+
+  Future<void> _pickTimeForUpload({required bool isStart}) async {
+    final key = isStart ? 'start_time' : 'end_time';
+    final initial = _parseStructuredTime(key) ?? TimeOfDay.now();
+    final picked = await showTimePicker(context: context, initialTime: initial);
+    if (picked != null) {
+      final formatted = picked.format(context);
+      setState(() {
+        structuredData = {...?structuredData, key: formatted};
+        if (isStart) {
+          _selectedStartTime = picked;
+          _startTimeController.text = formatted;
+        } else {
+          _selectedEndTime = picked;
+          _endTimeController.text = formatted;
+        }
+      });
+      _draftService.saveDraft(structuredData!);
+    }
   }
 
   Future<void> _loadEvents() async {
@@ -697,6 +1012,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       ];
       setState(() {
         _events = sorted;
+        _eventsUpcoming = upcoming;
+        _eventsPast = past;
         _isEventsLoading = false;
       });
     } catch (e) {
@@ -708,147 +1025,144 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   Widget _buildEventsTab() {
+    final List<Map<String, dynamic>> all = _events ?? const [];
+    final List<Map<String, dynamic>> upcoming = _eventsUpcoming ?? const [];
+    final List<Map<String, dynamic>> past = _eventsPast ?? const [];
     return SafeArea(
-      child: RefreshIndicator(
-        onRefresh: _loadEvents,
-        color: const Color(0xFF6366F1),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final double width = constraints.maxWidth;
-            int crossAxisCount = 1;
-            if (width >= 1200) {
-              crossAxisCount = 4;
-            } else if (width >= 900) {
-              crossAxisCount = 3;
-            } else if (width >= 600) {
-              crossAxisCount = 2;
-            }
-
-            final List<Map<String, dynamic>> items = _events ?? const [];
-
-            if (_isEventsLoading && items.isEmpty) {
-              return ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(20),
-                children: const [
-                  Center(child: LoadingIndicator(text: 'Loading events...')),
+      child: DefaultTabController(
+        length: 2,
+        child: Column(
+          children: [
+            const TabBar(
+              tabs: [
+                Tab(text: 'Upcoming'),
+                Tab(text: 'Past'),
+              ],
+              labelColor: Color(0xFF6366F1),
+              unselectedLabelColor: Colors.grey,
+            ),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  _eventsInner(
+                    upcoming.isNotEmpty
+                        ? upcoming
+                        : all.where((e) => true).toList(),
+                  ),
+                  _eventsInner(past),
                 ],
-              );
-            }
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
+  Widget _eventsInner(List<Map<String, dynamic>> items) {
+    return RefreshIndicator(
+      onRefresh: _loadEvents,
+      color: const Color(0xFF6366F1),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final double width = constraints.maxWidth;
+          int crossAxisCount = 1;
+          if (width >= 1200) {
+            crossAxisCount = 4;
+          } else if (width >= 900) {
+            crossAxisCount = 3;
+          } else if (width >= 600) {
+            crossAxisCount = 2;
+          }
+
+          if (_isEventsLoading && items.isEmpty) {
             return ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(20),
-              children: [
-                if (_eventsError != null) ...[
-                  ErrorBanner(message: _eventsError!),
-                  const SizedBox(height: 12),
-                ],
-                if (!_isEventsLoading && items.isEmpty && _eventsError == null)
-                  Container(
-                    padding: const EdgeInsets.all(32),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.grey.shade100, width: 1),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
-                          blurRadius: 20,
-                          offset: const Offset(0, 8),
-                          spreadRadius: -4,
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF6366F1).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Icon(
-                            Icons.event_available_outlined,
-                            color: const Color(0xFF6366F1),
-                            size: 48,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        Text(
-                          'No Events Yet',
-                          style: TextStyle(
-                            color: const Color(0xFF0F172A),
-                            fontWeight: FontWeight.w700,
-                            fontSize: 20,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Create your first event by uploading a document or entering details manually.',
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontSize: 15,
-                            height: 1.5,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 24),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF8FAFC),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: Colors.grey.shade200,
-                              width: 1,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.refresh,
-                                size: 16,
-                                color: Colors.grey.shade500,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Pull to refresh',
-                                style: TextStyle(
-                                  color: Colors.grey.shade500,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                if (items.isNotEmpty)
-                  GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: crossAxisCount,
-                      mainAxisSpacing: 20,
-                      crossAxisSpacing: 20,
-                      childAspectRatio: crossAxisCount == 1 ? 0.95 : 0.85,
-                    ),
-                    itemCount: items.length,
-                    itemBuilder: (context, index) =>
-                        _buildEventCard(items[index]),
-                  ),
+              children: const [
+                Center(child: LoadingIndicator(text: 'Loading events...')),
               ],
             );
-          },
-        ),
+          }
+
+          return ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(20),
+            children: [
+              if (_eventsError != null) ...[
+                ErrorBanner(message: _eventsError!),
+                const SizedBox(height: 12),
+              ],
+              if (!_isEventsLoading && items.isEmpty && _eventsError == null)
+                Container(
+                  padding: const EdgeInsets.all(32),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.grey.shade100, width: 1),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                        spreadRadius: -4,
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF6366F1).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Icon(
+                          Icons.event_available_outlined,
+                          color: const Color(0xFF6366F1),
+                          size: 48,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        'No Events',
+                        style: TextStyle(
+                          color: const Color(0xFF0F172A),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 20,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Pull to refresh.',
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 15,
+                          height: 1.5,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              if (items.isNotEmpty)
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    mainAxisSpacing: 20,
+                    crossAxisSpacing: 20,
+                    childAspectRatio: crossAxisCount == 1 ? 0.95 : 0.85,
+                  ),
+                  itemCount: items.length,
+                  itemBuilder: (context, index) =>
+                      _buildEventCard(items[index]),
+                ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1484,9 +1798,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   Widget _buildEventCard(Map<String, dynamic> e) {
-    String title = (e['event_name'] ?? e['venue_name'] ?? 'Untitled Event')
+    // Show client prominently and event name as secondary
+    String title = (e['client_name'] ?? 'Client').toString();
+    String subtitle = (e['event_name'] ?? e['venue_name'] ?? 'Untitled Event')
         .toString();
-    String subtitle = (e['client_name'] ?? '').toString();
     String dateStr = '';
     bool isUpcoming = false;
     final dynamic rawDate = e['date'];
@@ -2332,35 +2647,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             );
           }),
         ],
-        const SizedBox(height: 16),
-        TextButton.icon(
-          onPressed: () {
-            showDialog(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                title: const Text('Raw JSON Data'),
-                content: SingleChildScrollView(
-                  child: Text(
-                    const JsonEncoder.withIndent('  ').convert(data),
-                    style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(ctx).pop(),
-                    child: const Text('Close'),
-                  ),
-                ],
-              ),
-            );
-          },
-          icon: const Icon(Icons.code, size: 16),
-          label: const Text('View Raw JSON'),
-          style: TextButton.styleFrom(foregroundColor: const Color(0xFF6366F1)),
-        ),
+        // Hidden: raw JSON dialog link is not needed for end users
       ],
     );
   }
@@ -2418,10 +2705,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               MapEntry(key.toString(), int.tryParse(value.toString()) ?? 0),
         ) ??
         <String, int>{};
-    final String thirdPartyCompanyName =
-        (promptResult['third_party_company_name']?.toString() ?? '').trim();
-    if (thirdPartyCompanyName.isNotEmpty) {
-      payload['third_party_company_name'] = thirdPartyCompanyName;
+    final String confirmedClientName =
+        (promptResult['client_name']?.toString() ?? '').trim();
+    if (confirmedClientName.isNotEmpty) {
+      payload['client_name'] = confirmedClientName;
     }
     final List<dynamic> existingRoles = (payload['roles'] is List)
         ? (payload['roles'] as List)
