@@ -10,6 +10,7 @@ import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 import '../../../shared/ui/widgets.dart';
 import '../services/clients_service.dart';
+import '../services/draft_service.dart';
 import '../services/event_service.dart';
 import '../services/extraction_service.dart';
 import '../services/google_places_service.dart';
@@ -70,11 +71,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   late final EventService _eventService;
   late final ClientsService _clientsService;
   late final RolesService _rolesService;
+  final DraftService _draftService = DraftService();
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _extractionService = ExtractionService();
     _eventService = EventService();
     _clientsService = ClientsService();
@@ -82,6 +84,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     _loadEvents();
     _loadClients();
     _loadRoles();
+    _loadDraftIfAny();
   }
 
   @override
@@ -102,6 +105,28 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     _headcountController.dispose();
     _notesController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadDraftIfAny() async {
+    final d = await _draftService.loadDraft();
+    if (d == null) return;
+    setState(() {
+      structuredData = d;
+      _eventNameController.text = (d['event_name'] ?? '').toString();
+      _clientNameController.text = (d['client_name'] ?? '').toString();
+      _dateController.text = (d['date'] ?? '').toString();
+      _startTimeController.text = (d['start_time'] ?? '').toString();
+      _endTimeController.text = (d['end_time'] ?? '').toString();
+      _venueNameController.text = (d['venue_name'] ?? '').toString();
+      _venueAddressController.text = (d['venue_address'] ?? '').toString();
+      _cityController.text = (d['city'] ?? '').toString();
+      _stateController.text = (d['state'] ?? '').toString();
+      _contactNameController.text = (d['contact_name'] ?? '').toString();
+      _contactPhoneController.text = (d['contact_phone'] ?? '').toString();
+      _contactEmailController.text = (d['contact_email'] ?? '').toString();
+      _headcountController.text = (d['headcount_total'] ?? '').toString();
+      _notesController.text = (d['notes'] ?? '').toString();
+    });
   }
 
   Future<void> _pickAndProcessFile() async {
@@ -166,6 +191,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         structuredData = response;
         isLoading = false;
       });
+      // Persist draft to allow switching tabs
+      try {
+        await _draftService.saveDraft(response);
+      } catch (_) {}
     } catch (e) {
       setState(() {
         errorMessage = e.toString();
@@ -413,6 +442,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         extractedText = 'Manually entered data';
         errorMessage = null;
       });
+      // Save draft for cross-tab persistence
+      _draftService.saveDraft(manualData);
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -440,8 +471,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
-            Tab(icon: Icon(Icons.upload_file), text: 'Upload Document'),
-            Tab(icon: Icon(Icons.edit), text: 'Manual Entry'),
+            Tab(icon: Icon(Icons.add_circle_outline), text: 'Create'),
             Tab(icon: Icon(Icons.view_module), text: 'Events'),
             Tab(icon: Icon(Icons.inventory_2), text: 'Catalog'),
           ],
@@ -452,12 +482,32 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [
-          _buildUploadTab(),
-          _buildManualEntryTab(),
-          _buildEventsTab(),
-          _buildCatalogTab(),
-        ],
+        children: [_buildCreateTab(), _buildEventsTab(), _buildCatalogTab()],
+      ),
+    );
+  }
+
+  Widget _buildCreateTab() {
+    return SafeArea(
+      child: DefaultTabController(
+        length: 2,
+        child: Column(
+          children: [
+            const TabBar(
+              tabs: [
+                Tab(icon: Icon(Icons.upload_file), text: 'Upload Document'),
+                Tab(icon: Icon(Icons.edit), text: 'Manual Entry'),
+              ],
+              labelColor: Color(0xFF6366F1),
+              unselectedLabelColor: Colors.grey,
+            ),
+            Expanded(
+              child: TabBarView(
+                children: [_buildUploadTab(), _buildManualEntryTab()],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2418,6 +2468,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           backgroundColor: Color(0xFF059669),
         ),
       );
+      // Clear draft after successful save
+      await _draftService.clearDraft();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
