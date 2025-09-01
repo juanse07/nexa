@@ -61,6 +61,7 @@ export interface EventDocument extends Document {
   accepted_staff?: AcceptedStaffMember[];
   declined_staff?: AcceptedStaffMember[];
   role_stats?: RoleStat[];
+  audience_user_keys?: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -151,6 +152,7 @@ const EventSchema = new Schema<EventDocument>(
     accepted_staff: { type: [AcceptedStaffMemberSchema], default: [] },
     declined_staff: { type: [AcceptedStaffMemberSchema], default: [] },
     role_stats: { type: [RoleStatSchema], default: [] },
+    audience_user_keys: { type: [String], default: [] },
   },
   { timestamps: true }
 );

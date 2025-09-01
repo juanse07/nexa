@@ -228,7 +228,16 @@ router.patch('/events/:id/roles', async (req, res) => {
 
 router.get('/events', async (_req, res) => {
   try {
-    const events = await EventModel.find().sort({ createdAt: -1 }).lean();
+    const audienceKey = (_req.headers['x-user-key'] as string | undefined) || undefined;
+    const filter: any = {};
+    if (audienceKey) {
+      filter.$or = [
+        { audience_user_keys: { $size: 0 } },
+        { audience_user_keys: { $exists: false } },
+        { audience_user_keys: audienceKey },
+      ];
+    }
+    const events = await EventModel.find(filter).sort({ createdAt: -1 }).lean();
     return res.json(events);
   } catch (err) {
     return res.status(500).json({ error: 'Internal Server Error' });

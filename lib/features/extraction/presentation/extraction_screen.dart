@@ -14,10 +14,12 @@ import '../services/draft_service.dart';
 import '../services/event_service.dart';
 import '../services/extraction_service.dart';
 import '../services/google_places_service.dart';
+import '../services/pending_events_service.dart';
 import '../services/roles_service.dart';
 import '../services/tariffs_service.dart';
 import '../services/users_service.dart';
 import '../widgets/modern_address_field.dart';
+import 'pending_publish_screen.dart';
 
 class ExtractionScreen extends StatefulWidget {
   const ExtractionScreen({super.key});
@@ -43,6 +45,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   String? _eventsError;
   List<Map<String, dynamic>>? _eventsUpcoming;
   List<Map<String, dynamic>>? _eventsPast;
+  // Pending drafts
+  List<Map<String, dynamic>> _pendingDrafts = const [];
+  bool _isPendingLoading = false;
 
   // Clients listing state
   List<Map<String, dynamic>>? _clients;
@@ -75,6 +80,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   late final ClientsService _clientsService;
   late final RolesService _rolesService;
   final DraftService _draftService = DraftService();
+  final PendingEventsService _pendingService = PendingEventsService();
   bool _lastStructuredFromUpload = false;
 
   @override
@@ -89,6 +95,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     _loadClients();
     _loadRoles();
     _loadDraftIfAny();
+    _loadPendingDrafts();
   }
 
   @override
@@ -881,10 +888,48 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         return;
                       }
                     }
-                    await _saveCurrentEvent();
+                    // Build payload from current structured data
+                    final Map<String, dynamic> payload =
+                        Map<String, dynamic>.from(structuredData!);
+                    // Ensure client is attached from selection
+                    final selClient = _clientNameController.text.trim();
+                    if (selClient.isNotEmpty)
+                      payload['client_name'] = selClient;
+                    // Ask for staff counts (always) and merge into roles
+                    final Map<String, dynamic>? promptResult =
+                        await _promptStaffCounts(payload);
+                    if (promptResult == null) {
+                      return;
+                    }
+                    final Map<String, int> counts =
+                        (promptResult['counts'] as Map?)?.map<String, int>(
+                          (k, v) => MapEntry(
+                            k.toString(),
+                            int.tryParse(v.toString()) ?? 0,
+                          ),
+                        ) ??
+                        <String, int>{};
+                    final List<dynamic> existingRoles =
+                        (payload['roles'] is List)
+                        ? (payload['roles'] as List)
+                        : const [];
+                    payload['roles'] = _mergeStaffCountsIntoRoles(
+                      existingRoles,
+                      counts,
+                    );
+                    // Save to pending
+                    final id = await _pendingService.saveDraft(payload);
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Saved to Pending'),
+                        backgroundColor: Color(0xFF059669),
+                      ),
+                    );
+                    await _draftService.clearDraft();
                   },
-                  icon: const Icon(Icons.cloud_upload, size: 18),
-                  label: const Text('Save to Database'),
+                  icon: const Icon(Icons.save, size: 18),
+                  label: const Text('Save to Pending'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF6366F1),
                     foregroundColor: Colors.white,
@@ -968,6 +1013,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       _eventsError = null;
     });
     try {
+      // If we have a stored app token and user identity, derive a userKey
+      // For now we pass no key (public) – TODO: wire real auth token to build userKey
       final items = await _eventService.fetchEvents();
       // Sort: upcoming soonest -> oldest past -> no date
       DateTime? parseDate(Map<String, dynamic> e) {
@@ -1030,11 +1077,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final List<Map<String, dynamic>> past = _eventsPast ?? const [];
     return SafeArea(
       child: DefaultTabController(
-        length: 2,
+        length: 3,
         child: Column(
           children: [
             const TabBar(
               tabs: [
+                Tab(text: 'Pending'),
                 Tab(text: 'Upcoming'),
                 Tab(text: 'Past'),
               ],
@@ -1044,6 +1092,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             Expanded(
               child: TabBarView(
                 children: [
+                  _pendingInner(),
                   _eventsInner(
                     upcoming.isNotEmpty
                         ? upcoming
@@ -1163,6 +1212,102 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             ],
           );
         },
+      ),
+    );
+  }
+
+  Future<void> _loadPendingDrafts() async {
+    setState(() {
+      _isPendingLoading = true;
+    });
+    final items = await _pendingService.list();
+    setState(() {
+      _pendingDrafts = items;
+      _isPendingLoading = false;
+    });
+  }
+
+  Widget _pendingInner() {
+    return RefreshIndicator(
+      onRefresh: _loadPendingDrafts,
+      color: const Color(0xFF6366F1),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(20),
+        children: [
+          if (_isPendingLoading && _pendingDrafts.isEmpty)
+            const Center(child: LoadingIndicator(text: 'Loading drafts...')),
+          if (_pendingDrafts.isEmpty && !_isPendingLoading)
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: const Center(child: Text('No pending drafts')),
+            ),
+          ..._pendingDrafts.map((d) {
+            final data =
+                (d['data'] as Map?)?.cast<String, dynamic>() ??
+                <String, dynamic>{};
+            final client = (data['client_name'] ?? '').toString();
+            final name =
+                (data['event_name'] ?? data['venue_name'] ?? 'Untitled')
+                    .toString();
+            final date = (data['date'] ?? '').toString();
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: ListTile(
+                title: Text(client.isNotEmpty ? client : 'Client'),
+                subtitle: Text(
+                  [
+                    name,
+                    date,
+                  ].where((s) => s.toString().isNotEmpty).join(' • '),
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextButton(
+                      onPressed: () async {
+                        final data =
+                            (d['data'] as Map?)?.cast<String, dynamic>() ??
+                            <String, dynamic>{};
+                        final id = (d['id'] ?? '').toString();
+                        if (!mounted) return;
+                        final changed = await Navigator.of(context).push<bool>(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                PendingPublishScreen(draft: data, draftId: id),
+                          ),
+                        );
+                        if (changed == true) {
+                          await _loadPendingDrafts();
+                        }
+                      },
+                      child: const Text('Publish'),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete, color: Color(0xFFDC2626)),
+                      onPressed: () async {
+                        final id = (d['id'] ?? '').toString();
+                        if (id.isEmpty) return;
+                        await _pendingService.deleteDraft(id);
+                        await _loadPendingDrafts();
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        ],
       ),
     );
   }
@@ -2447,9 +2592,44 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 child: ElevatedButton.icon(
                   onPressed: structuredData == null
                       ? null
-                      : () => _saveCurrentEvent(),
-                  icon: const Icon(Icons.cloud_upload, size: 18),
-                  label: const Text('Save to Database'),
+                      : () async {
+                          final Map<String, dynamic> payload =
+                              Map<String, dynamic>.from(structuredData!);
+                          final selClient = _clientNameController.text.trim();
+                          if (selClient.isNotEmpty)
+                            payload['client_name'] = selClient;
+                          final Map<String, dynamic>? promptResult =
+                              await _promptStaffCounts(payload);
+                          if (promptResult == null) return;
+                          final Map<String, int> counts =
+                              (promptResult['counts'] as Map?)
+                                  ?.map<String, int>(
+                                    (k, v) => MapEntry(
+                                      k.toString(),
+                                      int.tryParse(v.toString()) ?? 0,
+                                    ),
+                                  ) ??
+                              <String, int>{};
+                          final List<dynamic> existingRoles =
+                              (payload['roles'] is List)
+                              ? (payload['roles'] as List)
+                              : const [];
+                          payload['roles'] = _mergeStaffCountsIntoRoles(
+                            existingRoles,
+                            counts,
+                          );
+                          await _pendingService.saveDraft(payload);
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Saved to Pending'),
+                              backgroundColor: Color(0xFF059669),
+                            ),
+                          );
+                          await _draftService.clearDraft();
+                        },
+                  icon: const Icon(Icons.save, size: 18),
+                  label: const Text('Save to Pending'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF6366F1),
                     foregroundColor: Colors.white,

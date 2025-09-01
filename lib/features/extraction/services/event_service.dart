@@ -14,12 +14,13 @@ class EventService {
     return fromEnv;
   }
 
-  Future<List<Map<String, dynamic>>> fetchEvents() async {
+  Future<List<Map<String, dynamic>>> fetchEvents({String? userKey}) async {
     final uri = Uri.parse('$_baseUrl/events');
-    final response = await http.get(
-      uri,
-      headers: const {'Accept': 'application/json'},
-    );
+    final headers = <String, String>{'Accept': 'application/json'};
+    final effectiveKey = (userKey ?? (dotenv.env['VIEWER_USER_KEY'] ?? ''))
+        .trim();
+    if (effectiveKey.isNotEmpty) headers['x-user-key'] = effectiveKey;
+    final response = await http.get(uri, headers: headers);
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
       final List<dynamic> decoded = jsonDecode(response.body) as List<dynamic>;
