@@ -54,6 +54,7 @@ const eventSchema = z.object({
   roles: z.array(roleSchema).min(1, 'at least one role is required'),
   pay_rate_info: z.string().nullish(),
   accepted_staff: z.array(acceptedStaffSchema).nullish(),
+  audience_user_keys: z.array(z.string()).nullish(),
 });
 
 function computeRoleStats(roles: any[], accepted: any[]) {
@@ -82,7 +83,7 @@ router.post('/events', async (req, res) => {
       });
     }
 
-    const raw = parsed.data;
+    const raw = parsed.data as any;
     // Backwards compatibility: accept client_company_name and map to new field
     if ((raw as any).client_company_name && !(raw as any).third_party_company_name) {
       (raw as any).third_party_company_name = (raw as any).client_company_name;
@@ -96,7 +97,7 @@ router.post('/events', async (req, res) => {
           ? new Date(typeof raw.date === 'string' ? raw.date : raw.date)
           : undefined,
       accepted_staff:
-        raw.accepted_staff?.map((m) => {
+        raw.accepted_staff?.map((m: any) => {
           const roleFromPayload = (m?.role || (m as any)?.position || '').trim();
           return {
             ...m,

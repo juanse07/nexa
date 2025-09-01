@@ -48,6 +48,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   // Pending drafts
   List<Map<String, dynamic>> _pendingDrafts = const [];
   bool _isPendingLoading = false;
+  String? _viewerUserKey; // provider:subject used to filter events
 
   // Clients listing state
   List<Map<String, dynamic>>? _clients;
@@ -707,6 +708,24 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     leading: const CircleAvatar(child: Icon(Icons.person)),
                     title: Text((u['name'] ?? u['email'] ?? 'User').toString()),
                     subtitle: Text((u['email'] ?? '').toString()),
+                    trailing: TextButton(
+                      onPressed: () async {
+                        final key = '${u['provider']}:${u['subject']}';
+                        setState(() {
+                          _viewerUserKey = key;
+                        });
+                        await _loadEvents();
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Viewer set to ${(u['email'] ?? u['name'] ?? key)}',
+                            ),
+                          ),
+                        );
+                      },
+                      child: const Text('View as'),
+                    ),
                   );
                 },
               ),
@@ -1013,9 +1032,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       _eventsError = null;
     });
     try {
-      // If we have a stored app token and user identity, derive a userKey
-      // For now we pass no key (public) – TODO: wire real auth token to build userKey
-      final items = await _eventService.fetchEvents();
+      final items = await _eventService.fetchEvents(userKey: _viewerUserKey);
       // Sort: upcoming soonest -> oldest past -> no date
       DateTime? parseDate(Map<String, dynamic> e) {
         final dynamic v = e['date'];
