@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import mongoose from 'mongoose';
 import { z } from 'zod';
-import { requireAuth } from '../middleware/requireAuth';
 import { ClientModel } from '../models/client';
 
 const router = Router();
@@ -11,7 +10,7 @@ const clientSchema = z.object({
 });
 
 // List clients (sorted by name)
-router.get('/clients', requireAuth, async (_req, res) => {
+router.get('/clients', async (_req, res) => {
   try {
     const clients = await ClientModel.find({}, { _id: 1, name: 1 }).sort({ normalizedName: 1 }).lean();
     const mapped = (clients || []).map((c: any) => ({ id: String(c._id), name: c.name }));
@@ -22,7 +21,7 @@ router.get('/clients', requireAuth, async (_req, res) => {
 });
 
 // Create a client (name unique, case-insensitive)
-router.post('/clients', requireAuth, async (req, res) => {
+router.post('/clients', async (req, res) => {
   try {
     const parsed = clientSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -41,7 +40,7 @@ router.post('/clients', requireAuth, async (req, res) => {
 });
 
 // Update a client name
-router.patch('/clients/:id', requireAuth, async (req, res) => {
+router.patch('/clients/:id', async (req, res) => {
   try {
     const id = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -69,7 +68,7 @@ router.patch('/clients/:id', requireAuth, async (req, res) => {
 });
 
 // Delete a client
-router.delete('/clients/:id', requireAuth, async (req, res) => {
+router.delete('/clients/:id', async (req, res) => {
   try {
     const id = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(id)) {
