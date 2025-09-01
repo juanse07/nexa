@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/requireAuth';
 import { EventModel } from '../models/event';
+import { AvailabilityModel } from '../models/availability';
 
 const router = Router();
 
@@ -377,6 +378,100 @@ router.post('/events/:id/respond', requireAuth, async (req, res) => {
     // eslint-disable-next-line no-console
     console.error('[respond] failed', err);
     return res.status(500).json({ message: 'Failed to update response' });
+  }
+});
+
+// Availability APIs
+function getUserKey(req: any): string | undefined {
+  const provider = req?.user?.provider;
+  const sub = req?.user?.sub;
+  if (!provider || !sub) return undefined;
+  return `${provider}:${sub}`;
+}
+
+// Get user's availability blocks
+router.get('/availability', requireAuth, async (req, res) => {
+  try {
+    const userKey = getUserKey(req);
+    if (!userKey) return res.status(401).json({ message: 'User not authenticated' });
+
+    const docs = await AvailabilityModel.find({ userKey }).sort({ date: 1, startTime: 1 }).lean();
+    const mapped = (docs || []).map((d: any) => {
+      const { _id, ...rest } = d;
+      return { id: String(_id), ...rest };
+    });
+    return res.json(mapped);
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to fetch availability' });
+  }
+});
+
+const availabilitySchema = z.object({
+  date: z.string().min(1, 'date is required'),
+  startTime: z.string().min(1, 'startTime is required'),
+  endTime: z.string().min(1, 'endTime is required'),
+  status: z.enum(['available', 'unavailable']),
+});
+
+// Create or update an availability block
+router.post('/availability', requireAuth, async (req, res) => {
+  try {
+    const userKey = getUserKey(req);
+    if (!userKey) return res.status(401).json({ message: 'User not authenticated' });
+
+    const parsed = availabilitySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Validation failed', details: parsed.error.format() });
+    }
+    const { date, startTime, endTime, status } = parsed.data;
+
+    const result = await AvailabilityModel.updateOne(
+      { userKey, date, startTime, endTime },
+      { $set: { status, updatedAt: new Date() }, $setOnInsert: { createdAt: new Date(), userKey, date, startTime, endTime } },
+      { upsert: true }
+    );
+
+    if (result.upsertedId) {
+      return res.json({ message: 'Availability created', id: String(result.upsertedId._id) });
+    }
+    // If not upserted, fetch the existing doc to return id
+    const existing = await AvailabilityModel.findOne({ userKey, date, startTime, endTime }, { _id: 1 }).lean();
+    return res.json({ message: 'Availability updated', id: existing ? String(existing._id) : undefined });
+  } catch (err: any) {
+    // Unique index conflict fallback
+    if (err?.code === 11000) {
+      try {
+        const { date, startTime, endTime, status } = req.body || {};
+        await AvailabilityModel.updateOne(
+          { userKey: getUserKey(req), date, startTime, endTime },
+          { $set: { status, updatedAt: new Date() } }
+        );
+        const existing = await AvailabilityModel.findOne({ userKey: getUserKey(req), date, startTime, endTime }, { _id: 1 }).lean();
+        return res.json({ message: 'Availability updated', id: existing ? String(existing._id) : undefined });
+      } catch (_) {
+        return res.status(500).json({ message: 'Failed to set availability' });
+      }
+    }
+    return res.status(500).json({ message: 'Failed to set availability' });
+  }
+});
+
+// Delete availability block by id
+router.delete('/availability/:id', requireAuth, async (req, res) => {
+  try {
+    const userKey = getUserKey(req);
+    if (!userKey) return res.status(401).json({ message: 'User not authenticated' });
+
+    const availabilityId = req.params.id ?? '';
+    if (!mongoose.Types.ObjectId.isValid(availabilityId)) {
+      return res.status(400).json({ message: 'Invalid availability id' });
+    }
+
+    const result = await AvailabilityModel.deleteOne({ _id: new mongoose.Types.ObjectId(availabilityId), userKey });
+    if (result.deletedCount === 0) return res.status(404).json({ message: 'Availability not found' });
+    return res.json({ message: 'Availability deleted' });
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to delete availability' });
   }
 });
 
