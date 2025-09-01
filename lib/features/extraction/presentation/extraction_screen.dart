@@ -13,6 +13,7 @@ import '../services/clients_service.dart';
 import '../services/event_service.dart';
 import '../services/extraction_service.dart';
 import '../services/google_places_service.dart';
+import '../services/roles_service.dart';
 import '../widgets/modern_address_field.dart';
 
 class ExtractionScreen extends StatefulWidget {
@@ -67,6 +68,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   late final ExtractionService _extractionService;
   late final EventService _eventService;
   late final ClientsService _clientsService;
+  late final RolesService _rolesService;
 
   @override
   void initState() {
@@ -75,8 +77,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     _extractionService = ExtractionService();
     _eventService = EventService();
     _clientsService = ClientsService();
+    _rolesService = RolesService();
     _loadEvents();
     _loadClients();
+    _loadRoles();
   }
 
   @override
@@ -438,7 +442,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             Tab(icon: Icon(Icons.upload_file), text: 'Upload Document'),
             Tab(icon: Icon(Icons.edit), text: 'Manual Entry'),
             Tab(icon: Icon(Icons.view_module), text: 'Events'),
-            Tab(icon: Icon(Icons.business), text: 'Clients'),
+            Tab(icon: Icon(Icons.inventory_2), text: 'Catalog'),
           ],
           labelColor: const Color(0xFF6366F1),
           unselectedLabelColor: Colors.grey,
@@ -451,7 +455,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           _buildUploadTab(),
           _buildManualEntryTab(),
           _buildEventsTab(),
-          _buildClientsTab(),
+          _buildCatalogTab(),
         ],
       ),
     );
@@ -879,6 +883,196 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             ...items.map((c) => _clientListTile(c)),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildCatalogTab() {
+    return SafeArea(
+      child: DefaultTabController(
+        length: 2,
+        child: Column(
+          children: [
+            const TabBar(
+              tabs: [
+                Tab(text: 'Clients'),
+                Tab(text: 'Roles'),
+              ],
+              labelColor: Color(0xFF6366F1),
+              unselectedLabelColor: Colors.grey,
+            ),
+            Expanded(
+              child: TabBarView(
+                children: [_buildClientsTab(), _buildRolesTab()],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Roles UI (similar to Clients)
+  List<Map<String, dynamic>>? _roles;
+  bool _isRolesLoading = false;
+  String? _rolesError;
+
+  Future<void> _loadRoles() async {
+    setState(() {
+      _isRolesLoading = true;
+      _rolesError = null;
+    });
+    try {
+      final items = await _rolesService.fetchRoles();
+      setState(() {
+        _roles = items;
+        _isRolesLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _rolesError = e.toString();
+        _isRolesLoading = false;
+      });
+    }
+  }
+
+  Widget _buildRolesTab() {
+    final items = _roles ?? const [];
+    return RefreshIndicator(
+      onRefresh: _loadRoles,
+      color: const Color(0xFF6366F1),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(20),
+        children: [
+          Row(
+            children: [
+              ElevatedButton.icon(
+                onPressed: () async {
+                  final name = await _promptNewNamedItem(
+                    'New Role',
+                    'Role name',
+                  );
+                  if (name == null) return;
+                  try {
+                    await _rolesService.createRole(name);
+                    await _loadRoles();
+                  } catch (e) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to create role: $e'),
+                        backgroundColor: const Color(0xFFDC2626),
+                      ),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.add),
+                label: const Text('Add Role'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6366F1),
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (_isRolesLoading && items.isEmpty)
+            const Center(child: LoadingIndicator(text: 'Loading roles...')),
+          if (_rolesError != null) ...[
+            ErrorBanner(message: _rolesError!),
+            const SizedBox(height: 12),
+          ],
+          ...items.map((r) => _roleListTile(r)),
+        ],
+      ),
+    );
+  }
+
+  Widget _roleListTile(Map<String, dynamic> role) {
+    final String id = (role['id'] ?? '').toString();
+    final String name = (role['name'] ?? '').toString();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200, width: 1),
+      ),
+      child: ListTile(
+        title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
+        leading: const Icon(Icons.assignment_ind, color: Color(0xFF6366F1)),
+        trailing: PopupMenuButton<String>(
+          onSelected: (value) async {
+            if (value == 'rename') {
+              final newName = await _promptNewNamedItem(
+                'Rename Role',
+                'Role name',
+                initial: name,
+              );
+              if (newName == null) return;
+              try {
+                await _rolesService.renameRole(id, newName);
+                await _loadRoles();
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Failed to rename: $e'),
+                    backgroundColor: const Color(0xFFDC2626),
+                  ),
+                );
+              }
+            } else if (value == 'delete') {
+              final ok = await _confirmDeleteClient(name);
+              if (ok != true) return;
+              try {
+                await _rolesService.deleteRole(id);
+                await _loadRoles();
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Failed to delete: $e'),
+                    backgroundColor: const Color(0xFFDC2626),
+                  ),
+                );
+              }
+            }
+          },
+          itemBuilder: (context) => const [
+            PopupMenuItem(value: 'rename', child: Text('Rename')),
+            PopupMenuItem(value: 'delete', child: Text('Delete')),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<String?> _promptNewNamedItem(
+    String title,
+    String label, {
+    String? initial,
+  }) async {
+    final controller = TextEditingController(text: initial ?? '');
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          decoration: InputDecoration(labelText: label),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
       ),
     );
   }
