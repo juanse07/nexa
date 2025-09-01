@@ -9,6 +9,7 @@ import 'package:mime/mime.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 import '../../../shared/ui/widgets.dart';
+import '../services/clients_service.dart';
 import '../services/event_service.dart';
 import '../services/extraction_service.dart';
 import '../services/google_places_service.dart';
@@ -37,6 +38,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   bool _isEventsLoading = false;
   String? _eventsError;
 
+  // Clients listing state
+  List<Map<String, dynamic>>? _clients;
+  bool _isClientsLoading = false;
+  String? _clientsError;
+
   final _formKey = GlobalKey<FormState>();
   final _eventNameController = TextEditingController();
   final _clientNameController = TextEditingController();
@@ -60,14 +66,17 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
   late final ExtractionService _extractionService;
   late final EventService _eventService;
+  late final ClientsService _clientsService;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _extractionService = ExtractionService();
     _eventService = EventService();
+    _clientsService = ClientsService();
     _loadEvents();
+    _loadClients();
   }
 
   @override
@@ -429,6 +438,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             Tab(icon: Icon(Icons.upload_file), text: 'Upload Document'),
             Tab(icon: Icon(Icons.edit), text: 'Manual Entry'),
             Tab(icon: Icon(Icons.view_module), text: 'Events'),
+            Tab(icon: Icon(Icons.business), text: 'Clients'),
           ],
           labelColor: const Color(0xFF6366F1),
           unselectedLabelColor: Colors.grey,
@@ -441,6 +451,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           _buildUploadTab(),
           _buildManualEntryTab(),
           _buildEventsTab(),
+          _buildClientsTab(),
         ],
       ),
     );
@@ -783,6 +794,215 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             );
           },
         ),
+      ),
+    );
+  }
+
+  Future<void> _loadClients() async {
+    setState(() {
+      _isClientsLoading = true;
+      _clientsError = null;
+    });
+    try {
+      final items = await _clientsService.fetchClients();
+      setState(() {
+        _clients = items;
+        _isClientsLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _clientsError = e.toString();
+        _isClientsLoading = false;
+      });
+    }
+  }
+
+  Widget _buildClientsTab() {
+    final List<Map<String, dynamic>> items = _clients ?? const [];
+    return SafeArea(
+      child: RefreshIndicator(
+        onRefresh: _loadClients,
+        color: const Color(0xFF6366F1),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(20),
+          children: [
+            HeaderCard(
+              title: 'Clients',
+              subtitle: 'Manage third-party clients for quick selection',
+              icon: Icons.business,
+              gradientColors: const [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    final name = await _promptNewClientName();
+                    if (name == null) return;
+                    try {
+                      await _clientsService.createClient(name);
+                      await _loadClients();
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Client created'),
+                          backgroundColor: Color(0xFF059669),
+                        ),
+                      );
+                    } catch (e) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Failed to create client: $e'),
+                          backgroundColor: const Color(0xFFDC2626),
+                        ),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add Client'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6366F1),
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (_isClientsLoading && items.isEmpty)
+              const Center(child: LoadingIndicator(text: 'Loading clients...')),
+            if (_clientsError != null) ...[
+              ErrorBanner(message: _clientsError!),
+              const SizedBox(height: 12),
+            ],
+            ...items.map((c) => _clientListTile(c)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _clientListTile(Map<String, dynamic> client) {
+    final String id = (client['id'] ?? '').toString();
+    final String name = (client['name'] ?? '').toString();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200, width: 1),
+      ),
+      child: ListTile(
+        title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
+        leading: const Icon(Icons.business, color: Color(0xFF6366F1)),
+        trailing: PopupMenuButton<String>(
+          onSelected: (value) async {
+            if (value == 'rename') {
+              final newName = await _promptRenameClient(name);
+              if (newName == null) return;
+              try {
+                await _clientsService.renameClient(id, newName);
+                await _loadClients();
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Failed to rename: $e'),
+                    backgroundColor: const Color(0xFFDC2626),
+                  ),
+                );
+              }
+            } else if (value == 'delete') {
+              final ok = await _confirmDeleteClient(name);
+              if (ok != true) return;
+              try {
+                await _clientsService.deleteClient(id);
+                await _loadClients();
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Failed to delete: $e'),
+                    backgroundColor: const Color(0xFFDC2626),
+                  ),
+                );
+              }
+            }
+          },
+          itemBuilder: (context) => const [
+            PopupMenuItem(value: 'rename', child: Text('Rename')),
+            PopupMenuItem(value: 'delete', child: Text('Delete')),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<String?> _promptNewClientName() async {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('New Client'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(labelText: 'Client name'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<String?> _promptRenameClient(String current) async {
+    final controller = TextEditingController(text: current);
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rename Client'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(labelText: 'Client name'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<bool?> _confirmDeleteClient(String name) async {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Client?'),
+        content: Text("Are you sure you want to delete '$name' ?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
       ),
     );
   }
@@ -1212,6 +1432,20 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     label: 'Client Name',
                     icon: Icons.person,
                     isRequired: true,
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: () async {
+                        await _openClientPicker();
+                      },
+                      icon: const Icon(Icons.business),
+                      label: const Text('Pick from Clients'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFF6366F1),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 16),
                   _buildModernDatePicker(),
@@ -1766,6 +2000,92 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           backgroundColor: const Color(0xFFDC2626),
         ),
       );
+    }
+  }
+
+  Future<void> _openClientPicker() async {
+    // Ensure latest clients
+    await _loadClients();
+    final List<Map<String, dynamic>> items = _clients ?? const [];
+    final TextEditingController newClientCtrl = TextEditingController();
+    final String? picked = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setStateDialog) {
+            return AlertDialog(
+              title: const Text('Select Client'),
+              content: SizedBox(
+                width: 400,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (items.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 8),
+                        child: Text('No clients yet. Create one below.'),
+                      ),
+                    Flexible(
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: items.length,
+                        itemBuilder: (context, index) {
+                          final c = items[index];
+                          return ListTile(
+                            leading: const Icon(Icons.business),
+                            title: Text((c['name'] ?? '').toString()),
+                            onTap: () => Navigator.of(
+                              ctx,
+                            ).pop((c['name'] ?? '').toString()),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: newClientCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'New client name',
+                        prefixIcon: Icon(Icons.add_business),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('Close'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final name = newClientCtrl.text.trim();
+                    if (name.isEmpty) return;
+                    try {
+                      await _clientsService.createClient(name);
+                      Navigator.of(ctx).pop(name);
+                    } catch (e) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Failed to create client: $e'),
+                          backgroundColor: const Color(0xFFDC2626),
+                        ),
+                      );
+                    }
+                  },
+                  child: const Text('Create'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    if (picked != null && picked.isNotEmpty) {
+      setState(() {
+        _clientNameController.text = picked;
+      });
     }
   }
 
