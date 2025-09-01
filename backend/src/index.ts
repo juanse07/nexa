@@ -13,6 +13,7 @@ import clientsRouter from './routes/clients';
 import eventsRouter from './routes/events';
 import healthRouter from './routes/health';
 import rolesRouter from './routes/roles';
+import tariffsRouter from './routes/tariffs';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 
@@ -70,6 +71,7 @@ async function createServer() {
   app.use('/api', eventsRouter);
   app.use('/api', clientsRouter);
   app.use('/api', rolesRouter);
+  app.use('/api', tariffsRouter);
   app.use('/api/auth', authRouter);
 
   // Admin maintenance: recompute role_stats for all events
