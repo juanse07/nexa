@@ -2,8 +2,8 @@ import { Router } from 'express';
 import mongoose from 'mongoose';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/requireAuth';
-import { EventModel } from '../models/event';
 import { AvailabilityModel } from '../models/availability';
+import { EventModel } from '../models/event';
 
 const router = Router();
 
@@ -390,7 +390,7 @@ function getUserKey(req: any): string | undefined {
 }
 
 // Get user's availability blocks
-router.get('/availability', requireAuth, async (req, res) => {
+router.get(['/availability', '/events/availability'], requireAuth, async (req, res) => {
   try {
     const userKey = getUserKey(req);
     if (!userKey) return res.status(401).json({ message: 'User not authenticated' });
@@ -414,7 +414,7 @@ const availabilitySchema = z.object({
 });
 
 // Create or update an availability block
-router.post('/availability', requireAuth, async (req, res) => {
+router.post(['/availability', '/events/availability'], requireAuth, async (req, res) => {
   try {
     const userKey = getUserKey(req);
     if (!userKey) return res.status(401).json({ message: 'User not authenticated' });
@@ -457,7 +457,7 @@ router.post('/availability', requireAuth, async (req, res) => {
 });
 
 // Delete availability block by id
-router.delete('/availability/:id', requireAuth, async (req, res) => {
+router.delete(['/availability/:id', '/events/availability/:id'], requireAuth, async (req, res) => {
   try {
     const userKey = getUserKey(req);
     if (!userKey) return res.status(401).json({ message: 'User not authenticated' });
