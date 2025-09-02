@@ -523,12 +523,13 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text(
-          'Nexa',
-          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 24),
+        toolbarHeight: 88,
+        title: SizedBox(
+          height: 60,
+          child: Image.asset('assets/appbar_logo.png', fit: BoxFit.contain),
         ),
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF1E293B),
+        backgroundColor: const Color(0xFF430172),
+        foregroundColor: Colors.white,
         elevation: 0,
         shadowColor: Colors.transparent,
         centerTitle: true,
@@ -540,9 +541,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             Tab(icon: Icon(Icons.group), text: 'Users'),
             Tab(icon: Icon(Icons.inventory_2), text: 'Catalog'),
           ],
-          labelColor: const Color(0xFF6366F1),
-          unselectedLabelColor: Colors.grey,
-          indicatorColor: const Color(0xFF6366F1),
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          indicatorColor: Colors.white,
         ),
       ),
       body: TabBarView(
