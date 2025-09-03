@@ -76,10 +76,16 @@ flutter:
 
 # Icon generation config
 flutter_launcher_icons:
+  android: true
   ios: true
+  # iOS
   image_path_ios: assets/logo.png
   remove_alpha_ios: true
   background_color_ios: "#430172"
+  # Android
+  image_path_android: assets/logo_padded_small.png
+  adaptive_icon_background: "#430172"
+  adaptive_icon_foreground: assets/logo_padded_small.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

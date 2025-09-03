@@ -687,13 +687,15 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 itemCount: _users.length + 1,
                 itemBuilder: (ctx, idx) {
                   if (idx == _users.length) {
-                    if (_isUsersLoading)
+                    if (_isUsersLoading) {
                       return const Padding(
                         padding: EdgeInsets.all(16),
                         child: Center(child: CircularProgressIndicator()),
                       );
-                    if (_usersNextCursor == null)
+                    }
+                    if (_usersNextCursor == null) {
                       return const SizedBox.shrink();
+                    }
                     return Padding(
                       padding: const EdgeInsets.all(16),
                       child: Center(
@@ -913,8 +915,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         Map<String, dynamic>.from(structuredData!);
                     // Ensure client is attached from selection
                     final selClient = _clientNameController.text.trim();
-                    if (selClient.isNotEmpty)
+                    if (selClient.isNotEmpty) {
                       payload['client_name'] = selClient;
+                    }
                     // Ask for staff counts (always) and merge into roles
                     final Map<String, dynamic>? promptResult =
                         await _promptStaffCounts(payload);
@@ -2614,8 +2617,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           final Map<String, dynamic> payload =
                               Map<String, dynamic>.from(structuredData!);
                           final selClient = _clientNameController.text.trim();
-                          if (selClient.isNotEmpty)
+                          if (selClient.isNotEmpty) {
                             payload['client_name'] = selClient;
+                          }
                           final Map<String, dynamic>? promptResult =
                               await _promptStaffCounts(payload);
                           if (promptResult == null) return;

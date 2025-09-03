@@ -161,13 +161,14 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                       child: ListView.builder(
                         itemCount: _users.length + (_loadingUsers ? 1 : 0),
                         itemBuilder: (ctx, idx) {
-                          if (idx >= _users.length)
+                          if (idx >= _users.length) {
                             return const Center(
                               child: Padding(
                                 padding: EdgeInsets.all(12),
                                 child: CircularProgressIndicator(),
                               ),
                             );
+                          }
                           final u = _users[idx];
                           final key = '${u['provider']}:${u['subject']}';
                           final selected = _selectedKeys.contains(key);
