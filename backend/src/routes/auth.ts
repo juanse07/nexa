@@ -16,6 +16,9 @@ type VerifiedProfile = {
 const router = Router();
 
 const GOOGLE_CLIENT_ID_IOS = ENV.googleClientIdIos;
+const GOOGLE_CLIENT_ID_ANDROID = ENV.googleClientIdAndroid;
+const GOOGLE_CLIENT_ID_WEB = ENV.googleClientIdWeb;
+const GOOGLE_SERVER_CLIENT_ID = ENV.googleServerClientId;
 const APPLE_BUNDLE_ID = ENV.appleBundleId;
 const JWT_SECRET = ENV.jwtSecret;
 
@@ -26,6 +29,14 @@ if (!JWT_SECRET) {
 if (!GOOGLE_CLIENT_ID_IOS) {
   // eslint-disable-next-line no-console
   console.warn('[auth] GOOGLE_CLIENT_ID_IOS is not set. Google sign-in will fail.');
+}
+if (!GOOGLE_CLIENT_ID_ANDROID) {
+  // eslint-disable-next-line no-console
+  console.warn('[auth] GOOGLE_CLIENT_ID_ANDROID is not set. Android Google sign-in may fail.');
+}
+if (!GOOGLE_SERVER_CLIENT_ID) {
+  // eslint-disable-next-line no-console
+  console.warn('[auth] GOOGLE_SERVER_CLIENT_ID not set. Using only platform client IDs.');
 }
 
 function issueAppJwt(profile: VerifiedProfile): string {
@@ -56,7 +67,12 @@ async function upsertUser(profile: VerifiedProfile) {
 }
 
 async function verifyGoogleIdToken(idToken: string): Promise<VerifiedProfile> {
-  const audience = [GOOGLE_CLIENT_ID_IOS].filter(Boolean);
+  const audience = [
+    GOOGLE_CLIENT_ID_IOS,
+    GOOGLE_CLIENT_ID_ANDROID,
+    GOOGLE_CLIENT_ID_WEB,
+    GOOGLE_SERVER_CLIENT_ID,
+  ].filter(Boolean);
   const client = new OAuth2Client();
   const ticket = await client.verifyIdToken({ idToken, audience });
   const payload = ticket.getPayload();
