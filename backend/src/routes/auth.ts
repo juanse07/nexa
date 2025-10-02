@@ -67,10 +67,18 @@ async function upsertUser(profile: VerifiedProfile) {
 }
 
 async function verifyGoogleIdToken(idToken: string): Promise<VerifiedProfile> {
-  const audience = [GOOGLE_SERVER_CLIENT_ID].filter(Boolean);
+  // Accept tokens from iOS, Android, Web, or Server client IDs
+  const audience = [
+    GOOGLE_CLIENT_ID_IOS,
+    GOOGLE_CLIENT_ID_ANDROID,
+    GOOGLE_CLIENT_ID_WEB,
+    GOOGLE_SERVER_CLIENT_ID,
+  ].filter(Boolean);
+
   if (audience.length === 0) {
-    throw new Error('GOOGLE_SERVER_CLIENT_ID not set on server');
+    throw new Error('No Google Client IDs configured on server');
   }
+
   const client = new OAuth2Client();
   const ticket = await client.verifyIdToken({ idToken, audience });
   const payload = ticket.getPayload();
