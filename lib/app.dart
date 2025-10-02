@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:nexa/features/auth/data/services/auth_service.dart';
+import 'package:nexa/features/auth/presentation/pages/login_page.dart';
 import 'package:nexa/features/extraction/presentation/extraction_screen.dart';
 import 'package:nexa/shared/presentation/theme/theme.dart';
 
@@ -20,8 +22,23 @@ class NexaApp extends StatelessWidget {
       darkTheme: AppTheme.darkTheme(),
       themeMode: ThemeMode.light,
 
-      // Initial route
-      home: const ExtractionScreen(),
+      // Initial route - check authentication
+      home: FutureBuilder<String?>(
+        future: AuthService.getJwt(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+
+          // If JWT exists, go to main app, otherwise login
+          final hasToken = snapshot.data != null && snapshot.data!.isNotEmpty;
+          return hasToken ? const ExtractionScreen() : const LoginPage();
+        },
+      ),
 
       // Performance optimizations
       builder: (BuildContext context, Widget? child) {
