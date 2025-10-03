@@ -35,17 +35,17 @@ class AuthService {
   static const _requestTimeout = Duration(seconds: 30);
 
   static String get _apiBaseUrl {
-    // Support both API_BASE_URL + API_PATH_PREFIX and BACKEND_BASE_URL
-    final apiBase = dotenv.env['API_BASE_URL'] ?? dotenv.env['BACKEND_BASE_URL'];
+    // Support API_BASE_URL + API_PATH_PREFIX
+    final apiBase = dotenv.env['API_BASE_URL'];
     final pathPrefix = dotenv.env['API_PATH_PREFIX'] ?? '';
-    
+
     String raw;
     if (apiBase != null) {
       raw = pathPrefix.isNotEmpty ? '$apiBase$pathPrefix' : apiBase;
     } else {
       raw = 'http://127.0.0.1:4000';
     }
-    
+
     if (!kIsWeb && Platform.isAndroid) {
       // Android emulator maps host loopback to 10.0.2.2
       if (raw.contains('127.0.0.1')) {

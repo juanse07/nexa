@@ -5,13 +5,16 @@ import 'package:http/http.dart' as http;
 
 class EventService {
   String get _baseUrl {
-    final fromEnv = (dotenv.env['BACKEND_BASE_URL'] ?? '').trim();
-    if (fromEnv.isEmpty) {
+    final apiBase = dotenv.env['API_BASE_URL'];
+    final pathPrefix = dotenv.env['API_PATH_PREFIX'] ?? '';
+
+    if (apiBase == null || apiBase.trim().isEmpty) {
       throw StateError(
-        'BACKEND_BASE_URL is not set. Please set it in your .env to your deployed server URL.',
+        'API_BASE_URL is not set. Please set it in your .env to your deployed server URL.',
       );
     }
-    return fromEnv;
+
+    return pathPrefix.isNotEmpty ? '$apiBase$pathPrefix' : apiBase;
   }
 
   Future<List<Map<String, dynamic>>> fetchEvents({String? userKey}) async {

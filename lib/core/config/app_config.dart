@@ -43,13 +43,13 @@ class AppConfig {
 
   /// Backend base URL
   String get baseUrl {
-    final apiBase = _env.get('API_BASE_URL') ?? _env.get('BACKEND_BASE_URL');
+    final apiBase = _env.get('API_BASE_URL');
     final pathPrefix = _env.get('API_PATH_PREFIX') ?? '';
-    
+
     if (apiBase != null) {
       return pathPrefix.isNotEmpty ? '$apiBase$pathPrefix' : apiBase;
     }
-    
+
     return 'https://api.nexapymesoft.com/api';
   }
 
