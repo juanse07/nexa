@@ -8,6 +8,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:mime/mime.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
+import '../../../features/auth/data/services/auth_service.dart';
+import '../../../features/auth/presentation/pages/login_page.dart';
 import '../../../shared/ui/widgets.dart';
 import '../services/clients_service.dart';
 import '../services/draft_service.dart';
@@ -522,40 +524,90 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        toolbarHeight: 88,
-        title: SizedBox(
-          height: 60,
-          child: Image.asset('assets/appbar_logo.png', fit: BoxFit.contain),
-        ),
-        backgroundColor: const Color(0xFF430172),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        shadowColor: Colors.transparent,
-        centerTitle: true,
-        bottom: TabBar(
+      body: NestedScrollView(
+        headerSliverBuilder: (context, innerBoxIsScrolled) {
+          return [
+            SliverAppBar(
+              floating: true,
+              snap: true,
+              pinned: false,
+              toolbarHeight: 88,
+              title: SizedBox(
+                height: 60,
+                child: Image.asset('assets/appbar_logo.png', fit: BoxFit.contain),
+              ),
+              backgroundColor: const Color(0xFF430172),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shadowColor: Colors.transparent,
+              centerTitle: true,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.logout),
+                  tooltip: 'Logout',
+                  onPressed: () => _handleLogout(context),
+                ),
+              ],
+              bottom: TabBar(
+                controller: _tabController,
+                tabs: const [
+                  Tab(icon: Icon(Icons.add_circle_outline), text: 'Create'),
+                  Tab(icon: Icon(Icons.view_module), text: 'Events'),
+                  Tab(icon: Icon(Icons.group), text: 'Users'),
+                  Tab(icon: Icon(Icons.inventory_2), text: 'Catalog'),
+                ],
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white70,
+                indicatorColor: Colors.white,
+              ),
+            ),
+          ];
+        },
+        body: TabBarView(
           controller: _tabController,
-          tabs: const [
-            Tab(icon: Icon(Icons.add_circle_outline), text: 'Create'),
-            Tab(icon: Icon(Icons.view_module), text: 'Events'),
-            Tab(icon: Icon(Icons.group), text: 'Users'),
-            Tab(icon: Icon(Icons.inventory_2), text: 'Catalog'),
+          children: [
+            _buildCreateTab(),
+            _buildEventsTab(),
+            _buildUsersTab(),
+            _buildCatalogTab(),
           ],
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          indicatorColor: Colors.white,
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildCreateTab(),
-          _buildEventsTab(),
-          _buildUsersTab(),
-          _buildCatalogTab(),
+    );
+  }
+
+  Future<void> _handleLogout(BuildContext context) async {
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Logout'),
+          ),
         ],
       ),
     );
+
+    if (confirmed == true && context.mounted) {
+      // Perform logout
+      await AuthService.signOut();
+      
+      // Navigate to login page and remove all previous routes
+      if (context.mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const LoginPage()),
+          (route) => false,
+        );
+      }
+    }
   }
 
   Widget _buildCreateTab() {
@@ -1491,108 +1543,203 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       color: const Color(0xFF6366F1),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  initialValue: _selectedClientIdForTariffs,
+          // Modern filter card
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF6366F1).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.filter_list,
+                        color: Color(0xFF6366F1),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      'Filter Tariffs',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1F2937),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                // Client dropdown - full width
+                DropdownButtonFormField<String>(
+                  value: _selectedClientIdForTariffs,
                   items: clients
                       .map(
                         (c) => DropdownMenuItem(
                           value: (c['id'] ?? '').toString(),
-                          child: Text((c['name'] ?? '').toString()),
+                          child: Text(
+                            (c['name'] ?? '').toString(),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       )
                       .toList(),
                   onChanged: (v) =>
                       setState(() => _selectedClientIdForTariffs = v),
-                  decoration: const InputDecoration(labelText: 'Client'),
+                  decoration: InputDecoration(
+                    labelText: 'Client',
+                    prefixIcon: const Icon(Icons.business, size: 20),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    filled: true,
+                    fillColor: const Color(0xFFF9FAFB),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  initialValue: _selectedRoleIdForTariffs,
+                const SizedBox(height: 12),
+                // Role dropdown - full width
+                DropdownButtonFormField<String>(
+                  value: _selectedRoleIdForTariffs,
                   items: roles
                       .map(
                         (r) => DropdownMenuItem(
                           value: (r['id'] ?? '').toString(),
-                          child: Text((r['name'] ?? '').toString()),
+                          child: Text(
+                            (r['name'] ?? '').toString(),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       )
                       .toList(),
                   onChanged: (v) =>
                       setState(() => _selectedRoleIdForTariffs = v),
-                  decoration: const InputDecoration(labelText: 'Role'),
+                  decoration: InputDecoration(
+                    labelText: 'Role',
+                    prefixIcon: const Icon(Icons.work_outline, size: 20),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    filled: true,
+                    fillColor: const Color(0xFFF9FAFB),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              ElevatedButton(
-                onPressed: () async {
-                  await _loadTariffs();
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6366F1),
-                  foregroundColor: Colors.white,
-                ),
-                child: const Text('Load'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              ElevatedButton.icon(
-                onPressed: () async {
-                  final clientId = _selectedClientIdForTariffs;
-                  final roleId = _selectedRoleIdForTariffs;
-                  if (clientId == null || roleId == null) {
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Select client and role first'),
-                        backgroundColor: Color(0xFFDC2626),
+                const SizedBox(height: 16),
+                // Action buttons
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          await _loadTariffs();
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF6366F1),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 0,
+                        ),
+                        icon: const Icon(Icons.search, size: 20),
+                        label: const Text('Load', style: TextStyle(fontWeight: FontWeight.w600)),
                       ),
-                    );
-                    return;
-                  }
-                  final rate = await _promptRate();
-                  if (rate == null) return;
-                  try {
-                    await _tariffsService.upsertTariff(
-                      clientId: clientId,
-                      roleId: roleId,
-                      rate: rate,
-                    );
-                    await _loadTariffs();
-                  } catch (e) {
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Failed to save tariff: $e'),
-                        backgroundColor: const Color(0xFFDC2626),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          final clientId = _selectedClientIdForTariffs;
+                          final roleId = _selectedRoleIdForTariffs;
+                          if (clientId == null || roleId == null) {
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Select client and role first'),
+                                backgroundColor: Color(0xFFDC2626),
+                              ),
+                            );
+                            return;
+                          }
+                          final rate = await _promptRate();
+                          if (rate == null) return;
+                          try {
+                            await _tariffsService.upsertTariff(
+                              clientId: clientId,
+                              roleId: roleId,
+                              rate: rate,
+                            );
+                            await _loadTariffs();
+                          } catch (e) {
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Failed to save: $e'),
+                                backgroundColor: const Color(0xFFDC2626),
+                              ),
+                            );
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF059669),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 0,
+                        ),
+                        icon: const Icon(Icons.add, size: 20),
+                        label: const Text('Set', style: TextStyle(fontWeight: FontWeight.w600)),
                       ),
-                    );
-                  }
-                },
-                icon: const Icon(Icons.attach_money),
-                label: const Text('Set Rate'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF059669),
-                  foregroundColor: Colors.white,
+                    ),
+                  ],
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
+          // Loading & Error states
           if (_isTariffsLoading && tariffs.isEmpty)
             const Center(child: LoadingIndicator(text: 'Loading tariffs...')),
           if (_tariffsError != null) ...[
             ErrorBanner(message: _tariffsError!),
             const SizedBox(height: 12),
           ],
+          // Tariffs list header
+          if (tariffs.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                '${tariffs.length} Tariff${tariffs.length != 1 ? 's' : ''}',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF6B7280),
+                ),
+              ),
+            ),
+          // Tariffs list
           ...tariffs.map((t) => _tariffTile(t)),
         ],
       ),
@@ -1615,33 +1762,98 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         ?.toString();
     final rate = (t['rate'] ?? 0).toString();
     final currency = (t['currency'] ?? 'USD').toString();
+    
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200, width: 1),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      child: ListTile(
-        leading: const Icon(Icons.price_change, color: Color(0xFF6366F1)),
-        title: Text('$clientName — $roleName'),
-        subtitle: Text('$rate $currency'),
-        trailing: IconButton(
-          icon: const Icon(Icons.delete, color: Color(0xFFDC2626)),
-          onPressed: () async {
-            try {
-              await _tariffsService.deleteTariff(id);
-              await _loadTariffs();
-            } catch (e) {
-              if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Failed to delete: $e'),
-                  backgroundColor: const Color(0xFFDC2626),
-                ),
-              );
-            }
-          },
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF059669).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.attach_money,
+                color: Color(0xFF059669),
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$clientName — $roleName',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1F2937),
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF6366F1).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '$rate $currency',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF6366F1),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              color: const Color(0xFFDC2626),
+              iconSize: 22,
+              onPressed: () async {
+                try {
+                  await _tariffsService.deleteTariff(id);
+                  await _loadTariffs();
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Tariff deleted successfully'),
+                      backgroundColor: Color(0xFF059669),
+                    ),
+                  );
+                } catch (e) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to delete: $e'),
+                      backgroundColor: const Color(0xFFDC2626),
+                    ),
+                  );
+                }
+              },
+            ),
+          ],
         ),
       ),
     );

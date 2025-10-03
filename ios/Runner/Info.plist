@@ -8,8 +8,8 @@
 	<string>Nexa</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
-	<key>CFBundleIdentifier</key>
-	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
@@ -53,10 +53,15 @@
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<!-- Replace with your REVERSED_CLIENT_ID from GoogleService-Info.plist -->
-				<string>com.googleusercontent.apps.YOUR_IOS_CLIENT_ID_HERE</string>
+				<!-- REVERSED_CLIENT_ID for Google Sign-In -->
+				<string>com.googleusercontent.apps.832253199298-30pclv5ijm4etnciqh6en9b5l1iqddj0</string>
 			</array>
 		</dict>
 	</array>
+	<!-- Google Sign-In client IDs -->
+    <key>GIDClientID</key>
+    <string>832253199298-30pclv5ijm4etnciqh6en9b5l1iqddj0.apps.googleusercontent.com</string>
+	<key>GIDServerClientID</key>
+	<string>832253199298-cj28t4ill6gltnea1epaslvb2o1mar5k.apps.googleusercontent.com</string>
 </dict>
 </plist>

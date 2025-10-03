@@ -1,4 +1,4 @@
-package com.example.nexa
+package com.pymesoft.nexa
 
 import io.flutter.embedding.android.FlutterActivity
 
