@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/requireAuth';
 import { ManagerModel } from '../models/manager';
+import { UserModel } from '../models/user';
 
 const router = Router();
 
@@ -21,7 +22,34 @@ router.get('/managers/me', requireAuth, async (req, res) => {
     if (!req.user?.provider || !req.user?.sub) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
-    const doc = await ManagerModel.findOne({ provider: req.user.provider, subject: req.user.sub }).lean();
+    let doc = await ManagerModel.findOne({ provider: req.user.provider, subject: req.user.sub }).lean();
+    if (!doc) {
+      // Fallback: backfill from UserModel if exists
+      const user = await UserModel.findOne({ provider: req.user.provider, subject: req.user.sub }).lean();
+      if (user) {
+        const name = (user.name || '').trim();
+        const first_name = name ? name.split(/\s+/).slice(0, -1).join(' ') || undefined : undefined;
+        const last_name = name ? name.split(/\s+/).slice(-1)[0] || undefined : undefined;
+        await ManagerModel.updateOne(
+          { provider: req.user.provider, subject: req.user.sub },
+          {
+            $setOnInsert: {
+              provider: req.user.provider,
+              subject: req.user.sub,
+              email: user.email,
+              name: user.name,
+              first_name,
+              last_name,
+              picture: user.picture,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          },
+          { upsert: true }
+        );
+        doc = await ManagerModel.findOne({ provider: req.user.provider, subject: req.user.sub }).lean();
+      }
+    }
     if (!doc) return res.status(404).json({ message: 'Manager not found' });
     return res.json({
       id: String(doc._id),
@@ -61,6 +89,23 @@ router.patch('/managers/me', requireAuth, async (req, res) => {
       }
     }
 
+    // Ensure base manager doc exists before applying update
+    await ManagerModel.updateOne(
+      { provider: req.user.provider, subject: req.user.sub },
+      {
+        $setOnInsert: {
+          provider: req.user.provider,
+          subject: req.user.sub,
+          email: req.user.email,
+          name: req.user.name,
+          picture: req.user.picture,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      },
+      { upsert: true }
+    );
+
     const result = await ManagerModel.updateOne(
       { provider: req.user.provider, subject: req.user.sub },
       { $set: { ...parsed.data, updatedAt: new Date() } }
@@ -70,6 +115,7 @@ router.patch('/managers/me', requireAuth, async (req, res) => {
     return res.json({
       id: String(doc?._id),
       email: doc?.email,
+      name: doc?.name,
       first_name: doc?.first_name,
       last_name: doc?.last_name,
       picture: doc?.picture,
