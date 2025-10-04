@@ -1,0 +1,26 @@
+{
+  "" : {
+    "const-values" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/connectivity_plus.build/Objects-normal/arm64/connectivity_plus-primary.swiftconstvalues",
+    "dependencies" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/connectivity_plus.build/Objects-normal/arm64/connectivity_plus-primary.d",
+    "diagnostics" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/connectivity_plus.build/Objects-normal/arm64/connectivity_plus-primary.dia",
+    "emit-module-dependencies" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/connectivity_plus.build/Objects-normal/arm64/connectivity_plus-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/connectivity_plus.build/Objects-normal/arm64/connectivity_plus-primary-emit-module.dia",
+    "pch" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/connectivity_plus.build/Objects-normal/arm64/connectivity_plus-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/connectivity_plus.build/Objects-normal/arm64/connectivity_plus-primary.swiftdeps"
+  },
+  "/Users/juansuarez/.pub-cache/hosted/pub.dev/connectivity_plus-6.1.5/ios/connectivity_plus/Sources/connectivity_plus/ConnectivityPlusPlugin.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/connectivity_plus.build/Objects-normal/arm64/ConnectivityPlusPlugin.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/connectivity_plus.build/Objects-normal/arm64/ConnectivityPlusPlugin.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/connectivity_plus.build/Objects-normal/arm64/ConnectivityPlusPlugin.o"
+  },
+  "/Users/juansuarez/.pub-cache/hosted/pub.dev/connectivity_plus-6.1.5/ios/connectivity_plus/Sources/connectivity_plus/ConnectivityProvider.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/connectivity_plus.build/Objects-normal/arm64/ConnectivityProvider.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/connectivity_plus.build/Objects-normal/arm64/ConnectivityProvider.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/connectivity_plus.build/Objects-normal/arm64/ConnectivityProvider.o"
+  },
+  "/Users/juansuarez/.pub-cache/hosted/pub.dev/connectivity_plus-6.1.5/ios/connectivity_plus/Sources/connectivity_plus/PathMonitorConnectivityProvider.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/connectivity_plus.build/Objects-normal/arm64/PathMonitorConnectivityProvider.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/connectivity_plus.build/Objects-normal/arm64/PathMonitorConnectivityProvider.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/connectivity_plus.build/Objects-normal/arm64/PathMonitorConnectivityProvider.o"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "" : {
+    "const-values" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Runner.build/Release-iphoneos/Runner.build/Objects-normal/arm64/Runner-primary.swiftconstvalues",
+    "dependencies" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Runner.build/Release-iphoneos/Runner.build/Objects-normal/arm64/Runner-primary.d",
+    "diagnostics" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Runner.build/Release-iphoneos/Runner.build/Objects-normal/arm64/Runner-primary.dia",
+    "emit-module-dependencies" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Runner.build/Release-iphoneos/Runner.build/Objects-normal/arm64/Runner-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Runner.build/Release-iphoneos/Runner.build/Objects-normal/arm64/Runner-primary-emit-module.dia",
+    "pch" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Runner.build/Release-iphoneos/Runner.build/Objects-normal/arm64/Runner-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Runner.build/Release-iphoneos/Runner.build/Objects-normal/arm64/Runner-primary.swiftdeps"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Runner/AppDelegate.swift" : {
+    "index-unit-output-path" : "/Runner.build/Release-iphoneos/Runner.build/Objects-normal/arm64/AppDelegate.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Runner.build/Release-iphoneos/Runner.build/Objects-normal/arm64/AppDelegate.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Runner.build/Release-iphoneos/Runner.build/Objects-normal/arm64/AppDelegate.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Runner.build/Release-iphoneos/Runner.build/DerivedSources/GeneratedAssetSymbols.swift" : {
+    "index-unit-output-path" : "/Runner.build/Release-iphoneos/Runner.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Runner.build/Release-iphoneos/Runner.build/Objects-normal/arm64/GeneratedAssetSymbols.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Runner.build/Release-iphoneos/Runner.build/Objects-normal/arm64/GeneratedAssetSymbols.o"
+  }
+}

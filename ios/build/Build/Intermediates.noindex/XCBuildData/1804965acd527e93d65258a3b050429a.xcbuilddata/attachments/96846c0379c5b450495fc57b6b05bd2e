@@ -1,0 +1,41 @@
+{
+  "" : {
+    "const-values" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/SwiftyGif.build/Objects-normal/arm64/SwiftyGif-primary.swiftconstvalues",
+    "dependencies" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/SwiftyGif.build/Objects-normal/arm64/SwiftyGif-primary.d",
+    "diagnostics" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/SwiftyGif.build/Objects-normal/arm64/SwiftyGif-primary.dia",
+    "emit-module-dependencies" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/SwiftyGif.build/Objects-normal/arm64/SwiftyGif-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/SwiftyGif.build/Objects-normal/arm64/SwiftyGif-primary-emit-module.dia",
+    "pch" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/SwiftyGif.build/Objects-normal/arm64/SwiftyGif-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/SwiftyGif.build/Objects-normal/arm64/SwiftyGif-primary.swiftdeps"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/SwiftyGif/SwiftyGif/NSImage+SwiftyGif.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/SwiftyGif.build/Objects-normal/arm64/NSImage+SwiftyGif.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/SwiftyGif.build/Objects-normal/arm64/NSImage+SwiftyGif.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/SwiftyGif.build/Objects-normal/arm64/NSImage+SwiftyGif.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/SwiftyGif/SwiftyGif/NSImageView+SwiftyGif.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/SwiftyGif.build/Objects-normal/arm64/NSImageView+SwiftyGif.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/SwiftyGif.build/Objects-normal/arm64/NSImageView+SwiftyGif.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/SwiftyGif.build/Objects-normal/arm64/NSImageView+SwiftyGif.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/SwiftyGif/SwiftyGif/ObjcAssociatedWeakObject.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/SwiftyGif.build/Objects-normal/arm64/ObjcAssociatedWeakObject.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/SwiftyGif.build/Objects-normal/arm64/ObjcAssociatedWeakObject.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/SwiftyGif.build/Objects-normal/arm64/ObjcAssociatedWeakObject.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/SwiftyGif/SwiftyGif/SwiftyGifManager.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/SwiftyGif.build/Objects-normal/arm64/SwiftyGifManager.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/SwiftyGif.build/Objects-normal/arm64/SwiftyGifManager.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/SwiftyGif.build/Objects-normal/arm64/SwiftyGifManager.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/SwiftyGif/SwiftyGif/UIImage+SwiftyGif.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/SwiftyGif.build/Objects-normal/arm64/UIImage+SwiftyGif.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/SwiftyGif.build/Objects-normal/arm64/UIImage+SwiftyGif.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/SwiftyGif.build/Objects-normal/arm64/UIImage+SwiftyGif.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/SwiftyGif/SwiftyGif/UIImageView+SwiftyGif.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/SwiftyGif.build/Objects-normal/arm64/UIImageView+SwiftyGif.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/SwiftyGif.build/Objects-normal/arm64/UIImageView+SwiftyGif.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/SwiftyGif.build/Objects-normal/arm64/UIImageView+SwiftyGif.o"
+  }
+}

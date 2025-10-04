@@ -1,0 +1,4 @@
+
+module sign_in_with_apple.__Swift {
+  exclude header "sign_in_with_apple-Swift.h"
+}

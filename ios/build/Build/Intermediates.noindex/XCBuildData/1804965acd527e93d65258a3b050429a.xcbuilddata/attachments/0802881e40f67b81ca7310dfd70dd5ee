@@ -1,0 +1,23 @@
+{
+  "version": 0,
+  "use-external-names": false,
+  "case-sensitive": false,
+  "roots": [{
+    "type": "directory",
+    "name": "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Products/Release-iphoneos/connectivity_plus/connectivity_plus.framework/Modules",
+    "contents": [{
+      "type": "file",
+      "name": "module.modulemap",
+      "external-contents": "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/connectivity_plus.build/unextended-module.modulemap",
+    }]
+    },
+    {
+    "type": "directory",
+    "name": "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Products/Release-iphoneos/connectivity_plus/connectivity_plus.framework/Headers",
+    "contents": [{
+      "type": "file",
+      "name": "connectivity_plus-Swift.h",
+      "external-contents": "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/connectivity_plus.build/unextended-interface-header.h",
+    }]
+  }]
+}

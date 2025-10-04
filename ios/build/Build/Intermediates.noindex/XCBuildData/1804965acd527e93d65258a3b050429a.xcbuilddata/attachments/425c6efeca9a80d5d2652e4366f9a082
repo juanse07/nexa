@@ -1,0 +1,4 @@
+
+module GoogleMapsUtils.__Swift {
+  exclude header "GoogleMapsUtils-Swift.h"
+}

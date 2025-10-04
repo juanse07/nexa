@@ -1,0 +1,141 @@
+{
+  "" : {
+    "const-values" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGallery-primary.swiftconstvalues",
+    "dependencies" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGallery-primary.d",
+    "diagnostics" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGallery-primary.dia",
+    "emit-module-dependencies" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGallery-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGallery-primary-emit-module.dia",
+    "pch" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGallery-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGallery-primary.swiftdeps"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/DKPhotoGallery/DKPhotoGallery/DKPhotoGallery.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGallery.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGallery.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGallery.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/DKPhotoGallery/DKPhotoGallery/DKPhotoGalleryContentVC.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGalleryContentVC.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGalleryContentVC.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGalleryContentVC.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/DKPhotoGallery/DKPhotoGallery/DKPhotoGalleryItem.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGalleryItem.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGalleryItem.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGalleryItem.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/DKPhotoGallery/DKPhotoGallery/DKPhotoGalleryScrollView.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGalleryScrollView.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGalleryScrollView.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGalleryScrollView.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/DKPhotoGallery/DKPhotoGallery/DKPhotoIncrementalIndicator.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoIncrementalIndicator.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoIncrementalIndicator.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoIncrementalIndicator.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/DKPhotoGallery/DKPhotoGallery/DKPhotoPreviewFactory.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoPreviewFactory.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoPreviewFactory.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoPreviewFactory.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/DKPhotoGallery/DKPhotoGallery/Preview/DKPhotoBasePreviewVC.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoBasePreviewVC.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoBasePreviewVC.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoBasePreviewVC.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/DKPhotoGallery/DKPhotoGallery/Preview/DKPhotoContentAnimationView.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoContentAnimationView.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoContentAnimationView.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoContentAnimationView.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/DKPhotoGallery/DKPhotoGallery/Preview/DKPhotoProgressIndicator.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoProgressIndicator.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoProgressIndicator.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoProgressIndicator.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/DKPhotoGallery/DKPhotoGallery/Preview/DKPhotoProgressIndicatorProtocol.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoProgressIndicatorProtocol.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoProgressIndicatorProtocol.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoProgressIndicatorProtocol.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/DKPhotoGallery/DKPhotoGallery/Preview/ImagePreview/DKPhotoBaseImagePreviewVC.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoBaseImagePreviewVC.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoBaseImagePreviewVC.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoBaseImagePreviewVC.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/DKPhotoGallery/DKPhotoGallery/Preview/ImagePreview/DKPhotoImageDownloader.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoImageDownloader.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoImageDownloader.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoImageDownloader.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/DKPhotoGallery/DKPhotoGallery/Preview/ImagePreview/DKPhotoImagePreviewVC.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoImagePreviewVC.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoImagePreviewVC.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoImagePreviewVC.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/DKPhotoGallery/DKPhotoGallery/Preview/ImagePreview/DKPhotoImageUtility.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoImageUtility.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoImageUtility.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoImageUtility.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/DKPhotoGallery/DKPhotoGallery/Preview/ImagePreview/DKPhotoImageView.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoImageView.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoImageView.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoImageView.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/DKPhotoGallery/DKPhotoGallery/Preview/PDFPreview/DKPDFView.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPDFView.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPDFView.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPDFView.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/DKPhotoGallery/DKPhotoGallery/Preview/PDFPreview/DKPhotoPDFPreviewVC.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoPDFPreviewVC.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoPDFPreviewVC.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoPDFPreviewVC.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/DKPhotoGallery/DKPhotoGallery/Preview/PlayerPreview/DKPhotoPlayerPreviewVC.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoPlayerPreviewVC.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoPlayerPreviewVC.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoPlayerPreviewVC.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/DKPhotoGallery/DKPhotoGallery/Preview/PlayerPreview/DKPlayerView.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPlayerView.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPlayerView.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPlayerView.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/DKPhotoGallery/DKPhotoGallery/Preview/QRCode/DKPhotoQRCodeResultVC.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoQRCodeResultVC.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoQRCodeResultVC.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoQRCodeResultVC.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/DKPhotoGallery/DKPhotoGallery/Preview/QRCode/DKPhotoWebVC.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoWebVC.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoWebVC.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoWebVC.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/DKPhotoGallery/DKPhotoGallery/Resource/DKPhotoGalleryResource.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGalleryResource.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGalleryResource.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGalleryResource.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/DKPhotoGallery/DKPhotoGallery/Transition/DKPhotoGalleryInteractiveTransition.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGalleryInteractiveTransition.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGalleryInteractiveTransition.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGalleryInteractiveTransition.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/DKPhotoGallery/DKPhotoGallery/Transition/DKPhotoGalleryTransitionController.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGalleryTransitionController.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGalleryTransitionController.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGalleryTransitionController.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/DKPhotoGallery/DKPhotoGallery/Transition/DKPhotoGalleryTransitionDismiss.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGalleryTransitionDismiss.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGalleryTransitionDismiss.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGalleryTransitionDismiss.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/DKPhotoGallery/DKPhotoGallery/Transition/DKPhotoGalleryTransitionPresent.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGalleryTransitionPresent.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGalleryTransitionPresent.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKPhotoGallery.build/Objects-normal/arm64/DKPhotoGalleryTransitionPresent.o"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "version": 0,
+  "use-external-names": false,
+  "case-sensitive": false,
+  "roots": [{
+    "type": "directory",
+    "name": "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Products/Release-iphoneos/Google-Maps-iOS-Utils/GoogleMapsUtils.framework/Modules",
+    "contents": [{
+      "type": "file",
+      "name": "module.modulemap",
+      "external-contents": "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/unextended-module.modulemap",
+    }]
+    },
+    {
+    "type": "directory",
+    "name": "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Products/Release-iphoneos/Google-Maps-iOS-Utils/GoogleMapsUtils.framework/Headers",
+    "contents": [{
+      "type": "file",
+      "name": "GoogleMapsUtils-Swift.h",
+      "external-contents": "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/unextended-interface-header.h",
+    }]
+  }]
+}

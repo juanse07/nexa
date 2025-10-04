@@ -1,0 +1,61 @@
+{
+  "" : {
+    "const-values" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/Google-Maps-iOS-Utils-primary.swiftconstvalues",
+    "dependencies" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/Google-Maps-iOS-Utils-primary.d",
+    "diagnostics" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/Google-Maps-iOS-Utils-primary.dia",
+    "emit-module-dependencies" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/Google-Maps-iOS-Utils-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/Google-Maps-iOS-Utils-primary-emit-module.dia",
+    "pch" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/Google-Maps-iOS-Utils-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/Google-Maps-iOS-Utils-primary.swiftdeps"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/Google-Maps-iOS-Utils/Sources/GoogleMapsUtils/GeometryUtils/CLLocationCoordinate2D+GeometryUtils.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/CLLocationCoordinate2D+GeometryUtils.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/CLLocationCoordinate2D+GeometryUtils.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/CLLocationCoordinate2D+GeometryUtils.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/Google-Maps-iOS-Utils/Sources/GoogleMapsUtils/GeometryUtils/GMSPath+GeometryUtils.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/GMSPath+GeometryUtils.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/GMSPath+GeometryUtils.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/GMSPath+GeometryUtils.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/Google-Maps-iOS-Utils/Sources/GoogleMapsUtils/GeometryUtils/GMSPolygon+GeometryUtils.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/GMSPolygon+GeometryUtils.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/GMSPolygon+GeometryUtils.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/GMSPolygon+GeometryUtils.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/Google-Maps-iOS-Utils/Sources/GoogleMapsUtils/GeometryUtils/GMSPolyline+GeometryUtils.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/GMSPolyline+GeometryUtils.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/GMSPolyline+GeometryUtils.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/GMSPolyline+GeometryUtils.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/Google-Maps-iOS-Utils/Sources/GoogleMapsUtils/GeometryUtils/Internal/CartesianPoint.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/CartesianPoint.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/CartesianPoint.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/CartesianPoint.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/Google-Maps-iOS-Utils/Sources/GoogleMapsUtils/GeometryUtils/Internal/LatLngRadians.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/LatLngRadians.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/LatLngRadians.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/LatLngRadians.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/Google-Maps-iOS-Utils/Sources/GoogleMapsUtils/GeometryUtils/MapPoint.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/MapPoint.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/MapPoint.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/MapPoint.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/Google-Maps-iOS-Utils/Sources/GoogleMapsUtils/GeometryUtils/Math.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/Math.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/Math.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/Math.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/Google-Maps-iOS-Utils/Sources/GoogleMapsUtils/Heatmap/HeatmapInterpolationPoints.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/HeatmapInterpolationPoints.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/HeatmapInterpolationPoints.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/HeatmapInterpolationPoints.o"
+  },
+  "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/Pods/Google-Maps-iOS-Utils/Sources/GoogleMapsUtils/Helper/MockMapView.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/MockMapView.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/MockMapView.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Google-Maps-iOS-Utils.build/Objects-normal/arm64/MockMapView.o"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "version": 0,
+  "use-external-names": false,
+  "case-sensitive": false,
+  "roots": [{
+    "type": "directory",
+    "name": "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Products/Release-iphoneos/DKImagePickerController/DKImagePickerController.framework/Modules",
+    "contents": [{
+      "type": "file",
+      "name": "module.modulemap",
+      "external-contents": "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKImagePickerController.build/unextended-module.modulemap",
+    }]
+    },
+    {
+    "type": "directory",
+    "name": "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Products/Release-iphoneos/DKImagePickerController/DKImagePickerController.framework/Headers",
+    "contents": [{
+      "type": "file",
+      "name": "DKImagePickerController-Swift.h",
+      "external-contents": "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/DKImagePickerController.build/unextended-interface-header.h",
+    }]
+  }]
+}

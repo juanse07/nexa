@@ -230,7 +230,22 @@ router.patch('/events/:id/roles', async (req, res) => {
 router.get('/events', async (_req, res) => {
   try {
     const audienceKey = (_req.headers['x-user-key'] as string | undefined) || undefined;
+    const lastSyncParam = _req.query.lastSync as string | undefined;
+
     const filter: any = {};
+
+    // Delta sync: only return documents updated after lastSync timestamp
+    if (lastSyncParam) {
+      try {
+        const lastSyncDate = new Date(lastSyncParam);
+        if (!isNaN(lastSyncDate.getTime())) {
+          filter.updatedAt = { $gt: lastSyncDate };
+        }
+      } catch (e) {
+        // Invalid date format, ignore and return all
+      }
+    }
+
     if (audienceKey) {
       filter.$or = [
         { audience_user_keys: { $size: 0 } },
@@ -239,7 +254,13 @@ router.get('/events', async (_req, res) => {
       ];
     }
     const events = await EventModel.find(filter).sort({ createdAt: -1 }).lean();
-    return res.json(events);
+
+    // Include current server timestamp for next sync
+    return res.json({
+      events,
+      serverTimestamp: new Date().toISOString(),
+      deltaSync: !!lastSyncParam
+    });
   } catch (err) {
     return res.status(500).json({ error: 'Internal Server Error' });
   }

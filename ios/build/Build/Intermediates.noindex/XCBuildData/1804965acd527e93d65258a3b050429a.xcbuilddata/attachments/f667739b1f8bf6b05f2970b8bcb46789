@@ -1,0 +1,5 @@
+
+module GoogleMapsUtils.Swift {
+  header "GoogleMapsUtils-Swift.h"
+  requires objc
+}

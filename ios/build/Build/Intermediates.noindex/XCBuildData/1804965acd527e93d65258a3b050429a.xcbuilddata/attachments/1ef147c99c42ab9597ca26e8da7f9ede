@@ -1,0 +1,31 @@
+{
+  "" : {
+    "const-values" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/sign_in_with_apple.build/Objects-normal/arm64/sign_in_with_apple-primary.swiftconstvalues",
+    "dependencies" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/sign_in_with_apple.build/Objects-normal/arm64/sign_in_with_apple-primary.d",
+    "diagnostics" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/sign_in_with_apple.build/Objects-normal/arm64/sign_in_with_apple-primary.dia",
+    "emit-module-dependencies" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/sign_in_with_apple.build/Objects-normal/arm64/sign_in_with_apple-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/sign_in_with_apple.build/Objects-normal/arm64/sign_in_with_apple-primary-emit-module.dia",
+    "pch" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/sign_in_with_apple.build/Objects-normal/arm64/sign_in_with_apple-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/sign_in_with_apple.build/Objects-normal/arm64/sign_in_with_apple-primary.swiftdeps"
+  },
+  "/Users/juansuarez/.pub-cache/hosted/pub.dev/sign_in_with_apple-6.1.4/ios/Classes/SignInWithAppleAvailablePlugin.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/sign_in_with_apple.build/Objects-normal/arm64/SignInWithAppleAvailablePlugin.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/sign_in_with_apple.build/Objects-normal/arm64/SignInWithAppleAvailablePlugin.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/sign_in_with_apple.build/Objects-normal/arm64/SignInWithAppleAvailablePlugin.o"
+  },
+  "/Users/juansuarez/.pub-cache/hosted/pub.dev/sign_in_with_apple-6.1.4/ios/Classes/SignInWithAppleError.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/sign_in_with_apple.build/Objects-normal/arm64/SignInWithAppleError.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/sign_in_with_apple.build/Objects-normal/arm64/SignInWithAppleError.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/sign_in_with_apple.build/Objects-normal/arm64/SignInWithAppleError.o"
+  },
+  "/Users/juansuarez/.pub-cache/hosted/pub.dev/sign_in_with_apple-6.1.4/ios/Classes/SignInWithAppleUnavailablePlugin.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/sign_in_with_apple.build/Objects-normal/arm64/SignInWithAppleUnavailablePlugin.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/sign_in_with_apple.build/Objects-normal/arm64/SignInWithAppleUnavailablePlugin.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/sign_in_with_apple.build/Objects-normal/arm64/SignInWithAppleUnavailablePlugin.o"
+  },
+  "/Users/juansuarez/.pub-cache/hosted/pub.dev/sign_in_with_apple-6.1.4/ios/Classes/SwiftSignInWithApplePlugin.swift" : {
+    "index-unit-output-path" : "/Pods.build/Release-iphoneos/sign_in_with_apple.build/Objects-normal/arm64/SwiftSignInWithApplePlugin.o",
+    "llvm-bc" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/sign_in_with_apple.build/Objects-normal/arm64/SwiftSignInWithApplePlugin.bc",
+    "object" : "/Volumes/Macintosh HD/Users/juansuarez/nexa/ios/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/sign_in_with_apple.build/Objects-normal/arm64/SwiftSignInWithApplePlugin.o"
+  }
+}

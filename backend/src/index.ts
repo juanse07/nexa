@@ -16,6 +16,7 @@ import rolesRouter from './routes/roles';
 import managersRouter from './routes/managers';
 import tariffsRouter from './routes/tariffs';
 import usersRouter from './routes/users';
+import syncRouter from './routes/sync';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 
@@ -39,37 +40,6 @@ async function createServer() {
   app.use(pinoHttp({ logger }));
 
   app.use('/api', healthRouter);
-  // Direct handler for listing events to avoid any routing ambiguity
-  app.get('/api/events', async (_req, res) => {
-    try {
-      const events = await EventModel.find().sort({ createdAt: -1 }).lean();
-      const withStats = (events || []).map((ev: any) => {
-        const accepted = ev.accepted_staff || [];
-        const roleToAcceptedCount = accepted.reduce((acc: Record<string, number>, m: any) => {
-          const key = (m?.role || '').toLowerCase();
-          if (!key) return acc;
-          acc[key] = (acc[key] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>);
-        const stats = (ev.roles || []).map((r: any) => {
-          const key = (r?.role || '').toLowerCase();
-          const capacity = r?.count || 0;
-          const taken = roleToAcceptedCount[key] || 0;
-          const remaining = Math.max(capacity - taken, 0);
-          return {
-            role: r.role,
-            capacity,
-            taken,
-            remaining,
-          };
-        });
-        return { ...ev, role_stats: stats };
-      });
-      res.json(withStats);
-    } catch (err) {
-      res.status(500).json({ error: 'Internal Server Error' });
-    }
-  });
   app.use('/api', eventsRouter);
   app.use('/api', clientsRouter);
   app.use('/api', rolesRouter);
@@ -77,6 +47,7 @@ async function createServer() {
   app.use('/api', usersRouter);
   app.use('/api', managersRouter);
   app.use('/api/auth', authRouter);
+  app.use('/api', syncRouter);
 
   // Admin maintenance: recompute role_stats for all events
   app.post('/api/admin/recompute-role-stats', async (req, res) => {

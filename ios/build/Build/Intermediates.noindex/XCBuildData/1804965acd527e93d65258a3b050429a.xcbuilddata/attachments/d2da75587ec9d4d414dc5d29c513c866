@@ -1,0 +1,5 @@
+
+module sign_in_with_apple.Swift {
+  header "sign_in_with_apple-Swift.h"
+  requires objc
+}

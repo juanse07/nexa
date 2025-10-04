@@ -1,0 +1,4 @@
+
+module connectivity_plus.__Swift {
+  exclude header "connectivity_plus-Swift.h"
+}
