@@ -276,22 +276,26 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         ? (payload['roles'] as List)
         : const [];
 
-    final int defaultBartenders = _extractRoleCount(roles, 'bartender');
-    final int defaultServers = _extractRoleCount(roles, 'server');
-    final int defaultDishwashers = _extractRoleCount(roles, 'dishwasher');
+    // Get all available roles from database
+    final availableRoles = _roles ?? [];
+    
+    // Create controllers for each available role
+    final Map<String, TextEditingController> roleControllers = {};
+    final Map<String, String> roleIds = {}; // Store role IDs for reference
+    
+    for (final role in availableRoles) {
+      final roleId = (role['id'] ?? '').toString();
+      final roleName = (role['name'] ?? '').toString();
+      if (roleId.isEmpty || roleName.isEmpty) continue;
+      
+      // Try to find existing count for this role
+      final existingCount = _extractRoleCount(roles, roleName.toLowerCase());
+      roleControllers[roleName] = TextEditingController(
+        text: existingCount.toString(),
+      );
+      roleIds[roleName] = roleId;
+    }
 
-    final TextEditingController bartendersCtrl = TextEditingController(
-      text: defaultBartenders.toString(),
-    );
-    final TextEditingController serversCtrl = TextEditingController(
-      text: defaultServers.toString(),
-    );
-    final TextEditingController dishwashersCtrl = TextEditingController(
-      text: defaultDishwashers.toString(),
-    );
-    // Optional roles we don't staff by default
-    final TextEditingController captainCtrl = TextEditingController(text: '0');
-    final TextEditingController deliveryCtrl = TextEditingController(text: '0');
     final String selectedClientName = _clientNameController.text.trim();
 
     Map<String, dynamic>? result = await showDialog<Map<String, dynamic>>(
@@ -336,50 +340,22 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   ),
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  controller: bartendersCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Bartenders',
-                    prefixIcon: Icon(Icons.local_bar),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: serversCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Servers',
-                    prefixIcon: Icon(Icons.room_service),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: dishwashersCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Dishwashers',
-                    prefixIcon: Icon(Icons.wash),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: captainCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Catering Captain (optional)',
-                    prefixIcon: Icon(Icons.military_tech),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: deliveryCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Delivery Driver (optional)',
-                    prefixIcon: Icon(Icons.local_shipping),
-                  ),
-                ),
+                // Dynamically create text fields for all roles
+                ...roleControllers.entries.map((entry) {
+                  final roleName = entry.key;
+                  final controller = entry.value;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: TextField(
+                      controller: controller,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: roleName,
+                        prefixIcon: const Icon(Icons.work_outline),
+                      ),
+                    ),
+                  );
+                }).toList(),
               ],
             ),
           ),
@@ -390,28 +366,20 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             ),
             ElevatedButton(
               onPressed: () {
-                final int bartenders =
-                    int.tryParse(bartendersCtrl.text.trim()) ??
-                    defaultBartenders;
-                final int servers =
-                    int.tryParse(serversCtrl.text.trim()) ?? defaultServers;
-                final int dishwashers =
-                    int.tryParse(dishwashersCtrl.text.trim()) ??
-                    defaultDishwashers;
-                final int captain = int.tryParse(captainCtrl.text.trim()) ?? 0;
-                final int delivery =
-                    int.tryParse(deliveryCtrl.text.trim()) ?? 0;
+                // Collect all role counts
+                final Map<String, int> counts = {};
+                for (final entry in roleControllers.entries) {
+                  final roleName = entry.key;
+                  final controller = entry.value;
+                  final count = int.tryParse(controller.text.trim()) ?? 0;
+                  counts[roleName.toLowerCase()] = count < 0 ? 0 : count;
+                }
+                
                 final String company = selectedClientName.isNotEmpty
                     ? selectedClientName
                     : (payload['client_name']?.toString() ?? '').trim();
                 Navigator.of(ctx).pop({
-                  'counts': {
-                    'bartender': bartenders < 0 ? 0 : bartenders,
-                    'server': servers < 0 ? 0 : servers,
-                    'dishwasher': dishwashers < 0 ? 0 : dishwashers,
-                    'captain': captain < 0 ? 0 : captain,
-                    'delivery': delivery < 0 ? 0 : delivery,
-                  },
+                  'counts': counts,
                   'client_name': company,
                 });
               },
@@ -433,32 +401,34 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         .whereType<Map<String, dynamic>>()
         .toList(growable: true);
 
-    bool matches(String? role, String key) {
-      if (role == null) return false;
-      final String r = role.toLowerCase();
-      return r.contains(key);
+    // Get all available roles from database
+    final availableRoles = _roles ?? [];
+    
+    // Create a set of role names (lowercase) that we're updating
+    final updatingRoleNames = <String>{};
+    for (final entry in counts.entries) {
+      updatingRoleNames.add(entry.key.toLowerCase());
     }
 
-    roles.removeWhere(
-      (r) =>
-          matches(r['role']?.toString(), 'bartender') ||
-          matches(r['role']?.toString(), 'server') ||
-          matches(r['role']?.toString(), 'dishwasher') ||
-          matches(r['role']?.toString(), 'captain') ||
-          matches(r['role']?.toString(), 'delivery'),
-    );
+    // Remove existing roles that match any of the roles we're updating
+    roles.removeWhere((r) {
+      final roleName = (r['role']?.toString() ?? '').toLowerCase();
+      return updatingRoleNames.contains(roleName);
+    });
 
-    void addIfPositive(String name, int value) {
-      if (value > 0) {
-        roles.add({'role': name, 'count': value});
+    // Add new roles with counts > 0
+    for (final entry in counts.entries) {
+      final count = entry.value;
+      if (count > 0) {
+        // Find the proper case name from available roles
+        final properCaseName = availableRoles.firstWhere(
+          (r) => (r['name']?.toString() ?? '').toLowerCase() == entry.key,
+          orElse: () => {'name': entry.key},
+        )['name']?.toString() ?? entry.key;
+        
+        roles.add({'role': properCaseName, 'count': count});
       }
     }
-
-    addIfPositive('Bartender', counts['bartender'] ?? 0);
-    addIfPositive('Server', counts['server'] ?? 0);
-    addIfPositive('Dishwasher', counts['dishwasher'] ?? 0);
-    addIfPositive('Catering Captain', counts['captain'] ?? 0);
-    addIfPositive('Delivery Driver', counts['delivery'] ?? 0);
 
     return roles;
   }
@@ -733,7 +703,15 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   bool _isUsersLoading = false;
   Set<String> _favoriteUsers = {};
   String? _selectedRole;
-  final List<String> _favoriteRoleOptions = ['Bartender', 'Server', 'Host', 'Manager'];
+  
+  // Get role options dynamically from loaded roles
+  List<String> get _favoriteRoleOptions {
+    final roles = _roles ?? [];
+    return roles
+        .map((r) => (r['name'] ?? '').toString())
+        .where((name) => name.isNotEmpty)
+        .toList();
+  }
 
   Future<void> _loadFavorites() async {
     final prefs = await SharedPreferences.getInstance();

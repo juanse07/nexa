@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/event_service.dart';
 import '../services/pending_events_service.dart';
+import '../services/roles_service.dart';
 import '../services/users_service.dart';
 
 class PendingPublishScreen extends StatefulWidget {
@@ -22,16 +23,33 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
   final UsersService _usersService = UsersService();
   final PendingEventsService _pendingService = PendingEventsService();
   final EventService _eventService = EventService();
+  final RolesService _rolesService = RolesService();
 
   bool _everyone = true;
   final TextEditingController _searchCtrl = TextEditingController();
   List<Map<String, dynamic>> _users = const [];
+  List<Map<String, dynamic>> _roles = const [];
   String? _cursor;
   bool _loadingUsers = false;
   final Set<String> _selectedKeys = <String>{};
   final Map<String, Map<String, String>> _keyToUser =
       <String, Map<String, String>>{};
   bool _publishing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRoles();
+  }
+
+  Future<void> _loadRoles() async {
+    try {
+      final roles = await _rolesService.fetchRoles();
+      setState(() => _roles = roles);
+    } catch (e) {
+      // Silently fail, roles will be empty
+    }
+  }
 
   Future<void> _loadUsers({bool reset = false}) async {
     if (_loadingUsers) return;
@@ -247,21 +265,18 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
     final List<dynamic> existing = (payload['roles'] is List)
         ? (payload['roles'] as List)
         : const [];
-    final bartenders = TextEditingController(
-      text: extract(existing, 'bartender').toString(),
-    );
-    final servers = TextEditingController(
-      text: extract(existing, 'server').toString(),
-    );
-    final dishwashers = TextEditingController(
-      text: extract(existing, 'dishwasher').toString(),
-    );
-    final captain = TextEditingController(
-      text: extract(existing, 'captain').toString(),
-    );
-    final delivery = TextEditingController(
-      text: extract(existing, 'delivery').toString(),
-    );
+    
+    // Create controllers for all available roles dynamically
+    final Map<String, TextEditingController> roleControllers = {};
+    for (final role in _roles) {
+      final roleName = (role['name'] ?? '').toString();
+      if (roleName.isEmpty) continue;
+      
+      final existingCount = extract(existing, roleName.toLowerCase());
+      roleControllers[roleName] = TextEditingController(
+        text: existingCount.toString(),
+      );
+    }
 
     return showDialog<Map<String, int>>(
       context: context,
@@ -270,17 +285,12 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: [
-              _numField(bartenders, 'Bartenders'),
-              const SizedBox(height: 8),
-              _numField(servers, 'Servers'),
-              const SizedBox(height: 8),
-              _numField(dishwashers, 'Dishwashers'),
-              const SizedBox(height: 8),
-              _numField(captain, 'Catering Captain (optional)'),
-              const SizedBox(height: 8),
-              _numField(delivery, 'Delivery Driver (optional)'),
-            ],
+            children: roleControllers.entries.map((entry) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _numField(entry.value, entry.key),
+              );
+            }).toList(),
           ),
         ),
         actions: [
@@ -290,13 +300,14 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
           ),
           ElevatedButton(
             onPressed: () {
-              Navigator.of(ctx).pop({
-                'bartender': int.tryParse(bartenders.text.trim()) ?? 0,
-                'server': int.tryParse(servers.text.trim()) ?? 0,
-                'dishwasher': int.tryParse(dishwashers.text.trim()) ?? 0,
-                'captain': int.tryParse(captain.text.trim()) ?? 0,
-                'delivery': int.tryParse(delivery.text.trim()) ?? 0,
-              });
+              final counts = <String, int>{};
+              for (final entry in roleControllers.entries) {
+                final roleName = entry.key;
+                final controller = entry.value;
+                counts[roleName.toLowerCase()] = 
+                    int.tryParse(controller.text.trim()) ?? 0;
+              }
+              Navigator.of(ctx).pop(counts);
             },
             child: const Text('Continue'),
           ),
@@ -318,15 +329,21 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
 
   List<Map<String, dynamic>> _countsToRoles(Map<String, int> counts) {
     final list = <Map<String, dynamic>>[];
-    void add(String name, int value) {
-      if (value > 0) list.add({'role': name, 'count': value});
+    
+    // Add roles with counts > 0, using proper case names from _roles
+    for (final entry in counts.entries) {
+      final count = entry.value;
+      if (count > 0) {
+        // Find the proper case name from available roles
+        final properCaseName = _roles.firstWhere(
+          (r) => (r['name']?.toString() ?? '').toLowerCase() == entry.key,
+          orElse: () => {'name': entry.key},
+        )['name']?.toString() ?? entry.key;
+        
+        list.add({'role': properCaseName, 'count': count});
+      }
     }
-
-    add('Bartender', counts['bartender'] ?? 0);
-    add('Server', counts['server'] ?? 0);
-    add('Dishwasher', counts['dishwasher'] ?? 0);
-    add('Catering Captain', counts['captain'] ?? 0);
-    add('Delivery Driver', counts['delivery'] ?? 0);
+    
     return list;
   }
 }
