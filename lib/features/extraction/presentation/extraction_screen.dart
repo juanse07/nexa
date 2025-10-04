@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get_it/get_it.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -114,6 +115,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     _loadDraftIfAny();
     _loadPendingDrafts();
     _loadProfilePicture();
+    _loadFavorites();
+    _loadFirstUsersPage();
   }
 
   @override
@@ -728,6 +731,48 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   List<Map<String, dynamic>> _users = const [];
   String? _usersNextCursor;
   bool _isUsersLoading = false;
+  Set<String> _favoriteUsers = {};
+  String? _selectedRole;
+  final List<String> _favoriteRoleOptions = ['Bartender', 'Server', 'Host', 'Manager'];
+
+  Future<void> _loadFavorites() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _favoriteUsers = prefs.getStringList('favorite_users')?.toSet() ?? {};
+    });
+  }
+
+  Future<void> _saveFavorites() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('favorite_users', _favoriteUsers.toList());
+  }
+
+  void _toggleFavorite(String userId, String role) async {
+    final key = '$userId:$role';
+    setState(() {
+      if (_favoriteUsers.contains(key)) {
+        _favoriteUsers.remove(key);
+      } else {
+        _favoriteUsers.add(key);
+      }
+    });
+    await _saveFavorites();
+  }
+
+  bool _isFavorite(String userId, String? role) {
+    if (role == null) return false;
+    return _favoriteUsers.contains('$userId:$role');
+  }
+
+  List<Map<String, dynamic>> get _filteredUsers {
+    if (_selectedRole == null) {
+      return _users;
+    }
+    return _users.where((u) {
+      final userId = '${u['provider']}:${u['subject']}';
+      return _isFavorite(userId, _selectedRole);
+    }).toList();
+  }
 
   Future<void> _loadFirstUsersPage() async {
     setState(() {
@@ -790,32 +835,95 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         children: [
           Padding(
             padding: const EdgeInsets.all(12),
-            child: Row(
+            child: Column(
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: _userSearchCtrl,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.search),
-                      hintText: 'Search name or email',
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _userSearchCtrl,
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.search),
+                          hintText: 'Search name or email',
+                          border: OutlineInputBorder(),
+                        ),
+                        onSubmitted: (_) => _loadFirstUsersPage(),
+                      ),
                     ),
-                    onSubmitted: (_) => _loadFirstUsersPage(),
-                  ),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      onPressed: _loadFirstUsersPage,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6366F1),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                      icon: const Icon(Icons.search),
+                      label: const Text('Search'),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: _loadFirstUsersPage,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6366F1),
-                    foregroundColor: Colors.white,
+                const SizedBox(height: 8),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      FilterChip(
+                        selected: _selectedRole == null,
+                        label: const Text('All'),
+                        onSelected: (selected) {
+                          setState(() => _selectedRole = null);
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      ..._favoriteRoleOptions.map((role) => Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: FilterChip(
+                          selected: _selectedRole == role,
+                          label: Text(role),
+                          onSelected: (selected) {
+                            setState(() => _selectedRole = selected ? role : null);
+                          },
+                        ),
+                      )),
+                    ],
                   ),
-                  child: const Text('Search'),
                 ),
               ],
             ),
           ),
           Expanded(
-            child: NotificationListener<ScrollNotification>(
+            child: _filteredUsers.isEmpty && _selectedRole != null && !_isUsersLoading
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.star_border,
+                          size: 64,
+                          color: Colors.grey.shade400,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No favorite $_selectedRole yet',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Star users to add them to this list',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : NotificationListener<ScrollNotification>(
               onNotification: (n) {
                 if (n.metrics.pixels >= n.metrics.maxScrollExtent - 200) {
                   _loadMoreUsers();
@@ -823,9 +931,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 return false;
               },
               child: ListView.builder(
-                itemCount: _users.length + 1,
+                itemCount: _filteredUsers.length + 1,
                 itemBuilder: (ctx, idx) {
-                  if (idx == _users.length) {
+                  if (idx == _filteredUsers.length) {
                     if (_isUsersLoading) {
                       return const Padding(
                         padding: EdgeInsets.all(16),
@@ -845,28 +953,99 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       ),
                     );
                   }
-                  final u = _users[idx];
+                  final u = _filteredUsers[idx];
+                  final userId = '${u['provider']}:${u['subject']}';
+                  final name = u['name']?.toString() ?? '';
+                  final email = u['email']?.toString() ?? '';
+                  final appId = u['app_id']?.toString() ?? '';
+                  final firstName = u['first_name']?.toString() ?? '';
+                  final lastName = u['last_name']?.toString() ?? '';
+                  final displayName = [firstName, lastName].where((s) => s.isNotEmpty).join(' ');
+                  final picture = u['picture']?.toString();
+
                   return ListTile(
-                    leading: const CircleAvatar(child: Icon(Icons.person)),
-                    title: Text((u['name'] ?? u['email'] ?? 'User').toString()),
-                    subtitle: Text((u['email'] ?? '').toString()),
-                    trailing: TextButton(
-                      onPressed: () async {
-                        final key = '${u['provider']}:${u['subject']}';
-                        setState(() {
-                          _viewerUserKey = key;
-                        });
-                        await _loadEvents();
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Viewer set to ${(u['email'] ?? u['name'] ?? key)}',
-                            ),
+                    leading: CircleAvatar(
+                      backgroundImage: picture != null ? NetworkImage(picture) : null,
+                      child: picture == null ? const Icon(Icons.person) : null,
+                    ),
+                    title: Text(
+                      displayName.isNotEmpty ? displayName : (name.isNotEmpty ? name : email),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (email.isNotEmpty) Text(email),
+                        if (appId.isNotEmpty)
+                          Text(
+                            'ID: $appId',
+                            style: Theme.of(context).textTheme.bodySmall,
                           ),
-                        );
-                      },
-                      child: const Text('View as'),
+                      ],
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_selectedRole != null)
+                          IconButton(
+                            icon: Icon(
+                              _isFavorite(userId, _selectedRole)
+                                  ? Icons.star
+                                  : Icons.star_border,
+                              color: _isFavorite(userId, _selectedRole)
+                                  ? Colors.amber
+                                  : null,
+                            ),
+                            onPressed: () => _toggleFavorite(userId, _selectedRole!),
+                            tooltip: _isFavorite(userId, _selectedRole)
+                                ? 'Remove from $_selectedRole favorites'
+                                : 'Add to $_selectedRole favorites',
+                          ),
+                        PopupMenuButton<String>(
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(
+                              value: 'view',
+                              child: ListTile(
+                                leading: Icon(Icons.visibility),
+                                title: Text('View as'),
+                              ),
+                            ),
+                            ...(_selectedRole == null ? _favoriteRoleOptions : [_selectedRole!]).map(
+                              (role) => PopupMenuItem(
+                                value: 'favorite:$role',
+                                child: ListTile(
+                                  leading: Icon(
+                                    _isFavorite(userId, role)
+                                        ? Icons.star
+                                        : Icons.star_border,
+                                    color: _isFavorite(userId, role)
+                                        ? Colors.amber
+                                        : null,
+                                  ),
+                                  title: Text('${_isFavorite(userId, role) ? 'Remove from' : 'Add to'} $role favorites'),
+                                ),
+                              ),
+                            ),
+                          ],
+                          onSelected: (value) async {
+                            if (value == 'view') {
+                              setState(() => _viewerUserKey = userId);
+                              await _loadEvents();
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Viewing as ${displayName.isNotEmpty ? displayName : email}',
+                                  ),
+                                ),
+                              );
+                            } else if (value.startsWith('favorite:')) {
+                              final role = value.substring('favorite:'.length);
+                              _toggleFavorite(userId, role);
+                            }
+                          },
+                        ),
+                      ],
                     ),
                   );
                 },

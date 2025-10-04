@@ -119,7 +119,7 @@ router.get('/users', async (req, res) => {
       } catch (_) {}
     }
 
-    const docs = await UserModel.find(filter, { provider: 1, subject: 1, email: 1, name: 1, picture: 1 })
+    const docs = await UserModel.find(filter, { provider: 1, subject: 1, email: 1, name: 1, first_name: 1, last_name: 1, picture: 1, app_id: 1 })
       .sort({ _id: 1 })
       .limit(limit + 1)
       .lean();
@@ -140,7 +140,10 @@ router.get('/users', async (req, res) => {
       subject: u.subject,
       email: u.email,
       name: u.name,
+      first_name: u.first_name,
+      last_name: u.last_name,
       picture: u.picture,
+      app_id: u.app_id,
     }));
     return res.json({ items: mapped, nextCursor });
   } catch (err) {
