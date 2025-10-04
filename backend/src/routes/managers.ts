@@ -1,9 +1,7 @@
 import { Router } from 'express';
-import mongoose from 'mongoose';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/requireAuth';
 import { ManagerModel } from '../models/manager';
-import { UserModel } from '../models/user';
 
 const router = Router();
 
@@ -22,49 +20,21 @@ router.get('/managers/me', requireAuth, async (req, res) => {
     if (!req.user?.provider || !req.user?.sub) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
-    const user = await UserModel.findOne({ provider: req.user.provider, subject: req.user.sub }).lean();
-    const sourceEmail = user?.email || req.user.email;
-    const sourceName = user?.name || req.user.name;
-    const sourcePicture = user?.picture || req.user.picture;
-    const fullName = (sourceName || '').trim();
-    const first_name = fullName ? fullName.split(/\s+/).slice(0, -1).join(' ') || undefined : undefined;
-    const last_name = fullName ? fullName.split(/\s+/).slice(-1)[0] || undefined : undefined;
 
-    const updated = await ManagerModel.findOneAndUpdate(
-      { provider: req.user.provider, subject: req.user.sub },
-      {
-        $setOnInsert: {
-          provider: req.user.provider,
-          subject: req.user.sub,
-          email: sourceEmail,
-          name: sourceName,
-          first_name,
-          last_name,
-          picture: sourcePicture,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        $set: {
-          updatedAt: new Date(),
-          ...(sourceEmail ? { email: sourceEmail } : {}),
-          ...(sourceName ? { name: sourceName } : {}),
-          ...(first_name ? { first_name } : {}),
-          ...(last_name ? { last_name } : {}),
-          ...(sourcePicture ? { picture: sourcePicture } : {}),
-        },
-      },
-      { upsert: true, new: true }
-    ).lean();
+    const manager = await ManagerModel.findOne({
+      provider: req.user.provider,
+      subject: req.user.sub,
+    }).lean();
 
-    if (!updated) return res.status(404).json({ message: 'Manager not found' });
+    if (!manager) return res.status(404).json({ message: 'Manager not found' });
     return res.json({
-      id: String(updated._id),
-      email: updated.email,
-      name: updated.name,
-      first_name: updated.first_name,
-      last_name: updated.last_name,
-      picture: updated.picture,
-      app_id: updated.app_id,
+      id: String(manager._id),
+      email: manager.email,
+      name: manager.name,
+      first_name: manager.first_name,
+      last_name: manager.last_name,
+      picture: manager.picture,
+      app_id: manager.app_id,
     });
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -100,18 +70,9 @@ router.patch('/managers/me', requireAuth, async (req, res) => {
     const updated = await ManagerModel.findOneAndUpdate(
       { provider: req.user.provider, subject: req.user.sub },
       {
-        $setOnInsert: {
-          provider: req.user.provider,
-          subject: req.user.sub,
-          email: req.user.email,
-          name: req.user.name,
-          picture: req.user.picture,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
         $set: { ...parsed.data, updatedAt: new Date() },
       },
-      { upsert: true, new: true }
+      { new: true }
     ).lean();
     if (!updated) return res.status(404).json({ message: 'Manager not found' });
     return res.json({

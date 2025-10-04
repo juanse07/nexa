@@ -69,35 +69,18 @@ async function upsertUser(profile: VerifiedProfile) {
 
 async function ensureManagerDocument(profile: VerifiedProfile) {
   const filter = { provider: profile.provider, subject: profile.subject } as const;
-  const name = (profile.name || '').trim();
-  const first_name = name ? name.split(/\s+/).slice(0, -1).join(' ') || undefined : undefined;
-  const last_name = name ? name.split(/\s+/).slice(-1)[0] || undefined : undefined;
-  await ManagerModel.updateOne(
-    filter,
-    {
-      // Always refresh missing basic fields if currently empty
-      $setOnInsert: {
-        provider: profile.provider,
-        subject: profile.subject,
-        email: profile.email,
-        name: profile.name,
-        first_name,
-        last_name,
-        picture: profile.picture,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      $set: {
-        updatedAt: new Date(),
-        ...(profile.email ? { email: profile.email } : {}),
-        ...(profile.name ? { name: profile.name } : {}),
-        ...(first_name ? { first_name } : {}),
-        ...(last_name ? { last_name } : {}),
-        ...(profile.picture ? { picture: profile.picture } : {}),
-      },
+  const update = {
+    $set: {
+      provider: profile.provider,
+      subject: profile.subject,
+      email: profile.email,
+      name: profile.name,
+      picture: profile.picture,
+      updatedAt: new Date(),
     },
-    { upsert: true }
-  );
+    $setOnInsert: { createdAt: new Date() },
+  } as const;
+  await ManagerModel.updateOne(filter, update, { upsert: true });
 }
 
 async function verifyGoogleIdToken(idToken: string): Promise<VerifiedProfile> {
