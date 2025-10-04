@@ -103,8 +103,13 @@ class AuthService {
   static Future<String?> getJwt() => _storage.read(key: _jwtStorageKey);
 
   /// Saves JWT token to secure storage
-  static Future<void> _saveJwt(String token) =>
-      _storage.write(key: _jwtStorageKey, value: token);
+  static Future<void> _saveJwt(String token) async {
+    await _storage.write(key: _jwtStorageKey, value: token);
+    // For Dio-based client, mirror the token into the common access_token key
+    try {
+      await _storage.write(key: 'access_token', value: token);
+    } catch (_) {}
+  }
 
   /// Signs in a user with Google OAuth
   /// Returns true if successful, false otherwise

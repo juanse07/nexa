@@ -4,6 +4,7 @@ import * as jose from 'jose';
 import jwt from 'jsonwebtoken';
 import { ENV } from '../config/env';
 import { UserModel } from '../models/user';
+import { ManagerModel } from '../models/manager';
 
 type VerifiedProfile = {
   provider: 'google' | 'apple';
@@ -64,6 +65,30 @@ async function upsertUser(profile: VerifiedProfile) {
     $setOnInsert: { createdAt: new Date() },
   } as const;
   await UserModel.updateOne(filter, update, { upsert: true });
+}
+
+async function ensureManagerDocument(profile: VerifiedProfile) {
+  const filter = { provider: profile.provider, subject: profile.subject } as const;
+  const name = (profile.name || '').trim();
+  const first_name = name ? name.split(/\s+/).slice(0, -1).join(' ') || undefined : undefined;
+  const last_name = name ? name.split(/\s+/).slice(-1)[0] || undefined : undefined;
+  await ManagerModel.updateOne(
+    filter,
+    {
+      $setOnInsert: {
+        provider: profile.provider,
+        subject: profile.subject,
+        email: profile.email,
+        first_name,
+        last_name,
+        picture: profile.picture,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      $set: { updatedAt: new Date() },
+    },
+    { upsert: true }
+  );
 }
 
 async function verifyGoogleIdToken(idToken: string): Promise<VerifiedProfile> {
@@ -153,6 +178,7 @@ router.post('/google', async (req, res) => {
     if (!idToken) return res.status(400).json({ message: 'idToken is required' });
     const profile = await verifyGoogleIdToken(idToken);
     await upsertUser(profile);
+    await ensureManagerDocument(profile);
     const token = issueAppJwt(profile);
     res.json({ token, user: profile });
   } catch (err) {
@@ -169,6 +195,7 @@ router.post('/apple', async (req, res) => {
     if (!identityToken) return res.status(400).json({ message: 'identityToken is required' });
     const profile = await verifyAppleIdentityToken(identityToken);
     await upsertUser(profile);
+    await ensureManagerDocument(profile);
     const token = issueAppJwt(profile);
     res.json({ token, user: profile });
   } catch (err) {

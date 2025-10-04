@@ -13,6 +13,7 @@ import clientsRouter from './routes/clients';
 import eventsRouter from './routes/events';
 import healthRouter from './routes/health';
 import rolesRouter from './routes/roles';
+import managersRouter from './routes/managers';
 import tariffsRouter from './routes/tariffs';
 import usersRouter from './routes/users';
 
@@ -74,6 +75,7 @@ async function createServer() {
   app.use('/api', rolesRouter);
   app.use('/api', tariffsRouter);
   app.use('/api', usersRouter);
+  app.use('/api', managersRouter);
   app.use('/api/auth', authRouter);
 
   // Admin maintenance: recompute role_stats for all events

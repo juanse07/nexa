@@ -22,6 +22,7 @@ import '../services/tariffs_service.dart';
 import '../services/users_service.dart';
 import '../widgets/modern_address_field.dart';
 import 'pending_publish_screen.dart';
+import '../../users/presentation/pages/manager_profile_page.dart';
 
 class ExtractionScreen extends StatefulWidget {
   const ExtractionScreen({super.key});
@@ -542,6 +543,17 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               shadowColor: Colors.transparent,
               centerTitle: true,
               actions: [
+                IconButton(
+                  icon: const Icon(Icons.account_circle),
+                  tooltip: 'My Profile',
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const ManagerProfilePage(),
+                      ),
+                    );
+                  },
+                ),
                 IconButton(
                   icon: const Icon(Icons.logout),
                   tooltip: 'Logout',
