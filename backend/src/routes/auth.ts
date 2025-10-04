@@ -178,7 +178,12 @@ router.post('/google', async (req, res) => {
     if (!idToken) return res.status(400).json({ message: 'idToken is required' });
     const profile = await verifyGoogleIdToken(idToken);
     await upsertUser(profile);
-    await ensureManagerDocument(profile);
+    try {
+      await ensureManagerDocument(profile);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[auth] ensureManagerDocument failed, proceeding with login', err);
+    }
     const token = issueAppJwt(profile);
     res.json({ token, user: profile });
   } catch (err) {
@@ -195,7 +200,12 @@ router.post('/apple', async (req, res) => {
     if (!identityToken) return res.status(400).json({ message: 'identityToken is required' });
     const profile = await verifyAppleIdentityToken(identityToken);
     await upsertUser(profile);
-    await ensureManagerDocument(profile);
+    try {
+      await ensureManagerDocument(profile);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[auth] ensureManagerDocument failed, proceeding with login', err);
+    }
     const token = issueAppJwt(profile);
     res.json({ token, user: profile });
   } catch (err) {
