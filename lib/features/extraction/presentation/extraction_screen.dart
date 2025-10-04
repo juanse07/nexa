@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:get_it/get_it.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 // import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:mime/mime.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
@@ -11,6 +13,7 @@ import 'package:syncfusion_flutter_pdf/pdf.dart';
 import '../../../features/auth/data/services/auth_service.dart';
 import '../../../features/auth/presentation/pages/login_page.dart';
 import '../../../shared/ui/widgets.dart';
+import '../../../core/network/api_client.dart';
 import '../services/clients_service.dart';
 import '../services/draft_service.dart';
 import '../services/event_service.dart';
@@ -23,6 +26,8 @@ import '../services/users_service.dart';
 import '../widgets/modern_address_field.dart';
 import 'pending_publish_screen.dart';
 import '../../users/presentation/pages/manager_profile_page.dart';
+import '../../users/presentation/pages/settings_page.dart';
+import '../../users/data/services/manager_service.dart';
 
 class ExtractionScreen extends StatefulWidget {
   const ExtractionScreen({super.key});
@@ -87,6 +92,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   final PendingEventsService _pendingService = PendingEventsService();
   bool _lastStructuredFromUpload = false;
 
+  // Profile avatar state
+  late final ManagerService _managerService;
+  String? _profilePictureUrl;
+
   @override
   void initState() {
     super.initState();
@@ -95,11 +104,16 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     _eventService = EventService();
     _clientsService = ClientsService();
     _rolesService = RolesService();
+    // Initialize ManagerService via GetIt
+    final api = GetIt.I<ApiClient>();
+    final storage = GetIt.I<FlutterSecureStorage>();
+    _managerService = ManagerService(api, storage);
     _loadEvents();
     _loadClients();
     _loadRoles();
     _loadDraftIfAny();
     _loadPendingDrafts();
+    _loadProfilePicture();
   }
 
   @override
@@ -543,22 +557,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               shadowColor: Colors.transparent,
               centerTitle: true,
               actions: [
-                IconButton(
-                  icon: const Icon(Icons.account_circle),
-                  tooltip: 'My Profile',
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const ManagerProfilePage(),
-                      ),
-                    );
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.logout),
-                  tooltip: 'Logout',
-                  onPressed: () => _handleLogout(context),
-                ),
+                _buildProfileMenu(context),
               ],
               bottom: TabBar(
                 controller: _tabController,
@@ -586,6 +585,82 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         ),
       ),
     );
+  }
+
+  Widget _buildProfileMenu(BuildContext context) {
+    final theme = Theme.of(context);
+    return PopupMenuButton<String>(
+      tooltip: 'Account',
+      position: PopupMenuPosition.under,
+      onSelected: (value) async {
+        if (value == 'profile') {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const ManagerProfilePage(),
+            ),
+          );
+        } else if (value == 'settings') {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const SettingsPage(),
+            ),
+          );
+        } else if (value == 'logout') {
+          await _handleLogout(context);
+        }
+      },
+      itemBuilder: (context) => [
+        const PopupMenuItem<String>(
+          value: 'profile',
+          child: ListTile(
+            leading: Icon(Icons.account_circle),
+            title: Text('My Profile'),
+          ),
+        ),
+        const PopupMenuItem<String>(
+          value: 'settings',
+          child: ListTile(
+            leading: Icon(Icons.settings),
+            title: Text('Settings'),
+          ),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem<String>(
+          value: 'logout',
+          child: ListTile(
+            leading: Icon(Icons.logout),
+            title: Text('Logout'),
+          ),
+        ),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+        child: _buildAvatarOrIcon(theme),
+      ),
+    );
+  }
+
+  Widget _buildAvatarOrIcon(ThemeData theme) {
+    final url = _profilePictureUrl?.trim();
+    final hasUrl = url != null && url.isNotEmpty;
+    return CircleAvatar(
+      radius: 16,
+      backgroundColor: Colors.white24,
+      backgroundImage: hasUrl ? NetworkImage(url!) : null,
+      child: hasUrl ? null : const Icon(Icons.person, color: Colors.white),
+    );
+  }
+
+  Future<void> _loadProfilePicture() async {
+    try {
+      final me = await _managerService.getMe();
+      if (!mounted) return;
+      setState(() {
+        _profilePictureUrl = me.picture;
+      });
+    } catch (_) {
+      // Silently ignore; avatar will fall back to icon
+    }
   }
 
   Future<void> _handleLogout(BuildContext context) async {
