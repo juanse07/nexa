@@ -10,10 +10,11 @@ class ManagerProfile {
   final String? email;
   final String? firstName;
   final String? lastName;
+  final String? name;
   final String? picture;
   final String? appId;
 
-  ManagerProfile({this.id, this.email, this.firstName, this.lastName, this.picture, this.appId});
+  ManagerProfile({this.id, this.email, this.firstName, this.lastName, this.name, this.picture, this.appId});
 
   factory ManagerProfile.fromMap(Map<String, dynamic> map) {
     return ManagerProfile(
@@ -21,6 +22,7 @@ class ManagerProfile {
       email: map['email']?.toString(),
       firstName: map['first_name']?.toString(),
       lastName: map['last_name']?.toString(),
+      name: map['name']?.toString(),
       picture: map['picture']?.toString(),
       appId: map['app_id']?.toString(),
     );

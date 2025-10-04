@@ -4,6 +4,7 @@ export interface ManagerDocument extends Document {
   provider: 'google' | 'apple';
   subject: string;
   email?: string;
+  name?: string; // original OAuth full name
   first_name?: string;
   last_name?: string;
   picture?: string; // optional override picture
@@ -17,6 +18,7 @@ const ManagerSchema = new Schema<ManagerDocument>(
     provider: { type: String, required: true, enum: ['google', 'apple'] },
     subject: { type: String, required: true },
     email: { type: String, trim: true },
+    name: { type: String, trim: true },
     first_name: { type: String, trim: true },
     last_name: { type: String, trim: true },
     picture: { type: String, trim: true },

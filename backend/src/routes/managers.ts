@@ -26,6 +26,7 @@ router.get('/managers/me', requireAuth, async (req, res) => {
     return res.json({
       id: String(doc._id),
       email: doc.email,
+      name: doc.name,
       first_name: doc.first_name,
       last_name: doc.last_name,
       picture: doc.picture,

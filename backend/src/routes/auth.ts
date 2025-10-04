@@ -75,17 +75,26 @@ async function ensureManagerDocument(profile: VerifiedProfile) {
   await ManagerModel.updateOne(
     filter,
     {
+      // Always refresh missing basic fields if currently empty
       $setOnInsert: {
         provider: profile.provider,
         subject: profile.subject,
         email: profile.email,
+        name: profile.name,
         first_name,
         last_name,
         picture: profile.picture,
         createdAt: new Date(),
         updatedAt: new Date(),
       },
-      $set: { updatedAt: new Date() },
+      $set: {
+        updatedAt: new Date(),
+        ...(profile.email ? { email: profile.email } : {}),
+        ...(profile.name ? { name: profile.name } : {}),
+        ...(first_name ? { first_name } : {}),
+        ...(last_name ? { last_name } : {}),
+        ...(profile.picture ? { picture: profile.picture } : {}),
+      },
     },
     { upsert: true }
   );
