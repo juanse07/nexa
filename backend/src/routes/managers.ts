@@ -21,20 +21,31 @@ router.get('/managers/me', requireAuth, async (req, res) => {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const manager = await ManagerModel.findOne({
+    let manager = await ManagerModel.findOne({
       provider: req.user.provider,
       subject: req.user.sub,
     }).lean();
 
-    if (!manager) return res.status(404).json({ message: 'Manager not found' });
+    // Auto-provision a manager profile if it doesn't exist yet
+    if (!manager) {
+      const created = await ManagerModel.create({
+        provider: (req.user as any).provider,
+        subject: (req.user as any).sub,
+        email: (req.user as any).email,
+        name: (req.user as any).name,
+        picture: (req.user as any).picture,
+      });
+      manager = (created.toObject() as any);
+    }
+
     return res.json({
-      id: String(manager._id),
-      email: manager.email,
-      name: manager.name,
-      first_name: manager.first_name,
-      last_name: manager.last_name,
-      picture: manager.picture,
-      app_id: manager.app_id,
+      id: String((manager as any)._id),
+      email: (manager as any).email,
+      name: (manager as any).name,
+      first_name: (manager as any).first_name,
+      last_name: (manager as any).last_name,
+      picture: (manager as any).picture,
+      app_id: (manager as any).app_id,
     });
   } catch (err) {
     // eslint-disable-next-line no-console

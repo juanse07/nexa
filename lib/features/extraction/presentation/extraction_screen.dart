@@ -26,6 +26,7 @@ import '../services/tariffs_service.dart';
 import '../services/users_service.dart';
 import '../widgets/modern_address_field.dart';
 import 'pending_publish_screen.dart';
+import 'pending_edit_screen.dart';
 import '../../users/presentation/pages/manager_profile_page.dart';
 import '../../users/presentation/pages/settings_page.dart';
 import '../../users/data/services/manager_service.dart';
@@ -37,8 +38,7 @@ class ExtractionScreen extends StatefulWidget {
   State<ExtractionScreen> createState() => _ExtractionScreenState();
 }
 
-class _ExtractionScreenState extends State<ExtractionScreen>
-    with SingleTickerProviderStateMixin {
+class _ExtractionScreenState extends State<ExtractionScreen> {
   String? extractedText;
   Map<String, dynamic>? structuredData;
   bool isLoading = false;
@@ -46,7 +46,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   // Removed: we no longer prompt or store user keys on-device
   String? userApiKey;
 
-  late TabController _tabController;
+  int _selectedIndex = 0;
 
   // Events listing state
   List<Map<String, dynamic>>? _events;
@@ -58,6 +58,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   List<Map<String, dynamic>> _pendingDrafts = const [];
   bool _isPendingLoading = false;
   String? _viewerUserKey; // provider:subject used to filter events
+  
+  // Bulk upload state
+  bool _isBulkProcessing = false;
+  List<Map<String, dynamic>> _bulkItems = const [];
 
   // Clients listing state
   List<Map<String, dynamic>>? _clients;
@@ -100,7 +104,6 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
     _extractionService = ExtractionService();
     _eventService = EventService();
     _clientsService = ClientsService();
@@ -121,7 +124,6 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
   @override
   void dispose() {
-    _tabController.dispose();
     _eventNameController.dispose();
     _clientNameController.dispose();
     _dateController.dispose();
@@ -510,50 +512,79 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
   @override
   Widget build(BuildContext context) {
+    final List<Widget> pages = [
+      _buildCreateTab(),
+      _buildEventsTab(),
+      _buildUsersTab(),
+      _buildCatalogTab(),
+    ];
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      body: NestedScrollView(
-        headerSliverBuilder: (context, innerBoxIsScrolled) {
-          return [
-            SliverAppBar(
-              floating: true,
-              snap: true,
-              pinned: false,
-              toolbarHeight: 88,
-              title: SizedBox(
-                height: 60,
-                child: Image.asset('assets/appbar_logo.png', fit: BoxFit.contain),
-              ),
-              backgroundColor: const Color(0xFF430172),
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shadowColor: Colors.transparent,
-              centerTitle: true,
-              actions: [
-                _buildProfileMenu(context),
+      appBar: AppBar(
+        toolbarHeight: 88,
+        title: SizedBox(
+          height: 60,
+          child: Image.asset('assets/appbar_logo.png', fit: BoxFit.contain),
+        ),
+        backgroundColor: const Color(0xFF430172),
+        foregroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
+        actions: [
+          _buildProfileMenu(context),
+        ],
+      ),
+      body: pages[_selectedIndex],
+      bottomNavigationBar: Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFF430172),
+        ),
+        child: SafeArea(
+          child: SizedBox(
+            height: 56,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildNavButton(0, Icons.add_circle_outline, 'Create'),
+                _buildNavButton(1, Icons.view_module, 'Events'),
+                _buildNavButton(2, Icons.group, 'Users'),
+                _buildNavButton(3, Icons.inventory_2, 'Catalog'),
               ],
-              bottom: TabBar(
-                controller: _tabController,
-                tabs: const [
-                  Tab(icon: Icon(Icons.add_circle_outline), text: 'Create'),
-                  Tab(icon: Icon(Icons.view_module), text: 'Events'),
-                  Tab(icon: Icon(Icons.group), text: 'Users'),
-                  Tab(icon: Icon(Icons.inventory_2), text: 'Catalog'),
-                ],
-                labelColor: Colors.white,
-                unselectedLabelColor: Colors.white70,
-                indicatorColor: Colors.white,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavButton(int index, IconData icon, String label) {
+    final isSelected = _selectedIndex == index;
+    return Expanded(
+      child: InkWell(
+        onTap: () {
+          setState(() {
+            _selectedIndex = index;
+          });
+        },
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              color: Colors.white,
+              size: 24,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.3,
               ),
             ),
-          ];
-        },
-        body: TabBarView(
-          controller: _tabController,
-          children: [
-            _buildCreateTab(),
-            _buildEventsTab(),
-            _buildUsersTab(),
-            _buildCatalogTab(),
           ],
         ),
       ),
@@ -673,26 +704,282 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   Widget _buildCreateTab() {
     return SafeArea(
       child: DefaultTabController(
-        length: 2,
+        length: 3,
         child: Column(
           children: [
             const TabBar(
               tabs: [
                 Tab(icon: Icon(Icons.upload_file), text: 'Upload Document'),
                 Tab(icon: Icon(Icons.edit), text: 'Manual Entry'),
+                Tab(icon: Icon(Icons.cloud_upload), text: 'Bulk Upload'),
               ],
               labelColor: Color(0xFF6366F1),
               unselectedLabelColor: Colors.grey,
             ),
             Expanded(
               child: TabBarView(
-                children: [_buildUploadTab(), _buildManualEntryTab()],
+                children: [
+                  _buildUploadTab(),
+                  _buildManualEntryTab(),
+                  _buildBulkUploadTab(),
+                ],
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildBulkUploadTab() {
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            HeaderCard(
+              title: 'Bulk Upload',
+              subtitle: 'Upload multiple PDFs or images and save each as a pending draft',
+              icon: Icons.cloud_upload,
+              gradientColors: const [Color(0xFF10B981), Color(0xFF3B82F6)],
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: _isBulkProcessing ? null : () => _pickAndProcessMultipleFiles(append: false),
+                  icon: const Icon(Icons.folder_open),
+                  label: const Text('Select Files'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6366F1),
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+                if (_bulkItems.isNotEmpty)
+                  ElevatedButton.icon(
+                    onPressed: _isBulkProcessing ? null : () => _pickAndProcessMultipleFiles(append: true),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add More'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF6366F1),
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                if (_bulkItems.any((e) => e['data'] != null))
+                  ElevatedButton.icon(
+                    onPressed: _isBulkProcessing ? null : _confirmAllBulkToPending,
+                    icon: const Icon(Icons.done_all),
+                    label: const Text('Confirm All'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF059669),
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Tip: Long-press to multi-select in the picker. Or use Add More to append.',
+              style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+            ),
+            const SizedBox(height: 16),
+            if (_isBulkProcessing)
+              const LoadingIndicator(text: 'Processing files...'),
+            const SizedBox(height: 8),
+            ..._bulkItems.asMap().entries.map((entry) {
+              final int index = entry.key;
+              final Map<String, dynamic> item = entry.value;
+              final String name = (item['name'] ?? 'File').toString();
+              final String status = (item['status'] ?? 'queued').toString();
+              final Map<String, dynamic>? data =
+                  (item['data'] as Map?)?.cast<String, dynamic>();
+              final String subtitle = data == null
+                  ? status[0].toUpperCase() + status.substring(1)
+                  : _summarizeEvent(data);
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: ListTile(
+                  leading: Icon(
+                    data != null
+                        ? Icons.check_circle
+                        : status == 'error'
+                            ? Icons.error
+                            : Icons.hourglass_bottom,
+                    color: data != null
+                        ? const Color(0xFF059669)
+                        : status == 'error'
+                            ? const Color(0xFFDC2626)
+                            : const Color(0xFF6366F1),
+                  ),
+                  title: Text(name),
+                  subtitle: Text(subtitle),
+                  isThreeLine: false,
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (data != null)
+                        TextButton(
+                          onPressed: () => _confirmSingleBulkToPending(index),
+                          child: const Text('Confirm'),
+                        ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline, color: Color(0xFFDC2626)),
+                        onPressed: () {
+                          setState(() {
+                            _bulkItems = List.of(_bulkItems)..removeAt(index);
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _summarizeEvent(Map<String, dynamic> data) {
+    final client = (data['client_name'] ?? '').toString();
+    final name = (data['event_name'] ?? data['venue_name'] ?? 'Untitled').toString();
+    final date = (data['date'] ?? '').toString();
+    return [name, if (date.isNotEmpty) date, if (client.isNotEmpty) client].join(' • ');
+  }
+
+  Future<void> _pickAndProcessMultipleFiles({required bool append}) async {
+    if (!append) {
+      setState(() {
+        _bulkItems = const [];
+      });
+    }
+    setState(() => _isBulkProcessing = true);
+    try {
+      final ok = await _ensureApiKey();
+      if (!ok) {
+        setState(() {
+          _isBulkProcessing = false;
+        });
+        return;
+      }
+      final result = await FilePicker.platform.pickFiles(
+        allowMultiple: true,
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg', 'heic'],
+      );
+      if (result == null || result.files.isEmpty) {
+        setState(() => _isBulkProcessing = false);
+        return;
+      }
+
+      final picked = result.files.where((f) => f.path != null).toList();
+      final existing = List<Map<String, dynamic>>.from(_bulkItems);
+      final startIndex = existing.length;
+      // Append new entries, dedup by path+name
+      final added = <Map<String, dynamic>>[];
+      for (final f in picked) {
+        final already = existing.any((e) => e['path'] == f.path && e['name'] == f.name);
+        if (!already) {
+          added.add({'name': f.name, 'path': f.path, 'status': 'queued'});
+        }
+      }
+      if (added.isEmpty) {
+        setState(() => _isBulkProcessing = false);
+        return;
+      }
+      setState(() {
+        _bulkItems = [...existing, ...added];
+      });
+
+      for (int idx = 0; idx < added.length; idx++) {
+        final f = picked[idx];
+        if (f.path == null) continue;
+        setState(() {
+          _bulkItems = List.of(_bulkItems);
+          _bulkItems[startIndex + idx] = {..._bulkItems[startIndex + idx], 'status': 'processing'};
+        });
+        try {
+          final file = File(f.path!);
+          final mimeType = lookupMimeType(f.path!) ?? '';
+          String input;
+          if (mimeType.contains('pdf') || f.path!.toLowerCase().endsWith('.pdf')) {
+            input = await _extractTextFromPdf(file);
+          } else if (mimeType.startsWith('image/')) {
+            final bytes = await file.readAsBytes();
+            input = '[[IMAGE_BASE64]]:' + base64Encode(bytes);
+          } else {
+            throw Exception('Unsupported type: $mimeType');
+          }
+          final response = await _extractionService.extractStructuredData(
+            input: input,
+            apiKey: userApiKey ?? dotenv.env['OPENAI_API_KEY'] ?? '',
+          );
+          setState(() {
+            _bulkItems = List.of(_bulkItems);
+            _bulkItems[startIndex + idx] = {
+              ..._bulkItems[startIndex + idx],
+              'status': 'done',
+              'data': response,
+            };
+          });
+        } catch (_) {
+          setState(() {
+            _bulkItems = List.of(_bulkItems);
+            _bulkItems[startIndex + idx] = {..._bulkItems[startIndex + idx], 'status': 'error'};
+          });
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _isBulkProcessing = false);
+    }
+  }
+
+  Future<void> _confirmSingleBulkToPending(int index) async {
+    final Map<String, dynamic> item = _bulkItems[index];
+    final Map<String, dynamic>? data =
+        (item['data'] as Map?)?.cast<String, dynamic>();
+    if (data == null) return;
+    final id = await _pendingService.saveDraft(data);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Saved to Pending (' + (item['name']?.toString() ?? 'File') + ')'),
+        backgroundColor: const Color(0xFF059669),
+      ),
+    );
+    setState(() {
+      _bulkItems = List.of(_bulkItems);
+      _bulkItems.removeAt(index);
+    });
+    await _loadPendingDrafts();
+  }
+
+  Future<void> _confirmAllBulkToPending() async {
+    final ready = _bulkItems
+        .map((e) => (e['data'] as Map?)?.cast<String, dynamic>())
+        .whereType<Map<String, dynamic>>()
+        .toList();
+    for (final d in ready) {
+      await _pendingService.saveDraft(d);
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('All ready items saved to Pending'),
+        backgroundColor: Color(0xFF059669),
+      ),
+    );
+    setState(() => _bulkItems = const []);
+    await _loadPendingDrafts();
   }
 
   // Users tab with search + cursor pagination
@@ -1214,28 +1501,6 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     if (selClient.isNotEmpty) {
                       payload['client_name'] = selClient;
                     }
-                    // Ask for staff counts (always) and merge into roles
-                    final Map<String, dynamic>? promptResult =
-                        await _promptStaffCounts(payload);
-                    if (promptResult == null) {
-                      return;
-                    }
-                    final Map<String, int> counts =
-                        (promptResult['counts'] as Map?)?.map<String, int>(
-                          (k, v) => MapEntry(
-                            k.toString(),
-                            int.tryParse(v.toString()) ?? 0,
-                          ),
-                        ) ??
-                        <String, int>{};
-                    final List<dynamic> existingRoles =
-                        (payload['roles'] is List)
-                        ? (payload['roles'] as List)
-                        : const [];
-                    payload['roles'] = _mergeStaffCountsIntoRoles(
-                      existingRoles,
-                      counts,
-                    );
                     // Save to pending
                     final id = await _pendingService.saveDraft(payload);
                     if (!mounted) return;
@@ -1591,6 +1856,24 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    TextButton(
+                      onPressed: () async {
+                        final data =
+                            (d['data'] as Map?)?.cast<String, dynamic>() ??
+                            <String, dynamic>{};
+                        final id = (d['id'] ?? '').toString();
+                        if (!mounted) return;
+                        final changed = await Navigator.of(context).push<bool>(
+                          MaterialPageRoute(
+                            builder: (_) => PendingEditScreen(draft: data, draftId: id),
+                          ),
+                        );
+                        if (changed == true) {
+                          await _loadPendingDrafts();
+                        }
+                      },
+                      child: const Text('Edit'),
+                    ),
                     TextButton(
                       onPressed: () async {
                         final data =
@@ -3076,26 +3359,6 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           if (selClient.isNotEmpty) {
                             payload['client_name'] = selClient;
                           }
-                          final Map<String, dynamic>? promptResult =
-                              await _promptStaffCounts(payload);
-                          if (promptResult == null) return;
-                          final Map<String, int> counts =
-                              (promptResult['counts'] as Map?)
-                                  ?.map<String, int>(
-                                    (k, v) => MapEntry(
-                                      k.toString(),
-                                      int.tryParse(v.toString()) ?? 0,
-                                    ),
-                                  ) ??
-                              <String, int>{};
-                          final List<dynamic> existingRoles =
-                              (payload['roles'] is List)
-                              ? (payload['roles'] as List)
-                              : const [];
-                          payload['roles'] = _mergeStaffCountsIntoRoles(
-                            existingRoles,
-                            counts,
-                          );
                           await _pendingService.saveDraft(payload);
                           if (!mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -3406,7 +3669,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       // Refresh events list and navigate to Events tab so the user can see it immediately
       await _loadEvents();
       if (!mounted) return;
-      _tabController.animateTo(2);
+      setState(() {
+        _selectedIndex = 1; // Navigate to Events tab
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Event saved to database'),

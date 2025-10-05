@@ -26,11 +26,29 @@ class EventService {
     final response = await http.get(uri, headers: headers);
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
-      final List<dynamic> decoded = jsonDecode(response.body) as List<dynamic>;
-      return decoded
-          .whereType<Map<String, dynamic>>()
-          .map((e) => e)
-          .toList(growable: false);
+      final dynamic decoded = jsonDecode(response.body);
+      // Support two shapes:
+      // 1) Legacy: top-level array of events
+      // 2) Current: object { events: [...], serverTimestamp, deltaSync }
+      if (decoded is List) {
+        return decoded
+            .whereType<Map<String, dynamic>>()
+            .map((e) => e)
+            .toList(growable: false);
+      }
+      if (decoded is Map<String, dynamic>) {
+        final dynamic eventsField = decoded['events'];
+        if (eventsField is List) {
+          return eventsField
+              .whereType<Map<String, dynamic>>()
+              .map((e) => e)
+              .toList(growable: false);
+        }
+        // If backend returns an object without 'events', fallback to empty list
+        return const <Map<String, dynamic>>[];
+      }
+      // Unknown shape
+      return const <Map<String, dynamic>>[];
     }
     throw Exception(
       'Failed to load events (${response.statusCode}): ${response.body}',

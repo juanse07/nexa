@@ -35,11 +35,21 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
   final Map<String, Map<String, String>> _keyToUser =
       <String, Map<String, String>>{};
   bool _publishing = false;
+  final Map<String, TextEditingController> _roleCountCtrls = <String, TextEditingController>{};
 
   @override
   void initState() {
     super.initState();
     _loadRoles();
+    // Pre-fill role counts if draft already contains roles
+    final roles = (widget.draft['roles'] as List?)?.whereType<Map>().toList() ?? const [];
+    for (final r in roles) {
+      final roleName = (r['role'] ?? '').toString();
+      final count = (r['count'] ?? '').toString();
+      if (roleName.isNotEmpty) {
+        _roleCountCtrls[roleName] = TextEditingController(text: count);
+      }
+    }
   }
 
   Future<void> _loadRoles() async {
@@ -89,14 +99,13 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
     setState(() => _publishing = true);
     try {
       final payload = Map<String, dynamic>.from(widget.draft);
-      if (payload['roles'] is! List || (payload['roles'] as List).isEmpty) {
-        final counts = await _promptRoleCounts(payload);
-        if (counts == null) {
-          setState(() => _publishing = false);
-          return;
-        }
-        payload['roles'] = _countsToRoles(counts);
+      // Always ensure role counts are set at publish time
+      final counts = await _promptRoleCounts(payload);
+      if (counts == null) {
+        setState(() => _publishing = false);
+        return;
       }
+      payload['roles'] = _countsToRoles(counts);
       if (!_everyone) {
         payload['audience_user_keys'] = _selectedKeys.toList();
       }
@@ -148,7 +157,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                   ].where((s) => s.toString().isNotEmpty).join(' • '),
                   style: const TextStyle(color: Colors.grey),
                 ),
-                const SizedBox(height: 12),
+            const SizedBox(height: 12),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Visible to everyone'),
