@@ -28,6 +28,7 @@ import '../widgets/modern_address_field.dart';
 import 'pending_publish_screen.dart';
 import 'pending_edit_screen.dart';
 import '../../users/presentation/pages/manager_profile_page.dart';
+import '../../events/presentation/event_detail_screen.dart';
 import '../../users/presentation/pages/settings_page.dart';
 import '../../users/data/services/manager_service.dart';
 
@@ -115,6 +116,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
     _loadEvents();
     _loadClients();
     _loadRoles();
+    _loadTariffs();
     _loadDraftIfAny();
     _loadPendingDrafts();
     _loadProfilePicture();
@@ -1478,25 +1480,10 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
                 alignment: Alignment.centerRight,
                 child: ElevatedButton.icon(
                   onPressed: () async {
-                    if (_lastStructuredFromUpload) {
-                      await _openClientPicker();
-                      if (_clientNameController.text.trim().isEmpty) {
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Please choose a client before saving',
-                            ),
-                            backgroundColor: Color(0xFFDC2626),
-                          ),
-                        );
-                        return;
-                      }
-                    }
                     // Build payload from current structured data
                     final Map<String, dynamic> payload =
                         Map<String, dynamic>.from(structuredData!);
-                    // Ensure client is attached from selection
+                    // Ensure client is attached from selection if it exists
                     final selClient = _clientNameController.text.trim();
                     if (selClient.isNotEmpty) {
                       payload['client_name'] = selClient;
@@ -2739,7 +2726,20 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
         ? const Color(0xFF059669)
         : const Color(0xFF6B7280);
 
-    return Container(
+    return GestureDetector(
+      onTap: () async {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => EventDetailScreen(
+              event: e,
+              onEventUpdated: () => _loadEvents(),
+            ),
+          ),
+        );
+        // Refresh events after returning from detail screen
+        await _loadEvents();
+      },
+      child: Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
@@ -2967,99 +2967,13 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
                         ),
                       ],
                     ],
-                    if (acceptedStaff.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      Text(
-                        'Accepted Staff',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey.shade700,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: acceptedStaff.take(6).map((member) {
-                          String displayName;
-                          String? roleLabel;
-                          if (member is Map<String, dynamic>) {
-                            final m = member;
-                            displayName =
-                                (m['name'] ??
-                                        m['first_name'] ??
-                                        m['email'] ??
-                                        m['subject'] ??
-                                        m['userKey'] ??
-                                        'Member')
-                                    .toString();
-                            final r = (m['role'] ?? '').toString();
-                            roleLabel = r.isNotEmpty ? r : null;
-                          } else if (member is String) {
-                            displayName = member;
-                          } else {
-                            displayName = member.toString();
-                          }
-
-                          return Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF0F9FF),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: const Color(
-                                  0xFF0EA5E9,
-                                ).withValues(alpha: 0.2),
-                                width: 1,
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  Icons.person,
-                                  size: 14,
-                                  color: Color(0xFF0EA5E9),
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  roleLabel != null
-                                      ? "$displayName — $roleLabel"
-                                      : displayName,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF0369A1),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                      if (acceptedStaff.length > 6) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          '+${acceptedStaff.length - 6} more',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey.shade500,
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      ],
-                    ],
                   ],
                 ),
               ),
             ),
           ),
         ],
+      ),
       ),
     );
   }

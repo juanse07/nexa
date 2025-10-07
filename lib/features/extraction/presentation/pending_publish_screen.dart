@@ -4,6 +4,7 @@ import '../services/event_service.dart';
 import '../services/pending_events_service.dart';
 import '../services/roles_service.dart';
 import '../services/users_service.dart';
+import '../services/clients_service.dart';
 
 class PendingPublishScreen extends StatefulWidget {
   final Map<String, dynamic> draft;
@@ -24,11 +25,13 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
   final PendingEventsService _pendingService = PendingEventsService();
   final EventService _eventService = EventService();
   final RolesService _rolesService = RolesService();
+  final ClientsService _clientsService = ClientsService();
 
   bool _everyone = true;
   final TextEditingController _searchCtrl = TextEditingController();
   List<Map<String, dynamic>> _users = const [];
   List<Map<String, dynamic>> _roles = const [];
+  List<Map<String, dynamic>> _clients = const [];
   String? _cursor;
   bool _loadingUsers = false;
   final Set<String> _selectedKeys = <String>{};
@@ -99,7 +102,16 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
     setState(() => _publishing = true);
     try {
       final payload = Map<String, dynamic>.from(widget.draft);
-      // Always ensure role counts are set at publish time
+
+      // First, pick client
+      final clientName = await _promptClientPicker();
+      if (clientName == null) {
+        setState(() => _publishing = false);
+        return;
+      }
+      payload['client_name'] = clientName;
+
+      // Then, ensure role counts are set at publish time
       final counts = await _promptRoleCounts(payload);
       if (counts == null) {
         setState(() => _publishing = false);
@@ -338,7 +350,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
 
   List<Map<String, dynamic>> _countsToRoles(Map<String, int> counts) {
     final list = <Map<String, dynamic>>[];
-    
+
     // Add roles with counts > 0, using proper case names from _roles
     for (final entry in counts.entries) {
       final count = entry.value;
@@ -348,11 +360,98 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
           (r) => (r['name']?.toString() ?? '').toLowerCase() == entry.key,
           orElse: () => {'name': entry.key},
         )['name']?.toString() ?? entry.key;
-        
+
         list.add({'role': properCaseName, 'count': count});
       }
     }
-    
+
     return list;
+  }
+
+  Future<String?> _promptClientPicker() async {
+    // Load latest clients
+    try {
+      final clients = await _clientsService.fetchClients();
+      setState(() => _clients = clients);
+    } catch (e) {
+      // Fail silently, clients will be empty
+    }
+
+    final TextEditingController newClientCtrl = TextEditingController();
+
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setStateDialog) {
+            return AlertDialog(
+              title: const Text('Select Client'),
+              content: SizedBox(
+                width: 400,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_clients.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text('No clients available. Create one below.'),
+                      )
+                    else
+                      SizedBox(
+                        height: 200,
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: _clients.length,
+                          itemBuilder: (ctx, idx) {
+                            final client = _clients[idx];
+                            final name = (client['name'] ?? 'Unnamed').toString();
+                            return ListTile(
+                              title: Text(name),
+                              onTap: () => Navigator.of(ctx).pop(name),
+                            );
+                          },
+                        ),
+                      ),
+                    const SizedBox(height: 16),
+                    const Divider(),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: newClientCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Or create new client',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(null),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final newName = newClientCtrl.text.trim();
+                    if (newName.isEmpty) return;
+                    try {
+                      await _clientsService.createClient(newName);
+                      if (!mounted) return;
+                      Navigator.of(ctx).pop(newName);
+                    } catch (e) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Failed to create client: $e')),
+                      );
+                    }
+                  },
+                  child: const Text('Create & Select'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 }

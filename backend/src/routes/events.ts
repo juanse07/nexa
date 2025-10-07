@@ -227,6 +227,45 @@ router.patch('/events/:id/roles', async (req, res) => {
   }
 });
 
+// Update an event (partial update)
+router.patch('/events/:id', async (req, res) => {
+  try {
+    const eventId = req.params.id ?? '';
+    if (!mongoose.Types.ObjectId.isValid(eventId)) {
+      return res.status(400).json({ message: 'Invalid event id' });
+    }
+
+    const updateData = { ...req.body };
+    delete updateData._id;
+    delete updateData.id;
+
+    // Normalize date if provided
+    if (updateData.date) {
+      updateData.date = new Date(updateData.date);
+    }
+
+    // Update the event
+    const result = await EventModel.updateOne(
+      { _id: new mongoose.Types.ObjectId(eventId) },
+      { $set: { ...updateData, updatedAt: new Date() } }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    const updated = await EventModel.findById(eventId).lean();
+    if (!updated) {
+      return res.status(404).json({ message: 'Event not found after update' });
+    }
+    return res.json({ ...updated, id: String(updated._id) });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[update event] failed', err);
+    return res.status(500).json({ message: 'Failed to update event' });
+  }
+});
+
 router.get('/events', async (_req, res) => {
   try {
     const audienceKey = (_req.headers['x-user-key'] as string | undefined) || undefined;
@@ -255,9 +294,15 @@ router.get('/events', async (_req, res) => {
     }
     const events = await EventModel.find(filter).sort({ createdAt: -1 }).lean();
 
+    // Map events to include id field as string
+    const mappedEvents = events.map((event: any) => ({
+      ...event,
+      id: String(event._id),
+    }));
+
     // Include current server timestamp for next sync
     return res.json({
-      events,
+      events: mappedEvents,
       serverTimestamp: new Date().toISOString(),
       deltaSync: !!lastSyncParam
     });
@@ -299,6 +344,54 @@ router.get('/positions', async (_req, res) => {
     return res.json(positions);
   } catch (err) {
     return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Remove accepted staff member from event
+router.delete('/events/:id/staff/:userKey', async (req, res) => {
+  try {
+    const eventId = req.params.id ?? '';
+    const userKey = req.params.userKey ?? '';
+
+    if (!mongoose.Types.ObjectId.isValid(eventId)) {
+      return res.status(400).json({ message: 'Invalid event id' });
+    }
+
+    if (!userKey) {
+      return res.status(400).json({ message: 'User key is required' });
+    }
+
+    const event = await EventModel.findById(eventId).lean();
+    if (!event) return res.status(404).json({ message: 'Event not found' });
+
+    // Remove the staff member from accepted_staff array
+    const result = await EventModel.updateOne(
+      { _id: new mongoose.Types.ObjectId(eventId) },
+      {
+        $pull: { accepted_staff: { userKey } } as any,
+        $set: { updatedAt: new Date() }
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    // Recompute and persist role_stats
+    const updatedEvent = await EventModel.findById(eventId).lean();
+    if (!updatedEvent) return res.status(404).json({ message: 'Event not found' });
+    const role_stats = computeRoleStats((updatedEvent.roles as any[]) || [], (updatedEvent.accepted_staff as any[]) || []);
+    await EventModel.updateOne(
+      { _id: new mongoose.Types.ObjectId(eventId) },
+      { $set: { role_stats, updatedAt: new Date() } }
+    );
+
+    const finalDoc = await EventModel.findById(eventId).lean();
+    return res.json(finalDoc);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[remove staff] failed', err);
+    return res.status(500).json({ message: 'Failed to remove staff member' });
   }
 });
 

@@ -70,4 +70,38 @@ class EventService {
       'Failed to save event (${response.statusCode}): ${response.body}',
     );
   }
+
+  Future<Map<String, dynamic>> updateEvent(String eventId, Map<String, dynamic> updates) async {
+    final uri = Uri.parse('$_baseUrl/events/$eventId');
+    print('DEBUG: Updating event at URL: $uri');
+    print('DEBUG: Event ID: $eventId');
+
+    final response = await http.patch(
+      uri,
+      headers: const {'Content-Type': 'application/json'},
+      body: jsonEncode(updates),
+    );
+
+    print('DEBUG: Response status: ${response.statusCode}');
+    print('DEBUG: Response body: ${response.body}');
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    throw Exception(
+      'Failed to update event (${response.statusCode}): ${response.body}',
+    );
+  }
+
+  Future<Map<String, dynamic>> removeAcceptedStaff(String eventId, String userKey) async {
+    final uri = Uri.parse('$_baseUrl/events/$eventId/staff/$userKey');
+    final response = await http.delete(uri);
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    throw Exception(
+      'Failed to remove staff member (${response.statusCode}): ${response.body}',
+    );
+  }
 }
