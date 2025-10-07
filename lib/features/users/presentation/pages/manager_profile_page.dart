@@ -43,7 +43,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
       });
     } catch (e) {
       setState(() {
-        _error = 'Failed to load profile';
+        _error = 'Failed to load profile. This may be due to backend deployment. Please try again in a few minutes.';
         _loading = false;
       });
     }
