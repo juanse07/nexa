@@ -910,16 +910,41 @@ router.post('/events/:id/submit-hours', async (req, res) => {
           `${s.first_name} ${s.last_name}`.toLowerCase().includes(hours.name?.toLowerCase())
       );
 
-      if (staffMember && staffMember.attendance) {
-        const lastAttendance = staffMember.attendance[staffMember.attendance.length - 1];
-        if (lastAttendance) {
-          // Update the most recent attendance session
-          if (hours.signInTime) lastAttendance.sheetSignInTime = new Date(`1970-01-01 ${hours.signInTime}`);
-          if (hours.signOutTime) lastAttendance.sheetSignOutTime = new Date(`1970-01-01 ${hours.signOutTime}`);
-          if (hours.approvedHours) lastAttendance.approvedHours = hours.approvedHours;
-          if (hours.notes) lastAttendance.managerNotes = hours.notes;
-          lastAttendance.status = 'sheet_submitted';
+      if (staffMember) {
+        // Initialize attendance array if it doesn't exist
+        if (!staffMember.attendance) {
+          staffMember.attendance = [];
         }
+
+        // If there's a recent attendance session (clocked in), update it
+        // Otherwise, create a new session from sheet data
+        let attendanceSession: any;
+        if (staffMember.attendance.length > 0) {
+          attendanceSession = staffMember.attendance[staffMember.attendance.length - 1];
+        } else {
+          // Create new attendance session from sheet data
+          const newSession = {
+            clockInAt: new Date(), // Use current time as placeholder
+          };
+          staffMember.attendance.push(newSession);
+          attendanceSession = newSession;
+        }
+
+        // Update with sheet data
+        if (hours.signInTime) {
+          attendanceSession.sheetSignInTime = new Date(`1970-01-01 ${hours.signInTime}`);
+        }
+        if (hours.signOutTime) {
+          attendanceSession.sheetSignOutTime = new Date(`1970-01-01 ${hours.signOutTime}`);
+        }
+        if (hours.approvedHours != null) {
+          attendanceSession.approvedHours = hours.approvedHours;
+          console.log(`[submit-hours] Set approvedHours=${hours.approvedHours} for ${hours.name}`);
+        }
+        if (hours.notes) {
+          attendanceSession.managerNotes = hours.notes;
+        }
+        attendanceSession.status = 'sheet_submitted';
       }
     }
 
@@ -1003,11 +1028,14 @@ router.post('/events/:id/bulk-approve-hours', async (req, res) => {
     for (const staffMember of event.accepted_staff || []) {
       if (staffMember.attendance && staffMember.attendance.length > 0) {
         const lastAttendance = staffMember.attendance[staffMember.attendance.length - 1];
-        if (lastAttendance && lastAttendance.status === 'sheet_submitted' && lastAttendance.approvedHours) {
+        if (lastAttendance && lastAttendance.status === 'sheet_submitted' && lastAttendance.approvedHours != null) {
+          console.log(`[bulk-approve] Approving ${staffMember.name || staffMember.userKey}: ${lastAttendance.approvedHours} hours`);
           lastAttendance.status = 'approved';
           lastAttendance.approvedBy = approvedBy;
           lastAttendance.approvedAt = new Date();
           approvedCount++;
+        } else {
+          console.log(`[bulk-approve] Skipping ${staffMember.name || staffMember.userKey}: status=${lastAttendance?.status}, hours=${lastAttendance?.approvedHours}`);
         }
       }
     }
