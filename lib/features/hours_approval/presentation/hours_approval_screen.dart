@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:nexa/features/hours_approval/services/timesheet_extraction_service.dart';
+import 'package:nexa/features/hours_approval/presentation/manual_hours_entry_screen.dart';
 
 class HoursApprovalScreen extends StatefulWidget {
   final Map<String, dynamic> event;
@@ -106,6 +107,43 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
                             label: const Text('Gallery'),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          const Expanded(child: Divider()),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Text(
+                              'OR',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                          const Expanded(child: Divider()),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            final result = await Navigator.of(context).push<bool>(
+                              MaterialPageRoute(
+                                builder: (_) => ManualHoursEntryScreen(event: widget.event),
+                              ),
+                            );
+                            if (result == true && mounted) {
+                              Navigator.of(context).pop(true);
+                            }
+                          },
+                          icon: const Icon(Icons.edit),
+                          label: const Text('Manual Entry'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -328,25 +366,17 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
               }),
               const SizedBox(height: 16),
 
-              // Action buttons
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _isSubmitting ? null : _submitForReview,
-                      icon: const Icon(Icons.send),
-                      label: const Text('Submit for Review'),
-                    ),
+              // Action button
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _isSubmitting ? null : _bulkApprove,
+                  icon: const Icon(Icons.check_circle),
+                  label: const Text('Approve Hours'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: _isSubmitting ? null : _bulkApprove,
-                      icon: const Icon(Icons.check_circle),
-                      label: const Text('Bulk Approve'),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ],
           ],
@@ -425,52 +455,6 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
     if (result != null) {
       setState(() {
         _extractedHours![index] = result;
-      });
-    }
-  }
-
-  Future<void> _submitForReview() async {
-    if (_extractedHours == null || _sheetPhotoPath == null) return;
-
-    setState(() {
-      _isSubmitting = true;
-      _error = null;
-    });
-
-    try {
-      final eventId = widget.event['_id'] ?? widget.event['id'];
-      final result = await _service.submitHours(
-        eventId: eventId.toString(),
-        staffHours: _extractedHours!,
-        sheetPhotoUrl: _sheetPhotoPath!,
-        submittedBy: 'Manager', // TODO: Get actual user
-      );
-
-      if (mounted) {
-        // Show match results
-        if (result.unmatchedCount > 0) {
-          await _showMatchResults(result);
-        }
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result.message),
-            backgroundColor: result.processedCount > 0 ? Colors.green : Colors.orange,
-          ),
-        );
-
-        if (result.processedCount > 0) {
-          Navigator.of(context).pop(true);
-        } else {
-          setState(() {
-            _isSubmitting = false;
-          });
-        }
-      }
-    } catch (e) {
-      setState(() {
-        _error = 'Failed to submit: $e';
-        _isSubmitting = false;
       });
     }
   }
