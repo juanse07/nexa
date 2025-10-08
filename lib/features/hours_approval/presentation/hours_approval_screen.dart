@@ -439,7 +439,7 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
 
     try {
       final eventId = widget.event['_id'] ?? widget.event['id'];
-      await _service.submitHours(
+      final result = await _service.submitHours(
         eventId: eventId.toString(),
         staffHours: _extractedHours!,
         sheetPhotoUrl: _sheetPhotoPath!,
@@ -447,13 +447,25 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
       );
 
       if (mounted) {
+        // Show match results
+        if (result.unmatchedCount > 0) {
+          await _showMatchResults(result);
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Hours submitted for review'),
-            backgroundColor: Colors.green,
+          SnackBar(
+            content: Text(result.message),
+            backgroundColor: result.processedCount > 0 ? Colors.green : Colors.orange,
           ),
         );
-        Navigator.of(context).pop(true);
+
+        if (result.processedCount > 0) {
+          Navigator.of(context).pop(true);
+        } else {
+          setState(() {
+            _isSubmitting = false;
+          });
+        }
       }
     } catch (e) {
       setState(() {
@@ -496,15 +508,31 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
     try {
       // First submit the hours
       final eventId = widget.event['_id'] ?? widget.event['id'];
-      await _service.submitHours(
+      final submitResult = await _service.submitHours(
         eventId: eventId.toString(),
         staffHours: _extractedHours!,
         sheetPhotoUrl: _sheetPhotoPath!,
         submittedBy: 'Manager', // TODO: Get actual user
       );
 
+      // Show match results if any didn't match
+      if (submitResult.unmatchedCount > 0 && mounted) {
+        await _showMatchResults(submitResult);
+      }
+
+      // If no hours were matched, don't proceed with approval
+      if (submitResult.processedCount == 0) {
+        if (mounted) {
+          setState(() {
+            _error = 'No hours were matched. Please check the names on the sheet.';
+            _isSubmitting = false;
+          });
+        }
+        return;
+      }
+
       // Then bulk approve
-      final result = await _service.bulkApproveHours(
+      final approveResult = await _service.bulkApproveHours(
         eventId: eventId.toString(),
         approvedBy: 'Manager', // TODO: Get actual user
       );
@@ -512,11 +540,19 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(result.message),
-            backgroundColor: Colors.green,
+            content: Text(approveResult.message),
+            backgroundColor: approveResult.approvedCount > 0 ? Colors.green : Colors.orange,
           ),
         );
-        Navigator.of(context).pop(true);
+
+        if (approveResult.approvedCount > 0) {
+          Navigator.of(context).pop(true);
+        } else {
+          setState(() {
+            _error = 'No hours were approved. Check match results above.';
+            _isSubmitting = false;
+          });
+        }
       }
     } catch (e) {
       setState(() {
@@ -524,6 +560,68 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
         _isSubmitting = false;
       });
     }
+  }
+
+  Future<void> _showMatchResults(SubmitHoursResult result) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(
+              result.unmatchedCount > 0 ? Icons.warning : Icons.check_circle,
+              color: result.unmatchedCount > 0 ? Colors.orange : Colors.green,
+            ),
+            const SizedBox(width: 8),
+            const Text('Name Matching Results'),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${result.processedCount}/${result.totalCount} staff members matched',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: result.matchResults.length,
+                  itemBuilder: (context, index) {
+                    final match = result.matchResults[index];
+                    return Card(
+                      color: match.matched ? Colors.green[50] : Colors.red[50],
+                      child: ListTile(
+                        leading: Icon(
+                          match.matched ? Icons.check_circle : Icons.error,
+                          color: match.matched ? Colors.green : Colors.red,
+                        ),
+                        title: Text(match.extractedName),
+                        subtitle: match.matched
+                            ? Text(
+                                'Matched to: ${match.matchedName} (${match.similarity}% match)\nRole: ${match.extractedRole}',
+                              )
+                            : Text(match.reason ?? 'No match found'),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 }
 

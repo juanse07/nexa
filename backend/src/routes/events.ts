@@ -885,6 +885,49 @@ Return ONLY valid JSON in this exact format:
   }
 });
 
+// Helper function to calculate string similarity (simple Levenshtein-based)
+function stringSimilarity(str1: string, str2: string): number {
+  const longer = str1.length > str2.length ? str1 : str2;
+  const shorter = str1.length > str2.length ? str2 : str1;
+
+  if (longer.length === 0) return 1.0;
+
+  const editDistance = levenshteinDistance(longer, shorter);
+  return (longer.length - editDistance) / longer.length;
+}
+
+function levenshteinDistance(str1: string, str2: string): number {
+  const matrix: number[][] = [];
+
+  for (let i = 0; i <= str2.length; i++) {
+    matrix[i] = [i];
+  }
+
+  for (let j = 0; j <= str1.length; j++) {
+    if (matrix[0]) matrix[0][j] = j;
+  }
+
+  for (let i = 1; i <= str2.length; i++) {
+    for (let j = 1; j <= str1.length; j++) {
+      const row = matrix[i];
+      const prevRow = matrix[i - 1];
+      if (!row || !prevRow) continue;
+
+      if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+        row[j] = prevRow[j - 1] ?? 0;
+      } else {
+        row[j] = Math.min(
+          (prevRow[j - 1] ?? 0) + 1,
+          (row[j - 1] ?? 0) + 1,
+          (prevRow[j] ?? 0) + 1
+        );
+      }
+    }
+  }
+
+  return matrix[str2.length]?.[str1.length] ?? 0;
+}
+
 // Submit hours from sign-in sheet
 router.post('/events/:id/submit-hours', async (req, res) => {
   try {
@@ -907,6 +950,16 @@ router.post('/events/:id/submit-hours', async (req, res) => {
     console.log(`[submit-hours] Processing ${staffHours.length} staff members`);
     console.log(`[submit-hours] Event has ${acceptedStaff.length} accepted staff`);
 
+    const matchResults: Array<{
+      extractedName: string;
+      extractedRole: string;
+      matched: boolean;
+      matchedName?: string;
+      matchedUserKey?: string;
+      similarity?: number;
+      reason?: string;
+    }> = [];
+
     for (const hours of staffHours) {
       console.log(`[submit-hours] Looking for: "${hours.name}" with role: "${hours.role}"`);
 
@@ -914,34 +967,67 @@ router.post('/events/:id/submit-hours', async (req, res) => {
       const nameLower = hours.name?.toLowerCase().trim() || '';
       const roleLower = hours.role?.toLowerCase().trim() || '';
 
-      const staffMember = acceptedStaff.find((s: any) => {
+      // First attempt: exact or contains match
+      let staffMember = acceptedStaff.find((s: any) => {
         const staffName = (s.name || `${s.first_name || ''} ${s.last_name || ''}`).toLowerCase().trim();
         const staffRole = (s.role || '').toLowerCase().trim();
 
-        // Match by name (contains or exact)
         const nameMatch = staffName.includes(nameLower) || nameLower.includes(staffName);
-
-        // Match by role if provided
         const roleMatch = !roleLower || !staffRole || staffRole === roleLower;
 
-        console.log(`  Checking: "${staffName}" (${staffRole}) - nameMatch=${nameMatch}, roleMatch=${roleMatch}`);
-
-        return nameMatch && roleMatch;
+        return nameMatch && roleMatch && staffName.length > 0 && nameLower.length > 0;
       });
 
-      if (staffMember) {
-        console.log(`  ✓ Found staff member: ${staffMember.name || staffMember.userKey}`);
-      } else {
-        console.log(`  ✗ No match found for "${hours.name}"`);
-        console.log(`  Available staff:`, acceptedStaff.map((s: any) => ({
-          name: s.name || `${s.first_name} ${s.last_name}`,
-          role: s.role,
-          userKey: s.userKey
-        })));
-        continue; // Skip this person
+      let matchMethod = 'exact';
+      let similarity = 1.0;
+
+      // Second attempt: fuzzy matching with similarity threshold
+      if (!staffMember && nameLower.length > 0) {
+        console.log(`[submit-hours] Trying fuzzy match for "${hours.name}"`);
+
+        const candidates = acceptedStaff.map((s: any) => {
+          const staffName = (s.name || `${s.first_name || ''} ${s.last_name || ''}`).toLowerCase().trim();
+          const staffRole = (s.role || '').toLowerCase().trim();
+
+          if (staffName.length === 0) return { staff: s, similarity: 0 };
+
+          const nameSimilarity = stringSimilarity(nameLower, staffName);
+          const roleMatch = !roleLower || !staffRole || staffRole === roleLower;
+
+          // Boost similarity if role matches
+          const finalSimilarity = roleMatch ? nameSimilarity : nameSimilarity * 0.8;
+
+          console.log(`  Fuzzy: "${staffName}" (${staffRole}) - similarity=${finalSimilarity.toFixed(2)}`);
+
+          return { staff: s, similarity: finalSimilarity, staffName };
+        }).filter(c => c.similarity > 0.6); // Threshold: 60% similarity
+
+        candidates.sort((a, b) => b.similarity - a.similarity);
+
+        if (candidates.length > 0 && candidates[0]) {
+          staffMember = candidates[0].staff;
+          similarity = candidates[0].similarity ?? 1.0;
+          matchMethod = 'fuzzy';
+          console.log(`  ✓ Fuzzy matched to: "${candidates[0].staffName ?? ''}" (${(similarity * 100).toFixed(0)}% match)`);
+        }
       }
 
       if (staffMember) {
+        const staffName = staffMember.name || `${staffMember.first_name || ''} ${staffMember.last_name || ''}`;
+        console.log(`  ✓ Found staff member: ${staffName} (${matchMethod})`);
+
+        const matchResult: any = {
+          extractedName: hours.name,
+          extractedRole: hours.role,
+          matched: true,
+          matchedName: staffName.trim(),
+          similarity: Math.round(similarity * 100),
+        };
+        if (staffMember.userKey) {
+          matchResult.matchedUserKey = staffMember.userKey;
+        }
+        matchResults.push(matchResult);
+
         // Initialize attendance array if it doesn't exist
         if (!staffMember.attendance) {
           staffMember.attendance = [];
@@ -976,6 +1062,20 @@ router.post('/events/:id/submit-hours', async (req, res) => {
           attendanceSession.managerNotes = hours.notes;
         }
         attendanceSession.status = 'sheet_submitted';
+      } else {
+        console.log(`  ✗ No match found for "${hours.name}"`);
+        const availableStaff = acceptedStaff.map((s: any) => {
+          const staffName = s.name || `${s.first_name} ${s.last_name}`;
+          return `${staffName} (${s.role || 'no role'})`;
+        }).join(', ');
+        console.log(`  Available staff: ${availableStaff}`);
+
+        matchResults.push({
+          extractedName: hours.name,
+          extractedRole: hours.role,
+          matched: false,
+          reason: `No match found in accepted staff. Available: ${availableStaff}`,
+        });
       }
     }
 
@@ -991,12 +1091,21 @@ router.post('/events/:id/submit-hours', async (req, res) => {
       return s.attendance && s.attendance.some((a: any) => a.approvedHours != null);
     }).length;
 
+    const unmatchedCount = matchResults.filter(r => !r.matched).length;
+
     console.log(`[submit-hours] Successfully set hours for ${staffWithHours}/${staffHours.length} staff members`);
+    if (unmatchedCount > 0) {
+      console.log(`[submit-hours] WARNING: ${unmatchedCount} names could not be matched`);
+    }
 
     return res.json({
-      message: 'Hours submitted successfully',
+      message: staffWithHours > 0
+        ? `Hours submitted for ${staffWithHours}/${staffHours.length} staff members`
+        : 'No hours were matched - check name matching results',
       processedCount: staffWithHours,
       totalCount: staffHours.length,
+      unmatchedCount,
+      matchResults,
       event
     });
   } catch (err) {
@@ -1048,6 +1157,46 @@ router.post('/events/:id/approve-hours/:userKey', async (req, res) => {
   } catch (err) {
     console.error('[approve-hours] failed', err);
     return res.status(500).json({ message: 'Failed to approve hours' });
+  }
+});
+
+// Debug endpoint: inspect event attendance data
+router.get('/events/:id/debug-attendance', async (req, res) => {
+  try {
+    const eventId = req.params.id ?? '';
+    if (!mongoose.Types.ObjectId.isValid(eventId)) {
+      return res.status(400).json({ message: 'Invalid event id' });
+    }
+
+    const event = await EventModel.findById(eventId).lean();
+    if (!event) return res.status(404).json({ message: 'Event not found' });
+
+    const staffDebug = (event.accepted_staff || []).map((s: any) => ({
+      name: s.name || `${s.first_name} ${s.last_name}`,
+      role: s.role,
+      userKey: s.userKey,
+      attendanceCount: s.attendance?.length || 0,
+      attendance: s.attendance?.map((a: any) => ({
+        clockInAt: a.clockInAt,
+        clockOutAt: a.clockOutAt,
+        sheetSignInTime: a.sheetSignInTime,
+        sheetSignOutTime: a.sheetSignOutTime,
+        approvedHours: a.approvedHours,
+        status: a.status,
+        managerNotes: a.managerNotes,
+      })) || [],
+    }));
+
+    return res.json({
+      eventName: event.event_name,
+      hoursStatus: event.hoursStatus,
+      signInSheetPhotoUrl: event.signInSheetPhotoUrl,
+      acceptedStaffCount: (event.accepted_staff || []).length,
+      staff: staffDebug,
+    });
+  } catch (err) {
+    console.error('[debug-attendance] failed', err);
+    return res.status(500).json({ message: 'Failed to debug attendance' });
   }
 });
 

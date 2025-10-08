@@ -53,7 +53,7 @@ class TimesheetExtractionService {
   }
 
   /// Submit hours from sign-in sheet to backend
-  Future<void> submitHours({
+  Future<SubmitHoursResult> submitHours({
     required String eventId,
     required List<StaffHours> staffHours,
     required String sheetPhotoUrl,
@@ -77,6 +77,9 @@ class TimesheetExtractionService {
           'Failed to submit hours (${response.statusCode}): ${response.body}',
         );
       }
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return SubmitHoursResult.fromJson(data);
     } catch (e) {
       throw Exception('Failed to submit hours: $e');
     }
@@ -267,4 +270,65 @@ class BulkApprovalResult {
     required this.message,
     required this.approvedCount,
   });
+}
+
+class SubmitHoursResult {
+  final String message;
+  final int processedCount;
+  final int totalCount;
+  final int unmatchedCount;
+  final List<MatchResult> matchResults;
+
+  SubmitHoursResult({
+    required this.message,
+    required this.processedCount,
+    required this.totalCount,
+    required this.unmatchedCount,
+    required this.matchResults,
+  });
+
+  factory SubmitHoursResult.fromJson(Map<String, dynamic> json) {
+    final matchList = json['matchResults'] as List<dynamic>? ?? [];
+    return SubmitHoursResult(
+      message: json['message'] as String? ?? '',
+      processedCount: json['processedCount'] as int? ?? 0,
+      totalCount: json['totalCount'] as int? ?? 0,
+      unmatchedCount: json['unmatchedCount'] as int? ?? 0,
+      matchResults: matchList
+          .map((item) => MatchResult.fromJson(item as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+}
+
+class MatchResult {
+  final String extractedName;
+  final String extractedRole;
+  final bool matched;
+  final String? matchedName;
+  final String? matchedUserKey;
+  final int? similarity;
+  final String? reason;
+
+  MatchResult({
+    required this.extractedName,
+    required this.extractedRole,
+    required this.matched,
+    this.matchedName,
+    this.matchedUserKey,
+    this.similarity,
+    this.reason,
+  });
+
+  factory MatchResult.fromJson(Map<String, dynamic> json) {
+    return MatchResult(
+      extractedName: json['extractedName'] as String? ?? '',
+      extractedRole: json['extractedRole'] as String? ?? '',
+      matched: json['matched'] as bool? ?? false,
+      matchedName: json['matchedName'] as String?,
+      matchedUserKey: json['matchedUserKey'] as String?,
+      similarity: json['similarity'] as int?,
+      reason: json['reason'] as String?,
+    );
+  }
 }
