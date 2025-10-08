@@ -31,6 +31,7 @@ import '../../users/presentation/pages/manager_profile_page.dart';
 import '../../events/presentation/event_detail_screen.dart';
 import '../../users/presentation/pages/settings_page.dart';
 import '../../users/data/services/manager_service.dart';
+import '../../hours_approval/presentation/hours_approval_list_screen.dart';
 
 class ExtractionScreen extends StatefulWidget {
   const ExtractionScreen({super.key});
@@ -518,6 +519,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
       _buildCreateTab(),
       _buildEventsTab(),
       _buildUsersTab(),
+      const HoursApprovalListScreen(),
       _buildCatalogTab(),
     ];
 
@@ -551,7 +553,8 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
                 _buildNavButton(0, Icons.add_circle_outline, 'Create'),
                 _buildNavButton(1, Icons.view_module, 'Events'),
                 _buildNavButton(2, Icons.group, 'Users'),
-                _buildNavButton(3, Icons.inventory_2, 'Catalog'),
+                _buildNavButton(3, Icons.schedule, 'Hours'),
+                _buildNavButton(4, Icons.inventory_2, 'Catalog'),
               ],
             ),
           ),

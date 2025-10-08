@@ -36,7 +36,8 @@ async function createServer() {
   );
   app.use(helmet());
   app.use(compression());
-  app.use(express.json({ limit: '2mb' }));
+  app.use(express.json({ limit: '50mb' })); // Increased for sign-in sheet photos
+  app.use(express.urlencoded({ limit: '50mb', extended: true }));
   app.use(pinoHttp({ logger }));
 
   app.use('/api', healthRouter);
