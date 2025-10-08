@@ -4,6 +4,9 @@ import { z } from 'zod';
 import { requireAuth } from '../middleware/requireAuth';
 import { AvailabilityModel } from '../models/availability';
 import { EventModel } from '../models/event';
+import { TariffModel } from '../models/tariff';
+import { ClientModel } from '../models/client';
+import { RoleModel } from '../models/role';
 
 const router = Router();
 
@@ -70,6 +73,68 @@ function computeRoleStats(roles: any[], accepted: any[]) {
     const taken = acceptedCounts[key] || 0;
     const remaining = Math.max(capacity - taken, 0);
     return { role: r.role, capacity, taken, remaining, is_full: remaining === 0 && capacity > 0 };
+  });
+}
+
+// Helper to enrich events with tariff data per role
+async function enrichEventsWithTariffs(events: any[]): Promise<any[]> {
+  // Build a map of client names to IDs
+  const clientNames = Array.from(new Set(events.map(e => e.client_name).filter(Boolean)));
+  const clients = await ClientModel.find({
+    normalizedName: { $in: clientNames.map(n => n.toLowerCase().trim()) }
+  }).lean();
+  const clientNameToId = new Map(clients.map(c => [c.normalizedName, c._id.toString()]));
+
+  // Build a map of role names to IDs
+  const roleNames = Array.from(new Set(
+    events.flatMap(e => (e.roles || []).map((r: any) => r.role)).filter(Boolean)
+  ));
+  const rolesData = await RoleModel.find({
+    normalizedName: { $in: roleNames.map(n => n.toLowerCase().trim()) }
+  }).lean();
+  const roleNameToId = new Map(rolesData.map(r => [r.normalizedName, r._id.toString()]));
+
+  // Fetch all relevant tariffs in one query
+  const clientIds = Array.from(clientNameToId.values());
+  const roleIds = Array.from(roleNameToId.values());
+  const tariffs = await TariffModel.find({
+    clientId: { $in: clientIds.map(id => new mongoose.Types.ObjectId(id)) },
+    roleId: { $in: roleIds.map(id => new mongoose.Types.ObjectId(id)) }
+  }).lean();
+
+  // Build a map: clientId_roleId -> tariff
+  const tariffMap = new Map(
+    tariffs.map(t => [`${t.clientId}_${t.roleId}`, t])
+  );
+
+  // Enrich each event's roles with tariff data
+  return events.map(event => {
+    const clientId = clientNameToId.get(event.client_name?.toLowerCase().trim());
+
+    const enrichedRoles = (event.roles || []).map((role: any) => {
+      const roleId = roleNameToId.get(role.role?.toLowerCase().trim());
+
+      if (clientId && roleId) {
+        const tariff = tariffMap.get(`${clientId}_${roleId}`);
+        if (tariff) {
+          return {
+            ...role,
+            tariff: {
+              rate: tariff.rate,
+              currency: tariff.currency,
+              rateDisplay: `${tariff.currency} ${tariff.rate.toFixed(2)}/hr`
+            }
+          };
+        }
+      }
+
+      return role;
+    });
+
+    return {
+      ...event,
+      roles: enrichedRoles
+    };
   });
 }
 
@@ -300,9 +365,12 @@ router.get('/events', async (_req, res) => {
       id: String(event._id),
     }));
 
+    // Enrich with tariff data
+    const enrichedEvents = await enrichEventsWithTariffs(mappedEvents);
+
     // Include current server timestamp for next sync
     return res.json({
-      events: mappedEvents,
+      events: enrichedEvents,
       serverTimestamp: new Date().toISOString(),
       deltaSync: !!lastSyncParam
     });

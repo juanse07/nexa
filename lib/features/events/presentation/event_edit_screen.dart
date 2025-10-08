@@ -282,19 +282,29 @@ class _EventEditScreenState extends State<EventEditScreen> {
         backgroundColor: const Color(0xFF6366F1),
         foregroundColor: Colors.white,
         actions: [
-          IconButton(
-            onPressed: _isSaving ? null : _saveEvent,
-            icon: _isSaving
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: TextButton(
+              onPressed: _isSaving ? null : _saveEvent,
+              child: _isSaving
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text(
+                      'Save',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5,
+                      ),
                     ),
-                  )
-                : const Icon(Icons.save),
-            tooltip: 'Save Changes',
+            ),
           ),
         ],
       ),
