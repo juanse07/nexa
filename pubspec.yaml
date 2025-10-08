@@ -57,6 +57,7 @@ dependencies:
 
   # File Handling
   file_picker: ^8.0.6
+  image_picker: ^1.1.2
   mime: ^1.0.5
   syncfusion_flutter_pdf: ^26.1.35
 

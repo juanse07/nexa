@@ -7,8 +7,24 @@ export interface RoleRequirement {
 }
 
 export interface AttendanceSession {
+  // Digital clock-in/out (reference only)
   clockInAt: Date;
   clockOutAt?: Date;
+  estimatedHours?: number;
+
+  // Official hours from client sign-in sheet (source of truth)
+  sheetSignInTime?: Date;
+  sheetSignOutTime?: Date;
+  approvedHours?: number;
+
+  // Approval workflow
+  status?: 'clocked' | 'pending_sheet' | 'sheet_submitted' | 'approved' | 'disputed';
+  approvedBy?: string;
+  approvedAt?: Date;
+
+  // Notes and documentation
+  managerNotes?: string;
+  discrepancyNote?: string;
 }
 
 export interface AcceptedStaffMember {
@@ -62,6 +78,15 @@ export interface EventDocument extends Document {
   declined_staff?: AcceptedStaffMember[];
   role_stats?: RoleStat[];
   audience_user_keys?: string[];
+
+  // Hours approval workflow
+  hoursStatus?: 'pending' | 'sheet_submitted' | 'approved' | 'paid';
+  signInSheetPhotoUrl?: string;
+  hoursSubmittedBy?: string;
+  hoursSubmittedAt?: Date;
+  hoursApprovedBy?: string;
+  hoursApprovedAt?: Date;
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -94,6 +119,18 @@ const AcceptedStaffMemberSchema = new Schema<AcceptedStaffMember>(
           {
             clockInAt: { type: Date, required: true },
             clockOutAt: { type: Date },
+            estimatedHours: { type: Number },
+            sheetSignInTime: { type: Date },
+            sheetSignOutTime: { type: Date },
+            approvedHours: { type: Number },
+            status: {
+              type: String,
+              enum: ['clocked', 'pending_sheet', 'sheet_submitted', 'approved', 'disputed'],
+            },
+            approvedBy: { type: String },
+            approvedAt: { type: Date },
+            managerNotes: { type: String },
+            discrepancyNote: { type: String },
           },
           { _id: false }
         ),
@@ -153,6 +190,18 @@ const EventSchema = new Schema<EventDocument>(
     declined_staff: { type: [AcceptedStaffMemberSchema], default: [] },
     role_stats: { type: [RoleStatSchema], default: [] },
     audience_user_keys: { type: [String], default: [] },
+
+    // Hours approval workflow
+    hoursStatus: {
+      type: String,
+      enum: ['pending', 'sheet_submitted', 'approved', 'paid'],
+      default: 'pending',
+    },
+    signInSheetPhotoUrl: { type: String, trim: true },
+    hoursSubmittedBy: { type: String, trim: true },
+    hoursSubmittedAt: { type: Date },
+    hoursApprovedBy: { type: String, trim: true },
+    hoursApprovedAt: { type: Date },
   },
   { timestamps: true }
 );

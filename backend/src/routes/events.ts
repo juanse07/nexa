@@ -785,6 +785,249 @@ router.post('/events/:id/clock-out', requireAuth, async (req, res) => {
     return res.status(500).json({ message: 'Failed to clock out' });
   }
 });
+
+// Analyze sign-in sheet photo with OpenAI
+router.post('/events/:id/analyze-sheet', async (req, res) => {
+  try {
+    const eventId = req.params.id ?? '';
+    if (!mongoose.Types.ObjectId.isValid(eventId)) {
+      return res.status(400).json({ message: 'Invalid event id' });
+    }
+
+    const { imageBase64, openaiApiKey } = req.body;
+    if (!imageBase64 || !openaiApiKey) {
+      return res.status(400).json({ message: 'imageBase64 and openaiApiKey required' });
+    }
+
+    const event = await EventModel.findById(eventId).lean();
+    if (!event) return res.status(404).json({ message: 'Event not found' });
+
+    // Get accepted staff for context
+    const staffList = (event.accepted_staff || []).map((s: any) => ({
+      name: s.name || `${s.first_name} ${s.last_name}`,
+      role: s.role,
+    }));
+
+    // Call OpenAI API
+    const prompt = `You are a timesheet data extractor. Analyze this sign-in/sign-out sheet photo and extract staff hours.
+
+Event: ${event.event_name}
+Expected Staff: ${JSON.stringify(staffList)}
+
+Extract for each person:
+- name (string): Staff member name
+- role (string): Their role/position
+- signInTime (string): Time they signed in (format: HH:MM AM/PM)
+- signOutTime (string): Time they signed out (format: HH:MM AM/PM)
+- notes (string, optional): Any notes or observations
+
+Return ONLY valid JSON in this exact format:
+{
+  "staffHours": [
+    {
+      "name": "John Doe",
+      "role": "Bartender",
+      "signInTime": "5:00 PM",
+      "signOutTime": "11:30 PM",
+      "notes": ""
+    }
+  ]
+}`;
+
+    const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              {
+                type: 'image_url',
+                image_url: { url: `data:image/png;base64,${imageBase64}` },
+              },
+            ],
+          },
+        ],
+        temperature: 0,
+        max_tokens: 1000,
+      }),
+    });
+
+    if (!openaiResponse.ok) {
+      const errorText = await openaiResponse.text();
+      return res.status(openaiResponse.status).json({
+        message: 'OpenAI API error',
+        details: errorText,
+      });
+    }
+
+    const aiResult = await openaiResponse.json();
+    const content = aiResult.choices?.[0]?.message?.content || '{}';
+
+    // Parse JSON from response
+    const start = content.indexOf('{');
+    const end = content.lastIndexOf('}');
+    if (start === -1 || end === -1) {
+      return res.status(500).json({ message: 'Failed to parse AI response' });
+    }
+
+    const extracted = JSON.parse(content.substring(start, end + 1));
+    return res.json(extracted);
+  } catch (err) {
+    console.error('[analyze-sheet] failed', err);
+    return res.status(500).json({ message: 'Failed to analyze sheet' });
+  }
+});
+
+// Submit hours from sign-in sheet
+router.post('/events/:id/submit-hours', async (req, res) => {
+  try {
+    const eventId = req.params.id ?? '';
+    if (!mongoose.Types.ObjectId.isValid(eventId)) {
+      return res.status(400).json({ message: 'Invalid event id' });
+    }
+
+    const { staffHours, sheetPhotoUrl, submittedBy } = req.body;
+    if (!Array.isArray(staffHours)) {
+      return res.status(400).json({ message: 'staffHours array required' });
+    }
+
+    const event = await EventModel.findById(eventId);
+    if (!event) return res.status(404).json({ message: 'Event not found' });
+
+    // Update each staff member's attendance with sheet data
+    const acceptedStaff = event.accepted_staff || [];
+    for (const hours of staffHours) {
+      const staffMember = acceptedStaff.find(
+        (s: any) =>
+          s.name?.toLowerCase().includes(hours.name?.toLowerCase()) ||
+          `${s.first_name} ${s.last_name}`.toLowerCase().includes(hours.name?.toLowerCase())
+      );
+
+      if (staffMember && staffMember.attendance) {
+        const lastAttendance = staffMember.attendance[staffMember.attendance.length - 1];
+        if (lastAttendance) {
+          // Update the most recent attendance session
+          if (hours.signInTime) lastAttendance.sheetSignInTime = new Date(`1970-01-01 ${hours.signInTime}`);
+          if (hours.signOutTime) lastAttendance.sheetSignOutTime = new Date(`1970-01-01 ${hours.signOutTime}`);
+          if (hours.approvedHours) lastAttendance.approvedHours = hours.approvedHours;
+          if (hours.notes) lastAttendance.managerNotes = hours.notes;
+          lastAttendance.status = 'sheet_submitted';
+        }
+      }
+    }
+
+    event.signInSheetPhotoUrl = sheetPhotoUrl;
+    event.hoursStatus = 'sheet_submitted';
+    event.hoursSubmittedBy = submittedBy;
+    event.hoursSubmittedAt = new Date();
+
+    await event.save();
+
+    return res.json({ message: 'Hours submitted successfully', event });
+  } catch (err) {
+    console.error('[submit-hours] failed', err);
+    return res.status(500).json({ message: 'Failed to submit hours' });
+  }
+});
+
+// Approve hours for individual staff member
+router.post('/events/:id/approve-hours/:userKey', async (req, res) => {
+  try {
+    const eventId = req.params.id ?? '';
+    const userKey = req.params.userKey ?? '';
+
+    if (!mongoose.Types.ObjectId.isValid(eventId)) {
+      return res.status(400).json({ message: 'Invalid event id' });
+    }
+
+    const { approvedHours, approvedBy, notes } = req.body;
+    if (approvedHours == null) {
+      return res.status(400).json({ message: 'approvedHours required' });
+    }
+
+    const event = await EventModel.findById(eventId);
+    if (!event) return res.status(404).json({ message: 'Event not found' });
+
+    const staffMember = (event.accepted_staff || []).find(
+      (s: any) => s.userKey === userKey
+    );
+
+    if (!staffMember) {
+      return res.status(404).json({ message: 'Staff member not found' });
+    }
+
+    if (staffMember.attendance && staffMember.attendance.length > 0) {
+      const lastAttendance = staffMember.attendance[staffMember.attendance.length - 1];
+      if (lastAttendance) {
+        lastAttendance.approvedHours = approvedHours;
+        lastAttendance.approvedBy = approvedBy;
+        lastAttendance.approvedAt = new Date();
+        lastAttendance.status = 'approved';
+        if (notes) lastAttendance.managerNotes = notes;
+      }
+    }
+
+    await event.save();
+
+    return res.json({ message: 'Hours approved', staffMember });
+  } catch (err) {
+    console.error('[approve-hours] failed', err);
+    return res.status(500).json({ message: 'Failed to approve hours' });
+  }
+});
+
+// Bulk approve all hours for an event
+router.post('/events/:id/bulk-approve-hours', async (req, res) => {
+  try {
+    const eventId = req.params.id ?? '';
+    if (!mongoose.Types.ObjectId.isValid(eventId)) {
+      return res.status(400).json({ message: 'Invalid event id' });
+    }
+
+    const { approvedBy } = req.body;
+    if (!approvedBy) {
+      return res.status(400).json({ message: 'approvedBy required' });
+    }
+
+    const event = await EventModel.findById(eventId);
+    if (!event) return res.status(404).json({ message: 'Event not found' });
+
+    let approvedCount = 0;
+    for (const staffMember of event.accepted_staff || []) {
+      if (staffMember.attendance && staffMember.attendance.length > 0) {
+        const lastAttendance = staffMember.attendance[staffMember.attendance.length - 1];
+        if (lastAttendance && lastAttendance.status === 'sheet_submitted' && lastAttendance.approvedHours) {
+          lastAttendance.status = 'approved';
+          lastAttendance.approvedBy = approvedBy;
+          lastAttendance.approvedAt = new Date();
+          approvedCount++;
+        }
+      }
+    }
+
+    event.hoursStatus = 'approved';
+    event.hoursApprovedBy = approvedBy;
+    event.hoursApprovedAt = new Date();
+
+    await event.save();
+
+    return res.json({
+      message: `Bulk approved ${approvedCount} staff hours`,
+      approvedCount,
+    });
+  } catch (err) {
+    console.error('[bulk-approve-hours] failed', err);
+    return res.status(500).json({ message: 'Failed to bulk approve hours' });
+  }
+});
+
 export default router;
 
 
