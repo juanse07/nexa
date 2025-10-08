@@ -903,12 +903,43 @@ router.post('/events/:id/submit-hours', async (req, res) => {
 
     // Update each staff member's attendance with sheet data
     const acceptedStaff = event.accepted_staff || [];
+
+    console.log(`[submit-hours] Processing ${staffHours.length} staff members`);
+    console.log(`[submit-hours] Event has ${acceptedStaff.length} accepted staff`);
+
     for (const hours of staffHours) {
-      const staffMember = acceptedStaff.find(
-        (s: any) =>
-          s.name?.toLowerCase().includes(hours.name?.toLowerCase()) ||
-          `${s.first_name} ${s.last_name}`.toLowerCase().includes(hours.name?.toLowerCase())
-      );
+      console.log(`[submit-hours] Looking for: "${hours.name}" with role: "${hours.role}"`);
+
+      // Try multiple matching strategies
+      const nameLower = hours.name?.toLowerCase().trim() || '';
+      const roleLower = hours.role?.toLowerCase().trim() || '';
+
+      const staffMember = acceptedStaff.find((s: any) => {
+        const staffName = (s.name || `${s.first_name || ''} ${s.last_name || ''}`).toLowerCase().trim();
+        const staffRole = (s.role || '').toLowerCase().trim();
+
+        // Match by name (contains or exact)
+        const nameMatch = staffName.includes(nameLower) || nameLower.includes(staffName);
+
+        // Match by role if provided
+        const roleMatch = !roleLower || !staffRole || staffRole === roleLower;
+
+        console.log(`  Checking: "${staffName}" (${staffRole}) - nameMatch=${nameMatch}, roleMatch=${roleMatch}`);
+
+        return nameMatch && roleMatch;
+      });
+
+      if (staffMember) {
+        console.log(`  ✓ Found staff member: ${staffMember.name || staffMember.userKey}`);
+      } else {
+        console.log(`  ✗ No match found for "${hours.name}"`);
+        console.log(`  Available staff:`, acceptedStaff.map((s: any) => ({
+          name: s.name || `${s.first_name} ${s.last_name}`,
+          role: s.role,
+          userKey: s.userKey
+        })));
+        continue; // Skip this person
+      }
 
       if (staffMember) {
         // Initialize attendance array if it doesn't exist
@@ -955,7 +986,19 @@ router.post('/events/:id/submit-hours', async (req, res) => {
 
     await event.save();
 
-    return res.json({ message: 'Hours submitted successfully', event });
+    // Count how many staff have approved hours set
+    const staffWithHours = acceptedStaff.filter((s: any) => {
+      return s.attendance && s.attendance.some((a: any) => a.approvedHours != null);
+    }).length;
+
+    console.log(`[submit-hours] Successfully set hours for ${staffWithHours}/${staffHours.length} staff members`);
+
+    return res.json({
+      message: 'Hours submitted successfully',
+      processedCount: staffWithHours,
+      totalCount: staffHours.length,
+      event
+    });
   } catch (err) {
     console.error('[submit-hours] failed', err);
     return res.status(500).json({ message: 'Failed to submit hours' });
