@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get_it/get_it.dart';
@@ -10,6 +11,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 // import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:mime/mime.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../features/auth/data/services/auth_service.dart';
 import '../../../features/auth/presentation/pages/login_page.dart';
@@ -716,7 +718,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
               tabs: [
                 Tab(icon: Icon(Icons.upload_file), text: 'Upload Document'),
                 Tab(icon: Icon(Icons.edit), text: 'Manual Entry'),
-                Tab(icon: Icon(Icons.cloud_upload), text: 'Bulk Upload'),
+                Tab(icon: Icon(Icons.cloud_upload), text: 'Multi-Upload'),
               ],
               labelColor: Color(0xFF6366F1),
               unselectedLabelColor: Colors.grey,
@@ -744,7 +746,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             HeaderCard(
-              title: 'Bulk Upload',
+              title: 'Multi-Upload',
               subtitle: 'Upload multiple PDFs or images and save each as a pending draft',
               icon: Icons.cloud_upload,
               gradientColors: const [Color(0xFF10B981), Color(0xFF3B82F6)],
@@ -1768,18 +1770,8 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
                   ),
                 ),
               if (items.isNotEmpty)
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: crossAxisCount,
-                    mainAxisSpacing: 20,
-                    crossAxisSpacing: 20,
-                    childAspectRatio: crossAxisCount == 1 ? 0.95 : 0.85,
-                  ),
-                  itemCount: items.length,
-                  itemBuilder: (context, index) =>
-                      _buildEventCard(items[index]),
+                Column(
+                  children: items.map((item) => _buildEventCard(item)).toList(),
                 ),
             ],
           );
@@ -2692,12 +2684,52 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
     );
   }
 
+  Future<void> _openGoogleMaps(String address, String googleMapsUrl) async {
+    // Prefer the google_maps_url if available (has place_id), otherwise use address
+    final String urlString = googleMapsUrl.isNotEmpty
+        ? googleMapsUrl
+        : 'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(address)}';
+
+    final Uri url = Uri.parse(urlString);
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open Google Maps')),
+        );
+      }
+    }
+  }
+
+  Future<void> _shareEvent(Map<String, dynamic> event) async {
+    final String clientName = (event['client_name'] ?? 'Client').toString();
+    final String venueName = (event['venue_name'] ?? 'Venue').toString();
+    final String date = (event['date'] ?? '').toString();
+    final String time = (event['start_time'] ?? '').toString();
+
+    String shareText = 'Event: $clientName\n';
+    shareText += 'Location: $venueName\n';
+    if (date.isNotEmpty) shareText += 'Date: $date\n';
+    if (time.isNotEmpty) shareText += 'Time: $time';
+
+    await Clipboard.setData(ClipboardData(text: shareText));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Event details copied to clipboard')),
+      );
+    }
+  }
+
   Widget _buildEventCard(Map<String, dynamic> e) {
-    // Show client prominently and event name as secondary
-    String title = (e['client_name'] ?? 'Client').toString();
-    String subtitle = (e['event_name'] ?? e['venue_name'] ?? 'Untitled Event')
-        .toString();
+    // Extract essential data
+    final String clientName = (e['client_name'] ?? 'Client').toString();
+    final String venueName = (e['venue_name'] ?? 'Venue TBD').toString();
+    final String venueAddress = (e['venue_address'] ?? '').toString();
+    final String googleMapsUrl = (e['google_maps_url'] ?? '').toString();
+
     String dateStr = '';
+    String displayDate = '';
     bool isUpcoming = false;
     final dynamic rawDate = e['date'];
     if (rawDate is String && rawDate.isNotEmpty) {
@@ -2705,29 +2737,23 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
         final d = DateTime.parse(rawDate);
         final now = DateTime.now();
         isUpcoming = !d.isBefore(DateTime(now.year, now.month, now.day));
-        dateStr =
-            '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+        dateStr = '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+        // Format date as "Mon, Jan 15"
+        final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        displayDate = '${days[d.weekday - 1]}, ${months[d.month - 1]} ${d.day}';
       } catch (_) {
         dateStr = rawDate;
+        displayDate = rawDate;
       }
     }
-    final String location = [
-      e['city'],
-      e['state'],
-    ].where((v) => v != null && v.toString().isNotEmpty).join(', ');
-    final int? headcount = (e['headcount_total'] is int)
-        ? e['headcount_total'] as int
-        : int.tryParse((e['headcount_total'] ?? '').toString());
-    final List<dynamic> roles = (e['roles'] is List)
-        ? (e['roles'] as List)
-        : const [];
-    final List<dynamic> acceptedStaff = (e['accepted_staff'] is List)
-        ? (e['accepted_staff'] as List)
-        : const [];
+
+    final String startTime = (e['start_time'] ?? '').toString();
 
     final statusColor = isUpcoming
-        ? const Color(0xFF059669)
-        : const Color(0xFF6B7280);
+        ? const Color(0xFF6366F1)
+        : const Color(0xFF94A3B8);
 
     return GestureDetector(
       onTap: () async {
@@ -2739,244 +2765,154 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
             ),
           ),
         );
-        // Refresh events after returning from detail screen
         await _loadEvents();
       },
       child: Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey.shade100, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-            spreadRadius: -2,
-          ),
-          BoxShadow(
-            color: const Color(0xFF6366F1).withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header with gradient background
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  const Color(0xFF6366F1).withOpacity(0.08),
-                  const Color(0xFF8B5CF6).withOpacity(0.05),
-                ],
-              ),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(20),
-                topRight: Radius.circular(20),
-              ),
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade200, width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF6366F1).withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: const Color(0xFF6366F1).withOpacity(0.2),
-                      width: 1,
+          ],
+        ),
+        child: Row(
+          children: [
+            // Event details
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Client name
+                  Text(
+                    clientName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF0F172A),
+                      letterSpacing: -0.2,
+                      height: 1.2,
                     ),
                   ),
-                  child: const Icon(
-                    Icons.event,
-                    color: Color(0xFF6366F1),
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF0F172A),
-                          letterSpacing: -0.3,
+                  const SizedBox(height: 4),
+                  // Date
+                  if (displayDate.isNotEmpty) ...[
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.calendar_today,
+                          size: 14,
+                          color: statusColor,
                         ),
-                      ),
-                      if (subtitle.isNotEmpty) ...[
-                        const SizedBox(height: 4),
+                        const SizedBox(width: 4),
                         Text(
-                          subtitle,
+                          displayDate,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: statusColor,
+                            height: 1.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                  ],
+                  // Venue
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.location_on,
+                        size: 14,
+                        color: Colors.grey.shade500,
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          venueName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
                             color: Colors.grey.shade600,
+                            height: 1.2,
                           ),
                         ),
-                      ],
-                    ],
-                  ),
-                ),
-                if (dateStr.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: statusColor.withOpacity(0.2),
-                        width: 1,
                       ),
-                    ),
-                    child: Text(
-                      isUpcoming ? 'Upcoming' : 'Past',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: statusColor,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          // Content
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Event details with modern info cards
-                    Wrap(
-                      runSpacing: 12,
-                      spacing: 12,
-                      children: [
-                        if (dateStr.isNotEmpty)
-                          _modernMiniInfo(
-                            icon: Icons.calendar_today,
-                            text: dateStr,
+                      const SizedBox(width: 8),
+                      // Navigate button
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          _openGoogleMaps(
+                            venueAddress.isNotEmpty ? venueAddress : venueName,
+                            googleMapsUrl,
+                          );
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Icon(
+                            Icons.directions,
+                            size: 20,
                             color: const Color(0xFF6366F1),
                           ),
-                        if (location.isNotEmpty)
-                          _modernMiniInfo(
-                            icon: Icons.place,
-                            text: location,
-                            color: const Color(0xFF059669),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      // Copy button
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          _shareEvent(e);
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Icon(
+                            Icons.copy,
+                            size: 18,
+                            color: Colors.grey.shade600,
                           ),
-                        if (headcount != null)
-                          _modernMiniInfo(
-                            icon: Icons.people,
-                            text: '$headcount guests',
-                            color: const Color(0xFFEF4444),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (startTime.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    // Time
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.access_time,
+                          size: 14,
+                          color: Colors.grey.shade500,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          startTime,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.grey.shade600,
+                            height: 1.2,
                           ),
-                        if (acceptedStaff.isNotEmpty)
-                          _modernMiniInfo(
-                            icon: Icons.group,
-                            text: '${acceptedStaff.length} team',
-                            color: const Color(0xFF0EA5E9),
-                          ),
+                        ),
                       ],
                     ),
-                    // Roles section
-                    if (roles.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      Text(
-                        'Roles Needed',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey.shade700,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: roles.take(3).map((role) {
-                          final r = role as Map<String, dynamic>? ?? {};
-                          final String rName = (r['role'] ?? 'Role').toString();
-                          final int rCount =
-                              int.tryParse((r['count'] ?? '').toString()) ??
-                              (r['count'] is int ? (r['count'] as int) : 0);
-                          // Compute accepted count for this role
-                          final int acceptedForRole = acceptedStaff.where((m) {
-                            if (m is Map<String, dynamic>) {
-                              final roleVal = (m['role'] ?? '')
-                                  .toString()
-                                  .toLowerCase();
-                              return roleVal == rName.toLowerCase();
-                            }
-                            return false;
-                          }).length;
-                          final int vacanciesLeft = (rCount - acceptedForRole)
-                              .clamp(0, 1 << 30);
-                          return Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF8FAFC),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: Colors.grey.shade200,
-                                width: 1,
-                              ),
-                            ),
-                            child: Text(
-                              rCount > 0
-                                  ? "$rName ($acceptedForRole/$rCount, $vacanciesLeft left)"
-                                  : rName,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF475569),
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                      if (roles.length > 3) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          '+${roles.length - 3} more roles',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.grey.shade500,
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      ],
-                    ],
                   ],
-                ),
+                ],
               ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }
