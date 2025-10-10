@@ -1248,6 +1248,41 @@ router.post('/events/:id/bulk-approve-hours', async (req, res) => {
   }
 });
 
+// Get events for a specific user by userKey
+router.get('/events/user/:userKey', async (req, res) => {
+  try {
+    const userKey = req.params.userKey ?? '';
+    if (!userKey) {
+      return res.status(400).json({ message: 'userKey is required' });
+    }
+
+    // Find all events where the user is in accepted_staff
+    const events = await EventModel.find({
+      'accepted_staff.userKey': userKey
+    }).sort({ date: -1 }).lean();
+
+    // Map events and include user's specific role and status
+    const mappedEvents = events.map((event: any) => {
+      const staffMember = (event.accepted_staff || []).find(
+        (s: any) => s.userKey === userKey
+      );
+
+      return {
+        ...event,
+        id: String(event._id),
+        userRole: staffMember?.role || null,
+        userResponse: staffMember?.response || null,
+        userRespondedAt: staffMember?.respondedAt || null,
+      };
+    });
+
+    return res.json({ events: mappedEvents });
+  } catch (err) {
+    console.error('[events/user] failed', err);
+    return res.status(500).json({ message: 'Failed to fetch user events' });
+  }
+});
+
 export default router;
 
 

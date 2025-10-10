@@ -30,6 +30,7 @@ import '../widgets/modern_address_field.dart';
 import 'pending_publish_screen.dart';
 import 'pending_edit_screen.dart';
 import '../../users/presentation/pages/manager_profile_page.dart';
+import '../../users/presentation/pages/user_events_screen.dart';
 import '../../events/presentation/event_detail_screen.dart';
 import '../../users/presentation/pages/settings_page.dart';
 import '../../users/data/services/manager_service.dart';
@@ -1278,8 +1279,8 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
                             const PopupMenuItem(
                               value: 'view',
                               child: ListTile(
-                                leading: Icon(Icons.visibility),
-                                title: Text('View as'),
+                                leading: Icon(Icons.event),
+                                title: Text('View events'),
                               ),
                             ),
                             ...(_selectedRole == null ? _favoriteRoleOptions : [_selectedRole!]).map(
@@ -1301,14 +1302,9 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
                           ],
                           onSelected: (value) async {
                             if (value == 'view') {
-                              setState(() => _viewerUserKey = userId);
-                              await _loadEvents();
-                              if (!mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    'Viewing as ${displayName.isNotEmpty ? displayName : email}',
-                                  ),
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => UserEventsScreen(user: u),
                                 ),
                               );
                             } else if (value.startsWith('favorite:')) {

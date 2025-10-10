@@ -104,4 +104,29 @@ class EventService {
       'Failed to remove staff member (${response.statusCode}): ${response.body}',
     );
   }
+
+  Future<List<Map<String, dynamic>>> fetchUserEvents(String userKey) async {
+    final uri = Uri.parse('$_baseUrl/events/user/$userKey');
+    final response = await http.get(
+      uri,
+      headers: const {'Accept': 'application/json'},
+    );
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      final dynamic decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) {
+        final dynamic eventsField = decoded['events'];
+        if (eventsField is List) {
+          return eventsField
+              .whereType<Map<String, dynamic>>()
+              .map((e) => e)
+              .toList(growable: false);
+        }
+      }
+      return const <Map<String, dynamic>>[];
+    }
+    throw Exception(
+      'Failed to load user events (${response.statusCode}): ${response.body}',
+    );
+  }
 }
