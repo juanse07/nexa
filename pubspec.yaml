@@ -59,7 +59,7 @@ dependencies:
   file_picker: ^8.0.6
   image_picker: ^1.1.2
   mime: ^1.0.5
-  syncfusion_flutter_pdf: ^26.1.35
+  syncfusion_flutter_pdf: ^31.1.23
 
   # Maps & Location
   google_maps_flutter: ^2.9.0
@@ -71,7 +71,7 @@ dependencies:
 
   # Utilities
   uuid: ^4.5.0
-  intl: ^0.19.0
+  intl: ^0.20.2
   dartz: ^0.10.1
   connectivity_plus: ^6.1.2
   url_launcher: ^6.3.1

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:nexa/features/hours_approval/services/timesheet_extraction_service.dart';
 import 'package:nexa/features/hours_approval/presentation/manual_hours_entry_screen.dart';
+import '../../../core/widgets/custom_sliver_app_bar.dart';
 
 class HoursApprovalScreen extends StatefulWidget {
   final Map<String, dynamic> event;
@@ -31,16 +32,25 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final eventName = widget.event['event_name']?.toString() ?? 'Event';
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Approve Hours'),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+      backgroundColor: theme.colorScheme.surfaceContainerLowest,
+      body: CustomScrollView(
+        slivers: [
+          CustomSliverAppBar(
+            title: 'Approve Hours',
+            subtitle: eventName,
+            onBackPressed: () => Navigator.of(context).pop(),
+            expandedHeight: 140.0,
+            pinned: false,
+            floating: true,
+            snap: true,
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.all(16),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
             // Event info
             Card(
               child: Padding(
@@ -379,8 +389,10 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
                 ),
               ),
             ],
-          ],
-        ),
+              ]),
+            ),
+          ),
+        ],
       ),
     );
   }

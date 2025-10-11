@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -17,6 +18,7 @@ import '../../../features/auth/data/services/auth_service.dart';
 import '../../../features/auth/presentation/pages/login_page.dart';
 import '../../../shared/ui/widgets.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/widgets/custom_sliver_app_bar.dart';
 import '../services/clients_service.dart';
 import '../services/draft_service.dart';
 import '../services/event_service.dart';
@@ -35,6 +37,7 @@ import '../../events/presentation/event_detail_screen.dart';
 import '../../users/presentation/pages/settings_page.dart';
 import '../../users/data/services/manager_service.dart';
 import '../../hours_approval/presentation/hours_approval_list_screen.dart';
+import '../../../core/widgets/custom_sliver_app_bar.dart';
 
 class ExtractionScreen extends StatefulWidget {
   const ExtractionScreen({super.key});
@@ -106,6 +109,9 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
   late final ManagerService _managerService;
   String? _profilePictureUrl;
 
+  // Timer for real-time updates
+  Timer? _updateTimer;
+
   @override
   void initState() {
     super.initState();
@@ -126,6 +132,15 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
     _loadProfilePicture();
     _loadFavorites();
     _loadFirstUsersPage();
+    
+    // Start timer for real-time updates
+    _updateTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
+      if (mounted) {
+        setState(() {
+          // This will trigger a rebuild and update the time display
+        });
+      }
+    });
   }
 
   @override
@@ -144,6 +159,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
     _contactEmailController.dispose();
     _headcountController.dispose();
     _notesController.dispose();
+    _updateTimer?.cancel();
     super.dispose();
   }
 
@@ -516,36 +532,144 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
     }
   }
 
+  String _getAppBarTitle() {
+    final now = DateTime.now();
+    final hour = now.hour;
+    
+    String greeting;
+    if (hour < 12) {
+      greeting = "Good Morning!";
+    } else if (hour < 17) {
+      greeting = "Good Afternoon!";
+    } else {
+      greeting = "Good Evening!";
+    }
+
+    switch (_selectedIndex) {
+      case 0: // Create tab
+        if (structuredData != null && structuredData!.isNotEmpty) {
+          final eventName = structuredData!['event_name']?.toString() ?? 'Untitled Event';
+          return eventName.length > 20 ? '${eventName.substring(0, 20)}...' : eventName;
+        }
+        return greeting;
+      case 1: // Events tab
+        final pendingCount = _pendingDrafts.length;
+        final upcomingCount = _eventsUpcoming?.length ?? 0;
+        final pastCount = _eventsPast?.length ?? 0;
+        final totalEvents = (pendingCount + upcomingCount + pastCount);
+        return "Events • $pendingCount pending, $upcomingCount upcoming, $pastCount past";
+      case 2: // Users tab
+        final totalClients = _clients?.length ?? 0;
+        return "Clients • $totalClients active";
+      case 3: // Hours tab
+        return "Hours Approval";
+      case 4: // Catalog tab
+        final clientsCount = _clients?.length ?? 0;
+        final rolesCount = _roles?.length ?? 0;
+        return "Catalog • $clientsCount clients, $rolesCount roles";
+      default:
+        return greeting;
+    }
+  }
+
+  String _getAppBarSubtitle() {
+    final now = DateTime.now();
+    final weekday = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][now.weekday - 1];
+    final month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][now.month - 1];
+    final timeStr = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    final baseTime = "$weekday, $month ${now.day} at $timeStr";
+
+    switch (_selectedIndex) {
+      case 0: // Create tab
+        if (structuredData != null && structuredData!.isNotEmpty) {
+          final clientName = structuredData!['client_name']?.toString();
+          final date = structuredData!['date']?.toString();
+          if (clientName != null && clientName.isNotEmpty) {
+            return date != null && date.isNotEmpty ? "$clientName • $date" : clientName;
+          }
+          return date ?? baseTime;
+        }
+        return baseTime;
+      case 1: // Events tab
+        final pendingCount = _pendingDrafts.length;
+        final upcomingCount = _eventsUpcoming?.length ?? 0;
+        final pastCount = _eventsPast?.length ?? 0;
+        final totalEvents = (pendingCount + upcomingCount + pastCount);
+        
+        if (totalEvents > 0) {
+          // Show the most relevant category first
+          if (pendingCount > 0) {
+            return "$pendingCount pending • $upcomingCount upcoming • $baseTime";
+          } else if (upcomingCount > 0) {
+            return "$upcomingCount upcoming • $pastCount past • $baseTime";
+          } else {
+            return "$totalEvents total events • $baseTime";
+          }
+        }
+        return baseTime;
+      case 2: // Users tab
+        return baseTime;
+      case 3: // Hours tab
+        return baseTime;
+      case 4: // Catalog tab
+        final clientsCount = _clients?.length ?? 0;
+        final rolesCount = _roles?.length ?? 0;
+        final tariffsCount = _tariffs?.length ?? 0;
+        if (clientsCount > 0 || rolesCount > 0) {
+          return "$clientsCount clients • $rolesCount roles • $tariffsCount tariffs • $baseTime";
+        }
+        return baseTime;
+      default:
+        return baseTime;
+    }
+  }
+
+  List<Widget> _buildSliverContent() {
+    switch (_selectedIndex) {
+      case 0: // Create tab
+        return _buildCreateSlivers();
+      case 1: // Events tab
+        return _buildEventsSlivers();
+      case 2: // Users tab
+        return _buildUsersSlivers();
+      case 3: // Hours tab
+        return _buildHoursSlivers();
+      case 4: // Catalog tab
+        return _buildCatalogSlivers();
+      default:
+        return [];
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final List<Widget> pages = [
-      _buildCreateTab(),
-      _buildEventsTab(),
-      _buildUsersTab(),
-      const HoursApprovalListScreen(),
-      _buildCatalogTab(),
-    ];
-
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        toolbarHeight: 88,
-        title: SizedBox(
-          height: 60,
-          child: Image.asset('assets/appbar_logo.png', fit: BoxFit.contain),
-        ),
-        backgroundColor: const Color(0xFF430172),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-        actions: [
-          _buildProfileMenu(context),
+      body: CustomScrollView(
+        slivers: [
+          CustomSliverAppBar(
+            title: _getAppBarTitle(),
+            subtitle: _getAppBarSubtitle(),
+            expandedHeight: 120.0,
+            titleFontSize: _selectedIndex == 1 ? 14.0 : null, // Smaller font for Events tab
+            subtitleFontSize: _selectedIndex == 1 ? 9.0 : null, // Even smaller subtitle for Events tab
+            actions: [
+              _buildProfileMenu(context),
+            ],
+          ),
+          ..._buildSliverContent(),
         ],
       ),
-      body: pages[_selectedIndex],
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
-          color: Color(0xFF430172),
+          gradient: LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [
+              Color(0xFF7A3AFB),
+              Color(0xFF5B27D8),
+            ],
+          ),
         ),
         child: SafeArea(
           child: SizedBox(
@@ -709,6 +833,41 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
     }
   }
 
+  List<Widget> _buildCreateSlivers() {
+    return [
+      SliverFillRemaining(
+        child: DefaultTabController(
+          length: 3,
+          child: Column(
+            children: [
+              Container(
+                color: Colors.white,
+                child: const TabBar(
+                  tabs: [
+                    Tab(icon: Icon(Icons.upload_file), text: 'Upload Document'),
+                    Tab(icon: Icon(Icons.edit), text: 'Manual Entry'),
+                    Tab(icon: Icon(Icons.cloud_upload), text: 'Multi-Upload'),
+                  ],
+                  labelColor: Color(0xFF6366F1),
+                  unselectedLabelColor: Colors.grey,
+                ),
+              ),
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    _buildUploadTab(),
+                    _buildManualEntryTab(),
+                    _buildBulkUploadTab(),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ];
+  }
+
   Widget _buildCreateTab() {
     return SafeArea(
       child: DefaultTabController(
@@ -740,12 +899,11 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
   }
 
   Widget _buildBulkUploadTab() {
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
             HeaderCard(
               title: 'Multi-Upload',
               subtitle: 'Upload multiple PDFs or images and save each as a pending draft',
@@ -851,8 +1009,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
                 ),
               );
             }),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -1326,12 +1483,11 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
   }
 
   Widget _buildUploadTab() {
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
@@ -1509,8 +1665,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
                 ),
               ),
             ],
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -1641,6 +1796,69 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
     }
   }
 
+  List<Widget> _buildEventsSlivers() {
+    final List<Map<String, dynamic>> all = _events ?? const [];
+    final List<Map<String, dynamic>> upcoming = _eventsUpcoming ?? const [];
+    final List<Map<String, dynamic>> past = _eventsPast ?? const [];
+
+    return [
+      SliverFillRemaining(
+        child: DefaultTabController(
+          length: 3,
+          child: Column(
+            children: [
+              Container(
+                color: Colors.white,
+                child: const TabBar(
+                  tabs: [
+                    Tab(text: 'Pending'),
+                    Tab(text: 'Upcoming'),
+                    Tab(text: 'Past'),
+                  ],
+                  labelColor: Color(0xFF6366F1),
+                  unselectedLabelColor: Colors.grey,
+                ),
+              ),
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    _pendingInner(),
+                    _eventsInner(upcoming),
+                    _pastEventsInner(past),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ];
+  }
+
+  List<Widget> _buildUsersSlivers() {
+    return [
+      SliverFillRemaining(
+        child: _buildUsersTab(),
+      ),
+    ];
+  }
+
+  List<Widget> _buildHoursSlivers() {
+    return [
+      SliverFillRemaining(
+        child: const HoursApprovalListScreen(),
+      ),
+    ];
+  }
+
+  List<Widget> _buildCatalogSlivers() {
+    return [
+      SliverFillRemaining(
+        child: _buildCatalogTab(),
+      ),
+    ];
+  }
+
   Widget _buildEventsTab() {
     final List<Map<String, dynamic>> all = _events ?? const [];
     final List<Map<String, dynamic>> upcoming = _eventsUpcoming ?? const [];
@@ -1663,17 +1881,172 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
               child: TabBarView(
                 children: [
                   _pendingInner(),
-                  _eventsInner(
-                    upcoming.isNotEmpty
-                        ? upcoming
-                        : all.where((e) => true).toList(),
-                  ),
-                  _eventsInner(past),
+                  _eventsInner(upcoming),
+                  _pastEventsInner(past),
                 ],
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _pastEventsInner(List<Map<String, dynamic>> items) {
+    // Group past events by month
+    final pastByMonth = <String, List<Map<String, dynamic>>>{};
+
+    for (final event in items) {
+      final dateStr = event['date']?.toString() ?? '';
+      if (dateStr.isNotEmpty) {
+        try {
+          final date = DateTime.parse(dateStr);
+          final monthKey = '${date.year}-${date.month.toString().padLeft(2, '0')}';
+          pastByMonth.putIfAbsent(monthKey, () => []).add(event);
+        } catch (_) {
+          pastByMonth.putIfAbsent('unknown', () => []).add(event);
+        }
+      } else {
+        pastByMonth.putIfAbsent('unknown', () => []).add(event);
+      }
+    }
+
+    // Sort months in descending order (most recent first)
+    final sortedMonths = pastByMonth.keys.toList()
+      ..sort((a, b) {
+        if (a == 'unknown') return 1;
+        if (b == 'unknown') return -1;
+        return b.compareTo(a);
+      });
+
+    return RefreshIndicator(
+      onRefresh: _loadEvents,
+      color: const Color(0xFF6366F1),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (_isEventsLoading && items.isEmpty) {
+            return ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(20),
+              children: const [
+                Center(child: LoadingIndicator(text: 'Loading events...')),
+              ],
+            );
+          }
+
+          return ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(20),
+            children: [
+              if (_eventsError != null) ...[
+                ErrorBanner(message: _eventsError!),
+                const SizedBox(height: 12),
+              ],
+              if (!_isEventsLoading && items.isEmpty && _eventsError == null)
+                Container(
+                  padding: const EdgeInsets.all(32),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.grey.shade100, width: 1),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                        spreadRadius: -4,
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF6366F1).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Icon(
+                          Icons.event_available_outlined,
+                          color: const Color(0xFF6366F1),
+                          size: 48,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        'No Past Events',
+                        style: TextStyle(
+                          color: const Color(0xFF0F172A),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 20,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Pull to refresh.',
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 15,
+                          height: 1.5,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              if (items.isNotEmpty)
+                ...sortedMonths.expand((monthKey) {
+                  final eventsInMonth = pastByMonth[monthKey]!;
+
+                  String monthLabel;
+                  if (monthKey == 'unknown') {
+                    monthLabel = 'Date Unknown';
+                  } else {
+                    try {
+                      final parts = monthKey.split('-');
+                      final year = int.parse(parts[0]);
+                      final month = int.parse(parts[1]);
+
+                      const monthNames = [
+                        'January', 'February', 'March', 'April', 'May', 'June',
+                        'July', 'August', 'September', 'October', 'November', 'December'
+                      ];
+
+                      monthLabel = '${monthNames[month - 1]} $year';
+                    } catch (_) {
+                      monthLabel = monthKey;
+                    }
+                  }
+
+                  return [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8, bottom: 16),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.calendar_month,
+                            color: Color(0xFF6B7280),
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '$monthLabel (${eventsInMonth.length})',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    ...eventsInMonth.map((event) => _buildEventCard(event)),
+                  ];
+                }),
+            ],
+          );
+        },
       ),
     );
   }
@@ -2946,11 +3319,10 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
   }
 
   Widget _buildManualEntryTab() {
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Form(
-          key: _formKey,
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Form(
+        key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -3234,10 +3606,9 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
                   child: _buildEventDetails(structuredData!),
                 ),
               ],
-            ],
-          ),
-        ),
+        ],
       ),
+        ),
     );
   }
 

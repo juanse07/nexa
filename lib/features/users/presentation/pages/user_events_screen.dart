@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../extraction/services/event_service.dart';
 import '../../../events/presentation/event_detail_screen.dart';
+import '../../../../core/widgets/custom_sliver_app_bar.dart';
 
 class UserEventsScreen extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -59,169 +60,118 @@ class _UserEventsScreenState extends State<UserEventsScreen> {
     final displayName = [firstName, lastName].where((s) => s.isNotEmpty).join(' ');
     final fullDisplayName = displayName.isNotEmpty ? displayName : (name.isNotEmpty ? name : email);
 
+    final theme = Theme.of(context);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        title: Text(fullDisplayName),
-        backgroundColor: const Color(0xFF6366F1),
-        foregroundColor: Colors.white,
-        elevation: 0,
-      ),
+      backgroundColor: theme.colorScheme.surfaceContainerLowest,
       body: RefreshIndicator(
         onRefresh: _loadUserEvents,
-        child: Column(
-          children: [
-            // User Profile Header
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    const Color(0xFF6366F1).withOpacity(0.08),
-                    const Color(0xFF8B5CF6).withOpacity(0.05),
-                  ],
-                ),
-              ),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 36,
-                    backgroundColor: const Color(0xFF6366F1).withOpacity(0.1),
-                    backgroundImage: picture != null && picture.isNotEmpty
-                        ? NetworkImage(picture)
-                        : null,
-                    child: picture == null || picture.isEmpty
-                        ? const Icon(
-                            Icons.person,
-                            color: Color(0xFF6366F1),
-                            size: 36,
-                          )
-                        : null,
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          fullDisplayName,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF0F172A),
-                          ),
-                        ),
-                        if (email.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            email,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+        child: CustomScrollView(
+          slivers: [
+            CustomSliverAppBar(
+              title: fullDisplayName,
+              subtitle: email.isNotEmpty ? email : null,
+              onBackPressed: () => Navigator.of(context).pop(),
+              expandedHeight: 140.0,
+              pinned: false,
+              floating: true,
+              snap: true,
             ),
-
             // Events List
-            Expanded(
-              child: _buildContent(),
-            ),
+            _buildSliverContent(),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildContent() {
+  Widget _buildSliverContent() {
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(),
+      return const SliverFillRemaining(
+        child: Center(
+          child: CircularProgressIndicator(),
+        ),
       );
     }
 
     if (_errorMessage != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 64,
-              color: Colors.red.shade300,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Error loading events',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey.shade700,
+      return SliverFillRemaining(
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 64,
+                color: Colors.red.shade300,
               ),
-            ),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Text(
-                _errorMessage!,
-                textAlign: TextAlign.center,
+              const SizedBox(height: 16),
+              Text(
+                'Error loading events',
                 style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey.shade600,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade700,
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: _loadUserEvents,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Retry'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6366F1),
-                foregroundColor: Colors.white,
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Text(
+                  _errorMessage!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: _loadUserEvents,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6366F1),
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
 
     if (_events == null || _events!.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.event_busy,
-              size: 64,
-              color: Colors.grey.shade400,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No events found',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey.shade700,
+      return SliverFillRemaining(
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.event_busy,
+                size: 64,
+                color: Colors.grey.shade400,
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'This user is not linked to any events yet',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey.shade600,
+              const SizedBox(height: 16),
+              Text(
+                'No events found',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade700,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              Text(
+                'This user is not linked to any events yet',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -229,7 +179,7 @@ class _UserEventsScreenState extends State<UserEventsScreen> {
     // Split into upcoming and past events
     final now = DateTime.now();
     final upcoming = <Map<String, dynamic>>[];
-    final past = <Map<String, dynamic>>[];
+    final pastByMonth = <String, List<Map<String, dynamic>>>{};
 
     for (final event in _events!) {
       final dateStr = event['date']?.toString() ?? '';
@@ -239,68 +189,138 @@ class _UserEventsScreenState extends State<UserEventsScreen> {
           if (date.isAfter(now)) {
             upcoming.add(event);
           } else {
-            past.add(event);
+            // Group past events by month
+            final monthKey = '${date.year}-${date.month.toString().padLeft(2, '0')}';
+            pastByMonth.putIfAbsent(monthKey, () => []).add(event);
           }
         } catch (_) {
-          past.add(event);
+          // If date parsing fails, add to a special "Unknown" group
+          pastByMonth.putIfAbsent('unknown', () => []).add(event);
         }
       } else {
-        past.add(event);
+        // No date, add to "Unknown" group
+        pastByMonth.putIfAbsent('unknown', () => []).add(event);
       }
     }
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        // Upcoming Events
-        if (upcoming.isNotEmpty) ...[
-          Row(
-            children: [
-              const Icon(
-                Icons.upcoming,
-                color: Color(0xFF059669),
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Upcoming Events (${upcoming.length})',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ...upcoming.map((event) => _buildEventCard(event, true)),
-          const SizedBox(height: 24),
-        ],
+    // Sort months in descending order (most recent first)
+    final sortedMonths = pastByMonth.keys.toList()
+      ..sort((a, b) {
+        if (a == 'unknown') return 1;
+        if (b == 'unknown') return -1;
+        return b.compareTo(a);
+      });
 
-        // Past Events
-        if (past.isNotEmpty) ...[
-          Row(
-            children: [
-              const Icon(
-                Icons.history,
-                color: Color(0xFF6B7280),
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Past Events (${past.length})',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF0F172A),
+    // Sort upcoming events (soonest first)
+    upcoming.sort((a, b) {
+      final dateStrA = a['date']?.toString() ?? '';
+      final dateStrB = b['date']?.toString() ?? '';
+
+      try {
+        final dateA = DateTime.parse(dateStrA);
+        final dateB = DateTime.parse(dateStrB);
+        return dateA.compareTo(dateB); // Ascending order for upcoming
+      } catch (_) {
+        return 0;
+      }
+    });
+
+    // Sort events within each month (newest first)
+    for (final monthKey in sortedMonths) {
+      pastByMonth[monthKey]!.sort((a, b) {
+        final dateStrA = a['date']?.toString() ?? '';
+        final dateStrB = b['date']?.toString() ?? '';
+
+        try {
+          final dateA = DateTime.parse(dateStrA);
+          final dateB = DateTime.parse(dateStrB);
+          return dateB.compareTo(dateA); // Descending order for past
+        } catch (_) {
+          return 0;
+        }
+      });
+    }
+
+    return SliverPadding(
+      padding: const EdgeInsets.all(16),
+      sliver: SliverList(
+        delegate: SliverChildListDelegate([
+          // Upcoming Events
+          if (upcoming.isNotEmpty) ...[
+            Row(
+              children: [
+                const Icon(
+                  Icons.upcoming,
+                  color: Color(0xFF059669),
+                  size: 20,
                 ),
+                const SizedBox(width: 8),
+                Text(
+                  'Upcoming Events (${upcoming.length})',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ...upcoming.map((event) => _buildEventCard(event, true)),
+            const SizedBox(height: 24),
+          ],
+
+          // Past Events grouped by month
+          ...sortedMonths.expand((monthKey) {
+            final eventsInMonth = pastByMonth[monthKey]!;
+
+            String monthLabel;
+            if (monthKey == 'unknown') {
+              monthLabel = 'Date Unknown';
+            } else {
+              try {
+                final parts = monthKey.split('-');
+                final year = int.parse(parts[0]);
+                final month = int.parse(parts[1]);
+                final date = DateTime(year, month);
+
+                const monthNames = [
+                  'January', 'February', 'March', 'April', 'May', 'June',
+                  'July', 'August', 'September', 'October', 'November', 'December'
+                ];
+
+                monthLabel = '${monthNames[month - 1]} $year';
+              } catch (_) {
+                monthLabel = monthKey;
+              }
+            }
+
+            return [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.history,
+                    color: Color(0xFF6B7280),
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '$monthLabel (${eventsInMonth.length})',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ...past.map((event) => _buildEventCard(event, false)),
-        ],
-      ],
+              const SizedBox(height: 12),
+              ...eventsInMonth.map((event) => _buildEventCard(event, false)),
+              const SizedBox(height: 24),
+            ];
+          }),
+        ]),
+      ),
     );
   }
 
