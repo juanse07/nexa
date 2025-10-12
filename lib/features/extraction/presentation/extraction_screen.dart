@@ -19,6 +19,7 @@ import '../../../features/auth/presentation/pages/login_page.dart';
 import '../../../shared/ui/widgets.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/widgets/custom_sliver_app_bar.dart';
+import '../../../core/widgets/pinned_header_delegate.dart';
 import '../services/clients_service.dart';
 import '../services/draft_service.dart';
 import '../services/event_service.dart';
@@ -46,7 +47,7 @@ class ExtractionScreen extends StatefulWidget {
   State<ExtractionScreen> createState() => _ExtractionScreenState();
 }
 
-class _ExtractionScreenState extends State<ExtractionScreen> {
+class _ExtractionScreenState extends State<ExtractionScreen> with TickerProviderStateMixin {
   String? extractedText;
   Map<String, dynamic>? structuredData;
   bool isLoading = false;
@@ -55,6 +56,9 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
   String? userApiKey;
 
   int _selectedIndex = 0;
+  late TabController _createTabController;
+  late TabController _eventsTabController;
+  late TabController _catalogTabController;
 
   // Events listing state
   List<Map<String, dynamic>>? _events;
@@ -115,6 +119,9 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
   @override
   void initState() {
     super.initState();
+    _createTabController = TabController(length: 3, vsync: this);
+    _eventsTabController = TabController(length: 3, vsync: this);
+    _catalogTabController = TabController(length: 3, vsync: this);
     _extractionService = ExtractionService();
     _eventService = EventService();
     _clientsService = ClientsService();
@@ -145,6 +152,9 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
 
   @override
   void dispose() {
+    _createTabController.dispose();
+    _eventsTabController.dispose();
+    _catalogTabController.dispose();
     _eventNameController.dispose();
     _clientNameController.dispose();
     _dateController.dispose();
@@ -641,24 +651,235 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
     }
   }
 
+  List<Widget> _buildPinnedHeaders() {
+    final topPadding = MediaQuery.of(context).padding.top;
+
+    switch (_selectedIndex) {
+      case 0: // Create tab - pin the TabBar
+        return [
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: PinnedHeaderDelegate(
+              height: 64.0,
+              safeAreaPadding: topPadding,
+              child: Material(
+                elevation: 4.0,
+                child: Container(
+                  color: Colors.white,
+                  child: SafeArea(
+                    bottom: false,
+                    child: TabBar(
+                      controller: _createTabController,
+                      tabs: const [
+                        Tab(icon: Icon(Icons.upload_file), text: 'Upload Document'),
+                        Tab(icon: Icon(Icons.edit), text: 'Manual Entry'),
+                        Tab(icon: Icon(Icons.cloud_upload), text: 'Multi-Upload'),
+                      ],
+                      labelColor: Color(0xFF6366F1),
+                      unselectedLabelColor: Colors.grey,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ];
+      case 1: // Events tab - pin the TabBar
+        return [
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: PinnedHeaderDelegate(
+              height: 44.0,
+              safeAreaPadding: topPadding,
+              child: Material(
+                elevation: 4.0,
+                child: Container(
+                  color: Colors.white,
+                  child: SafeArea(
+                    bottom: false,
+                    child: TabBar(
+                      controller: _eventsTabController,
+                      tabs: const [
+                        Tab(text: 'Pending'),
+                        Tab(text: 'Upcoming'),
+                        Tab(text: 'Past'),
+                      ],
+                      labelColor: Color(0xFF6366F1),
+                      unselectedLabelColor: Colors.grey,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ];
+      case 2: // Users tab - pin the search bar
+        return [
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: PinnedHeaderDelegate(
+              height: 118.0,
+              safeAreaPadding: topPadding,
+              child: Material(
+                elevation: 4.0,
+                child: Container(
+                  color: Colors.white,
+                  child: SafeArea(
+                    bottom: false,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _userSearchCtrl,
+                            decoration: const InputDecoration(
+                              prefixIcon: Icon(Icons.search),
+                              hintText: 'Search name or email',
+                              border: OutlineInputBorder(),
+                              contentPadding: EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            onSubmitted: (_) => _loadFirstUsersPage(),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          onPressed: _loadFirstUsersPage,
+                          icon: const Icon(Icons.refresh),
+                          tooltip: 'Refresh',
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          FilterChip(
+                            selected: _selectedRole == null,
+                            label: const Text('All'),
+                            onSelected: (selected) {
+                              setState(() => _selectedRole = null);
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          ..._favoriteRoleOptions.map((role) => Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: FilterChip(
+                              selected: _selectedRole == role,
+                              label: Text(role),
+                              onSelected: (selected) {
+                                setState(() => _selectedRole = selected ? role : null);
+                              },
+                            ),
+                          )),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ];
+      case 4: // Catalog tab - pin the TabBar
+        return [
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: PinnedHeaderDelegate(
+              height: 44.0,
+              safeAreaPadding: topPadding,
+              child: Material(
+                elevation: 4.0,
+                child: Container(
+                  color: Colors.white,
+                  child: SafeArea(
+                    bottom: false,
+                    child: TabBar(
+                      controller: _catalogTabController,
+                      tabs: const [
+                        Tab(text: 'Clients'),
+                        Tab(text: 'Roles'),
+                        Tab(text: 'Tariffs'),
+                      ],
+                      labelColor: Color(0xFF6366F1),
+                      unselectedLabelColor: Colors.grey,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ];
+      default:
+        return [];
+    }
+  }
+
+  Widget _buildBody() {
+    switch (_selectedIndex) {
+      case 0: // Create tab
+        return TabBarView(
+          controller: _createTabController,
+          children: [
+            _buildUploadTab(),
+            _buildManualEntryTab(),
+            _buildBulkUploadTab(),
+          ],
+        );
+      case 1: // Events tab
+        return TabBarView(
+          controller: _eventsTabController,
+          children: [
+            _pendingInner(),
+            _eventsInner(_eventsUpcoming ?? const []),
+            _pastEventsInner(_eventsPast ?? const []),
+          ],
+        );
+      case 2: // Users tab
+        return _buildUsersContent();
+      case 3: // Hours tab
+        return const HoursApprovalListScreen();
+      case 4: // Catalog tab
+        return TabBarView(
+          controller: _catalogTabController,
+          children: [
+            _buildClientsTab(),
+            _buildRolesTab(),
+            _buildTariffsTab(),
+          ],
+        );
+      default:
+        return Container();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      body: CustomScrollView(
-        slivers: [
-          CustomSliverAppBar(
-            title: _getAppBarTitle(),
-            subtitle: _getAppBarSubtitle(),
-            expandedHeight: 120.0,
-            titleFontSize: _selectedIndex == 1 ? 14.0 : null, // Smaller font for Events tab
-            subtitleFontSize: _selectedIndex == 1 ? 9.0 : null, // Even smaller subtitle for Events tab
-            actions: [
-              _buildProfileMenu(context),
-            ],
-          ),
-          ..._buildSliverContent(),
-        ],
+      body: NestedScrollView(
+        headerSliverBuilder: (context, innerBoxIsScrolled) {
+          return [
+            CustomSliverAppBar(
+              title: _getAppBarTitle(),
+              subtitle: _getAppBarSubtitle(),
+              expandedHeight: 120.0,
+              titleFontSize: _selectedIndex == 1 ? 14.0 : null, // Smaller font for Events tab
+              subtitleFontSize: _selectedIndex == 1 ? 9.0 : null, // Even smaller subtitle for Events tab
+              actions: [
+                _buildProfileMenu(context),
+              ],
+            ),
+            ..._buildPinnedHeaders(),
+          ];
+        },
+        body: _buildBody(),
       ),
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
@@ -835,34 +1056,29 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
 
   List<Widget> _buildCreateSlivers() {
     return [
-      SliverFillRemaining(
-        child: DefaultTabController(
-          length: 3,
-          child: Column(
-            children: [
-              Container(
-                color: Colors.white,
-                child: const TabBar(
-                  tabs: [
-                    Tab(icon: Icon(Icons.upload_file), text: 'Upload Document'),
-                    Tab(icon: Icon(Icons.edit), text: 'Manual Entry'),
-                    Tab(icon: Icon(Icons.cloud_upload), text: 'Multi-Upload'),
-                  ],
-                  labelColor: Color(0xFF6366F1),
-                  unselectedLabelColor: Colors.grey,
-                ),
-              ),
-              Expanded(
-                child: TabBarView(
-                  children: [
-                    _buildUploadTab(),
-                    _buildManualEntryTab(),
-                    _buildBulkUploadTab(),
-                  ],
-                ),
-              ),
+      SliverToBoxAdapter(
+        child: Container(
+          color: Colors.white,
+          child: TabBar(
+            controller: _createTabController,
+            tabs: const [
+              Tab(icon: Icon(Icons.upload_file), text: 'Upload Document'),
+              Tab(icon: Icon(Icons.edit), text: 'Manual Entry'),
+              Tab(icon: Icon(Icons.cloud_upload), text: 'Multi-Upload'),
             ],
+            labelColor: Color(0xFF6366F1),
+            unselectedLabelColor: Colors.grey,
           ),
+        ),
+      ),
+      SliverFillRemaining(
+        child: TabBarView(
+          controller: _createTabController,
+          children: [
+            _buildUploadTab(),
+            _buildManualEntryTab(),
+            _buildBulkUploadTab(),
+          ],
         ),
       ),
     ];
@@ -900,10 +1116,11 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
 
   Widget _buildBulkUploadTab() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
             HeaderCard(
               title: 'Multi-Upload',
               subtitle: 'Upload multiple PDFs or images and save each as a pending draft',
@@ -1009,7 +1226,8 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
                 ),
               );
             }),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1323,171 +1541,176 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
             ),
           ),
           Expanded(
-            child: _filteredUsers.isEmpty && _selectedRole != null && !_isUsersLoading
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.star_border,
-                          size: 64,
-                          color: Colors.grey.shade400,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No favorite $_selectedRole yet',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey.shade700,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Star users to add them to this list',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : NotificationListener<ScrollNotification>(
-              onNotification: (n) {
-                if (n.metrics.pixels >= n.metrics.maxScrollExtent - 200) {
-                  _loadMoreUsers();
-                }
-                return false;
-              },
-              child: ListView.builder(
-                itemCount: _filteredUsers.length + 1,
-                itemBuilder: (ctx, idx) {
-                  if (idx == _filteredUsers.length) {
-                    if (_isUsersLoading) {
-                      return const Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Center(child: CircularProgressIndicator()),
-                      );
-                    }
-                    if (_usersNextCursor == null) {
-                      return const SizedBox.shrink();
-                    }
-                    return Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Center(
-                        child: TextButton(
-                          onPressed: _loadMoreUsers,
-                          child: const Text('Load more'),
-                        ),
-                      ),
-                    );
-                  }
-                  final u = _filteredUsers[idx];
-                  final userId = '${u['provider']}:${u['subject']}';
-                  final name = u['name']?.toString() ?? '';
-                  final email = u['email']?.toString() ?? '';
-                  final appId = u['app_id']?.toString() ?? '';
-                  final firstName = u['first_name']?.toString() ?? '';
-                  final lastName = u['last_name']?.toString() ?? '';
-                  final displayName = [firstName, lastName].where((s) => s.isNotEmpty).join(' ');
-                  final picture = u['picture']?.toString();
-
-                  return ListTile(
-                    leading: CircleAvatar(
-                      backgroundImage: picture != null ? NetworkImage(picture) : null,
-                      child: picture == null ? const Icon(Icons.person) : null,
-                    ),
-                    title: Text(
-                      displayName.isNotEmpty ? displayName : (name.isNotEmpty ? name : email),
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (email.isNotEmpty) Text(email),
-                        if (appId.isNotEmpty)
-                          Text(
-                            'ID: $appId',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                      ],
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (_selectedRole != null)
-                          IconButton(
-                            icon: Icon(
-                              _isFavorite(userId, _selectedRole)
-                                  ? Icons.star
-                                  : Icons.star_border,
-                              color: _isFavorite(userId, _selectedRole)
-                                  ? Colors.amber
-                                  : null,
-                            ),
-                            onPressed: () => _toggleFavorite(userId, _selectedRole!),
-                            tooltip: _isFavorite(userId, _selectedRole)
-                                ? 'Remove from $_selectedRole favorites'
-                                : 'Add to $_selectedRole favorites',
-                          ),
-                        PopupMenuButton<String>(
-                          itemBuilder: (context) => [
-                            const PopupMenuItem(
-                              value: 'view',
-                              child: ListTile(
-                                leading: Icon(Icons.event),
-                                title: Text('View events'),
-                              ),
-                            ),
-                            ...(_selectedRole == null ? _favoriteRoleOptions : [_selectedRole!]).map(
-                              (role) => PopupMenuItem(
-                                value: 'favorite:$role',
-                                child: ListTile(
-                                  leading: Icon(
-                                    _isFavorite(userId, role)
-                                        ? Icons.star
-                                        : Icons.star_border,
-                                    color: _isFavorite(userId, role)
-                                        ? Colors.amber
-                                        : null,
-                                  ),
-                                  title: Text('${_isFavorite(userId, role) ? 'Remove from' : 'Add to'} $role favorites'),
-                                ),
-                              ),
-                            ),
-                          ],
-                          onSelected: (value) async {
-                            if (value == 'view') {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => UserEventsScreen(user: u),
-                                ),
-                              );
-                            } else if (value.startsWith('favorite:')) {
-                              final role = value.substring('favorite:'.length);
-                              _toggleFavorite(userId, role);
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
+            child: _buildUsersContent(),
           ),
         ],
       ),
     );
   }
 
+  Widget _buildUsersContent() {
+    return _filteredUsers.isEmpty && _selectedRole != null && !_isUsersLoading
+        ? Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.star_border,
+                  size: 64,
+                  color: Colors.grey.shade400,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No favorite $_selectedRole yet',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Star users to add them to this list',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ],
+            ),
+          )
+        : NotificationListener<ScrollNotification>(
+            onNotification: (n) {
+              if (n.metrics.pixels >= n.metrics.maxScrollExtent - 200) {
+                _loadMoreUsers();
+              }
+              return false;
+            },
+            child: ListView.builder(
+              itemCount: _filteredUsers.length + 1,
+              itemBuilder: (ctx, idx) {
+                if (idx == _filteredUsers.length) {
+                  if (_isUsersLoading) {
+                    return const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+                  if (_usersNextCursor == null) {
+                    return const SizedBox.shrink();
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Center(
+                      child: TextButton(
+                        onPressed: _loadMoreUsers,
+                        child: const Text('Load more'),
+                      ),
+                    ),
+                  );
+                }
+                final u = _filteredUsers[idx];
+                final userId = '${u['provider']}:${u['subject']}';
+                final name = u['name']?.toString() ?? '';
+                final email = u['email']?.toString() ?? '';
+                final appId = u['app_id']?.toString() ?? '';
+                final firstName = u['first_name']?.toString() ?? '';
+                final lastName = u['last_name']?.toString() ?? '';
+                final displayName = [firstName, lastName].where((s) => s.isNotEmpty).join(' ');
+                final picture = u['picture']?.toString();
+
+                return ListTile(
+                  leading: CircleAvatar(
+                    backgroundImage: picture != null ? NetworkImage(picture) : null,
+                    child: picture == null ? const Icon(Icons.person) : null,
+                  ),
+                  title: Text(
+                    displayName.isNotEmpty ? displayName : (name.isNotEmpty ? name : email),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (email.isNotEmpty) Text(email),
+                      if (appId.isNotEmpty)
+                        Text(
+                          'ID: $appId',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                    ],
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_selectedRole != null)
+                        IconButton(
+                          icon: Icon(
+                            _isFavorite(userId, _selectedRole)
+                                ? Icons.star
+                                : Icons.star_border,
+                            color: _isFavorite(userId, _selectedRole)
+                                ? Colors.amber
+                                : null,
+                          ),
+                          onPressed: () => _toggleFavorite(userId, _selectedRole!),
+                          tooltip: _isFavorite(userId, _selectedRole)
+                              ? 'Remove from $_selectedRole favorites'
+                              : 'Add to $_selectedRole favorites',
+                        ),
+                      PopupMenuButton<String>(
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'view',
+                            child: ListTile(
+                              leading: Icon(Icons.event),
+                              title: Text('View events'),
+                            ),
+                          ),
+                          ...(_selectedRole == null ? _favoriteRoleOptions : [_selectedRole!]).map(
+                            (role) => PopupMenuItem(
+                              value: 'favorite:$role',
+                              child: ListTile(
+                                leading: Icon(
+                                  _isFavorite(userId, role)
+                                      ? Icons.star
+                                      : Icons.star_border,
+                                  color: _isFavorite(userId, role)
+                                      ? Colors.amber
+                                      : null,
+                                ),
+                                title: Text('${_isFavorite(userId, role) ? 'Remove from' : 'Add to'} $role favorites'),
+                              ),
+                            ),
+                          ),
+                        ],
+                        onSelected: (value) async {
+                          if (value == 'view') {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => UserEventsScreen(user: u),
+                              ),
+                            );
+                          } else if (value.startsWith('favorite:')) {
+                            final role = value.substring('favorite:'.length);
+                            _toggleFavorite(userId, role);
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          );
+  }
+
   Widget _buildUploadTab() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
@@ -1665,7 +1888,8 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
                 ),
               ),
             ],
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1802,34 +2026,33 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
     final List<Map<String, dynamic>> past = _eventsPast ?? const [];
 
     return [
-      SliverFillRemaining(
-        child: DefaultTabController(
-          length: 3,
-          child: Column(
-            children: [
-              Container(
-                color: Colors.white,
-                child: const TabBar(
-                  tabs: [
-                    Tab(text: 'Pending'),
-                    Tab(text: 'Upcoming'),
-                    Tab(text: 'Past'),
-                  ],
-                  labelColor: Color(0xFF6366F1),
-                  unselectedLabelColor: Colors.grey,
-                ),
-              ),
-              Expanded(
-                child: TabBarView(
-                  children: [
-                    _pendingInner(),
-                    _eventsInner(upcoming),
-                    _pastEventsInner(past),
-                  ],
-                ),
-              ),
-            ],
+      SliverPersistentHeader(
+        pinned: true,
+        delegate: PinnedHeaderDelegate(
+          height: 48.0,
+          child: Container(
+            color: Colors.white,
+            child: TabBar(
+              controller: _eventsTabController,
+              tabs: const [
+                Tab(text: 'Pending'),
+                Tab(text: 'Upcoming'),
+                Tab(text: 'Past'),
+              ],
+              labelColor: Color(0xFF6366F1),
+              unselectedLabelColor: Colors.grey,
+            ),
           ),
+        ),
+      ),
+      SliverFillRemaining(
+        child: TabBarView(
+          controller: _eventsTabController,
+          children: [
+            _pendingInner(),
+            _eventsInner(upcoming),
+            _pastEventsInner(past),
+          ],
         ),
       ),
     ];
@@ -1837,8 +2060,69 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
 
   List<Widget> _buildUsersSlivers() {
     return [
+      SliverPersistentHeader(
+        pinned: true,
+        delegate: PinnedHeaderDelegate(
+          height: 120.0,
+          child: Container(
+            color: Colors.white,
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _userSearchCtrl,
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.search),
+                          hintText: 'Search name or email',
+                          border: OutlineInputBorder(),
+                        ),
+                        onSubmitted: (_) => _loadFirstUsersPage(),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      onPressed: _loadFirstUsersPage,
+                      icon: const Icon(Icons.refresh),
+                      tooltip: 'Refresh',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      FilterChip(
+                        selected: _selectedRole == null,
+                        label: const Text('All'),
+                        onSelected: (selected) {
+                          setState(() => _selectedRole = null);
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      ..._favoriteRoleOptions.map((role) => Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: FilterChip(
+                          selected: _selectedRole == role,
+                          label: Text(role),
+                          onSelected: (selected) {
+                            setState(() => _selectedRole = selected ? role : null);
+                          },
+                        ),
+                      )),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
       SliverFillRemaining(
-        child: _buildUsersTab(),
+        child: _buildUsersContent(),
       ),
     ];
   }
@@ -1853,8 +2137,34 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
 
   List<Widget> _buildCatalogSlivers() {
     return [
+      SliverPersistentHeader(
+        pinned: true,
+        delegate: PinnedHeaderDelegate(
+          height: 48.0,
+          child: Container(
+            color: Colors.white,
+            child: TabBar(
+              controller: _catalogTabController,
+              tabs: const [
+                Tab(text: 'Clients'),
+                Tab(text: 'Roles'),
+                Tab(text: 'Tariffs'),
+              ],
+              labelColor: Color(0xFF6366F1),
+              unselectedLabelColor: Colors.grey,
+            ),
+          ),
+        ),
+      ),
       SliverFillRemaining(
-        child: _buildCatalogTab(),
+        child: TabBarView(
+          controller: _catalogTabController,
+          children: [
+            _buildClientsTab(),
+            _buildRolesTab(),
+            _buildTariffsTab(),
+          ],
+        ),
       ),
     ];
   }
@@ -3320,23 +3630,24 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
 
   Widget _buildManualEntryTab() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Form(
-        key: _formKey,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Form(
+          key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              HeaderCard(
-                title: 'Manual Entry',
-                subtitle: 'Enter event details manually for precise control',
-                icon: Icons.edit_note,
-                gradientColors: const [Color(0xFF059669), Color(0xFF10B981)],
-              ),
-              const SizedBox(height: 24),
-              FormSection(
-                title: 'Event Information',
-                icon: Icons.event,
-                children: [
+            HeaderCard(
+              title: 'Manual Entry',
+              subtitle: 'Enter event details manually for precise control',
+              icon: Icons.edit_note,
+              gradientColors: const [Color(0xFF059669), Color(0xFF10B981)],
+            ),
+            const SizedBox(height: 24),
+            FormSection(
+              title: 'Event Information',
+              icon: Icons.event,
+              children: [
                   LabeledTextField(
                     controller: _eventNameController,
                     label: 'Event Name',
@@ -3606,9 +3917,10 @@ class _ExtractionScreenState extends State<ExtractionScreen> {
                   child: _buildEventDetails(structuredData!),
                 ),
               ],
-        ],
-      ),
+          ],
         ),
+        ),
+      ),
     );
   }
 
