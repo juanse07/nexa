@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io' show Platform;
 
 import 'package:nexa/features/auth/data/services/auth_service.dart';
@@ -55,7 +56,7 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final size = MediaQuery.of(context).size;
-    final bool showApple = Platform.isIOS;
+    final bool showApple = !kIsWeb && Platform.isIOS;
 
     return PopScope(
       canPop: false,
