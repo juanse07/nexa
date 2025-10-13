@@ -1,23 +1,45 @@
 #!/bin/bash
 set -e
 
-# Install Flutter
-echo "Installing Flutter..."
-git clone --depth 1 --branch stable https://github.com/flutter/flutter.git /opt/flutter
-export PATH="/opt/flutter/bin:$PATH"
+echo "===================================="
+echo "Installing Flutter SDK..."
+echo "===================================="
 
-# Verify Flutter installation
+# Clone Flutter SDK
+if [ ! -d "/opt/buildhome/.flutter" ]; then
+  git clone --depth 1 --branch stable https://github.com/flutter/flutter.git /opt/buildhome/.flutter
+fi
+
+# Add Flutter to PATH
+export PATH="/opt/buildhome/.flutter/bin:$PATH"
+export PATH="/opt/buildhome/.flutter/bin/cache/dart-sdk/bin:$PATH"
+
+# Verify installation
+echo "Flutter version:"
 flutter --version
 
-# Enable web support
-flutter config --enable-web
+# Precache web components
+echo "===================================="
+echo "Precaching web components..."
+echo "===================================="
+flutter precache --web
+
+# Enable web
+flutter config --enable-web --no-analytics
 
 # Get dependencies
-echo "Getting Flutter dependencies..."
+echo "===================================="
+echo "Getting dependencies..."
+echo "===================================="
 flutter pub get
 
-# Build web
+# Build for web
+echo "===================================="
 echo "Building Flutter web..."
-flutter build web --release --web-renderer canvaskit
+echo "===================================="
+flutter build web --release --web-renderer canvaskit --verbose
 
+echo "===================================="
 echo "Build complete!"
+echo "===================================="
+ls -la build/web/
