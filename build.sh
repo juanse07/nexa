@@ -37,7 +37,7 @@ flutter pub get
 echo "===================================="
 echo "Building Flutter web..."
 echo "===================================="
-flutter build web --release --web-renderer canvaskit --verbose
+flutter build web --release --verbose
 
 echo "===================================="
 echo "Build complete!"
