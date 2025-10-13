@@ -189,17 +189,26 @@ class AuthService {
   }
 
   static GoogleSignIn _googleSignIn() {
-    // Prefer the Server (web) client ID from GCP as serverClientId on all platforms
-    // so Google returns an ID token suitable for backend verification.
     final env = Environment.instance;
-    final serverClientId = env.get('GOOGLE_SERVER_CLIENT_ID') ??
-        env.get('GOOGLE_CLIENT_ID_WEB');
 
-    if (serverClientId != null && serverClientId.isNotEmpty) {
-      return GoogleSignIn(
-        scopes: const ['email', 'profile'],
-        serverClientId: serverClientId,
-      );
+    // For web, use clientId. For mobile, use serverClientId
+    if (kIsWeb) {
+      final webClientId = env.get('GOOGLE_CLIENT_ID_WEB');
+      if (webClientId != null && webClientId.isNotEmpty) {
+        return GoogleSignIn(
+          scopes: const ['email', 'profile'],
+          clientId: webClientId,
+        );
+      }
+    } else {
+      // For mobile platforms, use serverClientId for backend verification
+      final serverClientId = env.get('GOOGLE_SERVER_CLIENT_ID');
+      if (serverClientId != null && serverClientId.isNotEmpty) {
+        return GoogleSignIn(
+          scopes: const ['email', 'profile'],
+          serverClientId: serverClientId,
+        );
+      }
     }
 
     return GoogleSignIn(scopes: const ['email', 'profile']);
