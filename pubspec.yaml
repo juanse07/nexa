@@ -63,6 +63,7 @@ dependencies:
 
   # Maps & Location
   google_maps_flutter: ^2.9.0
+  google_maps_flutter_web: ^0.5.10
   google_places_flutter: ^2.0.9
   geocoding: ^3.0.0
 
