@@ -38,11 +38,10 @@ class Environment {
   /// Gets an environment variable by key
   /// Returns null if the key doesn't exist
   String? get(String key) {
-    // For web, try to get from compile-time constants first
     if (kIsWeb) {
-      return const String.fromEnvironment(key, defaultValue: '').isEmpty
-        ? null
-        : const String.fromEnvironment(key);
+      // For web builds, we need to check specific keys at compile time
+      // This is a limitation of String.fromEnvironment which requires constant keys
+      return _getWebEnvironmentVariable(key);
     }
     return dotenv.maybeGet(key);
   }
@@ -50,10 +49,8 @@ class Environment {
   /// Gets an environment variable by key with a default value
   /// Returns the default value if the key doesn't exist
   String getOrDefault(String key, String defaultValue) {
-    // For web, use compile-time constants
     if (kIsWeb) {
-      final value = const String.fromEnvironment(key, defaultValue: '');
-      return value.isEmpty ? defaultValue : value;
+      return _getWebEnvironmentVariable(key) ?? defaultValue;
     }
     return dotenv.maybeGet(key) ?? defaultValue;
   }
@@ -61,8 +58,55 @@ class Environment {
   /// Checks if an environment variable exists
   bool contains(String key) {
     if (kIsWeb) {
-      return const String.fromEnvironment(key, defaultValue: '').isNotEmpty;
+      return _getWebEnvironmentVariable(key) != null;
     }
     return dotenv.maybeGet(key) != null;
+  }
+
+  /// Helper method to get web environment variables with compile-time constants
+  static String? _getWebEnvironmentVariable(String key) {
+    switch (key) {
+      case 'API_BASE_URL':
+        const value = String.fromEnvironment('API_BASE_URL');
+        return value.isEmpty ? null : value;
+      case 'API_PATH_PREFIX':
+        const value = String.fromEnvironment('API_PATH_PREFIX');
+        return value.isEmpty ? null : value;
+      case 'GOOGLE_MAPS_API_KEY':
+        const value = String.fromEnvironment('GOOGLE_MAPS_API_KEY');
+        return value.isEmpty ? null : value;
+      case 'GOOGLE_CLIENT_ID_WEB':
+        const value = String.fromEnvironment('GOOGLE_CLIENT_ID_WEB');
+        return value.isEmpty ? null : value;
+      case 'GOOGLE_SERVER_CLIENT_ID':
+        const value = String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
+        return value.isEmpty ? null : value;
+      case 'PLACES_BIAS_LAT':
+        const value = String.fromEnvironment('PLACES_BIAS_LAT');
+        return value.isEmpty ? null : value;
+      case 'PLACES_BIAS_LNG':
+        const value = String.fromEnvironment('PLACES_BIAS_LNG');
+        return value.isEmpty ? null : value;
+      case 'PLACES_COMPONENTS':
+        const value = String.fromEnvironment('PLACES_COMPONENTS');
+        return value.isEmpty ? null : value;
+      case 'OPENAI_API_KEY':
+        const value = String.fromEnvironment('OPENAI_API_KEY');
+        return value.isEmpty ? null : value;
+      case 'GOOGLE_CLIENT_ID_ANDROID':
+        const value = String.fromEnvironment('GOOGLE_CLIENT_ID_ANDROID');
+        return value.isEmpty ? null : value;
+      case 'GOOGLE_CLIENT_ID_IOS':
+        const value = String.fromEnvironment('GOOGLE_CLIENT_ID_IOS');
+        return value.isEmpty ? null : value;
+      case 'GOOGLE_MAPS_IOS_SDK_KEY':
+        const value = String.fromEnvironment('GOOGLE_MAPS_IOS_SDK_KEY');
+        return value.isEmpty ? null : value;
+      case 'APPLE_BUNDLE_ID':
+        const value = String.fromEnvironment('APPLE_BUNDLE_ID');
+        return value.isEmpty ? null : value;
+      default:
+        return null;
+    }
   }
 }
