@@ -126,33 +126,55 @@ class AuthService {
       }
 
       final auth = await account.authentication;
+
+      // On web, idToken might be null but accessToken should be available
       final idToken = auth.idToken;
-      if (idToken == null) {
-        _log('Failed to get Google ID token', isError: true);
-        onError?.call('No ID token returned by Google. Check iOS client/URL scheme');
+      final accessToken = auth.accessToken;
+
+      _log('Auth tokens - idToken: ${idToken != null ? "present" : "null"}, accessToken: ${accessToken != null ? "present" : "null"}');
+
+      // For web, if we don't have an idToken, try using accessToken
+      String? tokenToSend;
+      String tokenType;
+
+      if (idToken != null && idToken.isNotEmpty) {
+        tokenToSend = idToken;
+        tokenType = 'idToken';
+      } else if (accessToken != null && accessToken.isNotEmpty) {
+        tokenToSend = accessToken;
+        tokenType = 'accessToken';
+        _log('Using accessToken instead of idToken for web authentication');
+      } else {
+        _log('Failed to get any Google token', isError: true);
+        onError?.call('No token returned by Google. Check OAuth configuration');
         return false;
       }
 
-      // Debug: Log token audience/issuer to verify configuration (masked)
-      try {
-        final parts = idToken.split('.');
-        if (parts.length == 3) {
-          final payloadStr = utf8.decode(base64Url.decode(_normalizeBase64(parts[1])));
-          final payload = json.decode(payloadStr) as Map<String, dynamic>;
-          final aud = (payload['aud']?.toString() ?? '').replaceAll(RegExp(r'(^.{6}|.{6}$)'), '***');
-          final iss = payload['iss']?.toString();
-          final azp = payload['azp']?.toString();
-          _log('Google idToken aud(masked)=$aud, iss=$iss, azp=$azp');
+      // Debug: Log token info if it's an ID token
+      if (tokenType == 'idToken') {
+        try {
+          final parts = tokenToSend!.split('.');
+          if (parts.length == 3) {
+            final payloadStr = utf8.decode(base64Url.decode(_normalizeBase64(parts[1])));
+            final payload = json.decode(payloadStr) as Map<String, dynamic>;
+            final aud = (payload['aud']?.toString() ?? '').replaceAll(RegExp(r'(^.{6}|.{6}$)'), '***');
+            final iss = payload['iss']?.toString();
+            final azp = payload['azp']?.toString();
+            _log('Google idToken aud(masked)=$aud, iss=$iss, azp=$azp');
+          }
+        } catch (e) {
+          _log('Failed to decode idToken payload: $e', isError: true);
         }
-      } catch (e) {
-        _log('Failed to decode idToken payload: $e', isError: true);
       }
 
       final resp = await _makeRequest(
         request: () => http.post(
           Uri.parse('$_apiBaseUrl/auth/google'),
           headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'idToken': idToken}),
+          body: jsonEncode({
+            if (tokenType == 'idToken') 'idToken': tokenToSend,
+            if (tokenType == 'accessToken') 'accessToken': tokenToSend,
+          }),
         ),
         operation: 'Google sign in',
       );
