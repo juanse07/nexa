@@ -191,13 +191,17 @@ class AuthService {
   static GoogleSignIn _googleSignIn() {
     final env = Environment.instance;
 
-    // For web, use clientId. For mobile, use serverClientId
+    // For web, use both clientId and serverClientId to get ID token
     if (kIsWeb) {
       final webClientId = env.get('GOOGLE_CLIENT_ID_WEB');
+      final serverClientId = env.get('GOOGLE_SERVER_CLIENT_ID');
+
       if (webClientId != null && webClientId.isNotEmpty) {
+        // Both clientId and serverClientId are needed on web to get ID token
         return GoogleSignIn(
           scopes: const ['email', 'profile'],
           clientId: webClientId,
+          serverClientId: serverClientId ?? webClientId,
         );
       }
     } else {
