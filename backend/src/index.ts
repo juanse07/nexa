@@ -28,9 +28,25 @@ async function createServer() {
     .split(',')
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
+
+  // Allow Cloudflare Pages preview deployments (*.nexa-web.pages.dev)
   app.use(
     cors({
-      origin: origins.length > 0 ? origins : undefined,
+      origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps or Postman)
+        if (!origin) return callback(null, true);
+
+        // Allow exact matches from ALLOWED_ORIGINS
+        if (origins.includes(origin)) return callback(null, true);
+
+        // Allow any Cloudflare Pages subdomain for nexa-web
+        if (origin.match(/^https:\/\/[a-z0-9]+\.nexa-web\.pages\.dev$/)) {
+          return callback(null, true);
+        }
+
+        // Deny all other origins
+        callback(new Error('Not allowed by CORS'));
+      },
       credentials: true,
     })
   );
