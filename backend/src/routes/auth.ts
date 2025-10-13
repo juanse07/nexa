@@ -163,12 +163,50 @@ async function verifyAppleIdentityToken(identityToken: string): Promise<Verified
   }
 }
 
+async function verifyGoogleAccessToken(accessToken: string): Promise<VerifiedProfile> {
+  // Fetch user info from Google using the access token
+  const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch user info: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+
+  if (!data.id) {
+    throw new Error('Invalid Google access token - no user ID');
+  }
+
+  return {
+    provider: 'google',
+    subject: data.id,
+    email: data.email ?? undefined,
+    name: data.name ?? undefined,
+    picture: data.picture ?? undefined,
+  };
+}
+
 router.post('/google', async (req, res) => {
   try {
     if (!JWT_SECRET) return res.status(500).json({ message: 'Server missing JWT secret' });
+
     const idToken = (req.body?.idToken ?? '') as string;
-    if (!idToken) return res.status(400).json({ message: 'idToken is required' });
-    const profile = await verifyGoogleIdToken(idToken);
+    const accessToken = (req.body?.accessToken ?? '') as string;
+
+    if (!idToken && !accessToken) {
+      return res.status(400).json({ message: 'idToken or accessToken is required' });
+    }
+
+    // Prefer idToken, fall back to accessToken
+    let profile: VerifiedProfile;
+    if (idToken) {
+      profile = await verifyGoogleIdToken(idToken);
+    } else {
+      profile = await verifyGoogleAccessToken(accessToken);
+    }
+
     await upsertUser(profile);
     try {
       await ensureManagerDocument(profile);
