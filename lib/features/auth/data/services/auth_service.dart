@@ -197,11 +197,11 @@ class AuthService {
       final serverClientId = env.get('GOOGLE_SERVER_CLIENT_ID');
 
       if (webClientId != null && webClientId.isNotEmpty) {
-        // Both clientId and serverClientId are needed on web to get ID token
+        // For web: Use serverClientId as the main clientId parameter
+        // This ensures we get an ID token suitable for backend verification
         return GoogleSignIn(
-          scopes: const ['email', 'profile'],
-          clientId: webClientId,
-          serverClientId: serverClientId ?? webClientId,
+          scopes: const ['email', 'profile', 'openid'],
+          clientId: serverClientId ?? webClientId,
         );
       }
     } else {
