@@ -18,42 +18,93 @@ Future<void> main() async {
   // Ensure Flutter bindings are initialized
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Set preferred orientations (portrait only for mobile, all orientations for web)
-  if (!kIsWeb) {
-    await SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-    ]);
+  try {
+    // Set preferred orientations (portrait only for mobile, all orientations for web)
+    if (!kIsWeb) {
+      await SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+      ]);
 
-    // Configure system UI overlays (mobile only)
-    SystemChrome.setSystemUIOverlayStyle(
-      const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.dark,
-        statusBarBrightness: Brightness.light,
-        systemNavigationBarColor: Colors.white,
-        systemNavigationBarIconBrightness: Brightness.dark,
+      // Configure system UI overlays (mobile only)
+      SystemChrome.setSystemUIOverlayStyle(
+        const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
+          statusBarBrightness: Brightness.light,
+          systemNavigationBarColor: Colors.white,
+          systemNavigationBarIconBrightness: Brightness.dark,
+        ),
+      );
+    }
+
+    // Initialize environment variables
+    await Environment.load();
+    if (kIsWeb) {
+      print('Environment loaded successfully for web');
+    } else {
+      AppLogger.instance.i('Environment loaded successfully');
+    }
+
+    // Configure dependency injection
+    await configureDependencies();
+    if (kIsWeb) {
+      print('Dependencies configured successfully for web');
+    } else {
+      AppLogger.instance.i('Dependencies configured successfully');
+    }
+
+    // Set up global error handling
+    FlutterError.onError = (FlutterErrorDetails details) {
+      if (kIsWeb) {
+        print('Flutter error: ${details.exception}');
+        print('Stack trace: ${details.stack}');
+      } else {
+        AppLogger.instance.e(
+          'Flutter error caught',
+          error: details.exception,
+          stackTrace: details.stack,
+        );
+      }
+    };
+
+    // Run the app
+    runApp(const NexaApp());
+  } catch (e, stackTrace) {
+    // Catch any initialization errors
+    if (kIsWeb) {
+      print('FATAL ERROR during initialization: $e');
+      print('Stack trace: $stackTrace');
+    }
+
+    // Show error screen
+    runApp(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Failed to initialize app',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    e.toString(),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
-
-  // Initialize environment variables
-  await Environment.load();
-  AppLogger.instance.i('Environment loaded successfully');
-
-  // Configure dependency injection
-  await configureDependencies();
-  AppLogger.instance.i('Dependencies configured successfully');
-
-  // Set up global error handling
-  FlutterError.onError = (FlutterErrorDetails details) {
-    AppLogger.instance.e(
-      'Flutter error caught',
-      error: details.exception,
-      stackTrace: details.stack,
-    );
-  };
-
-  // Run the app
-  runApp(const NexaApp());
 }
