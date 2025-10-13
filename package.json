@@ -1,0 +1,9 @@
+{
+  "name": "nexa",
+  "version": "1.0.0",
+  "description": "Nexa Flutter Web App",
+  "scripts": {
+    "build": "bash build.sh"
+  },
+  "private": true
+}
