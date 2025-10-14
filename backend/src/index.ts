@@ -39,6 +39,11 @@ async function createServer() {
         // Allow exact matches from ALLOWED_ORIGINS
         if (origins.includes(origin)) return callback(null, true);
 
+        // Allow localhost for development
+        if (origin && origin.match(/^http:\/\/localhost(:\d+)?$/)) {
+          return callback(null, true);
+        }
+
         // Allow any Cloudflare Pages subdomain for nexa-web
         if (origin.match(/^https:\/\/[a-z0-9]+\.nexa-web\.pages\.dev$/)) {
           return callback(null, true);
