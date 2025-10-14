@@ -3975,14 +3975,16 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
       ),
     );
 
-    if (result == true && selectedClientId != null && selectedRoleId != null) {
+    final clientId = selectedClientId;
+    final roleId = selectedRoleId;
+    if (result == true && clientId != null && roleId != null) {
       final rate = double.tryParse(rateController.text);
       if (rate == null) return;
 
       try {
         await _tariffsService.upsertTariff(
-          clientId: selectedClientId,
-          roleId: selectedRoleId,
+          clientId: clientId,
+          roleId: roleId,
           rate: rate,
         );
         await _loadTariffs();

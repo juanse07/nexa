@@ -22,7 +22,7 @@ Use `flutter_test`, `bloc_test`, and `mocktail` for unit and widget coverage; or
 Write concise, present-tense commit messages (e.g., `Add client filter bloc`, `Fix hours approval dialog state`). Keep related changes in a single commit when possible. Pull requests should include a summary of changes, testing evidence (`flutter test` output or screenshots for UI tweaks), and links to relevant issues or specs (`DELTA_SYNC_QUICKSTART.md`, etc.). Highlight any migration steps (env variables, schema updates) in the PR description.
 
 ## Configuration Notes
-Provide `.env` values (or `--dart-define`) for `APPLE_SERVICE_ID` and `APPLE_REDIRECT_URI` to enable Apple sign-in on web; mobile builds still rely on `APPLE_BUNDLE_ID`. Align each value with the identifiers registered in Apple developer settings.
+Provide `.env` values (or `--dart-define`) for `APPLE_SERVICE_ID` and `APPLE_REDIRECT_URI` to enable Apple sign-in on web; mobile builds still rely on `APPLE_BUNDLE_ID`. Align each value with the identifiers registered in Apple developer settings; `APPLE_BUNDLE_ID` accepts a comma-separated list (e.g., `com.pymesoft.nexastaff,com.pymesoft.nexa`) when supporting multiple apps.
     **Last Updated**: 2025-01-15
      **Project Status**: Phase 1 Complete ✅ | Phase 2 In Progress 🔜
      **Architecture**: Clean Architecture (Domain/Data/Presentation)
@@ -769,4 +769,3 @@ Provide `.env` values (or `--dart-define`) for `APPLE_SERVICE_ID` and `APPLE_RED
      **Last Updated**: 2025-01-15
      **Maintainer**: Development Team
      **For Questions**: Refer to inline dartdoc comments or ask the development team
-
