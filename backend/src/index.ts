@@ -29,7 +29,7 @@ async function createServer() {
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
 
-  // Allow Cloudflare Pages preview deployments (*.nexa-web.pages.dev)
+  // Allow Cloudflare Pages preview deployments and custom domain
   app.use(
     cors({
       origin: (origin, callback) => {
@@ -41,6 +41,11 @@ async function createServer() {
 
         // Allow any Cloudflare Pages subdomain for nexa-web
         if (origin.match(/^https:\/\/[a-z0-9]+\.nexa-web\.pages\.dev$/)) {
+          return callback(null, true);
+        }
+
+        // Allow custom domain app.nexapymesoft.com
+        if (origin === 'https://app.nexapymesoft.com') {
           return callback(null, true);
         }
 
