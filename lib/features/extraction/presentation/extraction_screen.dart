@@ -3880,26 +3880,26 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
           padding: const EdgeInsets.all(20),
           child: Form(
             key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-            HeaderCard(
-              title: 'Manual Entry',
-              subtitle: 'Enter event details manually for precise control',
-              icon: Icons.edit_note,
-              gradientColors: const [Color(0xFF059669), Color(0xFF10B981)],
-            ),
-            const SizedBox(height: 24),
-            FormSection(
-              title: 'Event Information',
-              icon: Icons.event,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                  LabeledTextField(
-                    controller: _eventNameController,
-                    label: 'Event Name',
-                    icon: Icons.celebration,
-                    isRequired: true,
-                  ),
+                HeaderCard(
+                  title: 'Manual Entry',
+                  subtitle: 'Enter event details manually for precise control',
+                  icon: Icons.edit_note,
+                  gradientColors: const [Color(0xFF059669), Color(0xFF10B981)],
+                ),
+                const SizedBox(height: 24),
+                FormSection(
+                  title: 'Event Information',
+                  icon: Icons.event,
+                  children: [
+                    LabeledTextField(
+                      controller: _eventNameController,
+                      label: 'Event Name',
+                      icon: Icons.celebration,
+                      isRequired: true,
+                    ),
                   const SizedBox(height: 16),
                   LabeledTextField(
                     controller: _clientNameController,
@@ -4156,18 +4156,19 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                 ),
               ),
               const SizedBox(height: 20),
-              if (structuredData != null) ...[
-                InfoCard(
-                  title: 'Event Details',
-                  icon: Icons.event_note,
-                  child: _buildEventDetails(structuredData!),
-                ),
+                if (structuredData != null) ...[
+                  InfoCard(
+                    title: 'Event Details',
+                    icon: Icons.event_note,
+                    child: _buildEventDetails(structuredData!),
+                  ),
+                ],
               ],
-          ],
+            ),
+          ),
         ),
       ),
-    ),
-  );
+    );
   }
 
   Widget _buildEventDetails(Map<String, dynamic> data) {
