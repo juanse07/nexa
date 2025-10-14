@@ -1452,10 +1452,9 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
             }),
           ],
         ),
-          ),
-        ),
       ),
-    );
+    ),
+  );
   }
 
   String _summarizeEvent(Map<String, dynamic> data) {
@@ -2119,9 +2118,8 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
           ],
         ),
       ),
-        ),
-      ),
-    );
+    ),
+  );
   }
 
   // Helpers for adjusting date/time in Upload flow
@@ -4167,11 +4165,9 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
               ],
           ],
         ),
-        ),
-          ),
-        ),
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildEventDetails(Map<String, dynamic> data) {
