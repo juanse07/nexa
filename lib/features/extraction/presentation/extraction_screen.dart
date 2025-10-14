@@ -2573,7 +2573,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                         ],
                       ),
                     ),
-                    ...eventsInMonth.map((event) => _buildEventCard(event)),
+                    ...eventsInMonth.map((event) => _buildEventCard(event, showMargin: true)),
                   ];
                 }),
             ],
@@ -2592,9 +2592,9 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
           final double width = constraints.maxWidth;
           int crossAxisCount = 1;
           if (width >= 1200) {
-            crossAxisCount = 4;
-          } else if (width >= 900) {
             crossAxisCount = 3;
+          } else if (width >= 900) {
+            crossAxisCount = 2;
           } else if (width >= 600) {
             crossAxisCount = 2;
           }
@@ -2606,6 +2606,22 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
               children: const [
                 Center(child: LoadingIndicator(text: 'Loading events...')),
               ],
+            );
+          }
+
+          // Use grid layout for wider screens
+          if (crossAxisCount > 1 && items.isNotEmpty) {
+            return GridView.builder(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(20),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: crossAxisCount,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+                childAspectRatio: 2.5,
+              ),
+              itemCount: items.length,
+              itemBuilder: (context, index) => _buildEventCard(items[index]),
             );
           }
 
@@ -2672,7 +2688,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                 ),
               if (items.isNotEmpty)
                 Column(
-                  children: items.map((item) => _buildEventCard(item)).toList(),
+                  children: items.map((item) => _buildEventCard(item, showMargin: true)).toList(),
                 ),
             ],
           );
@@ -3622,7 +3638,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
     }
   }
 
-  Widget _buildEventCard(Map<String, dynamic> e) {
+  Widget _buildEventCard(Map<String, dynamic> e, {bool showMargin = false}) {
     // Extract essential data
     final String clientName = (e['client_name'] ?? 'Client').toString();
     final String venueName = (e['venue_name'] ?? 'Venue TBD').toString();
@@ -3669,7 +3685,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
         await _loadEvents();
       },
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
+        margin: showMargin ? const EdgeInsets.only(bottom: 12) : EdgeInsets.zero,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
