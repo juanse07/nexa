@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform;
 
+import 'package:nexa/core/config/environment.dart';
 import 'package:nexa/features/auth/data/services/auth_service.dart';
+import 'package:nexa/features/auth/data/services/apple_web_auth.dart';
 import 'package:nexa/features/extraction/presentation/extraction_screen.dart';
 
 class LoginPage extends StatefulWidget {
@@ -40,10 +41,11 @@ class _LoginPageState extends State<LoginPage> {
       _loadingApple = true;
       _error = null;
     });
-    final ok = await AuthService.signInWithApple();
+    String? err;
+    final ok = await AuthService.signInWithApple(onError: (message) => err = message);
     setState(() {
       _loadingApple = false;
-      if (!ok) _error = 'Apple sign-in failed';
+      if (!ok) _error = err ?? 'Apple sign-in failed';
     });
     if (ok && mounted) {
       Navigator.of(context).pushReplacement(
@@ -56,7 +58,13 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final size = MediaQuery.of(context).size;
-    final bool showApple = !kIsWeb && Platform.isIOS;
+    final env = Environment.instance;
+    final bool appleWebAvailable = kIsWeb &&
+        AppleWebAuth.isSupported &&
+        env.contains('APPLE_SERVICE_ID') &&
+        env.contains('APPLE_REDIRECT_URI');
+    final bool isiOS = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+    final bool showApple = isiOS || appleWebAvailable;
 
     return PopScope(
       canPop: false,

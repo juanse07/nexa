@@ -114,6 +114,10 @@ class Environment {
         );
       case 'APPLE_BUNDLE_ID':
         return _valueOrNull(const String.fromEnvironment('APPLE_BUNDLE_ID'));
+      case 'APPLE_SERVICE_ID':
+        return _valueOrNull(const String.fromEnvironment('APPLE_SERVICE_ID'));
+      case 'APPLE_REDIRECT_URI':
+        return _valueOrNull(const String.fromEnvironment('APPLE_REDIRECT_URI'));
       default:
         return null;
     }

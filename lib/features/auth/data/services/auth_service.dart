@@ -8,6 +8,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:nexa/core/config/environment.dart';
+import 'package:nexa/features/auth/data/services/apple_web_auth.dart';
 
 /// Custom exceptions for authentication operations
 class AuthException implements Exception {
@@ -242,12 +243,34 @@ class AuthService {
 
   /// Signs in a user with Apple Sign In
   /// Returns true if successful, false otherwise
-  static Future<bool> signInWithApple() async {
+  static Future<bool> signInWithApple({void Function(String message)? onError}) async {
+    if (kIsWeb) {
+      final env = Environment.instance;
+      final clientId = env.get('APPLE_SERVICE_ID');
+      final redirectUri = env.get('APPLE_REDIRECT_URI');
+      if (clientId == null || redirectUri == null) {
+        onError?.call('Apple sign-in for web is not configured.');
+        return false;
+      }
+
+      final identityToken = await AppleWebAuth.signIn(
+        clientId: clientId,
+        redirectUri: redirectUri,
+        onError: onError,
+      );
+      if (identityToken == null) {
+        return false;
+      }
+
+      return _completeAppleLogin(identityToken, onError: onError);
+    }
+
     try {
       _log('Starting Apple sign in');
       final available = await SignInWithApple.isAvailable();
       if (!available) {
         _log('Apple sign in not available on this device');
+        onError?.call('Apple sign-in is not available on this device.');
         return false;
       }
 
@@ -260,9 +283,23 @@ class AuthService {
       final identityToken = credential.identityToken;
       if (identityToken == null) {
         _log('Failed to get Apple identity token', isError: true);
+        onError?.call('Apple did not return an identity token.');
         return false;
       }
 
+      return _completeAppleLogin(identityToken, onError: onError);
+    } catch (e) {
+      _log('Apple sign in error: $e', isError: true);
+      onError?.call('Apple sign-in failed: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> _completeAppleLogin(
+    String identityToken, {
+    void Function(String message)? onError,
+  }) async {
+    try {
       final resp = await _makeRequest(
         request: () => http.post(
           Uri.parse('$_apiBaseUrl/auth/apple'),
@@ -281,12 +318,15 @@ class AuthService {
           return true;
         }
         _log('Invalid token received from server', isError: true);
+        onError?.call('Server returned an invalid token payload.');
       } else {
         _log('Apple sign in failed with status ${resp.statusCode}', isError: true);
+        onError?.call('API ${resp.statusCode}: ${resp.body}');
       }
       return false;
     } catch (e) {
       _log('Apple sign in error: $e', isError: true);
+      onError?.call('Apple sign-in request failed: $e');
       return false;
     }
   }

@@ -3297,6 +3297,8 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
     final clients = _clients ?? const [];
     final roles = _roles ?? const [];
     final tariffs = _tariffs ?? const [];
+    final isWeb = ResponsiveLayout.shouldUseDesktopLayout(context);
+
     return RefreshIndicator(
       onRefresh: () async {
         await _loadClients();
@@ -3306,22 +3308,70 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
       color: const Color(0xFF6366F1),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(ResponsiveLayout.getHorizontalPadding(context)),
         children: [
-          // Modern filter card
+          // Header with create button
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Tariff Management',
+                  style: TextStyle(
+                    fontSize: isWeb ? 24 : 20,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF1F2937),
+                  ),
+                ),
+              ),
+              if (kIsWeb)
+                _maybeWebRefreshButton(
+                  onPressed: () async {
+                    await _loadClients();
+                    await _loadRoles();
+                    await _loadTariffs();
+                  },
+                  label: 'Refresh',
+                  padding: const EdgeInsets.only(right: 8),
+                ),
+              ElevatedButton.icon(
+                onPressed: () => _showCreateTariffDialog(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF059669),
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isWeb ? 24 : 16,
+                    vertical: isWeb ? 16 : 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 2,
+                ),
+                icon: const Icon(Icons.add_circle_outline, size: 20),
+                label: Text(
+                  isWeb ? 'Create Tariff' : 'Create',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Filter card
           Container(
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withOpacity(0.04),
                   blurRadius: 10,
                   offset: const Offset(0, 2),
                 ),
               ],
             ),
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(isWeb ? 24 : 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -3340,259 +3390,236 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                       ),
                     ),
                     const SizedBox(width: 12),
-                    const Expanded(
-                      child: Text(
-                        'Filter Tariffs',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF1F2937),
-                        ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Filter Tariffs',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1F2937),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Filter by client or role to narrow results',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    if (kIsWeb)
-                      _maybeWebRefreshButton(
-                        onPressed: () async {
-                          await _loadClients();
-                          await _loadRoles();
-                          await _loadTariffs();
+                    if (_selectedClientIdForTariffs != null || _selectedRoleIdForTariffs != null)
+                      TextButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            _selectedClientIdForTariffs = null;
+                            _selectedRoleIdForTariffs = null;
+                          });
+                          _loadTariffs();
                         },
-                        label: 'Refresh data',
+                        icon: const Icon(Icons.clear, size: 16),
+                        label: const Text('Clear'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: const Color(0xFFDC2626),
+                          visualDensity: VisualDensity.compact,
+                        ),
                       ),
                   ],
                 ),
                 const SizedBox(height: 16),
-                // Client dropdown - full width
-                DropdownButtonFormField<String>(
-                  value: _selectedClientIdForTariffs,
-                  items: clients
-                      .map(
-                        (c) => DropdownMenuItem(
-                          value: (c['id'] ?? '').toString(),
-                          child: Text(
-                            (c['name'] ?? '').toString(),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (v) =>
-                      setState(() => _selectedClientIdForTariffs = v),
-                  decoration: InputDecoration(
-                    labelText: 'Client',
-                    prefixIcon: const Icon(Icons.business, size: 20),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    filled: true,
-                    fillColor: const Color(0xFFF9FAFB),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                // Role dropdown - full width
-                DropdownButtonFormField<String>(
-                  value: _selectedRoleIdForTariffs,
-                  items: roles
-                      .map(
-                        (r) => DropdownMenuItem(
-                          value: (r['id'] ?? '').toString(),
-                          child: Text(
-                            (r['name'] ?? '').toString(),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (v) =>
-                      setState(() => _selectedRoleIdForTariffs = v),
-                  decoration: InputDecoration(
-                    labelText: 'Role',
-                    prefixIcon: const Icon(Icons.work_outline, size: 20),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    filled: true,
-                    fillColor: const Color(0xFFF9FAFB),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                // Action buttons
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () async {
-                          await _loadTariffs();
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF6366F1),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 0,
-                        ),
-                        icon: const Icon(Icons.search, size: 20),
-                        label: const Text('Load', style: TextStyle(fontWeight: FontWeight.w600)),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () async {
-                          final clientId = _selectedClientIdForTariffs;
-                          final roleId = _selectedRoleIdForTariffs;
-                          if (clientId == null || roleId == null) {
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Select client and role first'),
-                                backgroundColor: Color(0xFFDC2626),
+
+                // Responsive layout for filters
+                isWeb
+                    ? Row(
+                        children: [
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              value: _selectedClientIdForTariffs,
+                              hint: const Text('All Clients'),
+                              items: [
+                                const DropdownMenuItem(
+                                  value: null,
+                                  child: Text('All Clients'),
+                                ),
+                                ...clients.map((c) => DropdownMenuItem(
+                                      value: (c['id'] ?? '').toString(),
+                                      child: Text(
+                                        (c['name'] ?? '').toString(),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    )),
+                              ],
+                              onChanged: (v) {
+                                setState(() => _selectedClientIdForTariffs = v);
+                                _loadTariffs();
+                              },
+                              decoration: InputDecoration(
+                                labelText: 'Filter by Client',
+                                prefixIcon: const Icon(Icons.business, size: 20),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                filled: true,
+                                fillColor: const Color(0xFFF9FAFB),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 16,
+                                ),
                               ),
-                            );
-                            return;
-                          }
-                          final rate = await _promptRate();
-                          if (rate == null) return;
-                          try {
-                            await _tariffsService.upsertTariff(
-                              clientId: clientId,
-                              roleId: roleId,
-                              rate: rate,
-                            );
-                            await _loadTariffs();
-                          } catch (e) {
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Failed to save: $e'),
-                                backgroundColor: const Color(0xFFDC2626),
-                              ),
-                            );
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF059669),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
-                          elevation: 0,
-                        ),
-                        icon: const Icon(Icons.add, size: 20),
-                        label: const Text('Set', style: TextStyle(fontWeight: FontWeight.w600)),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              value: _selectedRoleIdForTariffs,
+                              hint: const Text('All Roles'),
+                              items: [
+                                const DropdownMenuItem(
+                                  value: null,
+                                  child: Text('All Roles'),
+                                ),
+                                ...roles.map((r) => DropdownMenuItem(
+                                      value: (r['id'] ?? '').toString(),
+                                      child: Text(
+                                        (r['name'] ?? '').toString(),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    )),
+                              ],
+                              onChanged: (v) {
+                                setState(() => _selectedRoleIdForTariffs = v);
+                                _loadTariffs();
+                              },
+                              decoration: InputDecoration(
+                                labelText: 'Filter by Role',
+                                prefixIcon: const Icon(Icons.work_outline, size: 20),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                filled: true,
+                                fillColor: const Color(0xFFF9FAFB),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 16,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : Column(
+                        children: [
+                          DropdownButtonFormField<String>(
+                            value: _selectedClientIdForTariffs,
+                            hint: const Text('All Clients'),
+                            items: [
+                              const DropdownMenuItem(
+                                value: null,
+                                child: Text('All Clients'),
+                              ),
+                              ...clients.map((c) => DropdownMenuItem(
+                                    value: (c['id'] ?? '').toString(),
+                                    child: Text(
+                                      (c['name'] ?? '').toString(),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  )),
+                            ],
+                            onChanged: (v) {
+                              setState(() => _selectedClientIdForTariffs = v);
+                              _loadTariffs();
+                            },
+                            decoration: InputDecoration(
+                              labelText: 'Filter by Client',
+                              prefixIcon: const Icon(Icons.business, size: 20),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              filled: true,
+                              fillColor: const Color(0xFFF9FAFB),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<String>(
+                            value: _selectedRoleIdForTariffs,
+                            hint: const Text('All Roles'),
+                            items: [
+                              const DropdownMenuItem(
+                                value: null,
+                                child: Text('All Roles'),
+                              ),
+                              ...roles.map((r) => DropdownMenuItem(
+                                    value: (r['id'] ?? '').toString(),
+                                    child: Text(
+                                      (r['name'] ?? '').toString(),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  )),
+                            ],
+                            onChanged: (v) {
+                              setState(() => _selectedRoleIdForTariffs = v);
+                              _loadTariffs();
+                            },
+                            decoration: InputDecoration(
+                              labelText: 'Filter by Role',
+                              prefixIcon: const Icon(Icons.work_outline, size: 20),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              filled: true,
+                              fillColor: const Color(0xFFF9FAFB),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
+
           // Loading & Error states
           if (_isTariffsLoading && tariffs.isEmpty)
-            const Center(child: LoadingIndicator(text: 'Loading tariffs...')),
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(48.0),
+                child: LoadingIndicator(text: 'Loading tariffs...'),
+              ),
+            ),
           if (_tariffsError != null) ...[
             ErrorBanner(message: _tariffsError!),
             const SizedBox(height: 12),
           ],
-          // Tariffs list header
-          if (tariffs.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Text(
-                '${tariffs.length} Tariff${tariffs.length != 1 ? 's' : ''}',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF6B7280),
-                ),
-              ),
-            ),
-          // Tariffs list
-          ...tariffs.map((t) => _tariffTile(t)),
-        ],
-      ),
-    );
-  }
 
-  Widget _tariffTile(Map<String, dynamic> t) {
-    final id = (t['id'] ?? '').toString();
-    final roleName = (_roles ?? [])
-        .firstWhere(
-          (r) => (r['id'] ?? '') == (t['roleId'] ?? ''),
-          orElse: () => const {},
-        )['name']
-        ?.toString();
-    final clientName = (_clients ?? [])
-        .firstWhere(
-          (c) => (c['id'] ?? '') == (t['clientId'] ?? ''),
-          orElse: () => const {},
-        )['name']
-        ?.toString();
-    final rate = (t['rate'] ?? 0).toString();
-    final currency = (t['currency'] ?? 'USD').toString();
-    
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFF059669).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(
-                Icons.attach_money,
-                color: Color(0xFF059669),
-                size: 24,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          // Tariffs list header with count
+          if (!_isTariffsLoading && tariffs.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Row(
                 children: [
-                  Text(
-                    '$clientName — $roleName',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1F2937),
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: const Color(0xFF6366F1).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      '$rate $currency',
+                      '${tariffs.length} Tariff${tariffs.length != 1 ? 's' : ''}',
                       style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
                         color: Color(0xFF6366F1),
                       ),
                     ),
@@ -3600,37 +3627,633 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+
+          // Empty state
+          if (!_isTariffsLoading && tariffs.isEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(48.0),
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF3F4F6),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.attach_money,
+                        size: 64,
+                        color: Color(0xFF9CA3AF),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'No tariffs found',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF6B7280),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _selectedClientIdForTariffs != null || _selectedRoleIdForTariffs != null
+                          ? 'Try adjusting your filters or create a new tariff'
+                          : 'Create your first tariff to get started',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          // Tariffs grid/list (responsive)
+          if (tariffs.isNotEmpty)
+            isWeb
+                ? GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: ResponsiveLayout.getGridColumns(context),
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
+                      childAspectRatio: 2.5,
+                    ),
+                    itemCount: tariffs.length,
+                    itemBuilder: (context, index) => _tariffTile(tariffs[index]),
+                  )
+                : Column(
+                    children: tariffs.map((t) => _tariffTile(t)).toList(),
+                  ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tariffTile(Map<String, dynamic> t) {
+    final id = (t['id'] ?? '').toString();
+    final clientId = (t['clientId'] ?? '').toString();
+    final roleId = (t['roleId'] ?? '').toString();
+    final roleName = (_roles ?? [])
+        .firstWhere(
+          (r) => (r['id'] ?? '') == roleId,
+          orElse: () => const {},
+        )['name']
+        ?.toString();
+    final clientName = (_clients ?? [])
+        .firstWhere(
+          (c) => (c['id'] ?? '') == clientId,
+          orElse: () => const {},
+        )['name']
+        ?.toString();
+    final rate = (t['rate'] ?? 0).toString();
+    final currency = (t['currency'] ?? 'USD').toString();
+    final isWeb = ResponsiveLayout.shouldUseDesktopLayout(context);
+
+    return Container(
+      margin: EdgeInsets.only(bottom: isWeb ? 0 : 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(isWeb ? 20 : 16),
+        child: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(isWeb ? 12 : 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF059669).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                Icons.attach_money,
+                color: const Color(0xFF059669),
+                size: isWeb ? 28 : 24,
+              ),
+            ),
+            SizedBox(width: isWeb ? 20 : 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$clientName',
+                    style: TextStyle(
+                      fontSize: isWeb ? 17 : 16,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF1F2937),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.work_outline,
+                        size: 14,
+                        color: Colors.grey[600],
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          roleName ?? 'Unknown Role',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF6366F1).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '\$$rate $currency/hr',
+                      style: TextStyle(
+                        fontSize: isWeb ? 15 : 14,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF6366F1),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(width: isWeb ? 12 : 8),
+            // Edit button
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              color: const Color(0xFF6366F1),
+              iconSize: isWeb ? 24 : 22,
+              tooltip: 'Edit tariff',
+              onPressed: () => _showEditTariffDialog(
+                tariffId: id,
+                clientId: clientId,
+                roleId: roleId,
+                currentRate: double.tryParse(rate) ?? 0.0,
+              ),
+            ),
+            // Delete button
             IconButton(
               icon: const Icon(Icons.delete_outline),
               color: const Color(0xFFDC2626),
-              iconSize: 22,
-              onPressed: () async {
-                try {
-                  await _tariffsService.deleteTariff(id);
-                  await _loadTariffs();
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Tariff deleted successfully'),
-                      backgroundColor: Color(0xFF059669),
-                    ),
-                  );
-                } catch (e) {
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Failed to delete: $e'),
-                      backgroundColor: const Color(0xFFDC2626),
-                    ),
-                  );
-                }
-              },
+              iconSize: isWeb ? 24 : 22,
+              tooltip: 'Delete tariff',
+              onPressed: () => _confirmDeleteTariff(id),
             ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _showCreateTariffDialog() async {
+    final clients = _clients ?? const [];
+    final roles = _roles ?? const [];
+
+    if (clients.isEmpty || roles.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please add clients and roles first'),
+          backgroundColor: Color(0xFFDC2626),
+        ),
+      );
+      return;
+    }
+
+    String? selectedClientId;
+    String? selectedRoleId;
+    final rateController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF059669).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.add_circle_outline,
+                  color: Color(0xFF059669),
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text('Create Tariff'),
+            ],
+          ),
+          content: SizedBox(
+            width: ResponsiveLayout.shouldUseDesktopLayout(context) ? 500 : double.maxFinite,
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Client dropdown
+                  DropdownButtonFormField<String>(
+                    value: selectedClientId,
+                    decoration: InputDecoration(
+                      labelText: 'Client *',
+                      prefixIcon: const Icon(Icons.business, size: 20),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      filled: true,
+                      fillColor: const Color(0xFFF9FAFB),
+                    ),
+                    items: clients
+                        .map((c) => DropdownMenuItem(
+                              value: (c['id'] ?? '').toString(),
+                              child: Text((c['name'] ?? '').toString()),
+                            ))
+                        .toList(),
+                    onChanged: (v) => setDialogState(() => selectedClientId = v),
+                    validator: (v) => v == null ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  // Role dropdown
+                  DropdownButtonFormField<String>(
+                    value: selectedRoleId,
+                    decoration: InputDecoration(
+                      labelText: 'Role *',
+                      prefixIcon: const Icon(Icons.work_outline, size: 20),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      filled: true,
+                      fillColor: const Color(0xFFF9FAFB),
+                    ),
+                    items: roles
+                        .map((r) => DropdownMenuItem(
+                              value: (r['id'] ?? '').toString(),
+                              child: Text((r['name'] ?? '').toString()),
+                            ))
+                        .toList(),
+                    onChanged: (v) => setDialogState(() => selectedRoleId = v),
+                    validator: (v) => v == null ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  // Rate field
+                  TextFormField(
+                    controller: rateController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: 'Hourly Rate *',
+                      prefixIcon: const Icon(Icons.attach_money, size: 20),
+                      hintText: 'e.g., 25.00',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      filled: true,
+                      fillColor: const Color(0xFFF9FAFB),
+                    ),
+                    validator: (v) {
+                      if (v == null || v.isEmpty) return 'Required';
+                      if (double.tryParse(v) == null) return 'Invalid number';
+                      if (double.parse(v) <= 0) return 'Must be positive';
+                      return null;
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () async {
+                if (formKey.currentState?.validate() ?? false) {
+                  Navigator.of(ctx).pop(true);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF059669),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              icon: const Icon(Icons.check, size: 20),
+              label: const Text('Create'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result == true && selectedClientId != null && selectedRoleId != null) {
+      final rate = double.tryParse(rateController.text);
+      if (rate == null) return;
+
+      try {
+        await _tariffsService.upsertTariff(
+          clientId: selectedClientId,
+          roleId: selectedRoleId,
+          rate: rate,
+        );
+        await _loadTariffs();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tariff created successfully'),
+            backgroundColor: Color(0xFF059669),
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to create tariff: $e'),
+            backgroundColor: const Color(0xFFDC2626),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showEditTariffDialog({
+    required String tariffId,
+    required String clientId,
+    required String roleId,
+    required double currentRate,
+  }) async {
+    final clients = _clients ?? const [];
+    final roles = _roles ?? const [];
+
+    final clientName = clients.firstWhere(
+      (c) => (c['id'] ?? '') == clientId,
+      orElse: () => const {},
+    )['name']?.toString() ?? 'Unknown';
+
+    final roleName = roles.firstWhere(
+      (r) => (r['id'] ?? '') == roleId,
+      orElse: () => const {},
+    )['name']?.toString() ?? 'Unknown';
+
+    final rateController = TextEditingController(text: currentRate.toString());
+    final formKey = GlobalKey<FormState>();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF6366F1).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.edit_outlined,
+                color: Color(0xFF6366F1),
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(child: Text('Edit Tariff')),
+          ],
+        ),
+        content: SizedBox(
+          width: ResponsiveLayout.shouldUseDesktopLayout(context) ? 500 : double.maxFinite,
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Display client and role (read-only)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3F4F6),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.business, size: 18, color: Color(0xFF6B7280)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              clientName,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1F2937),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Icon(Icons.work_outline, size: 18, color: Color(0xFF6B7280)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              roleName,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1F2937),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Rate field
+                TextFormField(
+                  controller: rateController,
+                  autofocus: true,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                    labelText: 'Hourly Rate *',
+                    prefixIcon: const Icon(Icons.attach_money, size: 20),
+                    hintText: 'e.g., 25.00',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                  ),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Required';
+                    if (double.tryParse(v) == null) return 'Invalid number';
+                    if (double.parse(v) <= 0) return 'Must be positive';
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              if (formKey.currentState?.validate() ?? false) {
+                Navigator.of(ctx).pop(true);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF6366F1),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            icon: const Icon(Icons.check, size: 20),
+            label: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true) {
+      final rate = double.tryParse(rateController.text);
+      if (rate == null) return;
+
+      try {
+        await _tariffsService.upsertTariff(
+          clientId: clientId,
+          roleId: roleId,
+          rate: rate,
+        );
+        await _loadTariffs();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tariff updated successfully'),
+            backgroundColor: Color(0xFF059669),
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update tariff: $e'),
+            backgroundColor: const Color(0xFFDC2626),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmDeleteTariff(String tariffId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFDC2626).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.warning_outlined,
+                color: Color(0xFFDC2626),
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text('Delete Tariff'),
+          ],
+        ),
+        content: const Text(
+          'Are you sure you want to delete this tariff? This action cannot be undone.',
+          style: TextStyle(fontSize: 15),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            icon: const Icon(Icons.delete_outline, size: 20),
+            label: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await _tariffsService.deleteTariff(tariffId);
+        await _loadTariffs();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tariff deleted successfully'),
+            backgroundColor: Color(0xFF059669),
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete tariff: $e'),
+            backgroundColor: const Color(0xFFDC2626),
+          ),
+        );
+      }
+    }
   }
 
   Future<double?> _promptRate() async {
