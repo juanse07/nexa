@@ -234,7 +234,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
           bytes.length > 20 ? bytes.sublist(0, 20) : bytes;
       final fileName = platformFile.name;
       final lowerName = fileName.toLowerCase();
-      final lookupName = platformFile.path ?? fileName;
+      final lookupName = kIsWeb ? fileName : (platformFile.path ?? fileName);
       final mimeType =
           lookupMimeType(lookupName, headerBytes: headerBytes) ?? '';
 
@@ -309,6 +309,9 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
   }
 
   String _resolvePlatformFileId(PlatformFile file) {
+    if (kIsWeb) {
+      return file.identifier ?? '${file.name}_${file.hashCode}_${file.size}';
+    }
     return file.identifier ??
         file.path ??
         '${file.name}_${file.hashCode}_${file.size}';
@@ -1539,7 +1542,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
           added.add({
             'id': id,
             'name': f.name,
-            'path': f.path,
+            'path': kIsWeb ? null : f.path,
             'bytes': f.bytes,
             'status': 'queued',
           });
