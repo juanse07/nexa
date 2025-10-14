@@ -44,6 +44,8 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 # Environment variables
+# Environment files (commit only sanitized defaults)
 .env
 *.env
 .env.*
+!/.env.defaults

@@ -1,5 +1,7 @@
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+import 'env_file_loader.dart';
 
 /// Singleton class to manage environment variables
 /// Loads environment variables from .env file (mobile/desktop) or uses compile-time constants (web)
@@ -25,7 +27,15 @@ class Environment {
       // For web, we skip loading .env file as it won't be bundled
       // Environment variables should be provided via --dart-define at build time
       if (!kIsWeb) {
-        await dotenv.load();
+        final overrides = <String, String>{};
+        overrides.addAll(await loadEnvFile('.env'));
+        overrides.addAll(await loadEnvFile('.env.local'));
+
+        await dotenv.load(
+          fileName: '.env.defaults',
+          isOptional: true,
+          mergeWith: overrides,
+        );
       }
       _isLoaded = true;
     } catch (e) {
@@ -127,7 +137,11 @@ class Environment {
 
   static String? _safeMaybeGet(String key) {
     try {
-      return dotenv.maybeGet(key);
+      final value = dotenv.maybeGet(key);
+      if (value != null && value.isNotEmpty) {
+        return value;
+      }
+      return _getWebEnvironmentVariable(key);
     } catch (e) {
       if (e is NotInitializedError) {
         return null;

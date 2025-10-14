@@ -119,8 +119,8 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - assets/
-    - .env
-    # Note: .env file is not included for web builds (use environment variables instead)
+    - .env.defaults
+    # Copy .env.defaults to .env or .env.local locally; do not commit secrets.
 
 # Icon generation config
 flutter_launcher_icons:
