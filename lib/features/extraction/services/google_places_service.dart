@@ -1,11 +1,12 @@
 import 'dart:convert';
 
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+
+import '../../../core/config/environment.dart';
 
 class GooglePlacesService {
   static String get _apiKey {
-    final key = dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '';
+    final key = Environment.instance.get('GOOGLE_MAPS_API_KEY') ?? '';
     if (key.isEmpty) {
       throw Exception('GOOGLE_MAPS_API_KEY not found in .env file');
     }
@@ -19,15 +20,21 @@ class GooglePlacesService {
     if (input.isEmpty) return [];
 
     // Optional geo bias (defaults: Colorado, USA)
-    final biasLat =
-        double.tryParse(dotenv.env['PLACES_BIAS_LAT'] ?? '') ??
+    final biasLat = double.tryParse(
+          Environment.instance.get('PLACES_BIAS_LAT') ?? '',
+        ) ??
         39.7392; // Denver
-    final biasLng =
-        double.tryParse(dotenv.env['PLACES_BIAS_LNG'] ?? '') ?? -104.9903;
-    final biasRadiusM =
-        int.tryParse(dotenv.env['PLACES_BIAS_RADIUS_M'] ?? '') ??
+    final biasLng = double.tryParse(
+          Environment.instance.get('PLACES_BIAS_LNG') ?? '',
+        ) ??
+        -104.9903;
+    final biasRadiusM = int.tryParse(
+          Environment.instance.get('PLACES_BIAS_RADIUS_M') ?? '',
+        ) ??
         450000; // ~450km
-    final components = (dotenv.env['PLACES_COMPONENTS'] ?? 'country:us').trim();
+    final components = (Environment.instance.get('PLACES_COMPONENTS') ??
+            'country:us')
+        .trim();
 
     final sessionToken = DateTime.now().millisecondsSinceEpoch.toString();
     final queryParams = [

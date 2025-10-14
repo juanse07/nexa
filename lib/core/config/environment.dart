@@ -67,46 +67,57 @@ class Environment {
   static String? _getWebEnvironmentVariable(String key) {
     switch (key) {
       case 'API_BASE_URL':
-        const value = String.fromEnvironment('API_BASE_URL');
-        return value.isEmpty ? null : value;
+        return _valueOrNull(const String.fromEnvironment('API_BASE_URL'));
       case 'API_PATH_PREFIX':
-        const value = String.fromEnvironment('API_PATH_PREFIX');
-        return value.isEmpty ? null : value;
+        return _valueOrNull(const String.fromEnvironment('API_PATH_PREFIX'));
       case 'GOOGLE_MAPS_API_KEY':
-        const value = String.fromEnvironment('GOOGLE_MAPS_API_KEY');
-        return value.isEmpty ? null : value;
+        return _valueOrNull(const String.fromEnvironment('GOOGLE_MAPS_API_KEY'));
       case 'GOOGLE_CLIENT_ID_WEB':
-        const value = String.fromEnvironment('GOOGLE_CLIENT_ID_WEB');
-        return value.isEmpty ? null : value;
+        return _valueOrNull(const String.fromEnvironment('GOOGLE_CLIENT_ID_WEB'));
       case 'GOOGLE_SERVER_CLIENT_ID':
-        const value = String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
-        return value.isEmpty ? null : value;
+        return _valueOrNull(
+          const String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID'),
+        );
       case 'PLACES_BIAS_LAT':
-        const value = String.fromEnvironment('PLACES_BIAS_LAT');
-        return value.isEmpty ? null : value;
+        return _valueOrNull(const String.fromEnvironment('PLACES_BIAS_LAT'));
       case 'PLACES_BIAS_LNG':
-        const value = String.fromEnvironment('PLACES_BIAS_LNG');
-        return value.isEmpty ? null : value;
+        return _valueOrNull(const String.fromEnvironment('PLACES_BIAS_LNG'));
       case 'PLACES_COMPONENTS':
-        const value = String.fromEnvironment('PLACES_COMPONENTS');
-        return value.isEmpty ? null : value;
+        return _valueOrNull(const String.fromEnvironment('PLACES_COMPONENTS'));
+      case 'PLACES_BIAS_RADIUS_M':
+        return _valueOrNull(
+          const String.fromEnvironment('PLACES_BIAS_RADIUS_M'),
+        );
       case 'OPENAI_API_KEY':
-        const value = String.fromEnvironment('OPENAI_API_KEY');
-        return value.isEmpty ? null : value;
+        return _valueOrNull(const String.fromEnvironment('OPENAI_API_KEY'));
+      case 'OPENAI_BASE_URL':
+        return _valueOrNull(const String.fromEnvironment('OPENAI_BASE_URL'));
+      case 'OPENAI_VISION_MODEL':
+        return _valueOrNull(
+          const String.fromEnvironment('OPENAI_VISION_MODEL'),
+        );
+      case 'OPENAI_TEXT_MODEL':
+        return _valueOrNull(const String.fromEnvironment('OPENAI_TEXT_MODEL'));
+      case 'OPENAI_ORG_ID':
+        return _valueOrNull(const String.fromEnvironment('OPENAI_ORG_ID'));
       case 'GOOGLE_CLIENT_ID_ANDROID':
-        const value = String.fromEnvironment('GOOGLE_CLIENT_ID_ANDROID');
-        return value.isEmpty ? null : value;
+        return _valueOrNull(
+          const String.fromEnvironment('GOOGLE_CLIENT_ID_ANDROID'),
+        );
       case 'GOOGLE_CLIENT_ID_IOS':
-        const value = String.fromEnvironment('GOOGLE_CLIENT_ID_IOS');
-        return value.isEmpty ? null : value;
+        return _valueOrNull(
+          const String.fromEnvironment('GOOGLE_CLIENT_ID_IOS'),
+        );
       case 'GOOGLE_MAPS_IOS_SDK_KEY':
-        const value = String.fromEnvironment('GOOGLE_MAPS_IOS_SDK_KEY');
-        return value.isEmpty ? null : value;
+        return _valueOrNull(
+          const String.fromEnvironment('GOOGLE_MAPS_IOS_SDK_KEY'),
+        );
       case 'APPLE_BUNDLE_ID':
-        const value = String.fromEnvironment('APPLE_BUNDLE_ID');
-        return value.isEmpty ? null : value;
+        return _valueOrNull(const String.fromEnvironment('APPLE_BUNDLE_ID'));
       default:
         return null;
     }
   }
+
+  static String? _valueOrNull(String value) => value.isEmpty ? null : value;
 }

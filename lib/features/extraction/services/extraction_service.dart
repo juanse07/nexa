@@ -1,8 +1,8 @@
 import 'dart:convert';
-import 'dart:io';
 
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+
+import '../../../core/config/environment.dart';
 
 class ExtractionService {
   Future<Map<String, dynamic>> extractStructuredData({
@@ -15,11 +15,12 @@ class ExtractionService {
 
     final bool isImage = input.startsWith('[[IMAGE_BASE64]]:');
     final String visionModel =
-        dotenv.env['OPENAI_VISION_MODEL'] ?? 'gpt-4o-mini';
-    final String textModel = dotenv.env['OPENAI_TEXT_MODEL'] ?? 'gpt-4o-mini';
+        Environment.instance.get('OPENAI_VISION_MODEL') ?? 'gpt-4o-mini';
+    final String textModel =
+        Environment.instance.get('OPENAI_TEXT_MODEL') ?? 'gpt-4o-mini';
 
     final Uri uri = Uri.parse(
-      dotenv.env['OPENAI_BASE_URL'] ??
+      Environment.instance.get('OPENAI_BASE_URL') ??
           'https://api.openai.com/v1/chat/completions',
     );
 
@@ -67,10 +68,10 @@ class ExtractionService {
     }
 
     final Map<String, String> headers = {
-      HttpHeaders.authorizationHeader: 'Bearer $apiKey',
-      HttpHeaders.contentTypeHeader: 'application/json',
+      'Authorization': 'Bearer $apiKey',
+      'Content-Type': 'application/json',
     };
-    final String? orgId = dotenv.env['OPENAI_ORG_ID'];
+    final String? orgId = Environment.instance.get('OPENAI_ORG_ID');
     if (orgId != null && orgId.isNotEmpty) {
       headers['OpenAI-Organization'] = orgId;
     }
