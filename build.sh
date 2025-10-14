@@ -53,5 +53,6 @@ flutter build web --release --verbose \
 
 echo "===================================="
 echo "Build complete!"
+echo "Build timestamp: $(date)"
 echo "===================================="
 ls -la build/web/
