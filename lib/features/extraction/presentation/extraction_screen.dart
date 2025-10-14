@@ -8,7 +8,6 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get_it/get_it.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 // import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -16,6 +15,7 @@ import 'package:mime/mime.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/config/environment.dart';
 import '../../../features/auth/data/services/auth_service.dart';
 import '../../../features/auth/presentation/pages/login_page.dart';
 import '../../../shared/ui/widgets.dart';
@@ -259,7 +259,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
 
       final response = await _extractionService.extractStructuredData(
         input: text,
-        apiKey: userApiKey ?? dotenv.env['OPENAI_API_KEY'] ?? '',
+        apiKey: userApiKey ?? Environment.instance.get('OPENAI_API_KEY') ?? '',
       );
       // Exclude any client fields from the AI output; user must pick from our DB
       final sanitized = Map<String, dynamic>.from(response);
@@ -316,7 +316,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
 
   Future<bool> _ensureApiKey() async {
     // Always use project-level .env key; never prompt end users
-    final envKey = (dotenv.env['OPENAI_API_KEY'] ?? '').trim();
+    final envKey = (Environment.instance.get('OPENAI_API_KEY') ?? '').trim();
     if (envKey.isNotEmpty) {
       userApiKey = envKey;
       return true;
@@ -1588,7 +1588,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
           }
           final response = await _extractionService.extractStructuredData(
             input: input,
-            apiKey: userApiKey ?? dotenv.env['OPENAI_API_KEY'] ?? '',
+            apiKey: userApiKey ?? Environment.instance.get('OPENAI_API_KEY') ?? '',
           );
           setState(() {
             _bulkItems = List.of(_bulkItems);
