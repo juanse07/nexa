@@ -1,21 +1,11 @@
-import 'dart:convert';
-
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:http/http.dart' as http;
+import 'package:dio/dio.dart';
+import 'package:nexa/core/network/api_client.dart';
+import 'package:nexa/core/di/injection.dart';
 
 class UsersService {
-  String get _baseUrl {
-    final apiBase = dotenv.env['API_BASE_URL'];
-    final pathPrefix = dotenv.env['API_PATH_PREFIX'] ?? '';
+  UsersService() : _apiClient = getIt<ApiClient>();
 
-    if (apiBase == null || apiBase.trim().isEmpty) {
-      throw StateError(
-        'API_BASE_URL is not set. Please set it in your .env to your deployed server URL.',
-      );
-    }
-
-    return pathPrefix.isNotEmpty ? '$apiBase$pathPrefix' : apiBase;
-  }
+  final ApiClient _apiClient;
 
   Future<Map<String, dynamic>> fetchUsers({
     String? q,
@@ -25,17 +15,26 @@ class UsersService {
     final params = <String, String>{'limit': '$limit'};
     if (q != null && q.trim().isNotEmpty) params['q'] = q.trim();
     if (cursor != null && cursor.isNotEmpty) params['cursor'] = cursor;
-    final uri = Uri.parse('$_baseUrl/users').replace(queryParameters: params);
-    final response = await http.get(
-      uri,
-      headers: const {'Accept': 'application/json'},
-    );
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      return decoded;
+
+    try {
+      final response = await _apiClient.get<Map<String, dynamic>>(
+        '/users',
+        queryParameters: params,
+      );
+
+      if (response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300) {
+        return response.data ?? {};
+      }
+
+      throw Exception(
+        'Failed to load users (${response.statusCode}): ${response.data}',
+      );
+    } on DioException catch (e) {
+      throw Exception(
+        'Failed to load users: ${e.message}',
+      );
     }
-    throw Exception(
-      'Failed to load users (${response.statusCode}): ${response.body}',
-    );
   }
 }
