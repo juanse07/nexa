@@ -119,6 +119,25 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
   // Timer for real-time updates
   Timer? _updateTimer;
 
+  Widget _maybeWebRefreshButton({
+    required VoidCallback onPressed,
+    String label = 'Refresh',
+    EdgeInsetsGeometry padding = EdgeInsets.zero,
+  }) {
+    if (!kIsWeb) return const SizedBox.shrink();
+    return Padding(
+      padding: padding,
+      child: TextButton.icon(
+        onPressed: onPressed,
+        icon: const Icon(Icons.refresh, size: 18),
+        label: Text(label),
+        style: TextButton.styleFrom(
+          foregroundColor: const Color(0xFF6366F1),
+        ),
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -2327,15 +2346,27 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
           height: 48.0,
           child: Container(
             color: Colors.white,
-            child: TabBar(
-              controller: _eventsTabController,
-              tabs: const [
-                Tab(text: 'Pending'),
-                Tab(text: 'Upcoming'),
-                Tab(text: 'Past'),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TabBar(
+                    controller: _eventsTabController,
+                    tabs: const [
+                      Tab(text: 'Pending'),
+                      Tab(text: 'Upcoming'),
+                      Tab(text: 'Past'),
+                    ],
+                    labelColor: const Color(0xFF6366F1),
+                    unselectedLabelColor: Colors.grey,
+                  ),
+                ),
+                if (kIsWeb)
+                  _maybeWebRefreshButton(
+                    onPressed: _loadEvents,
+                    label: 'Refresh',
+                  ),
               ],
-              labelColor: Color(0xFF6366F1),
-              unselectedLabelColor: Colors.grey,
             ),
           ),
         ),
@@ -2473,14 +2504,28 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
         length: 3,
         child: Column(
           children: [
-            const TabBar(
-              tabs: [
-                Tab(text: 'Pending'),
-                Tab(text: 'Upcoming'),
-                Tab(text: 'Past'),
-              ],
-              labelColor: Color(0xFF6366F1),
-              unselectedLabelColor: Colors.grey,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: TabBar(
+                      tabs: [
+                        Tab(text: 'Pending'),
+                        Tab(text: 'Upcoming'),
+                        Tab(text: 'Past'),
+                      ],
+                      labelColor: Color(0xFF6366F1),
+                      unselectedLabelColor: Colors.grey,
+                    ),
+                  ),
+                  if (kIsWeb)
+                    _maybeWebRefreshButton(
+                      onPressed: _loadEvents,
+                      label: 'Refresh',
+                    ),
+                ],
+              ),
             ),
             Expanded(
               child: TabBarView(
@@ -2543,6 +2588,15 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(20),
             children: [
+              if (kIsWeb)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: _maybeWebRefreshButton(
+                    onPressed: _loadEvents,
+                    label: 'Refresh',
+                  ),
+                ),
+              if (kIsWeb) const SizedBox(height: 12),
               if (_eventsError != null) ...[
                 ErrorBanner(message: _eventsError!),
                 const SizedBox(height: 12),
@@ -2589,7 +2643,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Pull to refresh.',
+                        kIsWeb ? 'Click Refresh to update.' : 'Pull to refresh.',
                         style: TextStyle(
                           color: Colors.grey.shade600,
                           fontSize: 15,
@@ -2676,25 +2730,55 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
             return ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(20),
-              children: const [
-                Center(child: LoadingIndicator(text: 'Loading events...')),
+              children: [
+                if (kIsWeb)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: _maybeWebRefreshButton(
+                      onPressed: _loadEvents,
+                      label: 'Refresh',
+                    ),
+                  ),
+                if (kIsWeb) const SizedBox(height: 12),
+                const Center(child: LoadingIndicator(text: 'Loading events...')),
               ],
             );
           }
 
           // Use grid layout for wider screens
           if (crossAxisCount > 1 && items.isNotEmpty) {
-            return GridView.builder(
+            return CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(20),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: crossAxisCount,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                childAspectRatio: 2.5,
-              ),
-              itemCount: items.length,
-              itemBuilder: (context, index) => _buildEventCard(items[index]),
+              slivers: [
+                if (kIsWeb)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: _maybeWebRefreshButton(
+                          onPressed: _loadEvents,
+                          label: 'Refresh',
+                        ),
+                      ),
+                    ),
+                  ),
+                SliverPadding(
+                  padding: const EdgeInsets.all(20),
+                  sliver: SliverGrid(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) => _buildEventCard(items[index]),
+                      childCount: items.length,
+                    ),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: crossAxisCount,
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
+                      childAspectRatio: 2.5,
+                    ),
+                  ),
+                ),
+              ],
             );
           }
 
@@ -2702,6 +2786,15 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(20),
             children: [
+              if (kIsWeb)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: _maybeWebRefreshButton(
+                    onPressed: _loadEvents,
+                    label: 'Refresh',
+                  ),
+                ),
+              if (kIsWeb) const SizedBox(height: 12),
               if (_eventsError != null) ...[
                 ErrorBanner(message: _eventsError!),
                 const SizedBox(height: 12),
@@ -2748,7 +2841,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Pull to refresh.',
+                        kIsWeb ? 'Click Refresh to update.' : 'Pull to refresh.',
                         style: TextStyle(
                           color: Colors.grey.shade600,
                           fontSize: 15,
@@ -2789,6 +2882,15 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(20),
         children: [
+          if (kIsWeb)
+            Align(
+              alignment: Alignment.centerRight,
+              child: _maybeWebRefreshButton(
+                onPressed: _loadPendingDrafts,
+                label: 'Refresh drafts',
+              ),
+            ),
+          if (kIsWeb) const SizedBox(height: 12),
           if (_isPendingLoading && _pendingDrafts.isEmpty)
             const Center(child: LoadingIndicator(text: 'Loading drafts...')),
           if (_pendingDrafts.isEmpty && !_isPendingLoading)
@@ -2799,7 +2901,20 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: Colors.grey.shade200),
               ),
-              child: const Center(child: Text('No pending drafts')),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('No pending drafts'),
+                  if (kIsWeb) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Click Refresh drafts to check again.',
+                      style: TextStyle(color: Colors.grey.shade600),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ],
+              ),
             ),
           ..._pendingDrafts.map((d) {
             final data =
@@ -2919,6 +3034,16 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
               icon: Icons.business,
               gradientColors: const [Color(0xFF6366F1), Color(0xFF8B5CF6)],
             ),
+            if (kIsWeb)
+              Align(
+                alignment: Alignment.centerRight,
+                child: _maybeWebRefreshButton(
+                  onPressed: _loadClients,
+                  label: 'Refresh clients',
+                  padding: const EdgeInsets.only(top: 12),
+                ),
+              ),
+            if (kIsWeb) const SizedBox(height: 4),
             const SizedBox(height: 16),
             Row(
               children: [
@@ -3076,14 +3201,25 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                       ),
                     ),
                     const SizedBox(width: 12),
-                    const Text(
-                      'Filter Tariffs',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1F2937),
+                    const Expanded(
+                      child: Text(
+                        'Filter Tariffs',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1F2937),
+                        ),
                       ),
                     ),
+                    if (kIsWeb)
+                      _maybeWebRefreshButton(
+                        onPressed: () async {
+                          await _loadClients();
+                          await _loadRoles();
+                          await _loadTariffs();
+                        },
+                        label: 'Refresh data',
+                      ),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -3418,6 +3554,15 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(20),
         children: [
+          if (kIsWeb)
+            Align(
+              alignment: Alignment.centerRight,
+              child: _maybeWebRefreshButton(
+                onPressed: _loadRoles,
+                label: 'Refresh roles',
+                padding: const EdgeInsets.only(bottom: 12),
+              ),
+            ),
           Row(
             children: [
               ElevatedButton.icon(
