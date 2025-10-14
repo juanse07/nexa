@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -218,6 +219,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg', 'heic'],
+        withData: kIsWeb,
       );
       if (result == null || result.files.isEmpty) {
         setState(() {
@@ -226,21 +228,25 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
         return;
       }
 
-      final path = result.files.single.path;
-      if (path == null) {
-        throw Exception('No file path found');
-      }
+      final platformFile = result.files.single;
+      final bytes = await _resolvePlatformFileBytes(platformFile);
+      final headerBytes =
+          bytes.length > 20 ? bytes.sublist(0, 20) : bytes;
+      final fileName = platformFile.name;
+      final lowerName = fileName.toLowerCase();
+      final lookupName = platformFile.path ?? fileName;
+      final mimeType =
+          lookupMimeType(lookupName, headerBytes: headerBytes) ?? '';
 
-      final file = File(path);
-      final mimeType = lookupMimeType(path) ?? '';
-
-      String text = '';
-      if (mimeType.contains('pdf') || path.toLowerCase().endsWith('.pdf')) {
-        text = await _extractTextFromPdf(file);
-      } else if (mimeType.startsWith('image/')) {
-        final bytes = await file.readAsBytes();
-        final base64Image = base64Encode(bytes);
-        text = '[[IMAGE_BASE64]]:$base64Image';
+      String text;
+      if (mimeType.contains('pdf') || lowerName.endsWith('.pdf')) {
+        text = await _extractTextFromPdfBytes(bytes);
+      } else if (mimeType.startsWith('image/') ||
+          lowerName.endsWith('.png') ||
+          lowerName.endsWith('.jpg') ||
+          lowerName.endsWith('.jpeg') ||
+          lowerName.endsWith('.heic')) {
+        text = '[[IMAGE_BASE64]]:${base64Encode(bytes)}';
       } else {
         throw Exception('Unsupported file type: $mimeType');
       }
@@ -276,6 +282,36 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
         isLoading = false;
       });
     }
+  }
+
+  Future<Uint8List> _resolvePlatformFileBytes(PlatformFile file) async {
+    if (file.bytes != null) {
+      return file.bytes!;
+    }
+    if (!kIsWeb && file.path != null) {
+      final ioFile = File(file.path!);
+      return ioFile.readAsBytes();
+    }
+    throw Exception('Unable to read bytes for ${file.name}');
+  }
+
+  Future<Uint8List> _readBytesFromBulkItem(Map<String, dynamic> item) async {
+    final dynamic rawBytes = item['bytes'];
+    if (rawBytes is Uint8List) {
+      return rawBytes;
+    }
+    final dynamic path = item['path'];
+    if (!kIsWeb && path is String && path.isNotEmpty) {
+      final ioFile = File(path);
+      return ioFile.readAsBytes();
+    }
+    throw Exception('Unable to read bytes for ${item['name'] ?? 'file'}');
+  }
+
+  String _resolvePlatformFileId(PlatformFile file) {
+    return file.identifier ??
+        file.path ??
+        '${file.name}_${file.hashCode}_${file.size}';
   }
 
   Future<bool> _ensureApiKey() async {
@@ -469,8 +505,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
     return roles;
   }
 
-  Future<String> _extractTextFromPdf(File file) async {
-    final bytes = await file.readAsBytes();
+  Future<String> _extractTextFromPdfBytes(Uint8List bytes) async {
     final document = PdfDocument(inputBytes: bytes);
     final extractor = PdfTextExtractor(document);
     final buffer = StringBuffer();
@@ -1483,21 +1518,31 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
         allowMultiple: true,
         type: FileType.custom,
         allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg', 'heic'],
+        withData: kIsWeb,
       );
       if (result == null || result.files.isEmpty) {
         setState(() => _isBulkProcessing = false);
         return;
       }
 
-      final picked = result.files.where((f) => f.path != null).toList();
+      final picked = result.files.toList();
       final existing = List<Map<String, dynamic>>.from(_bulkItems);
       final startIndex = existing.length;
-      // Append new entries, dedup by path+name
+      // Append new entries, dedup by unique identifier
       final added = <Map<String, dynamic>>[];
       for (final f in picked) {
-        final already = existing.any((e) => e['path'] == f.path && e['name'] == f.name);
+        final id = _resolvePlatformFileId(f);
+        final already =
+            existing.any((e) => e['id'] == id) ||
+            added.any((e) => e['id'] == id);
         if (!already) {
-          added.add({'name': f.name, 'path': f.path, 'status': 'queued'});
+          added.add({
+            'id': id,
+            'name': f.name,
+            'path': f.path,
+            'bytes': f.bytes,
+            'status': 'queued',
+          });
         }
       }
       if (added.isEmpty) {
@@ -1509,21 +1554,35 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
       });
 
       for (int idx = 0; idx < added.length; idx++) {
-        final f = picked[idx];
-        if (f.path == null) continue;
+        final currentIndex = startIndex + idx;
+        final original =
+            Map<String, dynamic>.from(_bulkItems[currentIndex]);
         setState(() {
           _bulkItems = List.of(_bulkItems);
-          _bulkItems[startIndex + idx] = {..._bulkItems[startIndex + idx], 'status': 'processing'};
+          _bulkItems[currentIndex] = {
+            ..._bulkItems[currentIndex],
+            'status': 'processing',
+          };
         });
         try {
-          final file = File(f.path!);
-          final mimeType = lookupMimeType(f.path!) ?? '';
+          final bytes = await _readBytesFromBulkItem(original);
+          final headerBytes =
+              bytes.length > 20 ? bytes.sublist(0, 20) : bytes;
+          final name = (original['name']?.toString() ?? '');
+          final lowerName = name.toLowerCase();
+          final rawPath = (original['path']?.toString() ?? '');
+          final lookupName = rawPath.isNotEmpty ? rawPath : name;
+          final mimeType =
+              lookupMimeType(lookupName, headerBytes: headerBytes) ?? '';
           String input;
-          if (mimeType.contains('pdf') || f.path!.toLowerCase().endsWith('.pdf')) {
-            input = await _extractTextFromPdf(file);
-          } else if (mimeType.startsWith('image/')) {
-            final bytes = await file.readAsBytes();
-            input = '[[IMAGE_BASE64]]:' + base64Encode(bytes);
+          if (mimeType.contains('pdf') || lowerName.endsWith('.pdf')) {
+            input = await _extractTextFromPdfBytes(bytes);
+          } else if (mimeType.startsWith('image/') ||
+              lowerName.endsWith('.png') ||
+              lowerName.endsWith('.jpg') ||
+              lowerName.endsWith('.jpeg') ||
+              lowerName.endsWith('.heic')) {
+            input = '[[IMAGE_BASE64]]:${base64Encode(bytes)}';
           } else {
             throw Exception('Unsupported type: $mimeType');
           }
@@ -1533,16 +1592,21 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
           );
           setState(() {
             _bulkItems = List.of(_bulkItems);
-            _bulkItems[startIndex + idx] = {
-              ..._bulkItems[startIndex + idx],
+            _bulkItems[currentIndex] = {
+              ..._bulkItems[currentIndex],
               'status': 'done',
               'data': response,
+              'bytes': null,
             };
           });
         } catch (_) {
           setState(() {
             _bulkItems = List.of(_bulkItems);
-            _bulkItems[startIndex + idx] = {..._bulkItems[startIndex + idx], 'status': 'error'};
+            _bulkItems[currentIndex] = {
+              ..._bulkItems[currentIndex],
+              'status': 'error',
+              'bytes': null,
+            };
           });
         }
       }
