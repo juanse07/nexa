@@ -17,6 +17,15 @@ class _LoginPageState extends State<LoginPage> {
   bool _loadingGoogle = false;
   bool _loadingApple = false;
   String? _error;
+  bool _appleScriptReady = AppleWebAuth.isSupported;
+
+  @override
+  void initState() {
+    super.initState();
+    if (kIsWeb && !_appleScriptReady) {
+      _waitForAppleScript();
+    }
+  }
 
   Future<void> _handleGoogle() async {
     setState(() {
@@ -34,6 +43,22 @@ class _LoginPageState extends State<LoginPage> {
         MaterialPageRoute(builder: (_) => const ExtractionScreen()),
       );
     }
+  }
+
+  void _waitForAppleScript([int attempt = 0]) {
+    if (!mounted || _appleScriptReady || attempt > 40) return;
+    Future<void>.delayed(const Duration(milliseconds: 150), () {
+      if (!mounted) return;
+      final supported = AppleWebAuth.isSupported;
+      if (supported != _appleScriptReady) {
+        setState(() {
+          _appleScriptReady = supported;
+        });
+      }
+      if (!supported) {
+        _waitForAppleScript(attempt + 1);
+      }
+    });
   }
 
   Future<void> _handleApple() async {
@@ -60,7 +85,7 @@ class _LoginPageState extends State<LoginPage> {
     final size = MediaQuery.of(context).size;
     final env = Environment.instance;
     final bool appleWebAvailable = kIsWeb &&
-        AppleWebAuth.isSupported &&
+        _appleScriptReady &&
         env.contains('APPLE_SERVICE_ID') &&
         env.contains('APPLE_REDIRECT_URI');
     final bool isiOS = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
