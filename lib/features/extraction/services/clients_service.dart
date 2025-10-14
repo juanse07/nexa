@@ -1,76 +1,88 @@
-import 'dart:convert';
-
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:http/http.dart' as http;
+import 'package:dio/dio.dart';
+import 'package:nexa/core/network/api_client.dart';
+import 'package:nexa/core/di/injection.dart';
 
 class ClientsService {
-  String get _baseUrl {
-    final apiBase = dotenv.env['API_BASE_URL'];
-    final pathPrefix = dotenv.env['API_PATH_PREFIX'] ?? '';
+  ClientsService() : _apiClient = getIt<ApiClient>();
 
-    if (apiBase == null || apiBase.trim().isEmpty) {
-      throw StateError(
-        'API_BASE_URL is not set. Please set it in your .env to your deployed server URL.',
-      );
-    }
-
-    return pathPrefix.isNotEmpty ? '$apiBase$pathPrefix' : apiBase;
-  }
+  final ApiClient _apiClient;
 
   Future<List<Map<String, dynamic>>> fetchClients() async {
-    final uri = Uri.parse('$_baseUrl/clients');
-    final response = await http.get(
-      uri,
-      headers: const {'Accept': 'application/json'},
-    );
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      final List<dynamic> decoded = jsonDecode(response.body) as List<dynamic>;
-      return decoded
-          .whereType<Map<String, dynamic>>()
-          .map((e) => e)
-          .toList(growable: false);
+    try {
+      final response = await _apiClient.get('/clients');
+
+      if (response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300) {
+        final dynamic decoded = response.data;
+        if (decoded is List) {
+          return decoded
+              .whereType<Map<String, dynamic>>()
+              .map((e) => e)
+              .toList(growable: false);
+        }
+        return const <Map<String, dynamic>>[];
+      }
+      throw Exception(
+        'Failed to load clients (${response.statusCode}): ${response.data}',
+      );
+    } on DioException catch (e) {
+      throw Exception('Failed to load clients: ${e.message}');
     }
-    throw Exception(
-      'Failed to load clients (${response.statusCode}): ${response.body}',
-    );
   }
 
   Future<Map<String, dynamic>> createClient(String name) async {
-    final uri = Uri.parse('$_baseUrl/clients');
-    final response = await http.post(
-      uri,
-      headers: const {'Content-Type': 'application/json'},
-      body: jsonEncode({'name': name}),
-    );
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      return jsonDecode(response.body) as Map<String, dynamic>;
+    try {
+      final response = await _apiClient.post(
+        '/clients',
+        data: {'name': name},
+      );
+
+      if (response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300) {
+        return response.data as Map<String, dynamic>;
+      }
+      throw Exception(
+        'Failed to create client (${response.statusCode}): ${response.data}',
+      );
+    } on DioException catch (e) {
+      throw Exception('Failed to create client: ${e.message}');
     }
-    throw Exception(
-      'Failed to create client (${response.statusCode}): ${response.body}',
-    );
   }
 
   Future<void> renameClient(String id, String name) async {
-    final uri = Uri.parse('$_baseUrl/clients/$id');
-    final response = await http.patch(
-      uri,
-      headers: const {'Content-Type': 'application/json'},
-      body: jsonEncode({'name': name}),
-    );
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(
-        'Failed to rename client (${response.statusCode}): ${response.body}',
+    try {
+      final response = await _apiClient.patch(
+        '/clients/$id',
+        data: {'name': name},
       );
+
+      if (response.statusCode == null ||
+          response.statusCode! < 200 ||
+          response.statusCode! >= 300) {
+        throw Exception(
+          'Failed to rename client (${response.statusCode}): ${response.data}',
+        );
+      }
+    } on DioException catch (e) {
+      throw Exception('Failed to rename client: ${e.message}');
     }
   }
 
   Future<void> deleteClient(String id) async {
-    final uri = Uri.parse('$_baseUrl/clients/$id');
-    final response = await http.delete(uri);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(
-        'Failed to delete client (${response.statusCode}): ${response.body}',
-      );
+    try {
+      final response = await _apiClient.delete('/clients/$id');
+
+      if (response.statusCode == null ||
+          response.statusCode! < 200 ||
+          response.statusCode! >= 300) {
+        throw Exception(
+          'Failed to delete client (${response.statusCode}): ${response.data}',
+        );
+      }
+    } on DioException catch (e) {
+      throw Exception('Failed to delete client: ${e.message}');
     }
   }
 }

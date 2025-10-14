@@ -1,46 +1,44 @@
-import 'dart:convert';
-
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:http/http.dart' as http;
+import 'package:dio/dio.dart';
+import 'package:nexa/core/network/api_client.dart';
+import 'package:nexa/core/di/injection.dart';
 
 class TariffsService {
-  String get _baseUrl {
-    final apiBase = dotenv.env['API_BASE_URL'];
-    final pathPrefix = dotenv.env['API_PATH_PREFIX'] ?? '';
+  TariffsService() : _apiClient = getIt<ApiClient>();
 
-    if (apiBase == null || apiBase.trim().isEmpty) {
-      throw StateError(
-        'API_BASE_URL is not set. Please set it in your .env to your deployed server URL.',
-      );
-    }
-
-    return pathPrefix.isNotEmpty ? '$apiBase$pathPrefix' : apiBase;
-  }
+  final ApiClient _apiClient;
 
   Future<List<Map<String, dynamic>>> fetchTariffs({
     String? clientId,
     String? roleId,
   }) async {
-    final params = <String, String>{};
-    if (clientId != null && clientId.isNotEmpty) params['clientId'] = clientId;
-    if (roleId != null && roleId.isNotEmpty) params['roleId'] = roleId;
-    final uri = Uri.parse(
-      '$_baseUrl/tariffs',
-    ).replace(queryParameters: params.isEmpty ? null : params);
-    final response = await http.get(
-      uri,
-      headers: const {'Accept': 'application/json'},
-    );
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      final List<dynamic> decoded = jsonDecode(response.body) as List<dynamic>;
-      return decoded
-          .whereType<Map<String, dynamic>>()
-          .map((e) => e)
-          .toList(growable: false);
+    try {
+      final params = <String, String>{};
+      if (clientId != null && clientId.isNotEmpty) params['clientId'] = clientId;
+      if (roleId != null && roleId.isNotEmpty) params['roleId'] = roleId;
+
+      final response = await _apiClient.get(
+        '/tariffs',
+        queryParameters: params.isEmpty ? null : params,
+      );
+
+      if (response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300) {
+        final dynamic decoded = response.data;
+        if (decoded is List) {
+          return decoded
+              .whereType<Map<String, dynamic>>()
+              .map((e) => e)
+              .toList(growable: false);
+        }
+        return const <Map<String, dynamic>>[];
+      }
+      throw Exception(
+        'Failed to load tariffs (${response.statusCode}): ${response.data}',
+      );
+    } on DioException catch (e) {
+      throw Exception('Failed to load tariffs: ${e.message}');
     }
-    throw Exception(
-      'Failed to load tariffs (${response.statusCode}): ${response.body}',
-    );
   }
 
   Future<Map<String, dynamic>> upsertTariff({
@@ -49,32 +47,43 @@ class TariffsService {
     required double rate,
     String currency = 'USD',
   }) async {
-    final uri = Uri.parse('$_baseUrl/tariffs');
-    final response = await http.post(
-      uri,
-      headers: const {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'clientId': clientId,
-        'roleId': roleId,
-        'rate': rate,
-        'currency': currency,
-      }),
-    );
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      return jsonDecode(response.body) as Map<String, dynamic>;
+    try {
+      final response = await _apiClient.post(
+        '/tariffs',
+        data: {
+          'clientId': clientId,
+          'roleId': roleId,
+          'rate': rate,
+          'currency': currency,
+        },
+      );
+
+      if (response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300) {
+        return response.data as Map<String, dynamic>;
+      }
+      throw Exception(
+        'Failed to save tariff (${response.statusCode}): ${response.data}',
+      );
+    } on DioException catch (e) {
+      throw Exception('Failed to save tariff: ${e.message}');
     }
-    throw Exception(
-      'Failed to save tariff (${response.statusCode}): ${response.body}',
-    );
   }
 
   Future<void> deleteTariff(String id) async {
-    final uri = Uri.parse('$_baseUrl/tariffs/$id');
-    final response = await http.delete(uri);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(
-        'Failed to delete tariff (${response.statusCode}): ${response.body}',
-      );
+    try {
+      final response = await _apiClient.delete('/tariffs/$id');
+
+      if (response.statusCode == null ||
+          response.statusCode! < 200 ||
+          response.statusCode! >= 300) {
+        throw Exception(
+          'Failed to delete tariff (${response.statusCode}): ${response.data}',
+        );
+      }
+    } on DioException catch (e) {
+      throw Exception('Failed to delete tariff: ${e.message}');
     }
   }
 }
