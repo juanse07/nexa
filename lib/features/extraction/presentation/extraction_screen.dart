@@ -127,12 +127,15 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
     if (!kIsWeb) return const SizedBox.shrink();
     return Padding(
       padding: padding,
-      child: TextButton.icon(
+      child: OutlinedButton.icon(
         onPressed: onPressed,
         icon: const Icon(Icons.refresh, size: 18),
         label: Text(label),
-        style: TextButton.styleFrom(
+        style: OutlinedButton.styleFrom(
           foregroundColor: const Color(0xFF6366F1),
+          side: const BorderSide(color: Color(0xFF6366F1)),
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         ),
       ),
     );
@@ -2272,6 +2275,88 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
     }
   }
 
+  TimeOfDay? _parseTimeOfDayString(String input) {
+    final trimmed = input.trim();
+    if (trimmed.isEmpty) return null;
+    final lower = trimmed.toLowerCase();
+    final match = RegExp(r'(\d{1,2})(?::(\d{2}))?').firstMatch(lower);
+    if (match == null) return null;
+    int hour = int.parse(match.group(1)!);
+    final int minute = int.parse(match.group(2) ?? '0');
+    if (lower.contains('pm') && hour < 12) {
+      hour += 12;
+    } else if (lower.contains('am') && hour == 12) {
+      hour = 0;
+    }
+    if (hour >= 0 && hour < 24 && minute >= 0 && minute < 60) {
+      return TimeOfDay(hour: hour, minute: minute);
+    }
+    return null;
+  }
+
+  DateTime? _eventDateTime(Map<String, dynamic> event, {bool useEnd = false}) {
+    final rawDate = event['date']?.toString();
+    if (rawDate == null || rawDate.isEmpty) return null;
+    try {
+      final date = DateTime.parse(rawDate);
+      final rawTime =
+          (useEnd ? event['end_time'] : event['start_time'])?.toString() ?? '';
+      final parsedTime = _parseTimeOfDayString(rawTime);
+      if (parsedTime != null) {
+        return DateTime(
+          date.year,
+          date.month,
+          date.day,
+          parsedTime.hour,
+          parsedTime.minute,
+        );
+      }
+      return date;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  int _compareEventsAscending(
+    Map<String, dynamic> a,
+    Map<String, dynamic> b,
+  ) {
+    final DateTime? aDate = _eventDateTime(a);
+    final DateTime? bDate = _eventDateTime(b);
+    if (aDate == null && bDate == null) {
+      return (a['event_name'] ?? '').toString().compareTo(
+            (b['event_name'] ?? '').toString(),
+          );
+    }
+    if (aDate == null) return 1;
+    if (bDate == null) return -1;
+    final cmp = aDate.compareTo(bDate);
+    if (cmp != 0) return cmp;
+    return (a['event_name'] ?? '').toString().compareTo(
+          (b['event_name'] ?? '').toString(),
+        );
+  }
+
+  int _compareEventsDescending(
+    Map<String, dynamic> a,
+    Map<String, dynamic> b,
+  ) {
+    final DateTime? aDate = _eventDateTime(a);
+    final DateTime? bDate = _eventDateTime(b);
+    if (aDate == null && bDate == null) {
+      return (a['event_name'] ?? '').toString().compareTo(
+            (b['event_name'] ?? '').toString(),
+          );
+    }
+    if (aDate == null) return 1;
+    if (bDate == null) return -1;
+    final cmp = bDate.compareTo(aDate);
+    if (cmp != 0) return cmp;
+    return (a['event_name'] ?? '').toString().compareTo(
+          (b['event_name'] ?? '').toString(),
+        );
+  }
+
   Future<void> _loadEvents() async {
     setState(() {
       _isEventsLoading = true;
@@ -2543,10 +2628,11 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
   }
 
   Widget _pastEventsInner(List<Map<String, dynamic>> items) {
+    final sortedItems = [...items]..sort(_compareEventsDescending);
     // Group past events by month
     final pastByMonth = <String, List<Map<String, dynamic>>>{};
 
-    for (final event in items) {
+    for (final event in sortedItems) {
       final dateStr = event['date']?.toString() ?? '';
       if (dateStr.isNotEmpty) {
         try {
@@ -2574,7 +2660,15 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
       color: const Color(0xFF6366F1),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          if (_isEventsLoading && items.isEmpty) {
+          final double width = constraints.maxWidth;
+          int crossAxisCount = 1;
+          if (width >= 1200) {
+            crossAxisCount = 3;
+          } else if (width >= 900) {
+            crossAxisCount = 2;
+          }
+
+          if (_isEventsLoading && sortedItems.isEmpty) {
             return ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(20),
@@ -2601,7 +2695,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                 ErrorBanner(message: _eventsError!),
                 const SizedBox(height: 12),
               ],
-              if (!_isEventsLoading && items.isEmpty && _eventsError == null)
+              if (!_isEventsLoading && sortedItems.isEmpty && _eventsError == null)
                 Container(
                   padding: const EdgeInsets.all(32),
                   decoration: BoxDecoration(
@@ -2651,12 +2745,20 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                         ),
                         textAlign: TextAlign.center,
                       ),
+                      if (kIsWeb)
+                        _maybeWebRefreshButton(
+                          onPressed: _loadEvents,
+                          label: 'Refresh',
+                          padding: const EdgeInsets.only(top: 12),
+                        ),
                     ],
                   ),
                 ),
-              if (items.isNotEmpty)
+              if (sortedItems.isNotEmpty)
                 ...sortedMonths.expand((monthKey) {
-                  final eventsInMonth = pastByMonth[monthKey]!;
+                  final eventsInMonth = List<Map<String, dynamic>>.from(
+                    pastByMonth[monthKey]!,
+                  )..sort(_compareEventsDescending);
 
                   String monthLabel;
                   if (monthKey == 'unknown') {
@@ -2678,29 +2780,52 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                     }
                   }
 
-                  return [
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8, bottom: 16),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.calendar_month,
-                            color: Color(0xFF6B7280),
-                            size: 20,
+                  final header = Padding(
+                    padding: const EdgeInsets.only(top: 8, bottom: 16),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.calendar_month,
+                          color: Color(0xFF6B7280),
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '$monthLabel (${eventsInMonth.length})',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF0F172A),
                           ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '$monthLabel (${eventsInMonth.length})',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF0F172A),
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                    ...eventsInMonth.map((event) => _buildEventCard(event, showMargin: true)),
+                  );
+
+                  if (crossAxisCount > 1) {
+                    return [
+                      header,
+                      GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: crossAxisCount,
+                          crossAxisSpacing: 16,
+                          mainAxisSpacing: 16,
+                          childAspectRatio: 2.5,
+                        ),
+                        itemCount: eventsInMonth.length,
+                        itemBuilder: (context, index) =>
+                            _buildEventCard(eventsInMonth[index]),
+                      ),
+                    ];
+                  }
+
+                  return [
+                    header,
+                    ...eventsInMonth.map(
+                      (event) => _buildEventCard(event, showMargin: true),
+                    ),
                   ];
                 }),
             ],
@@ -2711,6 +2836,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
   }
 
   Widget _eventsInner(List<Map<String, dynamic>> items) {
+    final sortedItems = [...items]..sort(_compareEventsAscending);
     return RefreshIndicator(
       onRefresh: _loadEvents,
       color: const Color(0xFF6366F1),
@@ -2726,7 +2852,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
             crossAxisCount = 2;
           }
 
-          if (_isEventsLoading && items.isEmpty) {
+          if (_isEventsLoading && sortedItems.isEmpty) {
             return ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(20),
@@ -2746,7 +2872,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
           }
 
           // Use grid layout for wider screens
-          if (crossAxisCount > 1 && items.isNotEmpty) {
+          if (crossAxisCount > 1 && sortedItems.isNotEmpty) {
             return CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
@@ -2767,8 +2893,8 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                   padding: const EdgeInsets.all(20),
                   sliver: SliverGrid(
                     delegate: SliverChildBuilderDelegate(
-                      (context, index) => _buildEventCard(items[index]),
-                      childCount: items.length,
+                      (context, index) => _buildEventCard(sortedItems[index]),
+                      childCount: sortedItems.length,
                     ),
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: crossAxisCount,
@@ -2799,7 +2925,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                 ErrorBanner(message: _eventsError!),
                 const SizedBox(height: 12),
               ],
-              if (!_isEventsLoading && items.isEmpty && _eventsError == null)
+              if (!_isEventsLoading && sortedItems.isEmpty && _eventsError == null)
                 Container(
                   padding: const EdgeInsets.all(32),
                   decoration: BoxDecoration(
@@ -2849,12 +2975,20 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                         ),
                         textAlign: TextAlign.center,
                       ),
+                      if (kIsWeb)
+                        _maybeWebRefreshButton(
+                          onPressed: _loadEvents,
+                          label: 'Refresh',
+                          padding: const EdgeInsets.only(top: 12),
+                        ),
                     ],
                   ),
                 ),
-              if (items.isNotEmpty)
+              if (sortedItems.isNotEmpty)
                 Column(
-                  children: items.map((item) => _buildEventCard(item, showMargin: true)).toList(),
+                  children: sortedItems
+                      .map((item) => _buildEventCard(item, showMargin: true))
+                      .toList(),
                 ),
             ],
           );
@@ -2911,6 +3045,11 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                       'Click Refresh drafts to check again.',
                       style: TextStyle(color: Colors.grey.shade600),
                       textAlign: TextAlign.center,
+                    ),
+                    _maybeWebRefreshButton(
+                      onPressed: _loadPendingDrafts,
+                      label: 'Refresh drafts',
+                      padding: const EdgeInsets.only(top: 12),
                     ),
                   ],
                 ],
