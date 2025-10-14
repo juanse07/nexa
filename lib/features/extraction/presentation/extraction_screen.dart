@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -20,6 +21,7 @@ import '../../../shared/ui/widgets.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/widgets/custom_sliver_app_bar.dart';
 import '../../../core/widgets/pinned_header_delegate.dart';
+import '../../../core/utils/responsive_layout.dart';
 import '../services/clients_service.dart';
 import '../services/draft_service.dart';
 import '../services/event_service.dart';
@@ -861,6 +863,16 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
 
   @override
   Widget build(BuildContext context) {
+    final bool useDesktopLayout = ResponsiveLayout.shouldUseDesktopLayout(context);
+
+    if (useDesktopLayout) {
+      return _buildDesktopLayout(context);
+    } else {
+      return _buildMobileLayout(context);
+    }
+  }
+
+  Widget _buildMobileLayout(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       body: NestedScrollView(
@@ -870,8 +882,8 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
               title: _getAppBarTitle(),
               subtitle: _getAppBarSubtitle(),
               expandedHeight: 120.0,
-              titleFontSize: _selectedIndex == 1 ? 14.0 : null, // Smaller font for Events tab
-              subtitleFontSize: _selectedIndex == 1 ? 9.0 : null, // Even smaller subtitle for Events tab
+              titleFontSize: _selectedIndex == 1 ? 14.0 : null,
+              subtitleFontSize: _selectedIndex == 1 ? 9.0 : null,
               actions: [
                 _buildProfileMenu(context),
               ],
@@ -906,6 +918,216 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopLayout(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: Row(
+        children: [
+          // Side navigation rail
+          _buildNavigationRail(context),
+          // Main content area
+          Expanded(
+            child: Column(
+              children: [
+                // Top app bar for desktop
+                _buildDesktopAppBar(context),
+                // Content
+                Expanded(
+                  child: ResponsiveContainer(
+                    maxWidth: 1600,
+                    child: NestedScrollView(
+                      headerSliverBuilder: (context, innerBoxIsScrolled) {
+                        return [
+                          ..._buildPinnedHeaders(),
+                        ];
+                      },
+                      body: _buildBody(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNavigationRail(BuildContext context) {
+    return Container(
+      width: 240,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFF7A3AFB),
+            Color(0xFF5B27D8),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(2, 0),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Logo section
+          Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Image.asset(
+                    'assets/appbar_logo.png',
+                    height: 32,
+                    width: 32,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Nexa',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(color: Colors.white24, height: 1),
+          const SizedBox(height: 16),
+          // Navigation items
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Column(
+                children: [
+                  _buildNavRailItem(0, Icons.add_circle_outline, 'Create Event'),
+                  _buildNavRailItem(1, Icons.view_module, 'Events'),
+                  _buildNavRailItem(2, Icons.group, 'Users'),
+                  _buildNavRailItem(3, Icons.schedule, 'Hours Approval'),
+                  _buildNavRailItem(4, Icons.inventory_2, 'Catalog'),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNavRailItem(int index, IconData icon, String label) {
+    final isSelected = _selectedIndex == index;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            setState(() {
+              _selectedIndex = index;
+            });
+          },
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: isSelected ? Colors.white.withOpacity(0.2) : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              border: isSelected
+                  ? Border.all(color: Colors.white.withOpacity(0.3), width: 1)
+                  : null,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  color: Colors.white,
+                  size: 22,
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopAppBar(BuildContext context) {
+    return Container(
+      height: 70,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32.0),
+        child: Row(
+          children: [
+            // Title section
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _getAppBarTitle(),
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF0F172A),
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _getAppBarSubtitle(),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey.shade600,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Actions
+            _buildProfileMenu(context),
+          ],
         ),
       ),
     );
