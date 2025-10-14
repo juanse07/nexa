@@ -1338,11 +1338,13 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
 
   Widget _buildBulkUploadTab() {
     return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+      child: Center(
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 800),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
             HeaderCard(
               title: 'Multi-Upload',
               subtitle: 'Upload multiple PDFs or images and save each as a pending draft',
@@ -1449,6 +1451,8 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
               );
             }),
           ],
+        ),
+          ),
         ),
       ),
     );
@@ -1928,63 +1932,65 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
 
   Widget _buildUploadTab() {
     return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+      child: Center(
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 800),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF6366F1).withOpacity(0.2),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
                 ),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF6366F1).withOpacity(0.2),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  const Icon(Icons.auto_awesome, color: Colors.white, size: 32),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Event Data Extractor',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
+                child: Column(
+                  children: [
+                    const Icon(Icons.auto_awesome, color: Colors.white, size: 32),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Event Data Extractor',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Upload a PDF or image to extract catering event details',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.9),
-                      fontSize: 14,
+                    const SizedBox(height: 8),
+                    Text(
+                      'Upload a PDF or image to extract catering event details',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 14,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 24),
-            ActionCard(
-              title: 'Upload Document',
-              description:
-                  'Select a PDF or image file to extract event details automatically using AI',
-              icon: Icons.upload_file,
-              actionText: isLoading ? 'Processing...' : 'Choose File',
-              onPressed: _pickAndProcessFile,
-              isLoading: isLoading,
-              color: const Color(0xFF6366F1),
-            ),
+              const SizedBox(height: 24),
+              ActionCard(
+                title: 'Upload Document',
+                description:
+                    'Select a PDF or image file to extract event details automatically using AI',
+                icon: Icons.upload_file,
+                actionText: isLoading ? 'Processing...' : 'Choose File',
+                onPressed: _pickAndProcessFile,
+                isLoading: isLoading,
+                color: const Color(0xFF6366F1),
+              ),
             const SizedBox(height: 20),
             if (isLoading) ...[
               Container(
@@ -2111,6 +2117,8 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
               ),
             ],
           ],
+        ),
+      ),
         ),
       ),
     );
@@ -3868,10 +3876,12 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
 
   Widget _buildManualEntryTab() {
     return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Form(
-          key: _formKey,
+      child: Center(
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 800),
+          padding: const EdgeInsets.all(20),
+          child: Form(
+            key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -4157,6 +4167,8 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
               ],
           ],
         ),
+        ),
+          ),
         ),
       ),
     );
