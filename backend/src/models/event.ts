@@ -51,6 +51,7 @@ export interface RoleStat {
 }
 
 export interface EventDocument extends Document {
+  managerId: mongoose.Types.ObjectId;
   event_name?: string;
   client_name?: string;
   third_party_company_name?: string;
@@ -154,6 +155,7 @@ const RoleStatSchema = new Schema<RoleStat>(
 
 const EventSchema = new Schema<EventDocument>(
   {
+    managerId: { type: Schema.Types.ObjectId, ref: 'Manager', required: true, index: true },
     event_name: { type: String, trim: true },
     client_name: { type: String, trim: true },
     third_party_company_name: { type: String, trim: true },
@@ -208,5 +210,4 @@ const EventSchema = new Schema<EventDocument>(
 
 export const EventModel: Model<EventDocument> =
   mongoose.models.Event || mongoose.model<EventDocument>('Event', EventSchema);
-
 

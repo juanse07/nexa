@@ -7,6 +7,7 @@ import { EventModel } from '../models/event';
 import { TariffModel } from '../models/tariff';
 import { ClientModel } from '../models/client';
 import { RoleModel } from '../models/role';
+import { resolveManagerForRequest } from '../utils/manager';
 
 const router = Router();
 
@@ -76,70 +77,133 @@ function computeRoleStats(roles: any[], accepted: any[]) {
   });
 }
 
-// Helper to enrich events with tariff data per role
-async function enrichEventsWithTariffs(events: any[]): Promise<any[]> {
-  // Build a map of client names to IDs
-  const clientNames = Array.from(new Set(events.map(e => e.client_name).filter(Boolean)));
-  const clients = await ClientModel.find({
-    normalizedName: { $in: clientNames.map(n => n.toLowerCase().trim()) }
-  }).lean();
-  const clientNameToId = new Map(clients.map(c => [c.normalizedName, c._id.toString()]));
-
-  // Build a map of role names to IDs
-  const roleNames = Array.from(new Set(
-    events.flatMap(e => (e.roles || []).map((r: any) => r.role)).filter(Boolean)
-  ));
-  const rolesData = await RoleModel.find({
-    normalizedName: { $in: roleNames.map(n => n.toLowerCase().trim()) }
-  }).lean();
-  const roleNameToId = new Map(rolesData.map(r => [r.normalizedName, r._id.toString()]));
-
-  // Fetch all relevant tariffs in one query
-  const clientIds = Array.from(clientNameToId.values());
-  const roleIds = Array.from(roleNameToId.values());
-  const tariffs = await TariffModel.find({
-    clientId: { $in: clientIds.map(id => new mongoose.Types.ObjectId(id)) },
-    roleId: { $in: roleIds.map(id => new mongoose.Types.ObjectId(id)) }
-  }).lean();
-
-  // Build a map: clientId_roleId -> tariff
-  const tariffMap = new Map(
-    tariffs.map(t => [`${t.clientId}_${t.roleId}`, t])
-  );
-
-  // Enrich each event's roles with tariff data
-  return events.map(event => {
-    const clientId = clientNameToId.get(event.client_name?.toLowerCase().trim());
-
-    const enrichedRoles = (event.roles || []).map((role: any) => {
-      const roleId = roleNameToId.get(role.role?.toLowerCase().trim());
-
-      if (clientId && roleId) {
-        const tariff = tariffMap.get(`${clientId}_${roleId}`);
-        if (tariff) {
-          return {
-            ...role,
-            tariff: {
-              rate: tariff.rate,
-              currency: tariff.currency,
-              rateDisplay: `${tariff.currency} ${tariff.rate.toFixed(2)}/hr`
-            }
-          };
-        }
-      }
-
-      return role;
-    });
-
-    return {
-      ...event,
-      roles: enrichedRoles
-    };
-  });
+function toObjectId(value: unknown): mongoose.Types.ObjectId | undefined {
+  if (!value) return undefined;
+  if (value instanceof mongoose.Types.ObjectId) return value;
+  if (typeof value === 'string' && mongoose.Types.ObjectId.isValid(value)) {
+    return new mongoose.Types.ObjectId(value);
+  }
+  return undefined;
 }
 
-router.post('/events', async (req, res) => {
+type EventGroup = {
+  managerId: mongoose.Types.ObjectId | undefined;
+  events: any[];
+};
+
+// Helper to enrich events with tariff data per role
+async function enrichEventsWithTariffs(events: any[]): Promise<any[]> {
+  const grouped = new Map<string, EventGroup>();
+
+  for (const event of events) {
+    const managerObjectId = toObjectId(event.managerId);
+    const key = managerObjectId ? managerObjectId.toHexString() : '__unscoped__';
+    const existing = grouped.get(key);
+    if (existing) {
+      existing.events.push(event);
+    } else {
+      grouped.set(key, { managerId: managerObjectId, events: [event] });
+    }
+  }
+
+  const results: any[] = [];
+
+  for (const { managerId, events: scopedEvents } of grouped.values()) {
+    if (scopedEvents.length === 0) continue;
+
+    const clientNames = Array.from(
+      new Set(
+        scopedEvents
+          .map((e) => (e.client_name ? String(e.client_name).toLowerCase().trim() : null))
+          .filter((value): value is string => !!value)
+      )
+    );
+
+    const roleNames = Array.from(
+      new Set(
+        scopedEvents
+          .flatMap((e) => (e.roles || []).map((r: any) => (r.role ? String(r.role).toLowerCase().trim() : null)))
+          .filter((value): value is string => !!value)
+      )
+    );
+
+    let clientNameToId = new Map<string, string>();
+    if (clientNames.length > 0) {
+      const clientQuery: Record<string, any> = {
+        normalizedName: { $in: clientNames },
+      };
+      if (managerId) {
+        clientQuery.managerId = managerId;
+      }
+      const clients = await ClientModel.find(clientQuery).lean();
+      clientNameToId = new Map(clients.map((c) => [c.normalizedName, String(c._id)]));
+    }
+
+    let roleNameToId = new Map<string, string>();
+    if (roleNames.length > 0) {
+      const roleQuery: Record<string, any> = {
+        normalizedName: { $in: roleNames },
+      };
+      if (managerId) {
+        roleQuery.managerId = managerId;
+      }
+      const rolesData = await RoleModel.find(roleQuery).lean();
+      roleNameToId = new Map(rolesData.map((r) => [r.normalizedName, String(r._id)]));
+    }
+
+    let tariffMap = new Map<string, any>();
+    const clientIds = Array.from(clientNameToId.values());
+    const roleIds = Array.from(roleNameToId.values());
+    if (clientIds.length > 0 && roleIds.length > 0) {
+      const tariffFilter: Record<string, any> = {
+        clientId: { $in: clientIds.map((id) => new mongoose.Types.ObjectId(id)) },
+        roleId: { $in: roleIds.map((id) => new mongoose.Types.ObjectId(id)) },
+      };
+      if (managerId) {
+        tariffFilter.managerId = managerId;
+      }
+      const tariffs = await TariffModel.find(tariffFilter).lean();
+      tariffMap = new Map(tariffs.map((t) => [`${t.clientId}_${t.roleId}`, t]));
+    }
+
+    for (const event of scopedEvents) {
+      const normalizedClientName = event.client_name ? String(event.client_name).toLowerCase().trim() : undefined;
+      const clientId = normalizedClientName ? clientNameToId.get(normalizedClientName) : undefined;
+
+      const enrichedRoles = (event.roles || []).map((role: any) => {
+        const normalizedRoleName = role.role ? String(role.role).toLowerCase().trim() : undefined;
+        const roleId = normalizedRoleName ? roleNameToId.get(normalizedRoleName) : undefined;
+
+        if (clientId && roleId) {
+          const tariff = tariffMap.get(`${clientId}_${roleId}`);
+          if (tariff) {
+            return {
+              ...role,
+              tariff: {
+                rate: tariff.rate,
+                currency: tariff.currency,
+                rateDisplay: `${tariff.currency} ${tariff.rate.toFixed(2)}/hr`,
+              },
+            };
+          }
+        }
+
+        return role;
+      });
+
+      results.push({
+        ...event,
+        roles: enrichedRoles,
+      });
+    }
+  }
+
+  return results;
+}
+
+router.post('/events', requireAuth, async (req, res) => {
   try {
+    const manager = await resolveManagerForRequest(req);
     const parsed = eventSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({
@@ -204,10 +268,22 @@ router.post('/events', async (req, res) => {
     }
 
     // Persist initial role_stats
-    const role_stats = computeRoleStats(normalized.roles as any[], (normalized.accepted_staff as any[]) || []);
+    const role_stats = computeRoleStats(
+      normalized.roles as any[],
+      (normalized.accepted_staff as any[]) || []
+    );
 
-    const created = await EventModel.create({ ...normalized, role_stats });
-    return res.status(201).json(created);
+    const created = await EventModel.create({
+      ...normalized,
+      role_stats,
+      managerId: manager._id,
+    });
+    const createdObj = created.toObject();
+    return res.status(201).json({
+      ...createdObj,
+      id: String(createdObj._id),
+      managerId: createdObj.managerId ? String(createdObj.managerId) : undefined,
+    });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('Failed to create event', err);
@@ -220,8 +296,9 @@ const updateRolesSchema = z.object({
   roles: z.array(roleSchema).min(1, 'at least one role is required'),
 });
 
-router.patch('/events/:id/roles', async (req, res) => {
+router.patch('/events/:id/roles', requireAuth, async (req, res) => {
   try {
+    const manager = await resolveManagerForRequest(req);
     const eventId = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(eventId)) {
       return res.status(400).json({ message: 'Invalid event id' });
@@ -275,7 +352,7 @@ router.patch('/events/:id/roles', async (req, res) => {
     const role_stats = computeRoleStats(roles as any[], accepted as any[]);
 
     const result = await EventModel.updateOne(
-      { _id: new mongoose.Types.ObjectId(eventId) },
+      { _id: new mongoose.Types.ObjectId(eventId), managerId: manager._id },
       { $set: { roles, role_stats, updatedAt: new Date() } }
     );
 
@@ -283,7 +360,10 @@ router.patch('/events/:id/roles', async (req, res) => {
       return res.status(404).json({ message: 'Event not found' });
     }
 
-    const updated = await EventModel.findById(eventId).lean();
+    const updated = await EventModel.findOne({
+      _id: new mongoose.Types.ObjectId(eventId),
+      managerId: manager._id,
+    }).lean();
     return res.json(updated);
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -293,8 +373,9 @@ router.patch('/events/:id/roles', async (req, res) => {
 });
 
 // Update an event (partial update)
-router.patch('/events/:id', async (req, res) => {
+router.patch('/events/:id', requireAuth, async (req, res) => {
   try {
+    const manager = await resolveManagerForRequest(req);
     const eventId = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(eventId)) {
       return res.status(400).json({ message: 'Invalid event id' });
@@ -311,7 +392,7 @@ router.patch('/events/:id', async (req, res) => {
 
     // Update the event
     const result = await EventModel.updateOne(
-      { _id: new mongoose.Types.ObjectId(eventId) },
+      { _id: new mongoose.Types.ObjectId(eventId), managerId: manager._id },
       { $set: { ...updateData, updatedAt: new Date() } }
     );
 
@@ -319,7 +400,10 @@ router.patch('/events/:id', async (req, res) => {
       return res.status(404).json({ message: 'Event not found' });
     }
 
-    const updated = await EventModel.findById(eventId).lean();
+    const updated = await EventModel.findOne({
+      _id: new mongoose.Types.ObjectId(eventId),
+      managerId: manager._id,
+    }).lean();
     if (!updated) {
       return res.status(404).json({ message: 'Event not found after update' });
     }
@@ -331,12 +415,13 @@ router.patch('/events/:id', async (req, res) => {
   }
 });
 
-router.get('/events', async (_req, res) => {
+router.get('/events', requireAuth, async (req, res) => {
   try {
-    const audienceKey = (_req.headers['x-user-key'] as string | undefined) || undefined;
-    const lastSyncParam = _req.query.lastSync as string | undefined;
+    const manager = await resolveManagerForRequest(req);
+    const audienceKey = (req.headers['x-user-key'] as string | undefined) || undefined;
+    const lastSyncParam = req.query.lastSync as string | undefined;
 
-    const filter: any = {};
+    const filter: any = { managerId: manager._id };
 
     // Delta sync: only return documents updated after lastSync timestamp
     if (lastSyncParam) {
@@ -359,18 +444,19 @@ router.get('/events', async (_req, res) => {
     }
     const events = await EventModel.find(filter).sort({ createdAt: -1 }).lean();
 
-    // Map events to include id field as string
-    const mappedEvents = events.map((event: any) => ({
+    // Enrich with tariff data
+    const enrichedEvents = await enrichEventsWithTariffs(events);
+
+    // Map events to include string ids
+    const mappedEvents = enrichedEvents.map((event: any) => ({
       ...event,
       id: String(event._id),
+      managerId: event.managerId ? String(event.managerId) : undefined,
     }));
-
-    // Enrich with tariff data
-    const enrichedEvents = await enrichEventsWithTariffs(mappedEvents);
 
     // Include current server timestamp for next sync
     return res.json({
-      events: enrichedEvents,
+      events: mappedEvents,
       serverTimestamp: new Date().toISOString(),
       deltaSync: !!lastSyncParam
     });
@@ -380,9 +466,12 @@ router.get('/events', async (_req, res) => {
 });
 
 // Positions view: flatten roles to position cards with remaining spots
-router.get('/positions', async (_req, res) => {
+router.get('/positions', requireAuth, async (req, res) => {
   try {
-    const events = await EventModel.find().sort({ createdAt: -1 }).lean();
+    const manager = await resolveManagerForRequest(req);
+    const events = await EventModel.find({ managerId: manager._id })
+      .sort({ createdAt: -1 })
+      .lean();
     const positions = (events || []).flatMap((ev: any) => {
       const accepted = ev.accepted_staff || [];
       const roleToAcceptedCount = accepted.reduce((acc: Record<string, number>, m: any) => {
@@ -416,8 +505,9 @@ router.get('/positions', async (_req, res) => {
 });
 
 // Remove accepted staff member from event
-router.delete('/events/:id/staff/:userKey', async (req, res) => {
+router.delete('/events/:id/staff/:userKey', requireAuth, async (req, res) => {
   try {
+    const manager = await resolveManagerForRequest(req);
     const eventId = req.params.id ?? '';
     const userKey = req.params.userKey ?? '';
 
@@ -434,7 +524,7 @@ router.delete('/events/:id/staff/:userKey', async (req, res) => {
 
     // Remove the staff member from accepted_staff array
     const result = await EventModel.updateOne(
-      { _id: new mongoose.Types.ObjectId(eventId) },
+      { _id: new mongoose.Types.ObjectId(eventId), managerId: manager._id },
       {
         $pull: { accepted_staff: { userKey } } as any,
         $set: { updatedAt: new Date() }
@@ -446,15 +536,21 @@ router.delete('/events/:id/staff/:userKey', async (req, res) => {
     }
 
     // Recompute and persist role_stats
-    const updatedEvent = await EventModel.findById(eventId).lean();
+    const updatedEvent = await EventModel.findOne({
+      _id: new mongoose.Types.ObjectId(eventId),
+      managerId: manager._id,
+    }).lean();
     if (!updatedEvent) return res.status(404).json({ message: 'Event not found' });
     const role_stats = computeRoleStats((updatedEvent.roles as any[]) || [], (updatedEvent.accepted_staff as any[]) || []);
     await EventModel.updateOne(
-      { _id: new mongoose.Types.ObjectId(eventId) },
+      { _id: new mongoose.Types.ObjectId(eventId), managerId: manager._id },
       { $set: { role_stats, updatedAt: new Date() } }
     );
 
-    const finalDoc = await EventModel.findById(eventId).lean();
+    const finalDoc = await EventModel.findOne({
+      _id: new mongoose.Types.ObjectId(eventId),
+      managerId: manager._id,
+    }).lean();
     return res.json(finalDoc);
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -787,8 +883,9 @@ router.post('/events/:id/clock-out', requireAuth, async (req, res) => {
 });
 
 // Analyze sign-in sheet photo with OpenAI
-router.post('/events/:id/analyze-sheet', async (req, res) => {
+router.post('/events/:id/analyze-sheet', requireAuth, async (req, res) => {
   try {
+    const manager = await resolveManagerForRequest(req);
     const eventId = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(eventId)) {
       return res.status(400).json({ message: 'Invalid event id' });
@@ -929,8 +1026,9 @@ function levenshteinDistance(str1: string, str2: string): number {
 }
 
 // Submit hours from sign-in sheet
-router.post('/events/:id/submit-hours', async (req, res) => {
+router.post('/events/:id/submit-hours', requireAuth, async (req, res) => {
   try {
+    const manager = await resolveManagerForRequest(req);
     const eventId = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(eventId)) {
       return res.status(400).json({ message: 'Invalid event id' });
@@ -941,7 +1039,10 @@ router.post('/events/:id/submit-hours', async (req, res) => {
       return res.status(400).json({ message: 'staffHours array required' });
     }
 
-    const event = await EventModel.findById(eventId);
+    const event = await EventModel.findOne({
+      _id: new mongoose.Types.ObjectId(eventId),
+      managerId: manager._id,
+    });
     if (!event) return res.status(404).json({ message: 'Event not found' });
 
     // Update each staff member's attendance with sheet data
@@ -1115,8 +1216,9 @@ router.post('/events/:id/submit-hours', async (req, res) => {
 });
 
 // Approve hours for individual staff member
-router.post('/events/:id/approve-hours/:userKey', async (req, res) => {
+router.post('/events/:id/approve-hours/:userKey', requireAuth, async (req, res) => {
   try {
+    const manager = await resolveManagerForRequest(req);
     const eventId = req.params.id ?? '';
     const userKey = req.params.userKey ?? '';
 
@@ -1129,7 +1231,10 @@ router.post('/events/:id/approve-hours/:userKey', async (req, res) => {
       return res.status(400).json({ message: 'approvedHours required' });
     }
 
-    const event = await EventModel.findById(eventId);
+    const event = await EventModel.findOne({
+      _id: new mongoose.Types.ObjectId(eventId),
+      managerId: manager._id,
+    });
     if (!event) return res.status(404).json({ message: 'Event not found' });
 
     const staffMember = (event.accepted_staff || []).find(
@@ -1161,14 +1266,18 @@ router.post('/events/:id/approve-hours/:userKey', async (req, res) => {
 });
 
 // Debug endpoint: inspect event attendance data
-router.get('/events/:id/debug-attendance', async (req, res) => {
+router.get('/events/:id/debug-attendance', requireAuth, async (req, res) => {
   try {
+    const manager = await resolveManagerForRequest(req);
     const eventId = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(eventId)) {
       return res.status(400).json({ message: 'Invalid event id' });
     }
 
-    const event = await EventModel.findById(eventId).lean();
+    const event = await EventModel.findOne({
+      _id: new mongoose.Types.ObjectId(eventId),
+      managerId: manager._id,
+    }).lean();
     if (!event) return res.status(404).json({ message: 'Event not found' });
 
     const staffDebug = (event.accepted_staff || []).map((s: any) => ({
@@ -1201,8 +1310,9 @@ router.get('/events/:id/debug-attendance', async (req, res) => {
 });
 
 // Bulk approve all hours for an event
-router.post('/events/:id/bulk-approve-hours', async (req, res) => {
+router.post('/events/:id/bulk-approve-hours', requireAuth, async (req, res) => {
   try {
+    const manager = await resolveManagerForRequest(req);
     const eventId = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(eventId)) {
       return res.status(400).json({ message: 'Invalid event id' });
@@ -1213,7 +1323,10 @@ router.post('/events/:id/bulk-approve-hours', async (req, res) => {
       return res.status(400).json({ message: 'approvedBy required' });
     }
 
-    const event = await EventModel.findById(eventId);
+    const event = await EventModel.findOne({
+      _id: new mongoose.Types.ObjectId(eventId),
+      managerId: manager._id,
+    });
     if (!event) return res.status(404).json({ message: 'Event not found' });
 
     let approvedCount = 0;
@@ -1284,5 +1397,3 @@ router.get('/events/user/:userKey', async (req, res) => {
 });
 
 export default router;
-
-

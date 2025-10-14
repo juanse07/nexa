@@ -43,7 +43,7 @@ class Environment {
       // This is a limitation of String.fromEnvironment which requires constant keys
       return _getWebEnvironmentVariable(key);
     }
-    return dotenv.maybeGet(key);
+    return _safeMaybeGet(key);
   }
 
   /// Gets an environment variable by key with a default value
@@ -52,7 +52,7 @@ class Environment {
     if (kIsWeb) {
       return _getWebEnvironmentVariable(key) ?? defaultValue;
     }
-    return dotenv.maybeGet(key) ?? defaultValue;
+    return _safeMaybeGet(key) ?? defaultValue;
   }
 
   /// Checks if an environment variable exists
@@ -60,7 +60,7 @@ class Environment {
     if (kIsWeb) {
       return _getWebEnvironmentVariable(key) != null;
     }
-    return dotenv.maybeGet(key) != null;
+    return _safeMaybeGet(key) != null;
   }
 
   /// Helper method to get web environment variables with compile-time constants
@@ -124,4 +124,15 @@ class Environment {
   }
 
   static String? _valueOrNull(String value) => value.isEmpty ? null : value;
+
+  static String? _safeMaybeGet(String key) {
+    try {
+      return dotenv.maybeGet(key);
+    } catch (e) {
+      if (e is NotInitializedError) {
+        return null;
+      }
+      rethrow;
+    }
+  }
 }

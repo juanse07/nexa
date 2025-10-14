@@ -1,6 +1,7 @@
 import mongoose, { Document, Model, Schema } from 'mongoose';
 
 export interface TariffDocument extends Document {
+  managerId: mongoose.Types.ObjectId;
   clientId: mongoose.Types.ObjectId;
   roleId: mongoose.Types.ObjectId;
   rate: number; // hourly or flat, caller-defined semantics
@@ -11,6 +12,7 @@ export interface TariffDocument extends Document {
 
 const TariffSchema = new Schema<TariffDocument>(
   {
+    managerId: { type: Schema.Types.ObjectId, ref: 'Manager', required: true, index: true },
     clientId: { type: Schema.Types.ObjectId, ref: 'Client', required: true, index: true },
     roleId: { type: Schema.Types.ObjectId, ref: 'Role', required: true, index: true },
     rate: { type: Number, required: true, min: 0 },
@@ -19,9 +21,8 @@ const TariffSchema = new Schema<TariffDocument>(
   { timestamps: true }
 );
 
-TariffSchema.index({ clientId: 1, roleId: 1 }, { unique: true });
+TariffSchema.index({ managerId: 1, clientId: 1, roleId: 1 }, { unique: true });
 
 export const TariffModel: Model<TariffDocument> =
   mongoose.models.Tariff || mongoose.model<TariffDocument>('Tariff', TariffSchema, 'tariffs');
-
 
