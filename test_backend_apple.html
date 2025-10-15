@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Backend Apple Sign In Configuration</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        h1 { color: #333; }
+        .test-section {
+            background: #f5f5f5;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        .success { color: #28a745; font-weight: bold; }
+        .error { color: #dc3545; font-weight: bold; }
+        .warning { color: #ffc107; font-weight: bold; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        #output {
+            background: #fff;
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 6px;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        .info { background: #e7f3ff; padding: 15px; border-left: 4px solid #007bff; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Backend Apple Sign In Configuration Tester</h1>
+
+    <div class="info">
+        <strong>Purpose:</strong> This tool helps you verify if your backend at <code>api.nexapymesoft.com</code> is properly configured for Apple Sign In.
+    </div>
+
+    <div class="test-section">
+        <h2>Test 1: Backend Reachability</h2>
+        <button onclick="testBackendReachability()">Test Backend Connection</button>
+        <div id="test1-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 2: Check Apple Endpoint</h2>
+        <button onclick="testAppleEndpoint()">Test /auth/apple Endpoint</button>
+        <div id="test2-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>What to Check on Your Server</h2>
+        <p>Run this command on your backend server:</p>
+        <code style="display: block; background: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 4px; margin: 10px 0;">
+cat /path/to/nexa/backend/.env | grep APPLE
+        </code>
+        <p><strong>Expected output:</strong></p>
+        <code style="display: block; background: #f8f8f8; padding: 10px; border-radius: 4px;">
+APPLE_BUNDLE_ID=com.pymesoft.nexa
+APPLE_SERVICE_ID=com.pymesoft.nexa.web
+        </code>
+        <p class="error">⚠️ If APPLE_SERVICE_ID is missing, that's why Apple Sign In fails!</p>
+    </div>
+
+    <div class="test-section">
+        <h2>How to Fix</h2>
+        <ol>
+            <li>SSH into your backend server</li>
+            <li>Edit <code>/path/to/nexa/backend/.env</code></li>
+            <li>Add: <code>APPLE_SERVICE_ID=com.pymesoft.nexa.web</code></li>
+            <li>Restart backend: <code>pm2 restart all</code></li>
+            <li>Test again on <code>app.nexapymesoft.com</code></li>
+        </ol>
+    </div>
+
+    <div id="output"></div>
+
+    <script>
+        const API_BASE_URL = 'https://api.nexapymesoft.com/api';
+
+        function log(message, type = 'info') {
+            const output = document.getElementById('output');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : '';
+            output.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+        }
+
+        async function testBackendReachability() {
+            const result = document.getElementById('test1-result');
+            result.innerHTML = '<p>Testing...</p>';
+            log('Testing backend reachability at ' + API_BASE_URL);
+
+            try {
+                const response = await fetch(API_BASE_URL, {
+                    method: 'GET',
+                    mode: 'cors'
+                });
+
+                log(`Backend responded with status: ${response.status}`, 'success');
+                result.innerHTML = `<p class="success">✅ Backend is reachable! Status: ${response.status}</p>`;
+            } catch (error) {
+                log(`Failed to reach backend: ${error.message}`, 'error');
+                result.innerHTML = `<p class="error">❌ Cannot reach backend: ${error.message}</p>`;
+            }
+        }
+
+        async function testAppleEndpoint() {
+            const result = document.getElementById('test2-result');
+            result.innerHTML = '<p>Testing...</p>';
+            log('Testing /auth/apple endpoint');
+
+            try {
+                // Send an empty request to see how the endpoint responds
+                const response = await fetch(`${API_BASE_URL}/auth/apple`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ identityToken: '' })
+                });
+
+                const body = await response.text();
+                log(`Apple endpoint responded: ${response.status} - ${body}`);
+
+                if (response.status === 400) {
+                    // Expected response when token is missing
+                    result.innerHTML = `<p class="success">✅ Apple endpoint exists and is responding correctly</p><p>Response: ${body}</p>`;
+                } else if (response.status === 401) {
+                    result.innerHTML = `<p class="warning">⚠️ Endpoint exists but may have configuration issues</p><p>Response: ${body}</p>`;
+                } else {
+                    result.innerHTML = `<p class="warning">⚠️ Unexpected response: ${response.status}</p><p>${body}</p>`;
+                }
+            } catch (error) {
+                log(`Error testing Apple endpoint: ${error.message}`, 'error');
+                result.innerHTML = `<p class="error">❌ Error: ${error.message}</p>`;
+            }
+        }
+
+        // Auto-run first test on load
+        window.addEventListener('load', () => {
+            log('Apple Sign In Backend Configuration Tester loaded');
+            log('Backend URL: ' + API_BASE_URL);
+            log('Click buttons above to run tests');
+        });
+    </script>
+</body>
+</html>
