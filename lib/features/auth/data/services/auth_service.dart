@@ -41,11 +41,16 @@ class AuthService {
     final apiBase = env.get('API_BASE_URL');
     final pathPrefix = env.getOrDefault('API_PATH_PREFIX', '');
 
+    // DEBUG: Log what we're getting from environment
+    developer.log('[AuthService] API_BASE_URL from env: $apiBase', name: 'AuthService');
+    developer.log('[AuthService] API_PATH_PREFIX from env: $pathPrefix', name: 'AuthService');
+
     String raw;
     if (apiBase != null) {
       raw = pathPrefix.isNotEmpty ? '$apiBase$pathPrefix' : apiBase;
     } else {
       raw = 'http://127.0.0.1:4000';
+      developer.log('[AuthService] API_BASE_URL was null, using fallback: $raw', name: 'AuthService');
     }
 
     if (!kIsWeb && Platform.isAndroid) {
@@ -57,6 +62,8 @@ class AuthService {
         return raw.replaceAll('localhost', '10.0.2.2');
       }
     }
+
+    developer.log('[AuthService] Final API Base URL: $raw', name: 'AuthService');
     return raw;
   }
 

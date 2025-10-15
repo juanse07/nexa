@@ -27,15 +27,38 @@ class Environment {
       // For web, we skip loading .env file as it won't be bundled
       // Environment variables should be provided via --dart-define at build time
       if (!kIsWeb) {
-        final overrides = <String, String>{};
-        overrides.addAll(await loadEnvFile('.env'));
-        overrides.addAll(await loadEnvFile('.env.local'));
+        // Load in priority order: .env.defaults (lowest) → .env → .env.local (highest)
+        final allVars = <String, String>{};
 
-        await dotenv.load(
-          fileName: '.env.defaults',
-          isOptional: true,
-          mergeWith: overrides,
-        );
+        // 1. Load .env.defaults first (lowest priority)
+        final defaultVars = await loadEnvFile('.env.defaults');
+        print('[ENV] Loaded ${defaultVars.length} variables from .env.defaults');
+        allVars.addAll(defaultVars);
+
+        // 2. Load .env (overrides defaults)
+        final envVars = await loadEnvFile('.env');
+        print('[ENV] Loaded ${envVars.length} variables from .env');
+        allVars.addAll(envVars);
+
+        // 3. Load .env.local last (highest priority, overrides everything)
+        final localVars = await loadEnvFile('.env.local');
+        print('[ENV] Loaded ${localVars.length} variables from .env.local');
+        if (localVars.containsKey('API_BASE_URL')) {
+          print('[ENV] .env.local has API_BASE_URL: ${localVars['API_BASE_URL']}');
+        }
+        allVars.addAll(localVars);
+
+        // Now manually set dotenv with the final merged values
+        for (final entry in allVars.entries) {
+          dotenv.env[entry.key] = entry.value;
+        }
+
+        // Final verification
+        final finalUrl = dotenv.maybeGet('API_BASE_URL');
+        print('[ENV] ✅ Final API_BASE_URL: $finalUrl');
+        if (finalUrl == 'https://api.example.com') {
+          print('[ENV] ⚠️  WARNING: Still using placeholder URL! Check .env.local');
+        }
       }
       _isLoaded = true;
     } catch (e) {
