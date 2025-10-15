@@ -1,6 +1,7 @@
 # Cloudflare Pages Setup for Apple Sign In
 
 > **Last Updated**: October 14, 2025
+> **Build Script Updated**: October 14, 2025 - Apple Sign In environment variables added to build.sh
 
 ## Step 1: Configure Environment Variables
 
