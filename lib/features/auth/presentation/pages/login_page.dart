@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform;
 
 import 'package:nexa/core/config/environment.dart';
+import 'package:nexa/core/utils/responsive_layout.dart';
 import 'package:nexa/features/auth/data/services/auth_service.dart';
 import 'package:nexa/features/auth/data/services/apple_web_auth.dart';
 import 'package:nexa/features/extraction/presentation/extraction_screen.dart';
@@ -90,23 +91,111 @@ class _LoginPageState extends State<LoginPage> {
         env.contains('APPLE_REDIRECT_URI');
     final bool isiOS = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
     final bool showApple = isiOS || appleWebAvailable;
+    final bool isDesktop = ResponsiveLayout.shouldUseDesktopLayout(context);
 
     return PopScope(
       canPop: false,
       child: Scaffold(
-        body: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                theme.colorScheme.primaryContainer.withOpacity(0.3),
-                theme.colorScheme.surfaceContainerLowest,
-                theme.colorScheme.secondaryContainer.withOpacity(0.2),
-              ],
-            ),
-          ),
-          child: SafeArea(
+        body: Stack(
+          children: [
+            // Background
+            if (isDesktop)
+              // Professional white background with purple geometric shapes for desktop
+              Container(
+                color: Colors.white,
+                child: Stack(
+                  children: [
+                    // Top-left purple circle
+                    Positioned(
+                      top: -100,
+                      left: -100,
+                      child: Container(
+                        width: 300,
+                        height: 300,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: [
+                              theme.colorScheme.primary.withOpacity(0.15),
+                              theme.colorScheme.primary.withOpacity(0.05),
+                              Colors.transparent,
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Bottom-right purple shape
+                    Positioned(
+                      bottom: -150,
+                      right: -100,
+                      child: Container(
+                        width: 400,
+                        height: 400,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: [
+                              theme.colorScheme.secondary.withOpacity(0.12),
+                              theme.colorScheme.secondary.withOpacity(0.06),
+                              Colors.transparent,
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Middle accent shape
+                    Positioned(
+                      top: size.height * 0.3,
+                      right: size.width * 0.15,
+                      child: Container(
+                        width: 200,
+                        height: 200,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(40),
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              theme.colorScheme.primaryContainer.withOpacity(0.1),
+                              theme.colorScheme.secondaryContainer.withOpacity(0.08),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Small accent dot
+                    Positioned(
+                      top: size.height * 0.2,
+                      left: size.width * 0.25,
+                      child: Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: theme.colorScheme.tertiary.withOpacity(0.08),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              // Gradient background for mobile
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      theme.colorScheme.primaryContainer.withOpacity(0.3),
+                      theme.colorScheme.surfaceContainerLowest,
+                      theme.colorScheme.secondaryContainer.withOpacity(0.2),
+                    ],
+                  ),
+                ),
+              ),
+            // Content
+            SafeArea(
             child: Center(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -338,6 +427,7 @@ class _LoginPageState extends State<LoginPage> {
               ),
             ),
           ),
+          ],
         ),
       ),
     );
