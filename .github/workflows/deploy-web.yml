@@ -2,7 +2,7 @@ name: Deploy Flutter Web App
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, android1 ]  # Deploy from main or android1
     paths:
       - "lib/**"
       - "web/**"
