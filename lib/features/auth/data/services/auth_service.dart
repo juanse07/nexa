@@ -36,34 +36,28 @@ class AuthService {
   static const _requestTimeout = Duration(seconds: 30);
 
   static String get _apiBaseUrl {
-    // Support API_BASE_URL + API_PATH_PREFIX
     final env = Environment.instance;
     final apiBase = env.get('API_BASE_URL');
     final pathPrefix = env.getOrDefault('API_PATH_PREFIX', '');
 
-    // DEBUG: Log what we're getting from environment
-    developer.log('[AuthService] API_BASE_URL from env: $apiBase', name: 'AuthService');
-    developer.log('[AuthService] API_PATH_PREFIX from env: $pathPrefix', name: 'AuthService');
-
     String raw;
-    if (apiBase != null) {
+    if (apiBase != null && apiBase.isNotEmpty) {
       raw = pathPrefix.isNotEmpty ? '$apiBase$pathPrefix' : apiBase;
     } else {
+      // Fallback for local development
       raw = 'http://127.0.0.1:4000';
-      developer.log('[AuthService] API_BASE_URL was null, using fallback: $raw', name: 'AuthService');
     }
 
+    // Android emulator needs special localhost mapping
     if (!kIsWeb && Platform.isAndroid) {
-      // Android emulator maps host loopback to 10.0.2.2
       if (raw.contains('127.0.0.1')) {
-        return raw.replaceAll('127.0.0.1', '10.0.2.2');
+        raw = raw.replaceAll('127.0.0.1', '10.0.2.2');
       }
       if (raw.contains('localhost')) {
-        return raw.replaceAll('localhost', '10.0.2.2');
+        raw = raw.replaceAll('localhost', '10.0.2.2');
       }
     }
 
-    developer.log('[AuthService] Final API Base URL: $raw', name: 'AuthService');
     return raw;
   }
 
