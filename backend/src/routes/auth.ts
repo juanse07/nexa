@@ -21,6 +21,8 @@ const GOOGLE_CLIENT_ID_ANDROID = ENV.googleClientIdAndroid;
 const GOOGLE_CLIENT_ID_WEB = ENV.googleClientIdWeb;
 const GOOGLE_SERVER_CLIENT_ID = ENV.googleServerClientId;
 const APPLE_BUNDLE_IDS = ENV.appleBundleId;
+const APPLE_SERVICE_IDS = ENV.appleServiceId;
+const APPLE_AUDIENCE_IDS = Array.from(new Set([...APPLE_BUNDLE_IDS, ...APPLE_SERVICE_IDS]));
 const JWT_SECRET = ENV.jwtSecret;
 
 if (!JWT_SECRET) {
@@ -38,6 +40,12 @@ if (GOOGLE_CLIENT_ID_ANDROID.length === 0) {
 if (GOOGLE_SERVER_CLIENT_ID.length === 0) {
   // eslint-disable-next-line no-console
   console.warn('[auth] GOOGLE_SERVER_CLIENT_ID not set. Using only platform client IDs.');
+}
+if (APPLE_AUDIENCE_IDS.length === 0) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    '[auth] No Apple audience configured. Set APPLE_BUNDLE_ID and/or APPLE_SERVICE_ID.',
+  );
 }
 
 function issueAppJwt(profile: VerifiedProfile): string {
@@ -114,16 +122,16 @@ async function verifyGoogleIdToken(idToken: string): Promise<VerifiedProfile> {
 
 async function verifyAppleIdentityToken(identityToken: string): Promise<VerifiedProfile> {
   const JWKS = jose.createRemoteJWKSet(new URL('https://appleid.apple.com/auth/keys'));
-  
-  // Try to verify with each configured bundle ID (to support multiple apps)
-  if (APPLE_BUNDLE_IDS.length > 0) {
+
+  // Try to verify with each configured audience (bundle IDs or web service IDs)
+  if (APPLE_AUDIENCE_IDS.length > 0) {
     let lastError: Error | null = null;
-    
-    for (const bundleId of APPLE_BUNDLE_IDS) {
+
+    for (const audience of APPLE_AUDIENCE_IDS) {
       try {
         const options: jose.JWTVerifyOptions = {
           issuer: 'https://appleid.apple.com',
-          audience: bundleId,
+          audience,
         };
         const { payload } = await jose.jwtVerify(identityToken, JWKS, options);
         const subject = payload.sub as string | undefined;
@@ -139,14 +147,14 @@ async function verifyAppleIdentityToken(identityToken: string): Promise<Verified
         };
       } catch (err) {
         lastError = err as Error;
-        // Continue to next bundle ID
+        // Continue to next configured audience value
       }
     }
-    
-    // If we get here, none of the bundle IDs worked
-    throw lastError || new Error('Failed to verify Apple token with any configured bundle ID');
+
+    // If we get here, none of the configured audience values worked
+    throw lastError || new Error('Failed to verify Apple token with any configured audience');
   } else {
-    // No bundle IDs configured, verify without audience check
+    // No audience configured, verify without audience check
     const options: jose.JWTVerifyOptions = { issuer: 'https://appleid.apple.com' };
     const { payload } = await jose.jwtVerify(identityToken, JWKS, options);
     const subject = payload.sub as string | undefined;
@@ -246,5 +254,3 @@ router.post('/apple', async (req, res) => {
 });
 
 export default router;
-
-

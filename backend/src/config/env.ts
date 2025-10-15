@@ -23,6 +23,7 @@ export const ENV = {
   googleClientIdWeb: parseCommaSeparated(process.env.GOOGLE_CLIENT_ID_WEB),
   googleServerClientId: parseCommaSeparated(process.env.GOOGLE_SERVER_CLIENT_ID),
   appleBundleId: parseCommaSeparated(process.env.APPLE_BUNDLE_ID),
+  appleServiceId: parseCommaSeparated(process.env.APPLE_SERVICE_ID),
   // Admin
   adminKey: process.env.ADMIN_KEY || '',
 };
