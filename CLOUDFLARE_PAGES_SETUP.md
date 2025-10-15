@@ -1,5 +1,7 @@
 # Cloudflare Pages Setup for Apple Sign In
 
+> **Last Updated**: October 14, 2025
+
 ## Step 1: Configure Environment Variables
 
 Go to: **Cloudflare Dashboard** → **Pages** → **nexa-web** → **Settings** → **Environment variables**
