@@ -58,6 +58,10 @@ class AuthService {
       }
     }
 
+    if (kDebugMode) {
+      developer.log('Resolved API base URL: $raw', name: 'AuthService');
+    }
+
     return raw;
   }
 
