@@ -46,6 +46,8 @@ flutter build web --release --verbose \
   --dart-define=GOOGLE_MAPS_API_KEY="${GOOGLE_MAPS_API_KEY}" \
   --dart-define=GOOGLE_CLIENT_ID_WEB="${GOOGLE_CLIENT_ID_WEB}" \
   --dart-define=GOOGLE_SERVER_CLIENT_ID="${GOOGLE_SERVER_CLIENT_ID}" \
+  --dart-define=APPLE_SERVICE_ID="${APPLE_SERVICE_ID}" \
+  --dart-define=APPLE_REDIRECT_URI="${APPLE_REDIRECT_URI}" \
   --dart-define=PLACES_BIAS_LAT="${PLACES_BIAS_LAT:-39.7392}" \
   --dart-define=PLACES_BIAS_LNG="${PLACES_BIAS_LNG:--104.9903}" \
   --dart-define=PLACES_COMPONENTS="${PLACES_COMPONENTS:-country:us}" \
