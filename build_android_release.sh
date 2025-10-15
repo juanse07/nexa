@@ -5,10 +5,16 @@ echo "===================================="
 echo "Building Android Release"
 echo "===================================="
 
+# Get the directory of this script
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "$SCRIPT_DIR"
+
 # Load environment variables from .env.local
 if [ -f .env.local ]; then
   echo "Loading environment from .env.local..."
-  export $(cat .env.local | grep -v '^#' | grep -v '^$' | xargs)
+  set -a
+  source .env.local
+  set +a
 else
   echo "ERROR: .env.local not found!"
   echo "Please create .env.local with your production credentials"
@@ -17,6 +23,14 @@ fi
 
 # Build Android release with environment variables
 echo "Building Android APK with production configuration..."
+
+# Create a symlink without spaces as a workaround for Gradle's path issue
+TEMP_LINK="/tmp/nexa_build"
+rm -rf "$TEMP_LINK"
+ln -s "$SCRIPT_DIR" "$TEMP_LINK"
+
+# Build from the symlinked directory
+cd "$TEMP_LINK"
 
 flutter build apk --release \
   --dart-define=API_BASE_URL="${API_BASE_URL}" \
@@ -37,6 +51,15 @@ flutter build apk --release \
   --dart-define=PLACES_BIAS_LAT="${PLACES_BIAS_LAT:-39.7392}" \
   --dart-define=PLACES_BIAS_LNG="${PLACES_BIAS_LNG:--104.9903}" \
   --dart-define=PLACES_COMPONENTS="${PLACES_COMPONENTS:-country:us}"
+
+# Copy the APK back to the original location
+cp build/app/outputs/flutter-apk/app-release.apk "$SCRIPT_DIR/build/app/outputs/flutter-apk/" 2>/dev/null || true
+
+# Return to original directory
+cd "$SCRIPT_DIR"
+
+# Clean up symlink
+rm -rf "$TEMP_LINK"
 
 echo "===================================="
 echo "Build complete!"

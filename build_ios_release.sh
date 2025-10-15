@@ -5,10 +5,16 @@ echo "===================================="
 echo "Building iOS Release"
 echo "===================================="
 
+# Get the directory of this script
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "$SCRIPT_DIR"
+
 # Load environment variables from .env.local
 if [ -f .env.local ]; then
   echo "Loading environment from .env.local..."
-  export $(cat .env.local | grep -v '^#' | grep -v '^$' | xargs)
+  set -a
+  source .env.local
+  set +a
 else
   echo "ERROR: .env.local not found!"
   echo "Please create .env.local with your production credentials"

@@ -7,6 +7,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+import 'package:nexa/core/config/app_config.dart';
 import 'package:nexa/core/config/environment.dart';
 import 'package:nexa/features/auth/data/services/apple_web_auth.dart';
 
@@ -36,17 +37,9 @@ class AuthService {
   static const _requestTimeout = Duration(seconds: 30);
 
   static String get _apiBaseUrl {
-    final env = Environment.instance;
-    final apiBase = env.get('API_BASE_URL');
-    final pathPrefix = env.getOrDefault('API_PATH_PREFIX', '');
+    final base = AppConfig.instance.baseUrl;
 
-    String raw;
-    if (apiBase != null && apiBase.isNotEmpty) {
-      raw = pathPrefix.isNotEmpty ? '$apiBase$pathPrefix' : apiBase;
-    } else {
-      // Fallback for local development
-      raw = 'http://127.0.0.1:4000';
-    }
+    var raw = base.isNotEmpty ? base : 'http://127.0.0.1:4000';
 
     // Android emulator needs special localhost mapping
     if (!kIsWeb && Platform.isAndroid) {
