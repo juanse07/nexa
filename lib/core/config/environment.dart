@@ -43,9 +43,11 @@ class Environment {
         allVars.addAll(localVars);
 
         // Manually populate dotenv with the final merged values
-        for (final entry in allVars.entries) {
-          dotenv.env[entry.key] = entry.value;
-        }
+        final buffer = StringBuffer();
+        allVars.forEach((key, value) {
+          buffer.writeln('$key=$value');
+        });
+        await dotenv.testLoad(fileInput: buffer.toString());
       }
       _isLoaded = true;
     } catch (e) {

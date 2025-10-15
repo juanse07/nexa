@@ -5,6 +5,7 @@ import '../services/pending_events_service.dart';
 import '../services/roles_service.dart';
 import '../services/users_service.dart';
 import '../services/clients_service.dart';
+import '../services/tariffs_service.dart';
 
 class PendingPublishScreen extends StatefulWidget {
   final Map<String, dynamic> draft;
@@ -26,6 +27,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
   final EventService _eventService = EventService();
   final RolesService _rolesService = RolesService();
   final ClientsService _clientsService = ClientsService();
+  final TariffsService _tariffsService = TariffsService();
 
   bool _everyone = true;
   final TextEditingController _searchCtrl = TextEditingController();
@@ -104,11 +106,13 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
       final payload = Map<String, dynamic>.from(widget.draft);
 
       // First, pick client
-      final clientName = await _promptClientPicker();
-      if (clientName == null) {
+      final clientData = await _promptClientPicker();
+      if (clientData == null) {
         setState(() => _publishing = false);
         return;
       }
+      final clientName = clientData['name'] as String;
+      final clientId = clientData['id'] as String?;
       payload['client_name'] = clientName;
 
       // Then, ensure role counts are set at publish time
@@ -118,6 +122,27 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
         return;
       }
       payload['roles'] = _countsToRoles(counts);
+
+      // Get roles with non-zero counts for tariff picker
+      final activeRoleNames = counts.entries
+          .where((e) => e.value > 0)
+          .map((e) => e.key)
+          .toList();
+
+      // Prompt for tariffs if there are active roles and we have a client ID
+      if (activeRoleNames.isNotEmpty && clientId != null) {
+        final tariffs = await _promptTariffPicker(
+          clientId: clientId,
+          roleNames: activeRoleNames,
+        );
+        // Tariffs are saved in the picker itself, no need to add to payload
+        // User can skip by clicking Continue without entering tariffs
+        if (tariffs == null) {
+          setState(() => _publishing = false);
+          return;
+        }
+      }
+
       if (!_everyone) {
         payload['audience_user_keys'] = _selectedKeys.toList();
       }
@@ -286,54 +311,113 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
     final List<dynamic> existing = (payload['roles'] is List)
         ? (payload['roles'] as List)
         : const [];
-    
+
     // Create controllers for all available roles dynamically
     final Map<String, TextEditingController> roleControllers = {};
     for (final role in _roles) {
       final roleName = (role['name'] ?? '').toString();
       if (roleName.isEmpty) continue;
-      
+
       final existingCount = extract(existing, roleName.toLowerCase());
       roleControllers[roleName] = TextEditingController(
         text: existingCount.toString(),
       );
     }
 
+    final TextEditingController newRoleCtrl = TextEditingController();
+
     return showDialog<Map<String, int>>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Set roles for this event'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: roleControllers.entries.map((entry) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: _numField(entry.value, entry.key),
-              );
-            }).toList(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(null),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final counts = <String, int>{};
-              for (final entry in roleControllers.entries) {
-                final roleName = entry.key;
-                final controller = entry.value;
-                counts[roleName.toLowerCase()] = 
-                    int.tryParse(controller.text.trim()) ?? 0;
-              }
-              Navigator.of(ctx).pop(counts);
-            },
-            child: const Text('Continue'),
-          ),
-        ],
-      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setStateDialog) {
+            return AlertDialog(
+              title: const Text('Set roles for this event'),
+              content: SizedBox(
+                width: 400,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (roleControllers.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Text('No roles available. Create one below.'),
+                        )
+                      else
+                        ...roleControllers.entries.map((entry) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: _numField(entry.value, entry.key),
+                          );
+                        }).toList(),
+                      const SizedBox(height: 16),
+                      const Divider(),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: newRoleCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Or create new role',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            final newName = newRoleCtrl.text.trim();
+                            if (newName.isEmpty) return;
+                            try {
+                              await _rolesService.createRole(newName);
+                              // Reload roles
+                              await _loadRoles();
+                              // Add controller for the new role
+                              roleControllers[newName] = TextEditingController(text: '0');
+                              newRoleCtrl.clear();
+                              setStateDialog(() {});
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Role "$newName" created')),
+                              );
+                            } catch (e) {
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Failed to create role: $e')),
+                              );
+                            }
+                          },
+                          icon: const Icon(Icons.add),
+                          label: const Text('Create Role'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(null),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    final counts = <String, int>{};
+                    for (final entry in roleControllers.entries) {
+                      final roleName = entry.key;
+                      final controller = entry.value;
+                      counts[roleName.toLowerCase()] =
+                          int.tryParse(controller.text.trim()) ?? 0;
+                    }
+                    Navigator.of(ctx).pop(counts);
+                  },
+                  child: const Text('Continue'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -368,7 +452,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
     return list;
   }
 
-  Future<String?> _promptClientPicker() async {
+  Future<Map<String, dynamic>?> _promptClientPicker() async {
     // Load latest clients
     try {
       final clients = await _clientsService.fetchClients();
@@ -379,7 +463,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
 
     final TextEditingController newClientCtrl = TextEditingController();
 
-    return showDialog<String>(
+    return showDialog<Map<String, dynamic>>(
       context: context,
       builder: (ctx) {
         return StatefulBuilder(
@@ -405,9 +489,10 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                           itemBuilder: (ctx, idx) {
                             final client = _clients[idx];
                             final name = (client['name'] ?? 'Unnamed').toString();
+                            final id = (client['id'] ?? client['_id'] ?? '').toString();
                             return ListTile(
                               title: Text(name),
-                              onTap: () => Navigator.of(ctx).pop(name),
+                              onTap: () => Navigator.of(ctx).pop({'name': name, 'id': id}),
                             );
                           },
                         ),
@@ -435,9 +520,10 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                     final newName = newClientCtrl.text.trim();
                     if (newName.isEmpty) return;
                     try {
-                      await _clientsService.createClient(newName);
+                      final newClient = await _clientsService.createClient(newName);
                       if (!mounted) return;
-                      Navigator.of(ctx).pop(newName);
+                      final newId = (newClient['id'] ?? newClient['_id'] ?? '').toString();
+                      Navigator.of(ctx).pop({'name': newName, 'id': newId});
                     } catch (e) {
                       if (!mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -446,6 +532,184 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                     }
                   },
                   child: const Text('Create & Select'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<Map<String, double>?> _promptTariffPicker({
+    required String clientId,
+    required List<String> roleNames,
+  }) async {
+    // Load tariffs for this client
+    List<Map<String, dynamic>> tariffs = [];
+    try {
+      tariffs = await _tariffsService.fetchTariffs(clientId: clientId);
+    } catch (e) {
+      // Silently fail, tariffs will be empty
+    }
+
+    // Create a map of role name to role ID for matching
+    final Map<String, String> roleNameToId = {};
+    for (final role in _roles) {
+      final name = (role['name'] ?? '').toString();
+      final id = (role['id'] ?? role['_id'] ?? '').toString();
+      if (name.isNotEmpty && id.isNotEmpty) {
+        roleNameToId[name.toLowerCase()] = id;
+      }
+    }
+
+    // Create controllers for tariff rates for each role
+    final Map<String, TextEditingController> tariffControllers = {};
+    final Map<String, bool> hasExistingTariff = {};
+
+    for (final roleName in roleNames) {
+      final roleId = roleNameToId[roleName.toLowerCase()];
+
+      // Find existing tariff for this role by matching roleId
+      final existingTariff = tariffs.firstWhere(
+        (t) => (t['roleId']?.toString() ?? '') == roleId,
+        orElse: () => <String, dynamic>{},
+      );
+
+      final existingRate = existingTariff['rate']?.toString() ?? '';
+      final hasExisting = existingRate.isNotEmpty;
+
+      tariffControllers[roleName] = TextEditingController(text: existingRate);
+      hasExistingTariff[roleName] = hasExisting;
+    }
+
+    return showDialog<Map<String, double>>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setStateDialog) {
+            return AlertDialog(
+              title: const Text('Set tariffs for roles'),
+              content: SizedBox(
+                width: 400,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Set or update tariff rates for each role:',
+                        style: TextStyle(fontSize: 14, color: Colors.grey),
+                      ),
+                      const SizedBox(height: 16),
+                      ...tariffControllers.entries.map((entry) {
+                        final roleName = entry.key;
+                        final hasExisting = hasExistingTariff[roleName] ?? false;
+
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: TextField(
+                            controller: entry.value,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            decoration: InputDecoration(
+                              labelText: '${entry.key} Rate',
+                              prefixIcon: const Icon(Icons.attach_money),
+                              border: const OutlineInputBorder(),
+                              hintText: 'e.g., 50.00',
+                              suffixIcon: hasExisting
+                                  ? const Tooltip(
+                                      message: 'Existing tariff loaded',
+                                      child: Icon(Icons.check_circle, color: Colors.green),
+                                    )
+                                  : null,
+                              helperText: hasExisting ? 'Existing tariff' : 'New tariff',
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                      const SizedBox(height: 8),
+                      const Divider(),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            // Save all tariffs that have been entered
+                            for (final entry in tariffControllers.entries) {
+                              final roleName = entry.key;
+                              final rateStr = entry.value.text.trim();
+                              if (rateStr.isEmpty) continue;
+
+                              final rate = double.tryParse(rateStr);
+                              if (rate == null) continue;
+
+                              // Get the role ID for this role name
+                              final roleId = roleNameToId[roleName.toLowerCase()];
+                              if (roleId == null) continue;
+
+                              try {
+                                await _tariffsService.upsertTariff(
+                                  clientId: clientId,
+                                  roleId: roleId,
+                                  rate: rate,
+                                );
+                              } catch (e) {
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Failed to save tariff for $roleName: $e')),
+                                );
+                              }
+                            }
+
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Tariffs saved')),
+                            );
+                            // Reload tariffs to refresh the UI with updated data
+                            try {
+                              tariffs = await _tariffsService.fetchTariffs(clientId: clientId);
+                              // Update the hasExistingTariff map
+                              for (final roleName in roleNames) {
+                                final roleId = roleNameToId[roleName.toLowerCase()];
+                                final existingTariff = tariffs.firstWhere(
+                                  (t) => (t['roleId']?.toString() ?? '') == roleId,
+                                  orElse: () => <String, dynamic>{},
+                                );
+                                hasExistingTariff[roleName] = existingTariff['rate']?.toString().isNotEmpty ?? false;
+                              }
+                            } catch (e) {
+                              // Silently fail
+                            }
+                            setStateDialog(() {});
+                          },
+                          icon: const Icon(Icons.save),
+                          label: const Text('Save Tariffs'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(null),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    final rates = <String, double>{};
+                    for (final entry in tariffControllers.entries) {
+                      final roleName = entry.key;
+                      final rateStr = entry.value.text.trim();
+                      if (rateStr.isNotEmpty) {
+                        final rate = double.tryParse(rateStr);
+                        if (rate != null) {
+                          rates[roleName] = rate;
+                        }
+                      }
+                    }
+                    Navigator.of(ctx).pop(rates);
+                  },
+                  child: const Text('Continue'),
                 ),
               ],
             );
