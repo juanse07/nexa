@@ -39,7 +39,7 @@ import '../../users/presentation/pages/manager_profile_page.dart';
 import '../../users/presentation/pages/user_events_screen.dart';
 import '../../events/presentation/event_detail_screen.dart';
 import '../../teams/presentation/pages/teams_management_page.dart';
-import '../../core/network/socket_manager.dart';
+import 'package:nexa/core/network/socket_manager.dart';
 import '../../users/presentation/pages/settings_page.dart';
 import '../../users/data/services/manager_service.dart';
 import '../../hours_approval/presentation/hours_approval_list_screen.dart';

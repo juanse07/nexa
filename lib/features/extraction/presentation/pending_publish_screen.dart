@@ -10,7 +10,7 @@ import '../services/clients_service.dart';
 import '../services/tariffs_service.dart';
 import '../../teams/data/services/teams_service.dart';
 import '../../teams/presentation/pages/teams_management_page.dart';
-import '../../core/network/socket_manager.dart';
+import 'package:nexa/core/network/socket_manager.dart';
 
 class PendingPublishScreen extends StatefulWidget {
   final Map<String, dynamic> draft;
