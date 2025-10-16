@@ -11,6 +11,7 @@ import 'package:nexa/features/extraction/services/tariffs_service.dart';
 import 'package:nexa/features/extraction/presentation/extraction_screen.dart';
 import 'package:nexa/features/users/data/services/manager_service.dart';
 import 'package:nexa/features/users/presentation/pages/manager_profile_page.dart';
+import 'package:nexa/core/network/socket_manager.dart';
 
 class ManagerOnboardingGate extends StatefulWidget {
   const ManagerOnboardingGate({super.key});
@@ -64,6 +65,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
     }
     try {
       final profile = await _managerService.getMe();
+      SocketManager.instance.registerManager(profile.id);
       final clients = await _clientsService.fetchClients();
       final roles = await _rolesService.fetchRoles();
       final tariffs = await _tariffsService.fetchTariffs();
@@ -91,7 +93,9 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
     if (snapshot.clients.isEmpty) {
       _selectedClientId = null;
     } else {
-      final hasCurrent = snapshot.clients.any((c) => _resolveId(c) == _selectedClientId);
+      final hasCurrent = snapshot.clients.any(
+        (c) => _resolveId(c) == _selectedClientId,
+      );
       if (!hasCurrent) {
         _selectedClientId = _resolveId(snapshot.clients.first);
       }
@@ -100,7 +104,9 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
     if (snapshot.roles.isEmpty) {
       _selectedRoleId = null;
     } else {
-      final hasCurrent = snapshot.roles.any((r) => _resolveId(r) == _selectedRoleId);
+      final hasCurrent = snapshot.roles.any(
+        (r) => _resolveId(r) == _selectedRoleId,
+      );
       if (!hasCurrent) {
         _selectedRoleId = _resolveId(snapshot.roles.first);
       }
@@ -166,7 +172,10 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
     }
     final clientId = _selectedClientId;
     final roleId = _selectedRoleId;
-    if (clientId == null || clientId.isEmpty || roleId == null || roleId.isEmpty) {
+    if (clientId == null ||
+        clientId.isEmpty ||
+        roleId == null ||
+        roleId.isEmpty) {
       _showSnack('Select a client and a role');
       return;
     }
@@ -201,15 +210,15 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
 
   void _showSnack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _openProfile() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const ManagerProfilePage()),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const ManagerProfilePage()));
     await _refresh();
   }
 
@@ -225,9 +234,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     if (_error != null) {
@@ -235,10 +242,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
         appBar: AppBar(
           title: const Text('Getting Started'),
           actions: [
-            IconButton(
-              onPressed: _refresh,
-              icon: const Icon(Icons.refresh),
-            ),
+            IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
           ],
         ),
         body: Center(
@@ -247,7 +251,11 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.error_outline, size: 48, color: Colors.redAccent),
+                const Icon(
+                  Icons.error_outline,
+                  size: 48,
+                  color: Colors.redAccent,
+                ),
                 const SizedBox(height: 16),
                 Text(
                   _error!,
@@ -255,10 +263,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
                   style: const TextStyle(color: Colors.redAccent),
                 ),
                 const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: _refresh,
-                  child: const Text('Retry'),
-                ),
+                ElevatedButton(onPressed: _refresh, child: const Text('Retry')),
               ],
             ),
           ),
@@ -268,9 +273,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
 
     final snapshot = _snapshot;
     if (snapshot == null) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     if (snapshot.isComplete) {
@@ -309,9 +312,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
             if (snapshot.missingSteps.isNotEmpty)
               Text(
                 'Complete all steps above to access the full dashboard.',
-                style: TextStyle(
-                  color: Colors.grey.shade600,
-                ),
+                style: TextStyle(color: Colors.grey.shade600),
               ),
           ],
         ),
@@ -346,10 +347,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
                   label: 'Client',
                   completed: snapshot.hasClient,
                 ),
-                _buildStatusChip(
-                  label: 'Role',
-                  completed: snapshot.hasRole,
-                ),
+                _buildStatusChip(label: 'Role', completed: snapshot.hasRole),
                 _buildStatusChip(
                   label: 'Tariff',
                   completed: snapshot.hasTariff,
@@ -377,14 +375,17 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
         size: 18,
       ),
       label: Text(label),
-      backgroundColor: completed ? const Color(0xFFE8F5E9) : const Color(0xFFF3F4F6),
+      backgroundColor: completed
+          ? const Color(0xFFE8F5E9)
+          : const Color(0xFFF3F4F6),
     );
   }
 
   Widget _buildProfileStep(_OnboardingSnapshot snapshot) {
     final completed = snapshot.hasProfile;
     final subtitle = completed
-        ? 'Profile ready: ${snapshot.profile.firstName ?? ''} ${snapshot.profile.lastName ?? ''}'.trim()
+        ? 'Profile ready: ${snapshot.profile.firstName ?? ''} ${snapshot.profile.lastName ?? ''}'
+              .trim()
         : 'Add your first and last name so staff know who you are.';
     return _buildStepCard(
       title: '1. Update your profile',
@@ -416,12 +417,16 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
             decoration: InputDecoration(
               labelText: 'Client name',
               hintText: 'e.g. Bluebird Catering',
-              helperText: snapshot.hasProfile ? null : 'Complete your profile first',
+              helperText: snapshot.hasProfile
+                  ? null
+                  : 'Complete your profile first',
             ),
           ),
           const SizedBox(height: 12),
           ElevatedButton.icon(
-            onPressed: (!snapshot.hasProfile || _creatingClient) ? null : _createClient,
+            onPressed: (!snapshot.hasProfile || _creatingClient)
+                ? null
+                : _createClient,
             icon: _creatingClient
                 ? const SizedBox(
                     height: 18,
@@ -461,7 +466,9 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
           const SizedBox(height: 12),
           ElevatedButton.icon(
             onPressed:
-                (!snapshot.hasProfile || !snapshot.hasClient || _creatingRole) ? null : _createRole,
+                (!snapshot.hasProfile || !snapshot.hasClient || _creatingRole)
+                ? null
+                : _createRole,
             icon: _creatingRole
                 ? const SizedBox(
                     height: 18,
@@ -494,8 +501,8 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
             onChanged: (!snapshot.hasProfile || !snapshot.hasClient)
                 ? null
                 : (value) => setState(() {
-                      _selectedClientId = value;
-                    }),
+                    _selectedClientId = value;
+                  }),
             items: clients
                 .map(
                   (client) => DropdownMenuItem<String>(
@@ -512,11 +519,14 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             value: _selectedRoleId,
-            onChanged: (!snapshot.hasProfile || !snapshot.hasClient || !snapshot.hasRole)
+            onChanged:
+                (!snapshot.hasProfile ||
+                    !snapshot.hasClient ||
+                    !snapshot.hasRole)
                 ? null
                 : (value) => setState(() {
-                      _selectedRoleId = value;
-                    }),
+                    _selectedRoleId = value;
+                  }),
             items: roles
                 .map(
                   (role) => DropdownMenuItem<String>(
@@ -533,19 +543,25 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
           const SizedBox(height: 12),
           TextField(
             controller: _tariffRateCtrl,
-            enabled: snapshot.hasProfile && snapshot.hasClient && snapshot.hasRole,
+            enabled:
+                snapshot.hasProfile && snapshot.hasClient && snapshot.hasRole,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: InputDecoration(
               labelText: 'Hourly rate (USD)',
               hintText: 'e.g. 24.00',
-              helperText: snapshot.hasProfile && snapshot.hasClient && snapshot.hasRole
+              helperText:
+                  snapshot.hasProfile && snapshot.hasClient && snapshot.hasRole
                   ? 'You can adjust this later in Catalog > Tariffs'
                   : 'Finish previous steps first',
             ),
           ),
           const SizedBox(height: 12),
           ElevatedButton.icon(
-            onPressed: (!snapshot.hasProfile || !snapshot.hasClient || !snapshot.hasRole || _creatingTariff)
+            onPressed:
+                (!snapshot.hasProfile ||
+                    !snapshot.hasClient ||
+                    !snapshot.hasRole ||
+                    _creatingTariff)
                 ? null
                 : _createTariff,
             icon: _creatingTariff
@@ -581,7 +597,10 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
                 Expanded(
                   child: Text(
                     title,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
                 Icon(
@@ -591,10 +610,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
               ],
             ),
             const SizedBox(height: 8),
-            Text(
-              subtitle,
-              style: TextStyle(color: Colors.grey.shade700),
-            ),
+            Text(subtitle, style: TextStyle(color: Colors.grey.shade700)),
             const SizedBox(height: 16),
             action,
           ],

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../services/event_service.dart';
@@ -6,6 +8,9 @@ import '../services/roles_service.dart';
 import '../services/users_service.dart';
 import '../services/clients_service.dart';
 import '../services/tariffs_service.dart';
+import '../../teams/data/services/teams_service.dart';
+import '../../teams/presentation/pages/teams_management_page.dart';
+import '../../core/network/socket_manager.dart';
 
 class PendingPublishScreen extends StatefulWidget {
   final Map<String, dynamic> draft;
@@ -28,25 +33,31 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
   final RolesService _rolesService = RolesService();
   final ClientsService _clientsService = ClientsService();
   final TariffsService _tariffsService = TariffsService();
+  final TeamsService _teamsService = TeamsService();
+  StreamSubscription<SocketEvent>? _socketSubscription;
 
   bool _everyone = true;
   final TextEditingController _searchCtrl = TextEditingController();
   List<Map<String, dynamic>> _users = const [];
   List<Map<String, dynamic>> _roles = const [];
   List<Map<String, dynamic>> _clients = const [];
+  List<Map<String, dynamic>> _teams = const [];
   String? _cursor;
   bool _loadingUsers = false;
   final Set<String> _selectedKeys = <String>{};
+  final Set<String> _selectedTeamIds = <String>{};
   final Map<String, Map<String, String>> _keyToUser =
       <String, Map<String, String>>{};
   bool _publishing = false;
   final Map<String, TextEditingController> _roleCountCtrls =
       <String, TextEditingController>{};
+  bool _loadingTeams = false;
 
   @override
   void initState() {
     super.initState();
     _loadRoles();
+    _loadTeams();
     // Pre-fill role counts if draft already contains roles
     final roles =
         (widget.draft['roles'] as List?)?.whereType<Map>().toList() ?? const [];
@@ -57,6 +68,12 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
         _roleCountCtrls[roleName] = TextEditingController(text: count);
       }
     }
+    _socketSubscription = SocketManager.instance.events.listen((event) {
+      if (!mounted) return;
+      if (event.event.startsWith('team:') || event.event.startsWith('event:')) {
+        _loadTeams();
+      }
+    });
   }
 
   Future<void> _loadRoles() async {
@@ -96,11 +113,34 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
     }
   }
 
+  Future<void> _loadTeams() async {
+    setState(() => _loadingTeams = true);
+    try {
+      final teams = await _teamsService.fetchTeams();
+      final availableIds = teams
+          .map((team) => (team['id'] ?? '').toString())
+          .where((id) => id.isNotEmpty)
+          .toSet();
+      _selectedTeamIds.removeWhere((id) => !availableIds.contains(id));
+      setState(() {
+        _teams = teams;
+        _loadingTeams = false;
+      });
+    } catch (e) {
+      setState(() => _loadingTeams = false);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to load teams: $e')));
+      }
+    }
+  }
+
   Future<void> _publish() async {
-    if (!_everyone && _selectedKeys.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Select at least one user')));
+    if (!_everyone && _selectedKeys.isEmpty && _selectedTeamIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Select at least one user or team')),
+      );
       return;
     }
     setState(() => _publishing = true);
@@ -184,6 +224,10 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
 
       if (!_everyone) {
         payload['audience_user_keys'] = _selectedKeys.toList();
+        payload['audience_team_ids'] = _selectedTeamIds.toList();
+      } else {
+        payload['audience_user_keys'] = const <String>[];
+        payload['audience_team_ids'] = const <String>[];
       }
       await _eventService.createEvent(payload);
       await _pendingService.deleteDraft(widget.draftId);
@@ -241,6 +285,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                   onChanged: (v) => setState(() => _everyone = v),
                 ),
                 if (!_everyone) ...[
+                  _buildTeamSelector(),
                   TextField(
                     controller: _searchCtrl,
                     decoration: const InputDecoration(
@@ -327,6 +372,85 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildTeamSelector() {
+    final hasTeams = _teams.isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Text(
+              'Target teams',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: _openTeamsManagement,
+              icon: const Icon(Icons.groups_outlined),
+              label: const Text('Manage teams'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_loadingTeams)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: LinearProgressIndicator(minHeight: 2),
+          )
+        else if (!hasTeams)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              'Create a team to target groups of workers.',
+              style: TextStyle(color: Colors.grey.shade600),
+            ),
+          )
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _teams.map((team) {
+              final teamId = (team['id'] ?? '').toString();
+              final name = (team['name'] ?? '').toString();
+              final isSelected = _selectedTeamIds.contains(teamId);
+              return FilterChip(
+                selected: isSelected,
+                label: Text(name.isEmpty ? 'Untitled team' : name),
+                onSelected: (selected) {
+                  setState(() {
+                    if (selected) {
+                      if (teamId.isNotEmpty) _selectedTeamIds.add(teamId);
+                    } else {
+                      _selectedTeamIds.remove(teamId);
+                    }
+                  });
+                },
+              );
+            }).toList(),
+          ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  Future<void> _openTeamsManagement() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const TeamsManagementPage()));
+    await _loadTeams();
+  }
+
+  @override
+  void dispose() {
+    _socketSubscription?.cancel();
+    _searchCtrl.dispose();
+    for (final controller in _roleCountCtrls.values) {
+      controller.dispose();
+    }
+    _roleCountCtrls.clear();
+    super.dispose();
   }
 
   Future<Map<String, int>?> _promptRoleCounts(

@@ -79,6 +79,7 @@ export interface EventDocument extends Document {
   declined_staff?: AcceptedStaffMember[];
   role_stats?: RoleStat[];
   audience_user_keys?: string[];
+  audience_team_ids?: mongoose.Types.ObjectId[];
 
   // Hours approval workflow
   hoursStatus?: 'pending' | 'sheet_submitted' | 'approved' | 'paid';
@@ -192,6 +193,7 @@ const EventSchema = new Schema<EventDocument>(
     declined_staff: { type: [AcceptedStaffMemberSchema], default: [] },
     role_stats: { type: [RoleStatSchema], default: [] },
     audience_user_keys: { type: [String], default: [] },
+    audience_team_ids: { type: [Schema.Types.ObjectId], ref: 'Team', default: [] },
 
     // Hours approval workflow
     hoursStatus: {
@@ -210,4 +212,3 @@ const EventSchema = new Schema<EventDocument>(
 
 export const EventModel: Model<EventDocument> =
   mongoose.models.Event || mongoose.model<EventDocument>('Event', EventSchema);
-

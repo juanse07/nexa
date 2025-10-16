@@ -38,6 +38,8 @@ import 'pending_edit_screen.dart';
 import '../../users/presentation/pages/manager_profile_page.dart';
 import '../../users/presentation/pages/user_events_screen.dart';
 import '../../events/presentation/event_detail_screen.dart';
+import '../../teams/presentation/pages/teams_management_page.dart';
+import '../../core/network/socket_manager.dart';
 import '../../users/presentation/pages/settings_page.dart';
 import '../../users/data/services/manager_service.dart';
 import '../../hours_approval/presentation/hours_approval_list_screen.dart';
@@ -50,7 +52,8 @@ class ExtractionScreen extends StatefulWidget {
   State<ExtractionScreen> createState() => _ExtractionScreenState();
 }
 
-class _ExtractionScreenState extends State<ExtractionScreen> with TickerProviderStateMixin {
+class _ExtractionScreenState extends State<ExtractionScreen>
+    with TickerProviderStateMixin {
   String? extractedText;
   Map<String, dynamic>? structuredData;
   bool isLoading = false;
@@ -73,7 +76,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
   List<Map<String, dynamic>> _pendingDrafts = const [];
   bool _isPendingLoading = false;
   String? _viewerUserKey; // provider:subject used to filter events
-  
+
   // Bulk upload state
   bool _isBulkProcessing = false;
   List<Map<String, dynamic>> _bulkItems = const [];
@@ -118,6 +121,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
 
   // Timer for real-time updates
   Timer? _updateTimer;
+  StreamSubscription<SocketEvent>? _socketSubscription;
 
   Widget _maybeWebRefreshButton({
     required VoidCallback onPressed,
@@ -164,7 +168,18 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
     _loadProfilePicture();
     _loadFavorites();
     _loadFirstUsersPage();
-    
+
+    _socketSubscription = SocketManager.instance.events.listen((event) {
+      if (!mounted) return;
+      if (event.event.startsWith('event:')) {
+        _loadEvents();
+        _loadPendingDrafts();
+      } else if (event.event.startsWith('team:')) {
+        _loadClients();
+        _loadRoles();
+      }
+    });
+
     // Start timer for real-time updates
     _updateTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
       if (mounted) {
@@ -195,7 +210,16 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
     _headcountController.dispose();
     _notesController.dispose();
     _updateTimer?.cancel();
+    _socketSubscription?.cancel();
     super.dispose();
+  }
+
+  Future<void> _openTeamsManagementPage() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const TeamsManagementPage()));
+    if (!mounted) return;
+    await _loadEvents();
   }
 
   Future<void> _loadDraftIfAny() async {
@@ -252,8 +276,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
 
       final platformFile = result.files.single;
       final bytes = await _resolvePlatformFileBytes(platformFile);
-      final headerBytes =
-          bytes.length > 20 ? bytes.sublist(0, 20) : bytes;
+      final headerBytes = bytes.length > 20 ? bytes.sublist(0, 20) : bytes;
       final fileName = platformFile.name;
       final lowerName = fileName.toLowerCase();
       final lookupName = kIsWeb ? fileName : (platformFile.path ?? fileName);
@@ -375,16 +398,16 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
 
     // Get all available roles from database
     final availableRoles = _roles ?? [];
-    
+
     // Create controllers for each available role
     final Map<String, TextEditingController> roleControllers = {};
     final Map<String, String> roleIds = {}; // Store role IDs for reference
-    
+
     for (final role in availableRoles) {
       final roleId = (role['id'] ?? '').toString();
       final roleName = (role['name'] ?? '').toString();
       if (roleId.isEmpty || roleName.isEmpty) continue;
-      
+
       // Try to find existing count for this role
       final existingCount = _extractRoleCount(roles, roleName.toLowerCase());
       roleControllers[roleName] = TextEditingController(
@@ -471,14 +494,13 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                   final count = int.tryParse(controller.text.trim()) ?? 0;
                   counts[roleName.toLowerCase()] = count < 0 ? 0 : count;
                 }
-                
+
                 final String company = selectedClientName.isNotEmpty
                     ? selectedClientName
                     : (payload['client_name']?.toString() ?? '').trim();
-                Navigator.of(ctx).pop({
-                  'counts': counts,
-                  'client_name': company,
-                });
+                Navigator.of(
+                  ctx,
+                ).pop({'counts': counts, 'client_name': company});
               },
               child: const Text('Continue'),
             ),
@@ -500,7 +522,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
 
     // Get all available roles from database
     final availableRoles = _roles ?? [];
-    
+
     // Create a set of role names (lowercase) that we're updating
     final updatingRoleNames = <String>{};
     for (final entry in counts.entries) {
@@ -518,11 +540,16 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
       final count = entry.value;
       if (count > 0) {
         // Find the proper case name from available roles
-        final properCaseName = availableRoles.firstWhere(
-          (r) => (r['name']?.toString() ?? '').toLowerCase() == entry.key,
-          orElse: () => {'name': entry.key},
-        )['name']?.toString() ?? entry.key;
-        
+        final properCaseName =
+            availableRoles
+                .firstWhere(
+                  (r) =>
+                      (r['name']?.toString() ?? '').toLowerCase() == entry.key,
+                  orElse: () => {'name': entry.key},
+                )['name']
+                ?.toString() ??
+            entry.key;
+
         roles.add({'role': properCaseName, 'count': count});
       }
     }
@@ -607,7 +634,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
   String _getAppBarTitle() {
     final now = DateTime.now();
     final hour = now.hour;
-    
+
     String greeting;
     if (hour < 12) {
       greeting = "Good Morning!";
@@ -620,8 +647,11 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
     switch (_selectedIndex) {
       case 0: // Create tab
         if (structuredData != null && structuredData!.isNotEmpty) {
-          final eventName = structuredData!['event_name']?.toString() ?? 'Untitled Event';
-          return eventName.length > 20 ? '${eventName.substring(0, 20)}...' : eventName;
+          final eventName =
+              structuredData!['event_name']?.toString() ?? 'Untitled Event';
+          return eventName.length > 20
+              ? '${eventName.substring(0, 20)}...'
+              : eventName;
         }
         return greeting;
       case 1: // Events tab
@@ -646,9 +676,31 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
 
   String _getAppBarSubtitle() {
     final now = DateTime.now();
-    final weekday = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][now.weekday - 1];
-    final month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][now.month - 1];
-    final timeStr = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    final weekday = [
+      'Mon',
+      'Tue',
+      'Wed',
+      'Thu',
+      'Fri',
+      'Sat',
+      'Sun',
+    ][now.weekday - 1];
+    final month = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ][now.month - 1];
+    final timeStr =
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
     final baseTime = "$weekday, $month ${now.day} at $timeStr";
 
     switch (_selectedIndex) {
@@ -657,7 +709,9 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
           final clientName = structuredData!['client_name']?.toString();
           final date = structuredData!['date']?.toString();
           if (clientName != null && clientName.isNotEmpty) {
-            return date != null && date.isNotEmpty ? "$clientName • $date" : clientName;
+            return date != null && date.isNotEmpty
+                ? "$clientName • $date"
+                : clientName;
           }
           return date ?? baseTime;
         }
@@ -667,7 +721,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
         final upcomingCount = _eventsUpcoming?.length ?? 0;
         final pastCount = _eventsPast?.length ?? 0;
         final totalEvents = (pendingCount + upcomingCount + pastCount);
-        
+
         if (totalEvents > 0) {
           // Show the most relevant category first
           if (pendingCount > 0) {
@@ -733,9 +787,15 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                     child: TabBar(
                       controller: _createTabController,
                       tabs: const [
-                        Tab(icon: Icon(Icons.upload_file), text: 'Upload Document'),
+                        Tab(
+                          icon: Icon(Icons.upload_file),
+                          text: 'Upload Document',
+                        ),
                         Tab(icon: Icon(Icons.edit), text: 'Manual Entry'),
-                        Tab(icon: Icon(Icons.cloud_upload), text: 'Multi-Upload'),
+                        Tab(
+                          icon: Icon(Icons.cloud_upload),
+                          text: 'Multi-Upload',
+                        ),
                       ],
                       labelColor: Color(0xFF6366F1),
                       unselectedLabelColor: Colors.grey,
@@ -789,59 +849,70 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                   child: SafeArea(
                     bottom: false,
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _userSearchCtrl,
-                            decoration: const InputDecoration(
-                              prefixIcon: Icon(Icons.search),
-                              hintText: 'Search name or email',
-                              border: OutlineInputBorder(),
-                              contentPadding: EdgeInsets.symmetric(vertical: 12),
-                            ),
-                            onSubmitted: (_) => _loadFirstUsersPage(),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          onPressed: _loadFirstUsersPage,
-                          icon: const Icon(Icons.refresh),
-                          tooltip: 'Refresh',
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
                         children: [
-                          FilterChip(
-                            selected: _selectedRole == null,
-                            label: const Text('All'),
-                            onSelected: (selected) {
-                              setState(() => _selectedRole = null);
-                            },
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _userSearchCtrl,
+                                  decoration: const InputDecoration(
+                                    prefixIcon: Icon(Icons.search),
+                                    hintText: 'Search name or email',
+                                    border: OutlineInputBorder(),
+                                    contentPadding: EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
+                                  ),
+                                  onSubmitted: (_) => _loadFirstUsersPage(),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              IconButton(
+                                onPressed: _loadFirstUsersPage,
+                                icon: const Icon(Icons.refresh),
+                                tooltip: 'Refresh',
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 8),
-                          ..._favoriteRoleOptions.map((role) => Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: FilterChip(
-                              selected: _selectedRole == role,
-                              label: Text(role),
-                              onSelected: (selected) {
-                                setState(() => _selectedRole = selected ? role : null);
-                              },
+                          const SizedBox(height: 6),
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                FilterChip(
+                                  selected: _selectedRole == null,
+                                  label: const Text('All'),
+                                  onSelected: (selected) {
+                                    setState(() => _selectedRole = null);
+                                  },
+                                ),
+                                const SizedBox(width: 8),
+                                ..._favoriteRoleOptions.map(
+                                  (role) => Padding(
+                                    padding: const EdgeInsets.only(right: 8),
+                                    child: FilterChip(
+                                      selected: _selectedRole == role,
+                                      label: Text(role),
+                                      onSelected: (selected) {
+                                        setState(
+                                          () => _selectedRole = selected
+                                              ? role
+                                              : null,
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          )),
+                          ),
                         ],
                       ),
-                    ),
-                  ],
-                ),
                     ),
                   ),
                 ),
@@ -910,11 +981,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
       case 4: // Catalog tab
         return TabBarView(
           controller: _catalogTabController,
-          children: [
-            _buildClientsTab(),
-            _buildRolesTab(),
-            _buildTariffsTab(),
-          ],
+          children: [_buildClientsTab(), _buildRolesTab(), _buildTariffsTab()],
         );
       default:
         return Container();
@@ -923,7 +990,9 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
 
   @override
   Widget build(BuildContext context) {
-    final bool useDesktopLayout = ResponsiveLayout.shouldUseDesktopLayout(context);
+    final bool useDesktopLayout = ResponsiveLayout.shouldUseDesktopLayout(
+      context,
+    );
 
     if (useDesktopLayout) {
       return _buildDesktopLayout(context);
@@ -945,6 +1014,11 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
               titleFontSize: _selectedIndex == 1 ? 14.0 : null,
               subtitleFontSize: _selectedIndex == 1 ? 9.0 : null,
               actions: [
+                IconButton(
+                  tooltip: 'Manage teams',
+                  icon: const Icon(Icons.groups_outlined),
+                  onPressed: _openTeamsManagementPage,
+                ),
                 _buildProfileMenu(context),
               ],
             ),
@@ -958,10 +1032,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
           gradient: LinearGradient(
             begin: Alignment.centerLeft,
             end: Alignment.centerRight,
-            colors: [
-              Color(0xFF7A3AFB),
-              Color(0xFF5B27D8),
-            ],
+            colors: [Color(0xFF7A3AFB), Color(0xFF5B27D8)],
           ),
         ),
         child: SafeArea(
@@ -1002,9 +1073,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                     maxWidth: 1600,
                     child: NestedScrollView(
                       headerSliverBuilder: (context, innerBoxIsScrolled) {
-                        return [
-                          ..._buildPinnedHeaders(),
-                        ];
+                        return [..._buildPinnedHeaders()];
                       },
                       body: _buildBody(),
                     ),
@@ -1025,10 +1094,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
         gradient: const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [
-            Color(0xFF7A3AFB),
-            Color(0xFF5B27D8),
-          ],
+          colors: [Color(0xFF7A3AFB), Color(0xFF5B27D8)],
         ),
         boxShadow: [
           BoxShadow(
@@ -1078,7 +1144,11 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Column(
                 children: [
-                  _buildNavRailItem(0, Icons.add_circle_outline, 'Create Event'),
+                  _buildNavRailItem(
+                    0,
+                    Icons.add_circle_outline,
+                    'Create Event',
+                  ),
                   _buildNavRailItem(1, Icons.view_module, 'Events'),
                   _buildNavRailItem(2, Icons.group, 'Users'),
                   _buildNavRailItem(3, Icons.schedule, 'Hours Approval'),
@@ -1108,7 +1178,9 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
-              color: isSelected ? Colors.white.withOpacity(0.2) : Colors.transparent,
+              color: isSelected
+                  ? Colors.white.withOpacity(0.2)
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(12),
               border: isSelected
                   ? Border.all(color: Colors.white.withOpacity(0.3), width: 1)
@@ -1116,11 +1188,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
             ),
             child: Row(
               children: [
-                Icon(
-                  icon,
-                  color: Colors.white,
-                  size: 22,
-                ),
+                Icon(icon, color: Colors.white, size: 22),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Text(
@@ -1128,7 +1196,9 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 15,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                      fontWeight: isSelected
+                          ? FontWeight.w600
+                          : FontWeight.w500,
                       letterSpacing: 0.2,
                     ),
                   ),
@@ -1186,7 +1256,17 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
               ),
             ),
             // Actions
-            _buildProfileMenu(context),
+            Row(
+              children: [
+                IconButton(
+                  tooltip: 'Manage teams',
+                  icon: const Icon(Icons.groups_outlined),
+                  onPressed: _openTeamsManagementPage,
+                ),
+                const SizedBox(width: 12),
+                _buildProfileMenu(context),
+              ],
+            ),
           ],
         ),
       ),
@@ -1205,11 +1285,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              icon,
-              color: Colors.white,
-              size: 24,
-            ),
+            Icon(icon, color: Colors.white, size: 24),
             const SizedBox(height: 2),
             Text(
               label,
@@ -1233,17 +1309,13 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
       position: PopupMenuPosition.under,
       onSelected: (value) async {
         if (value == 'profile') {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const ManagerProfilePage(),
-            ),
-          );
+          Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const ManagerProfilePage()));
         } else if (value == 'settings') {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const SettingsPage(),
-            ),
-          );
+          Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const SettingsPage()));
         } else if (value == 'logout') {
           await _handleLogout(context);
         }
@@ -1266,10 +1338,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
         const PopupMenuDivider(),
         const PopupMenuItem<String>(
           value: 'logout',
-          child: ListTile(
-            leading: Icon(Icons.logout),
-            title: Text('Logout'),
-          ),
+          child: ListTile(leading: Icon(Icons.logout), title: Text('Logout')),
         ),
       ],
       child: Padding(
@@ -1293,6 +1362,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
   Future<void> _loadProfilePicture() async {
     try {
       final me = await _managerService.getMe();
+      SocketManager.instance.registerManager(me.id);
       if (!mounted) return;
       setState(() {
         _profilePictureUrl = me.picture;
@@ -1325,7 +1395,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
     if (confirmed == true && context.mounted) {
       // Perform logout
       await AuthService.signOut();
-      
+
       // Navigate to login page and remove all previous routes
       if (context.mounted) {
         Navigator.of(context).pushAndRemoveUntil(
@@ -1405,123 +1475,138 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-            HeaderCard(
-              title: 'Multi-Upload',
-              subtitle: 'Upload multiple PDFs or images and save each as a pending draft',
-              icon: Icons.cloud_upload,
-              gradientColors: const [Color(0xFF10B981), Color(0xFF3B82F6)],
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: _isBulkProcessing ? null : () => _pickAndProcessMultipleFiles(append: false),
-                  icon: const Icon(Icons.folder_open),
-                  label: const Text('Select Files'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6366F1),
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-                if (_bulkItems.isNotEmpty)
+              HeaderCard(
+                title: 'Multi-Upload',
+                subtitle:
+                    'Upload multiple PDFs or images and save each as a pending draft',
+                icon: Icons.cloud_upload,
+                gradientColors: const [Color(0xFF10B981), Color(0xFF3B82F6)],
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
                   ElevatedButton.icon(
-                    onPressed: _isBulkProcessing ? null : () => _pickAndProcessMultipleFiles(append: true),
-                    icon: const Icon(Icons.add),
-                    label: const Text('Add More'),
+                    onPressed: _isBulkProcessing
+                        ? null
+                        : () => _pickAndProcessMultipleFiles(append: false),
+                    icon: const Icon(Icons.folder_open),
+                    label: const Text('Select Files'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF6366F1),
                       foregroundColor: Colors.white,
                     ),
                   ),
-                if (_bulkItems.any((e) => e['data'] != null))
-                  ElevatedButton.icon(
-                    onPressed: _isBulkProcessing ? null : _confirmAllBulkToPending,
-                    icon: const Icon(Icons.done_all),
-                    label: const Text('Confirm All'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF059669),
-                      foregroundColor: Colors.white,
+                  if (_bulkItems.isNotEmpty)
+                    ElevatedButton.icon(
+                      onPressed: _isBulkProcessing
+                          ? null
+                          : () => _pickAndProcessMultipleFiles(append: true),
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add More'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6366F1),
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  if (_bulkItems.any((e) => e['data'] != null))
+                    ElevatedButton.icon(
+                      onPressed: _isBulkProcessing
+                          ? null
+                          : _confirmAllBulkToPending,
+                      icon: const Icon(Icons.done_all),
+                      label: const Text('Confirm All'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF059669),
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Tip: Long-press to multi-select in the picker. Or use Add More to append.',
+                style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+              ),
+              const SizedBox(height: 16),
+              if (_isBulkProcessing)
+                const LoadingIndicator(text: 'Processing files...'),
+              const SizedBox(height: 8),
+              ..._bulkItems.asMap().entries.map((entry) {
+                final int index = entry.key;
+                final Map<String, dynamic> item = entry.value;
+                final String name = (item['name'] ?? 'File').toString();
+                final String status = (item['status'] ?? 'queued').toString();
+                final Map<String, dynamic>? data = (item['data'] as Map?)
+                    ?.cast<String, dynamic>();
+                final String subtitle = data == null
+                    ? status[0].toUpperCase() + status.substring(1)
+                    : _summarizeEvent(data);
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: ListTile(
+                    leading: Icon(
+                      data != null
+                          ? Icons.check_circle
+                          : status == 'error'
+                          ? Icons.error
+                          : Icons.hourglass_bottom,
+                      color: data != null
+                          ? const Color(0xFF059669)
+                          : status == 'error'
+                          ? const Color(0xFFDC2626)
+                          : const Color(0xFF6366F1),
+                    ),
+                    title: Text(name),
+                    subtitle: Text(subtitle),
+                    isThreeLine: false,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (data != null)
+                          TextButton(
+                            onPressed: () => _confirmSingleBulkToPending(index),
+                            child: const Text('Confirm'),
+                          ),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            color: Color(0xFFDC2626),
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _bulkItems = List.of(_bulkItems)..removeAt(index);
+                            });
+                          },
+                        ),
+                      ],
                     ),
                   ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Tip: Long-press to multi-select in the picker. Or use Add More to append.',
-              style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
-            ),
-            const SizedBox(height: 16),
-            if (_isBulkProcessing)
-              const LoadingIndicator(text: 'Processing files...'),
-            const SizedBox(height: 8),
-            ..._bulkItems.asMap().entries.map((entry) {
-              final int index = entry.key;
-              final Map<String, dynamic> item = entry.value;
-              final String name = (item['name'] ?? 'File').toString();
-              final String status = (item['status'] ?? 'queued').toString();
-              final Map<String, dynamic>? data =
-                  (item['data'] as Map?)?.cast<String, dynamic>();
-              final String subtitle = data == null
-                  ? status[0].toUpperCase() + status.substring(1)
-                  : _summarizeEvent(data);
-              return Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade200),
-                ),
-                child: ListTile(
-                  leading: Icon(
-                    data != null
-                        ? Icons.check_circle
-                        : status == 'error'
-                            ? Icons.error
-                            : Icons.hourglass_bottom,
-                    color: data != null
-                        ? const Color(0xFF059669)
-                        : status == 'error'
-                            ? const Color(0xFFDC2626)
-                            : const Color(0xFF6366F1),
-                  ),
-                  title: Text(name),
-                  subtitle: Text(subtitle),
-                  isThreeLine: false,
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (data != null)
-                        TextButton(
-                          onPressed: () => _confirmSingleBulkToPending(index),
-                          child: const Text('Confirm'),
-                        ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline, color: Color(0xFFDC2626)),
-                        onPressed: () {
-                          setState(() {
-                            _bulkItems = List.of(_bulkItems)..removeAt(index);
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }),
-          ],
+                );
+              }),
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
   }
 
   String _summarizeEvent(Map<String, dynamic> data) {
     final client = (data['client_name'] ?? '').toString();
-    final name = (data['event_name'] ?? data['venue_name'] ?? 'Untitled').toString();
+    final name = (data['event_name'] ?? data['venue_name'] ?? 'Untitled')
+        .toString();
     final date = (data['date'] ?? '').toString();
-    return [name, if (date.isNotEmpty) date, if (client.isNotEmpty) client].join(' • ');
+    return [
+      name,
+      if (date.isNotEmpty) date,
+      if (client.isNotEmpty) client,
+    ].join(' • ');
   }
 
   Future<void> _pickAndProcessMultipleFiles({required bool append}) async {
@@ -1580,8 +1665,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
 
       for (int idx = 0; idx < added.length; idx++) {
         final currentIndex = startIndex + idx;
-        final original =
-            Map<String, dynamic>.from(_bulkItems[currentIndex]);
+        final original = Map<String, dynamic>.from(_bulkItems[currentIndex]);
         setState(() {
           _bulkItems = List.of(_bulkItems);
           _bulkItems[currentIndex] = {
@@ -1591,8 +1675,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
         });
         try {
           final bytes = await _readBytesFromBulkItem(original);
-          final headerBytes =
-              bytes.length > 20 ? bytes.sublist(0, 20) : bytes;
+          final headerBytes = bytes.length > 20 ? bytes.sublist(0, 20) : bytes;
           final name = (original['name']?.toString() ?? '');
           final lowerName = name.toLowerCase();
           final rawPath = (original['path']?.toString() ?? '');
@@ -1613,7 +1696,8 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
           }
           final response = await _extractionService.extractStructuredData(
             input: input,
-            apiKey: userApiKey ?? Environment.instance.get('OPENAI_API_KEY') ?? '',
+            apiKey:
+                userApiKey ?? Environment.instance.get('OPENAI_API_KEY') ?? '',
           );
           setState(() {
             _bulkItems = List.of(_bulkItems);
@@ -1642,14 +1726,16 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
 
   Future<void> _confirmSingleBulkToPending(int index) async {
     final Map<String, dynamic> item = _bulkItems[index];
-    final Map<String, dynamic>? data =
-        (item['data'] as Map?)?.cast<String, dynamic>();
+    final Map<String, dynamic>? data = (item['data'] as Map?)
+        ?.cast<String, dynamic>();
     if (data == null) return;
     final id = await _pendingService.saveDraft(data);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Saved to Pending (' + (item['name']?.toString() ?? 'File') + ')'),
+        content: Text(
+          'Saved to Pending (' + (item['name']?.toString() ?? 'File') + ')',
+        ),
         backgroundColor: const Color(0xFF059669),
       ),
     );
@@ -1687,7 +1773,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
   bool _isUsersLoading = false;
   Set<String> _favoriteUsers = {};
   String? _selectedRole;
-  
+
   // Get role options dynamically from loaded roles
   List<String> get _favoriteRoleOptions {
     final roles = _roles ?? [];
@@ -1818,7 +1904,10 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF6366F1),
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                       ),
                       icon: const Icon(Icons.search),
                       label: const Text('Search'),
@@ -1838,25 +1927,27 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                         },
                       ),
                       const SizedBox(width: 8),
-                      ..._favoriteRoleOptions.map((role) => Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: FilterChip(
-                          selected: _selectedRole == role,
-                          label: Text(role),
-                          onSelected: (selected) {
-                            setState(() => _selectedRole = selected ? role : null);
-                          },
+                      ..._favoriteRoleOptions.map(
+                        (role) => Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: FilterChip(
+                            selected: _selectedRole == role,
+                            label: Text(role),
+                            onSelected: (selected) {
+                              setState(
+                                () => _selectedRole = selected ? role : null,
+                              );
+                            },
+                          ),
                         ),
-                      )),
+                      ),
                     ],
                   ),
                 ),
               ],
             ),
           ),
-          Expanded(
-            child: _buildUsersContent(),
-          ),
+          Expanded(child: _buildUsersContent()),
         ],
       ),
     );
@@ -1868,11 +1959,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  Icons.star_border,
-                  size: 64,
-                  color: Colors.grey.shade400,
-                ),
+                Icon(Icons.star_border, size: 64, color: Colors.grey.shade400),
                 const SizedBox(height: 16),
                 Text(
                   'No favorite $_selectedRole yet',
@@ -1885,10 +1972,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                 const SizedBox(height: 8),
                 Text(
                   'Star users to add them to this list',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey.shade600,
-                  ),
+                  style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
                 ),
               ],
             ),
@@ -1930,16 +2014,23 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                 final appId = u['app_id']?.toString() ?? '';
                 final firstName = u['first_name']?.toString() ?? '';
                 final lastName = u['last_name']?.toString() ?? '';
-                final displayName = [firstName, lastName].where((s) => s.isNotEmpty).join(' ');
+                final displayName = [
+                  firstName,
+                  lastName,
+                ].where((s) => s.isNotEmpty).join(' ');
                 final picture = u['picture']?.toString();
 
                 return ListTile(
                   leading: CircleAvatar(
-                    backgroundImage: picture != null ? NetworkImage(picture) : null,
+                    backgroundImage: picture != null
+                        ? NetworkImage(picture)
+                        : null,
                     child: picture == null ? const Icon(Icons.person) : null,
                   ),
                   title: Text(
-                    displayName.isNotEmpty ? displayName : (name.isNotEmpty ? name : email),
+                    displayName.isNotEmpty
+                        ? displayName
+                        : (name.isNotEmpty ? name : email),
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   subtitle: Column(
@@ -1966,7 +2057,8 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                                 ? Colors.amber
                                 : null,
                           ),
-                          onPressed: () => _toggleFavorite(userId, _selectedRole!),
+                          onPressed: () =>
+                              _toggleFavorite(userId, _selectedRole!),
                           tooltip: _isFavorite(userId, _selectedRole)
                               ? 'Remove from $_selectedRole favorites'
                               : 'Add to $_selectedRole favorites',
@@ -1980,22 +2072,27 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                               title: Text('View events'),
                             ),
                           ),
-                          ...(_selectedRole == null ? _favoriteRoleOptions : [_selectedRole!]).map(
-                            (role) => PopupMenuItem(
-                              value: 'favorite:$role',
-                              child: ListTile(
-                                leading: Icon(
-                                  _isFavorite(userId, role)
-                                      ? Icons.star
-                                      : Icons.star_border,
-                                  color: _isFavorite(userId, role)
-                                      ? Colors.amber
-                                      : null,
+                          ...(_selectedRole == null
+                                  ? _favoriteRoleOptions
+                                  : [_selectedRole!])
+                              .map(
+                                (role) => PopupMenuItem(
+                                  value: 'favorite:$role',
+                                  child: ListTile(
+                                    leading: Icon(
+                                      _isFavorite(userId, role)
+                                          ? Icons.star
+                                          : Icons.star_border,
+                                      color: _isFavorite(userId, role)
+                                          ? Colors.amber
+                                          : null,
+                                    ),
+                                    title: Text(
+                                      '${_isFavorite(userId, role) ? 'Remove from' : 'Add to'} $role favorites',
+                                    ),
+                                  ),
                                 ),
-                                title: Text('${_isFavorite(userId, role) ? 'Remove from' : 'Add to'} $role favorites'),
                               ),
-                            ),
-                          ),
                         ],
                         onSelected: (value) async {
                           if (value == 'view') {
@@ -2046,7 +2143,11 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                 ),
                 child: Column(
                   children: [
-                    const Icon(Icons.auto_awesome, color: Colors.white, size: 32),
+                    const Icon(
+                      Icons.auto_awesome,
+                      color: Colors.white,
+                      size: 32,
+                    ),
                     const SizedBox(height: 12),
                     const Text(
                       'Event Data Extractor',
@@ -2079,136 +2180,140 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                 isLoading: isLoading,
                 color: const Color(0xFF6366F1),
               ),
-            const SizedBox(height: 20),
-            if (isLoading) ...[
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: const LoadingIndicator(
-                  text: 'Analyzing document with AI...',
-                ),
-              ),
               const SizedBox(height: 20),
-            ],
-            if (errorMessage != null) ...[
-              ErrorBanner(message: errorMessage!),
-              const SizedBox(height: 20),
-            ],
-            // Hide extracted text preview in Upload flow
-            if (structuredData != null) ...[
-              InfoCard(
-                title: 'Event Details',
-                icon: Icons.event_note,
-                child: _buildEventDetails(structuredData!),
-              ),
-              const SizedBox(height: 12),
-              // Allow quick adjustments for date and time before saving
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade200, width: 1),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Adjust Date & Time',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey.shade700,
+              if (isLoading) ...[
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        OutlinedButton.icon(
-                          onPressed: _pickDateForUpload,
-                          icon: const Icon(Icons.calendar_today, size: 16),
-                          label: Text(
-                            _dateController.text.isNotEmpty
-                                ? _dateController.text
-                                : (structuredData!['date']?.toString() ??
-                                      'Pick date'),
-                          ),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: () => _pickTimeForUpload(isStart: true),
-                          icon: const Icon(Icons.access_time, size: 16),
-                          label: Text(
-                            _startTimeController.text.isNotEmpty
-                                ? _startTimeController.text
-                                : (structuredData!['start_time']?.toString() ??
-                                      'Start time'),
-                          ),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: () => _pickTimeForUpload(isStart: false),
-                          icon: const Icon(Icons.access_time_filled, size: 16),
-                          label: Text(
-                            _endTimeController.text.isNotEmpty
-                                ? _endTimeController.text
-                                : (structuredData!['end_time']?.toString() ??
-                                      'End time'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerRight,
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    // Build payload from current structured data
-                    final Map<String, dynamic> payload =
-                        Map<String, dynamic>.from(structuredData!);
-                    // Ensure client is attached from selection if it exists
-                    final selClient = _clientNameController.text.trim();
-                    if (selClient.isNotEmpty) {
-                      payload['client_name'] = selClient;
-                    }
-                    // Save to pending
-                    final id = await _pendingService.saveDraft(payload);
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Saved to Pending'),
-                        backgroundColor: Color(0xFF059669),
-                      ),
-                    );
-                    await _draftService.clearDraft();
-                  },
-                  icon: const Icon(Icons.save, size: 18),
-                  label: const Text('Save to Pending'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6366F1),
-                    foregroundColor: Colors.white,
+                    ],
+                  ),
+                  child: const LoadingIndicator(
+                    text: 'Analyzing document with AI...',
                   ),
                 ),
-              ),
+                const SizedBox(height: 20),
+              ],
+              if (errorMessage != null) ...[
+                ErrorBanner(message: errorMessage!),
+                const SizedBox(height: 20),
+              ],
+              // Hide extracted text preview in Upload flow
+              if (structuredData != null) ...[
+                InfoCard(
+                  title: 'Event Details',
+                  icon: Icons.event_note,
+                  child: _buildEventDetails(structuredData!),
+                ),
+                const SizedBox(height: 12),
+                // Allow quick adjustments for date and time before saving
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade200, width: 1),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Adjust Date & Time',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: _pickDateForUpload,
+                            icon: const Icon(Icons.calendar_today, size: 16),
+                            label: Text(
+                              _dateController.text.isNotEmpty
+                                  ? _dateController.text
+                                  : (structuredData!['date']?.toString() ??
+                                        'Pick date'),
+                            ),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: () => _pickTimeForUpload(isStart: true),
+                            icon: const Icon(Icons.access_time, size: 16),
+                            label: Text(
+                              _startTimeController.text.isNotEmpty
+                                  ? _startTimeController.text
+                                  : (structuredData!['start_time']
+                                            ?.toString() ??
+                                        'Start time'),
+                            ),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: () => _pickTimeForUpload(isStart: false),
+                            icon: const Icon(
+                              Icons.access_time_filled,
+                              size: 16,
+                            ),
+                            label: Text(
+                              _endTimeController.text.isNotEmpty
+                                  ? _endTimeController.text
+                                  : (structuredData!['end_time']?.toString() ??
+                                        'End time'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      // Build payload from current structured data
+                      final Map<String, dynamic> payload =
+                          Map<String, dynamic>.from(structuredData!);
+                      // Ensure client is attached from selection if it exists
+                      final selClient = _clientNameController.text.trim();
+                      if (selClient.isNotEmpty) {
+                        payload['client_name'] = selClient;
+                      }
+                      // Save to pending
+                      final id = await _pendingService.saveDraft(payload);
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Saved to Pending'),
+                          backgroundColor: Color(0xFF059669),
+                        ),
+                      );
+                      await _draftService.clearDraft();
+                    },
+                    icon: const Icon(Icons.save, size: 18),
+                    label: const Text('Save to Pending'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF6366F1),
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
-    ),
-  );
+    );
   }
 
   // Helpers for adjusting date/time in Upload flow
@@ -2317,44 +2422,38 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
     }
   }
 
-  int _compareEventsAscending(
-    Map<String, dynamic> a,
-    Map<String, dynamic> b,
-  ) {
+  int _compareEventsAscending(Map<String, dynamic> a, Map<String, dynamic> b) {
     final DateTime? aDate = _eventDateTime(a);
     final DateTime? bDate = _eventDateTime(b);
     if (aDate == null && bDate == null) {
       return (a['event_name'] ?? '').toString().compareTo(
-            (b['event_name'] ?? '').toString(),
-          );
+        (b['event_name'] ?? '').toString(),
+      );
     }
     if (aDate == null) return 1;
     if (bDate == null) return -1;
     final cmp = aDate.compareTo(bDate);
     if (cmp != 0) return cmp;
     return (a['event_name'] ?? '').toString().compareTo(
-          (b['event_name'] ?? '').toString(),
-        );
+      (b['event_name'] ?? '').toString(),
+    );
   }
 
-  int _compareEventsDescending(
-    Map<String, dynamic> a,
-    Map<String, dynamic> b,
-  ) {
+  int _compareEventsDescending(Map<String, dynamic> a, Map<String, dynamic> b) {
     final DateTime? aDate = _eventDateTime(a);
     final DateTime? bDate = _eventDateTime(b);
     if (aDate == null && bDate == null) {
       return (a['event_name'] ?? '').toString().compareTo(
-            (b['event_name'] ?? '').toString(),
-          );
+        (b['event_name'] ?? '').toString(),
+      );
     }
     if (aDate == null) return 1;
     if (bDate == null) return -1;
     final cmp = bDate.compareTo(aDate);
     if (cmp != 0) return cmp;
     return (a['event_name'] ?? '').toString().compareTo(
-          (b['event_name'] ?? '').toString(),
-        );
+      (b['event_name'] ?? '').toString(),
+    );
   }
 
   Future<void> _loadEvents() async {
@@ -2514,16 +2613,20 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                         },
                       ),
                       const SizedBox(width: 8),
-                      ..._favoriteRoleOptions.map((role) => Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: FilterChip(
-                          selected: _selectedRole == role,
-                          label: Text(role),
-                          onSelected: (selected) {
-                            setState(() => _selectedRole = selected ? role : null);
-                          },
+                      ..._favoriteRoleOptions.map(
+                        (role) => Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: FilterChip(
+                            selected: _selectedRole == role,
+                            label: Text(role),
+                            onSelected: (selected) {
+                              setState(
+                                () => _selectedRole = selected ? role : null,
+                              );
+                            },
+                          ),
                         ),
-                      )),
+                      ),
                     ],
                   ),
                 ),
@@ -2532,18 +2635,12 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
           ),
         ),
       ),
-      SliverFillRemaining(
-        child: _buildUsersContent(),
-      ),
+      SliverFillRemaining(child: _buildUsersContent()),
     ];
   }
 
   List<Widget> _buildHoursSlivers() {
-    return [
-      SliverFillRemaining(
-        child: const HoursApprovalListScreen(),
-      ),
-    ];
+    return [SliverFillRemaining(child: const HoursApprovalListScreen())];
   }
 
   List<Widget> _buildCatalogSlivers() {
@@ -2570,11 +2667,7 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
       SliverFillRemaining(
         child: TabBarView(
           controller: _catalogTabController,
-          children: [
-            _buildClientsTab(),
-            _buildRolesTab(),
-            _buildTariffsTab(),
-          ],
+          children: [_buildClientsTab(), _buildRolesTab(), _buildTariffsTab()],
         ),
       ),
     ];
@@ -2637,7 +2730,8 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
       if (dateStr.isNotEmpty) {
         try {
           final date = DateTime.parse(dateStr);
-          final monthKey = '${date.year}-${date.month.toString().padLeft(2, '0')}';
+          final monthKey =
+              '${date.year}-${date.month.toString().padLeft(2, '0')}';
           pastByMonth.putIfAbsent(monthKey, () => []).add(event);
         } catch (_) {
           pastByMonth.putIfAbsent('unknown', () => []).add(event);
@@ -2695,7 +2789,9 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                 ErrorBanner(message: _eventsError!),
                 const SizedBox(height: 12),
               ],
-              if (!_isEventsLoading && sortedItems.isEmpty && _eventsError == null)
+              if (!_isEventsLoading &&
+                  sortedItems.isEmpty &&
+                  _eventsError == null)
                 Container(
                   padding: const EdgeInsets.all(32),
                   decoration: BoxDecoration(
@@ -2737,7 +2833,9 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        kIsWeb ? 'Click Refresh to update.' : 'Pull to refresh.',
+                        kIsWeb
+                            ? 'Click Refresh to update.'
+                            : 'Pull to refresh.',
                         style: TextStyle(
                           color: Colors.grey.shade600,
                           fontSize: 15,
@@ -2770,8 +2868,18 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                       final month = int.parse(parts[1]);
 
                       const monthNames = [
-                        'January', 'February', 'March', 'April', 'May', 'June',
-                        'July', 'August', 'September', 'October', 'November', 'December'
+                        'January',
+                        'February',
+                        'March',
+                        'April',
+                        'May',
+                        'June',
+                        'July',
+                        'August',
+                        'September',
+                        'October',
+                        'November',
+                        'December',
                       ];
 
                       monthLabel = '${monthNames[month - 1]} $year';
@@ -2866,7 +2974,9 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                     ),
                   ),
                 if (kIsWeb) const SizedBox(height: 12),
-                const Center(child: LoadingIndicator(text: 'Loading events...')),
+                const Center(
+                  child: LoadingIndicator(text: 'Loading events...'),
+                ),
               ],
             );
           }
@@ -2925,7 +3035,9 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                 ErrorBanner(message: _eventsError!),
                 const SizedBox(height: 12),
               ],
-              if (!_isEventsLoading && sortedItems.isEmpty && _eventsError == null)
+              if (!_isEventsLoading &&
+                  sortedItems.isEmpty &&
+                  _eventsError == null)
                 Container(
                   padding: const EdgeInsets.all(32),
                   decoration: BoxDecoration(
@@ -2967,7 +3079,9 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        kIsWeb ? 'Click Refresh to update.' : 'Pull to refresh.',
+                        kIsWeb
+                            ? 'Click Refresh to update.'
+                            : 'Pull to refresh.',
                         style: TextStyle(
                           color: Colors.grey.shade600,
                           fontSize: 15,
@@ -3091,7 +3205,8 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                         if (!mounted) return;
                         final changed = await Navigator.of(context).push<bool>(
                           MaterialPageRoute(
-                            builder: (_) => PendingEditScreen(draft: data, draftId: id),
+                            builder: (_) =>
+                                PendingEditScreen(draft: data, draftId: id),
                           ),
                         );
                         if (changed == true) {
@@ -3413,7 +3528,8 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                         ],
                       ),
                     ),
-                    if (_selectedClientIdForTariffs != null || _selectedRoleIdForTariffs != null)
+                    if (_selectedClientIdForTariffs != null ||
+                        _selectedRoleIdForTariffs != null)
                       TextButton.icon(
                         onPressed: () {
                           setState(() {
@@ -3446,13 +3562,15 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                                   value: null,
                                   child: Text('All Clients'),
                                 ),
-                                ...clients.map((c) => DropdownMenuItem(
-                                      value: (c['id'] ?? '').toString(),
-                                      child: Text(
-                                        (c['name'] ?? '').toString(),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    )),
+                                ...clients.map(
+                                  (c) => DropdownMenuItem(
+                                    value: (c['id'] ?? '').toString(),
+                                    child: Text(
+                                      (c['name'] ?? '').toString(),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ),
                               ],
                               onChanged: (v) {
                                 setState(() => _selectedClientIdForTariffs = v);
@@ -3460,7 +3578,10 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                               },
                               decoration: InputDecoration(
                                 labelText: 'Filter by Client',
-                                prefixIcon: const Icon(Icons.business, size: 20),
+                                prefixIcon: const Icon(
+                                  Icons.business,
+                                  size: 20,
+                                ),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
@@ -3483,13 +3604,15 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                                   value: null,
                                   child: Text('All Roles'),
                                 ),
-                                ...roles.map((r) => DropdownMenuItem(
-                                      value: (r['id'] ?? '').toString(),
-                                      child: Text(
-                                        (r['name'] ?? '').toString(),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    )),
+                                ...roles.map(
+                                  (r) => DropdownMenuItem(
+                                    value: (r['id'] ?? '').toString(),
+                                    child: Text(
+                                      (r['name'] ?? '').toString(),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ),
                               ],
                               onChanged: (v) {
                                 setState(() => _selectedRoleIdForTariffs = v);
@@ -3497,7 +3620,10 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                               },
                               decoration: InputDecoration(
                                 labelText: 'Filter by Role',
-                                prefixIcon: const Icon(Icons.work_outline, size: 20),
+                                prefixIcon: const Icon(
+                                  Icons.work_outline,
+                                  size: 20,
+                                ),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
@@ -3522,13 +3648,15 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                                 value: null,
                                 child: Text('All Clients'),
                               ),
-                              ...clients.map((c) => DropdownMenuItem(
-                                    value: (c['id'] ?? '').toString(),
-                                    child: Text(
-                                      (c['name'] ?? '').toString(),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  )),
+                              ...clients.map(
+                                (c) => DropdownMenuItem(
+                                  value: (c['id'] ?? '').toString(),
+                                  child: Text(
+                                    (c['name'] ?? '').toString(),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
                             ],
                             onChanged: (v) {
                               setState(() => _selectedClientIdForTariffs = v);
@@ -3557,13 +3685,15 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                                 value: null,
                                 child: Text('All Roles'),
                               ),
-                              ...roles.map((r) => DropdownMenuItem(
-                                    value: (r['id'] ?? '').toString(),
-                                    child: Text(
-                                      (r['name'] ?? '').toString(),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  )),
+                              ...roles.map(
+                                (r) => DropdownMenuItem(
+                                  value: (r['id'] ?? '').toString(),
+                                  child: Text(
+                                    (r['name'] ?? '').toString(),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
                             ],
                             onChanged: (v) {
                               setState(() => _selectedRoleIdForTariffs = v);
@@ -3571,7 +3701,10 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                             },
                             decoration: InputDecoration(
                               labelText: 'Filter by Role',
-                              prefixIcon: const Icon(Icons.work_outline, size: 20),
+                              prefixIcon: const Icon(
+                                Icons.work_outline,
+                                size: 20,
+                              ),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
@@ -3610,7 +3743,10 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
               child: Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFF6366F1).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(20),
@@ -3658,13 +3794,11 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      _selectedClientIdForTariffs != null || _selectedRoleIdForTariffs != null
+                      _selectedClientIdForTariffs != null ||
+                              _selectedRoleIdForTariffs != null
                           ? 'Try adjusting your filters or create a new tariff'
                           : 'Create your first tariff to get started',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[600],
-                      ),
+                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -3685,11 +3819,10 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                       childAspectRatio: 2.5,
                     ),
                     itemCount: tariffs.length,
-                    itemBuilder: (context, index) => _tariffTile(tariffs[index]),
+                    itemBuilder: (context, index) =>
+                        _tariffTile(tariffs[index]),
                   )
-                : Column(
-                    children: tariffs.map((t) => _tariffTile(t)).toList(),
-                  ),
+                : Column(children: tariffs.map((t) => _tariffTile(t)).toList()),
         ],
       ),
     );
@@ -3785,7 +3918,10 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                   ),
                   const SizedBox(height: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFF6366F1).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
@@ -3872,7 +4008,9 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
             ],
           ),
           content: SizedBox(
-            width: ResponsiveLayout.shouldUseDesktopLayout(context) ? 500 : double.maxFinite,
+            width: ResponsiveLayout.shouldUseDesktopLayout(context)
+                ? 500
+                : double.maxFinite,
             child: Form(
               key: formKey,
               child: Column(
@@ -3892,12 +4030,15 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                       fillColor: const Color(0xFFF9FAFB),
                     ),
                     items: clients
-                        .map((c) => DropdownMenuItem(
-                              value: (c['id'] ?? '').toString(),
-                              child: Text((c['name'] ?? '').toString()),
-                            ))
+                        .map(
+                          (c) => DropdownMenuItem(
+                            value: (c['id'] ?? '').toString(),
+                            child: Text((c['name'] ?? '').toString()),
+                          ),
+                        )
                         .toList(),
-                    onChanged: (v) => setDialogState(() => selectedClientId = v),
+                    onChanged: (v) =>
+                        setDialogState(() => selectedClientId = v),
                     validator: (v) => v == null ? 'Required' : null,
                   ),
                   const SizedBox(height: 16),
@@ -3914,10 +4055,12 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                       fillColor: const Color(0xFFF9FAFB),
                     ),
                     items: roles
-                        .map((r) => DropdownMenuItem(
-                              value: (r['id'] ?? '').toString(),
-                              child: Text((r['name'] ?? '').toString()),
-                            ))
+                        .map(
+                          (r) => DropdownMenuItem(
+                            value: (r['id'] ?? '').toString(),
+                            child: Text((r['name'] ?? '').toString()),
+                          ),
+                        )
                         .toList(),
                     onChanged: (v) => setDialogState(() => selectedRoleId = v),
                     validator: (v) => v == null ? 'Required' : null,
@@ -3926,7 +4069,9 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                   // Rate field
                   TextFormField(
                     controller: rateController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     decoration: InputDecoration(
                       labelText: 'Hourly Rate *',
                       prefixIcon: const Icon(Icons.attach_money, size: 20),
@@ -3962,7 +4107,10 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF059669),
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -4016,15 +4164,23 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
     final clients = _clients ?? const [];
     final roles = _roles ?? const [];
 
-    final clientName = clients.firstWhere(
-      (c) => (c['id'] ?? '') == clientId,
-      orElse: () => const {},
-    )['name']?.toString() ?? 'Unknown';
+    final clientName =
+        clients
+            .firstWhere(
+              (c) => (c['id'] ?? '') == clientId,
+              orElse: () => const {},
+            )['name']
+            ?.toString() ??
+        'Unknown';
 
-    final roleName = roles.firstWhere(
-      (r) => (r['id'] ?? '') == roleId,
-      orElse: () => const {},
-    )['name']?.toString() ?? 'Unknown';
+    final roleName =
+        roles
+            .firstWhere(
+              (r) => (r['id'] ?? '') == roleId,
+              orElse: () => const {},
+            )['name']
+            ?.toString() ??
+        'Unknown';
 
     final rateController = TextEditingController(text: currentRate.toString());
     final formKey = GlobalKey<FormState>();
@@ -4051,7 +4207,9 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
           ],
         ),
         content: SizedBox(
-          width: ResponsiveLayout.shouldUseDesktopLayout(context) ? 500 : double.maxFinite,
+          width: ResponsiveLayout.shouldUseDesktopLayout(context)
+              ? 500
+              : double.maxFinite,
           child: Form(
             key: formKey,
             child: Column(
@@ -4070,7 +4228,11 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.business, size: 18, color: Color(0xFF6B7280)),
+                          const Icon(
+                            Icons.business,
+                            size: 18,
+                            color: Color(0xFF6B7280),
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -4087,7 +4249,11 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          const Icon(Icons.work_outline, size: 18, color: Color(0xFF6B7280)),
+                          const Icon(
+                            Icons.work_outline,
+                            size: 18,
+                            color: Color(0xFF6B7280),
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -4109,7 +4275,9 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                 TextFormField(
                   controller: rateController,
                   autofocus: true,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   decoration: InputDecoration(
                     labelText: 'Hourly Rate *',
                     prefixIcon: const Icon(Icons.attach_money, size: 20),
@@ -4636,10 +4804,24 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
         final d = DateTime.parse(rawDate);
         final now = DateTime.now();
         isUpcoming = !d.isBefore(DateTime(now.year, now.month, now.day));
-        dateStr = '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+        dateStr =
+            '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
         // Format date as "Mon, Jan 15"
-        final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        final months = [
+          'Jan',
+          'Feb',
+          'Mar',
+          'Apr',
+          'May',
+          'Jun',
+          'Jul',
+          'Aug',
+          'Sep',
+          'Oct',
+          'Nov',
+          'Dec',
+        ];
         final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
         displayDate = '${days[d.weekday - 1]}, ${months[d.month - 1]} ${d.day}';
       } catch (_) {
@@ -4667,7 +4849,9 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
         await _loadEvents();
       },
       child: Container(
-        margin: showMargin ? const EdgeInsets.only(bottom: 12) : EdgeInsets.zero,
+        margin: showMargin
+            ? const EdgeInsets.only(bottom: 12)
+            : EdgeInsets.zero,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
@@ -4876,262 +5060,264 @@ class _ExtractionScreenState extends State<ExtractionScreen> with TickerProvider
                       icon: Icons.celebration,
                       isRequired: true,
                     ),
-                  const SizedBox(height: 16),
-                  LabeledTextField(
-                    controller: _clientNameController,
-                    label: 'Client Name',
-                    icon: Icons.person,
-                    isRequired: true,
-                  ),
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: () async {
-                        await _openClientPicker();
-                      },
-                      icon: const Icon(Icons.business),
-                      label: const Text('Pick from Clients'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: const Color(0xFF6366F1),
+                    const SizedBox(height: 16),
+                    LabeledTextField(
+                      controller: _clientNameController,
+                      label: 'Client Name',
+                      icon: Icons.person,
+                      isRequired: true,
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: () async {
+                          await _openClientPicker();
+                        },
+                        icon: const Icon(Icons.business),
+                        label: const Text('Pick from Clients'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: const Color(0xFF6366F1),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildModernDatePicker(),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildModernTimePicker(
-                          label: 'Start Time',
-                          icon: Icons.access_time,
-                          selectedTime: _selectedStartTime,
-                          onTimeSelected: (time) {
-                            setState(() {
-                              _selectedStartTime = time;
-                              _startTimeController.text = time.format(context);
-                            });
-                          },
+                    const SizedBox(height: 16),
+                    _buildModernDatePicker(),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildModernTimePicker(
+                            label: 'Start Time',
+                            icon: Icons.access_time,
+                            selectedTime: _selectedStartTime,
+                            onTimeSelected: (time) {
+                              setState(() {
+                                _selectedStartTime = time;
+                                _startTimeController.text = time.format(
+                                  context,
+                                );
+                              });
+                            },
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildModernTimePicker(
-                          label: 'End Time',
-                          icon: Icons.access_time_filled,
-                          selectedTime: _selectedEndTime,
-                          onTimeSelected: (time) {
-                            setState(() {
-                              _selectedEndTime = time;
-                              _endTimeController.text = time.format(context);
-                            });
-                          },
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildModernTimePicker(
+                            label: 'End Time',
+                            icon: Icons.access_time_filled,
+                            selectedTime: _selectedEndTime,
+                            onTimeSelected: (time) {
+                              setState(() {
+                                _selectedEndTime = time;
+                                _endTimeController.text = time.format(context);
+                              });
+                            },
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        flex: 2,
-                        child: Container(), // Spacer
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: LabeledTextField(
-                          controller: _headcountController,
-                          label: 'Headcount',
-                          icon: Icons.people,
-                          keyboardType: TextInputType.number,
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: Container(), // Spacer
                         ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              FormSection(
-                title: 'Venue Information',
-                icon: Icons.location_on,
-                children: [
-                  LabeledTextField(
-                    controller: _venueNameController,
-                    label: 'Venue Name',
-                    icon: Icons.business,
-                  ),
-                  const SizedBox(height: 16),
-                  ModernAddressField(
-                    controller: _venueAddressController,
-                    label: 'Address',
-                    icon: Icons.place,
-                    onPlaceSelected: (placeDetails) {
-                      setState(() {
-                        _selectedVenuePlace = placeDetails;
-                        // Auto-fill city and state from the selected place
-                        if (placeDetails
-                                .addressComponents['city']
-                                ?.isNotEmpty ==
-                            true) {
-                          _cityController.text =
-                              placeDetails.addressComponents['city']!;
-                        }
-                        if (placeDetails
-                                .addressComponents['state']
-                                ?.isNotEmpty ==
-                            true) {
-                          _stateController.text =
-                              placeDetails.addressComponents['state']!;
-                        }
-                      });
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: LabeledTextField(
+                            controller: _headcountController,
+                            label: 'Headcount',
+                            icon: Icons.people,
+                            keyboardType: TextInputType.number,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                FormSection(
+                  title: 'Venue Information',
+                  icon: Icons.location_on,
+                  children: [
+                    LabeledTextField(
+                      controller: _venueNameController,
+                      label: 'Venue Name',
+                      icon: Icons.business,
+                    ),
+                    const SizedBox(height: 16),
+                    ModernAddressField(
+                      controller: _venueAddressController,
+                      label: 'Address',
+                      icon: Icons.place,
+                      onPlaceSelected: (placeDetails) {
+                        setState(() {
+                          _selectedVenuePlace = placeDetails;
+                          // Auto-fill city and state from the selected place
+                          if (placeDetails
+                                  .addressComponents['city']
+                                  ?.isNotEmpty ==
+                              true) {
+                            _cityController.text =
+                                placeDetails.addressComponents['city']!;
+                          }
+                          if (placeDetails
+                                  .addressComponents['state']
+                                  ?.isNotEmpty ==
+                              true) {
+                            _stateController.text =
+                                placeDetails.addressComponents['state']!;
+                          }
+                        });
 
-                      // Show success feedback
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Row(
-                            children: [
-                              const Icon(
-                                Icons.check_circle,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'Address selected and city/state auto-filled',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w500,
+                        // Show success feedback
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Row(
+                              children: [
+                                const Icon(
+                                  Icons.check_circle,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Address selected and city/state auto-filled',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w500,
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ],
-                          ),
-                          backgroundColor: const Color(0xFF059669),
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        flex: 2,
-                        child: LabeledTextField(
-                          controller: _cityController,
-                          label: 'City',
-                          icon: Icons.location_city,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: LabeledTextField(
-                          controller: _stateController,
-                          label: 'State',
-                          icon: Icons.map,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              FormSection(
-                title: 'Contact Information',
-                icon: Icons.contact_phone,
-                children: [
-                  LabeledTextField(
-                    controller: _contactNameController,
-                    label: 'Contact Name',
-                    icon: Icons.person_outline,
-                  ),
-                  const SizedBox(height: 16),
-                  LabeledTextField(
-                    controller: _contactPhoneController,
-                    label: 'Phone Number',
-                    icon: Icons.phone,
-                    keyboardType: TextInputType.phone,
-                  ),
-                  const SizedBox(height: 16),
-                  LabeledTextField(
-                    controller: _contactEmailController,
-                    label: 'Email',
-                    icon: Icons.email,
-                    keyboardType: TextInputType.emailAddress,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              FormSection(
-                title: 'Additional Notes',
-                icon: Icons.note,
-                children: [
-                  LabeledTextField(
-                    controller: _notesController,
-                    label: 'Notes',
-                    icon: Icons.notes,
-                    maxLines: 3,
-                    placeholder: 'Special requirements, setup details, etc.',
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
-                onPressed: _submitManualEntry,
-                icon: const Icon(Icons.save, size: 20),
-                label: const Text(
-                  'Save Event Details',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF059669),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 32,
-                    vertical: 16,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  elevation: 0,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerRight,
-                child: ElevatedButton.icon(
-                  onPressed: structuredData == null
-                      ? null
-                      : () async {
-                          final Map<String, dynamic> payload =
-                              Map<String, dynamic>.from(structuredData!);
-                          final selClient = _clientNameController.text.trim();
-                          if (selClient.isNotEmpty) {
-                            payload['client_name'] = selClient;
-                          }
-                          await _pendingService.saveDraft(payload);
-                          if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Saved to Pending'),
-                              backgroundColor: Color(0xFF059669),
+                              ],
                             ),
-                          );
-                          await _draftService.clearDraft();
-                        },
-                  icon: const Icon(Icons.save, size: 18),
-                  label: const Text('Save to Pending'),
+                            backgroundColor: const Color(0xFF059669),
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: LabeledTextField(
+                            controller: _cityController,
+                            label: 'City',
+                            icon: Icons.location_city,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: LabeledTextField(
+                            controller: _stateController,
+                            label: 'State',
+                            icon: Icons.map,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                FormSection(
+                  title: 'Contact Information',
+                  icon: Icons.contact_phone,
+                  children: [
+                    LabeledTextField(
+                      controller: _contactNameController,
+                      label: 'Contact Name',
+                      icon: Icons.person_outline,
+                    ),
+                    const SizedBox(height: 16),
+                    LabeledTextField(
+                      controller: _contactPhoneController,
+                      label: 'Phone Number',
+                      icon: Icons.phone,
+                      keyboardType: TextInputType.phone,
+                    ),
+                    const SizedBox(height: 16),
+                    LabeledTextField(
+                      controller: _contactEmailController,
+                      label: 'Email',
+                      icon: Icons.email,
+                      keyboardType: TextInputType.emailAddress,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                FormSection(
+                  title: 'Additional Notes',
+                  icon: Icons.note,
+                  children: [
+                    LabeledTextField(
+                      controller: _notesController,
+                      label: 'Notes',
+                      icon: Icons.notes,
+                      maxLines: 3,
+                      placeholder: 'Special requirements, setup details, etc.',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: _submitManualEntry,
+                  icon: const Icon(Icons.save, size: 20),
+                  label: const Text(
+                    'Save Event Details',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                  ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6366F1),
+                    backgroundColor: const Color(0xFF059669),
                     foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 32,
+                      vertical: 16,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 0,
                   ),
                 ),
-              ),
-              const SizedBox(height: 20),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: ElevatedButton.icon(
+                    onPressed: structuredData == null
+                        ? null
+                        : () async {
+                            final Map<String, dynamic> payload =
+                                Map<String, dynamic>.from(structuredData!);
+                            final selClient = _clientNameController.text.trim();
+                            if (selClient.isNotEmpty) {
+                              payload['client_name'] = selClient;
+                            }
+                            await _pendingService.saveDraft(payload);
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Saved to Pending'),
+                                backgroundColor: Color(0xFF059669),
+                              ),
+                            );
+                            await _draftService.clearDraft();
+                          },
+                    icon: const Icon(Icons.save, size: 18),
+                    label: const Text('Save to Pending'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF6366F1),
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
                 if (structuredData != null) ...[
                   InfoCard(
                     title: 'Event Details',

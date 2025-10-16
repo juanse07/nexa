@@ -8,7 +8,10 @@ import { TariffModel } from '../models/tariff';
 import { ClientModel } from '../models/client';
 import { RoleModel } from '../models/role';
 import { ManagerModel } from '../models/manager';
+import { TeamModel } from '../models/team';
+import { TeamMemberModel } from '../models/teamMember';
 import { resolveManagerForRequest } from '../utils/manager';
+import { emitToManager, emitToTeams, emitToUser } from '../socket/server';
 
 const router = Router();
 
@@ -60,6 +63,7 @@ const eventSchema = z.object({
   pay_rate_info: z.string().nullish(),
   accepted_staff: z.array(acceptedStaffSchema).nullish(),
   audience_user_keys: z.array(z.string()).nullish(),
+  audience_team_ids: z.array(z.string()).nullish(),
 });
 
 function computeRoleStats(roles: any[], accepted: any[]) {
@@ -202,6 +206,42 @@ async function enrichEventsWithTariffs(events: any[]): Promise<any[]> {
   return results;
 }
 
+async function sanitizeTeamIds(
+  managerId: mongoose.Types.ObjectId,
+  input: unknown
+): Promise<mongoose.Types.ObjectId[]> {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+  const uniqueStrings = Array.from(
+    new Set(
+      input
+        .map((value) => {
+          if (value == null) return '';
+          return value.toString().trim();
+        })
+        .filter((value) => value.length > 0)
+    )
+  );
+
+  const objectIds = uniqueStrings
+    .filter((value) => mongoose.Types.ObjectId.isValid(value))
+    .map((value) => new mongoose.Types.ObjectId(value));
+
+  if (objectIds.length === 0) {
+    return [];
+  }
+
+  const teams = await TeamModel.find({
+    _id: { $in: objectIds },
+    managerId,
+  })
+    .select('_id')
+    .lean();
+
+  return teams.map((team) => team._id as mongoose.Types.ObjectId);
+}
+
 router.post('/events', requireAuth, async (req, res) => {
   try {
     const manager = await resolveManagerForRequest(req);
@@ -214,6 +254,8 @@ router.post('/events', requireAuth, async (req, res) => {
     }
 
     const raw = parsed.data as any;
+    const teamIds = await sanitizeTeamIds(manager._id, raw.audience_team_ids);
+    raw.audience_team_ids = teamIds;
     // Backwards compatibility: accept client_company_name and map to new field
     if ((raw as any).client_company_name && !(raw as any).third_party_company_name) {
       (raw as any).third_party_company_name = (raw as any).client_company_name;
@@ -280,11 +322,29 @@ router.post('/events', requireAuth, async (req, res) => {
       managerId: manager._id,
     });
     const createdObj = created.toObject();
-    return res.status(201).json({
+    const responsePayload = {
       ...createdObj,
       id: String(createdObj._id),
       managerId: createdObj.managerId ? String(createdObj.managerId) : undefined,
-    });
+      audience_user_keys: (createdObj.audience_user_keys || []).map((v: any) => v?.toString()).filter((v: string | undefined) => !!v),
+      audience_team_ids: (createdObj.audience_team_ids || [])
+        .map((v: any) => v?.toString())
+        .filter((v: string | undefined) => !!v),
+    };
+
+    emitToManager(String(manager._id), 'event:created', responsePayload);
+
+    const audienceTeams = (responsePayload.audience_team_ids || []) as string[];
+    if (audienceTeams.length > 0) {
+      emitToTeams(audienceTeams, 'event:created', responsePayload);
+    }
+
+    const audienceUsers = (responsePayload.audience_user_keys || []) as string[];
+    for (const key of audienceUsers) {
+      emitToUser(key, 'event:created', responsePayload);
+    }
+
+    return res.status(201).json(responsePayload);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('Failed to create event', err);
@@ -386,6 +446,22 @@ router.patch('/events/:id', requireAuth, async (req, res) => {
     delete updateData._id;
     delete updateData.id;
 
+    if (Object.prototype.hasOwnProperty.call(updateData, 'audience_team_ids')) {
+      if (Array.isArray(updateData.audience_team_ids)) {
+        updateData.audience_team_ids = await sanitizeTeamIds(
+          manager._id,
+          updateData.audience_team_ids
+        );
+      } else if (
+        updateData.audience_team_ids === null ||
+        updateData.audience_team_ids === undefined
+      ) {
+        updateData.audience_team_ids = [];
+      } else {
+        delete updateData.audience_team_ids;
+      }
+    }
+
     // Normalize date if provided
     if (updateData.date) {
       updateData.date = new Date(updateData.date);
@@ -408,7 +484,29 @@ router.patch('/events/:id', requireAuth, async (req, res) => {
     if (!updated) {
       return res.status(404).json({ message: 'Event not found after update' });
     }
-    return res.json({ ...updated, id: String(updated._id) });
+    const responsePayload = {
+      ...updated,
+      id: String(updated._id),
+      managerId: updated.managerId ? String(updated.managerId) : undefined,
+      audience_user_keys: (updated.audience_user_keys || []).map((v: any) => v?.toString()).filter((v: string | undefined) => !!v),
+      audience_team_ids: (updated.audience_team_ids || [])
+        .map((v: any) => v?.toString())
+        .filter((v: string | undefined) => !!v),
+    };
+
+    emitToManager(String(manager._id), 'event:updated', responsePayload);
+
+    const updateTeams = (responsePayload.audience_team_ids || []) as string[];
+    if (updateTeams.length > 0) {
+      emitToTeams(updateTeams, 'event:updated', responsePayload);
+    }
+
+    const updateUsers = (responsePayload.audience_user_keys || []) as string[];
+    for (const key of updateUsers) {
+      emitToUser(key, 'event:updated', responsePayload);
+    }
+
+    return res.json(responsePayload);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[update event] failed', err);
@@ -419,9 +517,10 @@ router.patch('/events/:id', requireAuth, async (req, res) => {
 router.get('/events', requireAuth, async (req, res) => {
   try {
     const authUser = (req as any).user as AuthenticatedUser | undefined;
-    const audienceHeader = typeof req.headers['x-user-key'] === 'string'
-      ? (req.headers['x-user-key'] as string).trim()
-      : undefined;
+    const audienceHeader =
+      typeof req.headers['x-user-key'] === 'string'
+        ? (req.headers['x-user-key'] as string).trim()
+        : undefined;
     const explicitAudienceKey =
       audienceHeader && audienceHeader.length > 0 ? audienceHeader : undefined;
     const derivedAudienceKey =
@@ -430,19 +529,29 @@ router.get('/events', requireAuth, async (req, res) => {
         : undefined;
     const audienceKey = explicitAudienceKey ?? derivedAudienceKey;
 
-    let manager = null;
+    let managerScope = false;
+    let manager: any = null;
+
     if (authUser?.provider && authUser.sub) {
       manager = await ManagerModel.findOne({
         provider: authUser.provider,
         subject: authUser.sub,
       });
+
+      if (!manager && !explicitAudienceKey) {
+        manager = await resolveManagerForRequest(req);
+      }
+
+      if (manager && !explicitAudienceKey) {
+        managerScope = true;
+      }
     }
 
     const lastSyncParam = req.query.lastSync as string | undefined;
 
     const filter: any = {};
 
-    if (manager) {
+    if (managerScope && manager) {
       filter.managerId = manager._id;
 
       if (lastSyncParam) {
@@ -464,7 +573,6 @@ router.get('/events', requireAuth, async (req, res) => {
         ];
       }
     } else {
-      // Staff / audience scope: fall back to audience-based visibility when no manager record exists
       if (!audienceKey) {
         return res.status(403).json({ message: 'Audience access requires a valid user key' });
       }
@@ -480,12 +588,54 @@ router.get('/events', requireAuth, async (req, res) => {
         }
       }
 
-      filter.$or = [
-        { audience_user_keys: { $size: 0 } },
-        { audience_user_keys: { $exists: false } },
+      const membershipTeamIdsRaw = authUser?.provider && authUser.sub
+        ? await TeamMemberModel.distinct('teamId', {
+            provider: authUser.provider,
+            subject: authUser.sub,
+            status: 'active',
+          })
+        : [];
+
+      const membershipTeamIds = (membershipTeamIdsRaw as unknown[])
+        .map((value) => {
+          if (!value) return null;
+          if (value instanceof mongoose.Types.ObjectId) {
+            return value as mongoose.Types.ObjectId;
+          }
+          const str = value.toString();
+          if (!mongoose.Types.ObjectId.isValid(str)) {
+            return null;
+          }
+          return new mongoose.Types.ObjectId(str);
+        })
+        .filter((value): value is mongoose.Types.ObjectId => value !== null);
+
+      const visibilityFilters: any[] = [
+        {
+          $and: [
+            {
+              $or: [
+                { audience_team_ids: { $exists: false } },
+                { audience_team_ids: { $eq: [] } },
+              ],
+            },
+            {
+              $or: [
+                { audience_user_keys: { $exists: false } },
+                { audience_user_keys: { $eq: [] } },
+              ],
+            },
+          ],
+        },
         { audience_user_keys: audienceKey },
         { 'accepted_staff.userKey': audienceKey },
       ];
+
+      if (membershipTeamIds.length > 0) {
+        visibilityFilters.push({ audience_team_ids: { $in: membershipTeamIds } });
+      }
+
+      filter.$or = visibilityFilters;
     }
     const events = await EventModel.find(filter).sort({ createdAt: -1 }).lean();
 
@@ -493,11 +643,27 @@ router.get('/events', requireAuth, async (req, res) => {
     const enrichedEvents = await enrichEventsWithTariffs(events);
 
     // Map events to include string ids
-    const mappedEvents = enrichedEvents.map((event: any) => ({
-      ...event,
-      id: String(event._id),
-      managerId: event.managerId ? String(event.managerId) : undefined,
-    }));
+    const mappedEvents = enrichedEvents.map((event: any) => {
+      const teamIds = Array.isArray(event.audience_team_ids)
+        ? event.audience_team_ids
+            .map((value: any) => {
+              if (!value) return null;
+              if (value instanceof mongoose.Types.ObjectId) {
+                return value.toHexString();
+              }
+              const str = value.toString();
+              return mongoose.Types.ObjectId.isValid(str) ? str : null;
+            })
+            .filter((value: string | null): value is string => !!value)
+        : [];
+
+      return {
+        ...event,
+        id: String(event._id),
+        managerId: event.managerId ? String(event.managerId) : undefined,
+        audience_team_ids: teamIds,
+      };
+    });
 
     // Include current server timestamp for next sync
     return res.json({

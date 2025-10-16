@@ -2,6 +2,7 @@ import compression from 'compression';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
+import http from 'http';
 import pino from 'pino';
 import pinoHttp from 'pino-http';
 
@@ -17,6 +18,8 @@ import managersRouter from './routes/managers';
 import tariffsRouter from './routes/tariffs';
 import usersRouter from './routes/users';
 import syncRouter from './routes/sync';
+import { initSocket } from './socket/server';
+import teamsRouter from './routes/teams';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 
@@ -73,6 +76,7 @@ async function createServer() {
   app.use('/api', tariffsRouter);
   app.use('/api', usersRouter);
   app.use('/api', managersRouter);
+  app.use('/api', teamsRouter);
   app.use('/api/auth', authRouter);
   app.use('/api', syncRouter);
 
@@ -128,7 +132,9 @@ async function start() {
     logger.info('DB initialized');
 
     const app = await createServer();
-    app.listen(ENV.port, '0.0.0.0', () => {
+    const server = http.createServer(app);
+    initSocket(server);
+    server.listen(ENV.port, '0.0.0.0', () => {
       logger.info(`Server listening on http://localhost:${ENV.port}`);
     });
   } catch (err) {
