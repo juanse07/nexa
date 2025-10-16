@@ -18,7 +18,7 @@ fi
 FLUTTER_CMD="${FLUTTER_CMD:-flutter}"
 
 DEVICE_ID=""
-FLUTTER_ARGS=()
+declare -a FLUTTER_ARGS=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -60,8 +60,15 @@ while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
   DART_DEFINES+=("--dart-define=${key}=${value}")
 done < ".env.local"
 
-if [[ -z "$DEVICE_ID" ]]; then
-  exec "$FLUTTER_CMD" run "${DART_DEFINES[@]}" "${FLUTTER_ARGS[@]}"
-else
-  exec "$FLUTTER_CMD" run -d "$DEVICE_ID" "${DART_DEFINES[@]}" "${FLUTTER_ARGS[@]}"
+cmd=("$FLUTTER_CMD" "run")
+if [[ -n "$DEVICE_ID" ]]; then
+  cmd+=("-d" "$DEVICE_ID")
 fi
+if ((${#DART_DEFINES[@]})); then
+  cmd+=("${DART_DEFINES[@]}")
+fi
+if ((${#FLUTTER_ARGS[@]})); then
+  cmd+=("${FLUTTER_ARGS[@]}")
+fi
+
+exec "${cmd[@]}"

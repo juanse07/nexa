@@ -5,7 +5,7 @@ import 'package:nexa/core/config/environment.dart';
 import 'package:nexa/core/utils/responsive_layout.dart';
 import 'package:nexa/features/auth/data/services/auth_service.dart';
 import 'package:nexa/features/auth/data/services/apple_web_auth.dart';
-import 'package:nexa/features/extraction/presentation/extraction_screen.dart';
+import 'package:nexa/features/users/presentation/pages/manager_onboarding_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -41,7 +41,7 @@ class _LoginPageState extends State<LoginPage> {
     });
     if (ok && mounted) {
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const ExtractionScreen()),
+        MaterialPageRoute(builder: (_) => const ManagerOnboardingGate()),
       );
     }
   }
@@ -75,7 +75,7 @@ class _LoginPageState extends State<LoginPage> {
     });
     if (ok && mounted) {
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const ExtractionScreen()),
+        MaterialPageRoute(builder: (_) => const ManagerOnboardingGate()),
       );
     }
   }

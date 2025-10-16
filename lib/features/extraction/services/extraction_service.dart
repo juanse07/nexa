@@ -19,10 +19,7 @@ class ExtractionService {
     final String textModel =
         Environment.instance.get('OPENAI_TEXT_MODEL') ?? 'gpt-4o-mini';
 
-    final Uri uri = Uri.parse(
-      Environment.instance.get('OPENAI_BASE_URL') ??
-          'https://api.openai.com/v1/chat/completions',
-    );
+    final Uri uri = _resolveEndpoint();
 
     const String systemPrompt =
         'You are a structured information extractor for catering event staffing. Extract fields: event_name, client_name, date (ISO 8601), start_time, end_time, venue_name, venue_address, city, state, country, contact_name, contact_phone, contact_email, setup_time, uniform, notes, headcount_total, roles (list of {role, count, call_time}), pay_rate_info. Return strict JSON.';
@@ -139,5 +136,37 @@ class ExtractionService {
         await Future.delayed(Duration(seconds: backoffSeconds));
       }
     }
+  }
+
+  Uri _resolveEndpoint() {
+    final raw = Environment.instance.get('OPENAI_BASE_URL')?.trim();
+    const fallback = 'https://api.openai.com/v1/chat/completions';
+    if (raw == null || raw.isEmpty) {
+      return Uri.parse(fallback);
+    }
+
+    Uri parsed;
+    try {
+      parsed = Uri.parse(raw);
+    } catch (_) {
+      return Uri.parse(fallback);
+    }
+
+    final path = parsed.path;
+    if (path.endsWith('/chat/completions')) {
+      return parsed;
+    }
+
+    final trimmedPath =
+        path.endsWith('/') && path.length > 1 ? path.substring(0, path.length - 1) : path;
+    if (trimmedPath.isEmpty || trimmedPath == '/' || trimmedPath == '/v1') {
+      final basePath = trimmedPath.isEmpty ? '' : trimmedPath;
+      final normalizedPath = basePath.endsWith('/')
+          ? '${basePath}chat/completions'
+          : '$basePath/chat/completions';
+      return parsed.replace(path: normalizedPath);
+    }
+
+    return parsed;
   }
 }

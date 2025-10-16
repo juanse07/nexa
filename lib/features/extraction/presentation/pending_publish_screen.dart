@@ -40,14 +40,16 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
   final Map<String, Map<String, String>> _keyToUser =
       <String, Map<String, String>>{};
   bool _publishing = false;
-  final Map<String, TextEditingController> _roleCountCtrls = <String, TextEditingController>{};
+  final Map<String, TextEditingController> _roleCountCtrls =
+      <String, TextEditingController>{};
 
   @override
   void initState() {
     super.initState();
     _loadRoles();
     // Pre-fill role counts if draft already contains roles
-    final roles = (widget.draft['roles'] as List?)?.whereType<Map>().toList() ?? const [];
+    final roles =
+        (widget.draft['roles'] as List?)?.whereType<Map>().toList() ?? const [];
     for (final r in roles) {
       final roleName = (r['role'] ?? '').toString();
       final count = (r['count'] ?? '').toString();
@@ -111,9 +113,14 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
         setState(() => _publishing = false);
         return;
       }
-      final clientName = clientData['name'] as String;
-      final clientId = clientData['id'] as String?;
+      final clientName = (clientData['name'] ?? '').toString();
+      final rawClientId = (clientData['id'] ?? '').toString();
+      final clientId = rawClientId.isNotEmpty ? rawClientId : null;
       payload['client_name'] = clientName;
+      if (clientId != null) {
+        payload['clientId'] = clientId;
+        payload['client_id'] = clientId;
+      }
 
       // Then, ensure role counts are set at publish time
       final counts = await _promptRoleCounts(payload);
@@ -121,7 +128,26 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
         setState(() => _publishing = false);
         return;
       }
-      payload['roles'] = _countsToRoles(counts);
+      final roleDefs = _countsToRoles(counts);
+      if (roleDefs.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Add at least one role with a positive headcount'),
+            ),
+          );
+        }
+        setState(() => _publishing = false);
+        return;
+      }
+      payload['roles'] = roleDefs;
+      final totalHeadcount = counts.values.fold<int>(
+        0,
+        (acc, value) => acc + value,
+      );
+      if (totalHeadcount > 0) {
+        payload['headcount_total'] = totalHeadcount;
+      }
 
       // Get roles with non-zero counts for tariff picker
       final activeRoleNames = counts.entries
@@ -135,11 +161,24 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
           clientId: clientId,
           roleNames: activeRoleNames,
         );
-        // Tariffs are saved in the picker itself, no need to add to payload
-        // User can skip by clicking Continue without entering tariffs
         if (tariffs == null) {
           setState(() => _publishing = false);
           return;
+        }
+        if (tariffs.isNotEmpty) {
+          final errorMessage = await _persistTariffsFromPicker(
+            clientId: clientId,
+            tariffs: tariffs,
+          );
+          if (errorMessage != null) {
+            if (mounted) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text(errorMessage)));
+            }
+            setState(() => _publishing = false);
+            return;
+          }
         }
       }
 
@@ -194,7 +233,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                   ].where((s) => s.toString().isNotEmpty).join(' • '),
                   style: const TextStyle(color: Colors.grey),
                 ),
-            const SizedBox(height: 12),
+                const SizedBox(height: 12),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Visible to everyone'),
@@ -373,17 +412,23 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                               // Reload roles
                               await _loadRoles();
                               // Add controller for the new role
-                              roleControllers[newName] = TextEditingController(text: '0');
+                              roleControllers[newName] = TextEditingController(
+                                text: '0',
+                              );
                               newRoleCtrl.clear();
                               setStateDialog(() {});
                               if (!mounted) return;
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Role "$newName" created')),
+                                SnackBar(
+                                  content: Text('Role "$newName" created'),
+                                ),
                               );
                             } catch (e) {
                               if (!mounted) return;
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Failed to create role: $e')),
+                                SnackBar(
+                                  content: Text('Failed to create role: $e'),
+                                ),
                               );
                             }
                           },
@@ -408,6 +453,19 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                       final controller = entry.value;
                       counts[roleName.toLowerCase()] =
                           int.tryParse(controller.text.trim()) ?? 0;
+                    }
+                    final hasPositive = counts.values.any((value) => value > 0);
+                    if (!hasPositive) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Add at least one role with a positive headcount',
+                            ),
+                          ),
+                        );
+                      }
+                      return;
                     }
                     Navigator.of(ctx).pop(counts);
                   },
@@ -440,16 +498,64 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
       final count = entry.value;
       if (count > 0) {
         // Find the proper case name from available roles
-        final properCaseName = _roles.firstWhere(
-          (r) => (r['name']?.toString() ?? '').toLowerCase() == entry.key,
-          orElse: () => {'name': entry.key},
-        )['name']?.toString() ?? entry.key;
+        final properCaseName =
+            _roles
+                .firstWhere(
+                  (r) =>
+                      (r['name']?.toString() ?? '').toLowerCase() == entry.key,
+                  orElse: () => {'name': entry.key},
+                )['name']
+                ?.toString() ??
+            entry.key;
 
         list.add({'role': properCaseName, 'count': count});
       }
     }
 
     return list;
+  }
+
+  Future<String?> _persistTariffsFromPicker({
+    required String clientId,
+    required Map<String, double> tariffs,
+  }) async {
+    if (tariffs.isEmpty) return null;
+    final failures = <String>[];
+    for (final entry in tariffs.entries) {
+      final rate = entry.value;
+      if (rate <= 0) continue;
+      final roleId = _findRoleIdForKey(entry.key);
+      if (roleId == null) {
+        failures.add('${entry.key} (role missing)');
+        continue;
+      }
+      try {
+        await _tariffsService.upsertTariff(
+          clientId: clientId,
+          roleId: roleId,
+          rate: rate,
+        );
+      } catch (e) {
+        failures.add('${entry.key}: $e');
+      }
+    }
+    if (failures.isEmpty) {
+      return null;
+    }
+    return 'Failed to save tariffs: ${failures.join(', ')}';
+  }
+
+  String? _findRoleIdForKey(String roleKey) {
+    final normalized = roleKey.trim().toLowerCase();
+    if (normalized.isEmpty) return null;
+    for (final role in _roles) {
+      final roleName = (role['name'] ?? '').toString().trim().toLowerCase();
+      if (roleName == normalized) {
+        final id = (role['id'] ?? role['_id'] ?? '').toString();
+        if (id.isNotEmpty) return id;
+      }
+    }
+    return null;
   }
 
   Future<Map<String, dynamic>?> _promptClientPicker() async {
@@ -488,11 +594,15 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                           itemCount: _clients.length,
                           itemBuilder: (ctx, idx) {
                             final client = _clients[idx];
-                            final name = (client['name'] ?? 'Unnamed').toString();
-                            final id = (client['id'] ?? client['_id'] ?? '').toString();
+                            final name = (client['name'] ?? 'Unnamed')
+                                .toString();
+                            final id = (client['id'] ?? client['_id'] ?? '')
+                                .toString();
                             return ListTile(
                               title: Text(name),
-                              onTap: () => Navigator.of(ctx).pop({'name': name, 'id': id}),
+                              onTap: () => Navigator.of(
+                                ctx,
+                              ).pop({'name': name, 'id': id}),
                             );
                           },
                         ),
@@ -520,9 +630,12 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                     final newName = newClientCtrl.text.trim();
                     if (newName.isEmpty) return;
                     try {
-                      final newClient = await _clientsService.createClient(newName);
+                      final newClient = await _clientsService.createClient(
+                        newName,
+                      );
                       if (!mounted) return;
-                      final newId = (newClient['id'] ?? newClient['_id'] ?? '').toString();
+                      final newId = (newClient['id'] ?? newClient['_id'] ?? '')
+                          .toString();
                       Navigator.of(ctx).pop({'name': newName, 'id': newId});
                     } catch (e) {
                       if (!mounted) return;
@@ -603,13 +716,16 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                       const SizedBox(height: 16),
                       ...tariffControllers.entries.map((entry) {
                         final roleName = entry.key;
-                        final hasExisting = hasExistingTariff[roleName] ?? false;
+                        final hasExisting =
+                            hasExistingTariff[roleName] ?? false;
 
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 12),
                           child: TextField(
                             controller: entry.value,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
                             decoration: InputDecoration(
                               labelText: '${entry.key} Rate',
                               prefixIcon: const Icon(Icons.attach_money),
@@ -618,10 +734,15 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                               suffixIcon: hasExisting
                                   ? const Tooltip(
                                       message: 'Existing tariff loaded',
-                                      child: Icon(Icons.check_circle, color: Colors.green),
+                                      child: Icon(
+                                        Icons.check_circle,
+                                        color: Colors.green,
+                                      ),
                                     )
                                   : null,
-                              helperText: hasExisting ? 'Existing tariff' : 'New tariff',
+                              helperText: hasExisting
+                                  ? 'Existing tariff'
+                                  : 'New tariff',
                             ),
                           ),
                         );
@@ -643,7 +764,8 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                               if (rate == null) continue;
 
                               // Get the role ID for this role name
-                              final roleId = roleNameToId[roleName.toLowerCase()];
+                              final roleId =
+                                  roleNameToId[roleName.toLowerCase()];
                               if (roleId == null) continue;
 
                               try {
@@ -655,7 +777,11 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                               } catch (e) {
                                 if (!mounted) return;
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Failed to save tariff for $roleName: $e')),
+                                  SnackBar(
+                                    content: Text(
+                                      'Failed to save tariff for $roleName: $e',
+                                    ),
+                                  ),
                                 );
                               }
                             }
@@ -666,15 +792,23 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                             );
                             // Reload tariffs to refresh the UI with updated data
                             try {
-                              tariffs = await _tariffsService.fetchTariffs(clientId: clientId);
+                              tariffs = await _tariffsService.fetchTariffs(
+                                clientId: clientId,
+                              );
                               // Update the hasExistingTariff map
                               for (final roleName in roleNames) {
-                                final roleId = roleNameToId[roleName.toLowerCase()];
+                                final roleId =
+                                    roleNameToId[roleName.toLowerCase()];
                                 final existingTariff = tariffs.firstWhere(
-                                  (t) => (t['roleId']?.toString() ?? '') == roleId,
+                                  (t) =>
+                                      (t['roleId']?.toString() ?? '') == roleId,
                                   orElse: () => <String, dynamic>{},
                                 );
-                                hasExistingTariff[roleName] = existingTariff['rate']?.toString().isNotEmpty ?? false;
+                                hasExistingTariff[roleName] =
+                                    existingTariff['rate']
+                                        ?.toString()
+                                        .isNotEmpty ??
+                                    false;
                               }
                             } catch (e) {
                               // Silently fail

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:nexa/features/auth/data/services/auth_service.dart';
 import 'package:nexa/features/auth/presentation/pages/login_page.dart';
-import 'package:nexa/features/extraction/presentation/extraction_screen.dart';
+import 'package:nexa/features/users/presentation/pages/manager_onboarding_page.dart';
 import 'package:nexa/shared/presentation/theme/theme.dart';
 
 /// The root widget of the Nexa application.
@@ -36,7 +36,7 @@ class NexaApp extends StatelessWidget {
 
           // If JWT exists, go to main app, otherwise login
           final hasToken = snapshot.data != null && snapshot.data!.isNotEmpty;
-          return hasToken ? const ExtractionScreen() : const LoginPage();
+          return hasToken ? const ManagerOnboardingGate() : const LoginPage();
         },
       ),
 
