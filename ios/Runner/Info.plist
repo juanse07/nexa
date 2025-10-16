@@ -63,5 +63,25 @@
     <string>832253199298-30pclv5ijm4etnciqh6en9b5l1iqddj0.apps.googleusercontent.com</string>
 	<key>GIDServerClientID</key>
 	<string>832253199298-cj28t4ill6gltnea1epaslvb2o1mar5k.apps.googleusercontent.com</string>
+
+	<!-- Permission Descriptions (Required for App Store) -->
+	<key>NSCameraUsageDescription</key>
+	<string>Nexa needs access to your camera to capture event documents and photos for OCR processing.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Nexa needs access to your photo library to select images for event documentation and OCR processing.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Nexa needs permission to save processed event documents to your photo library.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Nexa uses your location to help find nearby venues and provide location-based event services.</string>
+
+	<!-- Google Maps API Key -->
+	<key>GMSApiKey</key>
+	<string>AIzaSyATwPaeNRYASHtfqLggIsrir0ylYIt1PM4</string>
+
+	<!-- Background Modes for Push Notifications -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>
