@@ -10,6 +10,32 @@ class Environment {
 
   static Environment? _instance;
   static bool _isLoaded = false;
+  static final Map<String, String> _runtimeCache = <String, String>{};
+  static const List<String> _keys = [
+    'API_BASE_URL',
+    'API_PATH_PREFIX',
+    'GOOGLE_CLIENT_ID_IOS',
+    'GOOGLE_CLIENT_ID_ANDROID',
+    'GOOGLE_CLIENT_ID_WEB',
+    'GOOGLE_SERVER_CLIENT_ID',
+    'APPLE_BUNDLE_ID',
+    'APPLE_SERVICE_ID',
+    'APPLE_REDIRECT_URI',
+    'GOOGLE_MAPS_API_KEY',
+    'GOOGLE_MAPS_IOS_SDK_KEY',
+    'OPENAI_API_KEY',
+    'OPENAI_BASE_URL',
+    'OPENAI_VISION_MODEL',
+    'OPENAI_TEXT_MODEL',
+    'OPENAI_ORG_ID',
+    'OPENAI_PROJECT_ID',
+    'PLACES_BIAS_LAT',
+    'PLACES_BIAS_LNG',
+    'PLACES_COMPONENTS',
+    'PLACES_BIAS_RADIUS_M',
+    'ENVIRONMENT',
+    'DEBUG_MODE',
+  ];
 
   /// Gets the singleton instance of Environment
   static Environment get instance {
@@ -42,12 +68,24 @@ class Environment {
         final localVars = await loadEnvFile('.env.local');
         allVars.addAll(localVars);
 
-        // Manually populate dotenv with the final merged values
+        // Manually populate runtime and dotenv caches with the final merged values
+        // Merge with --dart-define overrides
+        for (final key in _keys) {
+          final override = _getDartDefine(key);
+          if (override != null && override.isNotEmpty) {
+            allVars[key] = override;
+          }
+        }
+
         final buffer = StringBuffer();
         allVars.forEach((key, value) {
           buffer.writeln('$key=$value');
         });
-        await dotenv.testLoad(fileInput: buffer.toString());
+        dotenv.testLoad(fileInput: buffer.toString());
+
+        _runtimeCache
+          ..clear()
+          ..addAll(allVars);
       }
       _isLoaded = true;
     } catch (e) {
@@ -60,33 +98,32 @@ class Environment {
   /// Gets an environment variable by key
   /// Returns null if the key doesn't exist
   String? get(String key) {
-    if (kIsWeb) {
-      // For web builds, we need to check specific keys at compile time
-      // This is a limitation of String.fromEnvironment which requires constant keys
-      return _getWebEnvironmentVariable(key);
-    }
+    if (kIsWeb) return _getDartDefine(key);
+    final cached = _runtimeCache[key];
+    if (cached != null && cached.isNotEmpty) return cached;
     return _safeMaybeGet(key);
   }
 
   /// Gets an environment variable by key with a default value
   /// Returns the default value if the key doesn't exist
   String getOrDefault(String key, String defaultValue) {
-    if (kIsWeb) {
-      return _getWebEnvironmentVariable(key) ?? defaultValue;
-    }
+    if (kIsWeb) return _getDartDefine(key) ?? defaultValue;
+    final cached = _runtimeCache[key];
+    if (cached != null && cached.isNotEmpty) return cached;
     return _safeMaybeGet(key) ?? defaultValue;
   }
 
   /// Checks if an environment variable exists
   bool contains(String key) {
-    if (kIsWeb) {
-      return _getWebEnvironmentVariable(key) != null;
+    if (kIsWeb) return _getDartDefine(key) != null;
+    if (_runtimeCache.containsKey(key) && (_runtimeCache[key]?.isNotEmpty ?? false)) {
+      return true;
     }
     return _safeMaybeGet(key) != null;
   }
 
   /// Helper method to get web environment variables with compile-time constants
-  static String? _getWebEnvironmentVariable(String key) {
+  static String? _getDartDefine(String key) {
     switch (key) {
       case 'API_BASE_URL':
         return _valueOrNull(const String.fromEnvironment('API_BASE_URL'));
@@ -149,11 +186,11 @@ class Environment {
 
   static String? _safeMaybeGet(String key) {
     try {
-      final value = dotenv.maybeGet(key);
+      final value = _runtimeCache[key] ?? dotenv.maybeGet(key);
       if (value != null && value.isNotEmpty) {
         return value;
       }
-      return _getWebEnvironmentVariable(key);
+      return _getDartDefine(key);
     } catch (e) {
       if (e is NotInitializedError) {
         return null;

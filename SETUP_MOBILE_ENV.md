@@ -59,15 +59,16 @@ OPENAI_API_KEY=your-actual-openai-api-key
 
 ### Step 3: Restart Your Flutter App
 
-After updating `.env.local`:
+After updating `.env.local`, launch the mobile app through the helper script so the values
+are passed in as `--dart-define`s:
 
 ```bash
-# Stop the current running app
-# Then restart it:
-flutter run
+# iOS simulator example (replace -d with your device id if needed)
+./tool/run_mobile_dev.sh -d <device-id>
 ```
 
-The app will now reload with your real backend URL and credentials.
+The script reads `.env.local`, forwards every key as a `--dart-define`, and the app reloads
+with your real backend URL and credentials.
 
 ## How This Works
 
