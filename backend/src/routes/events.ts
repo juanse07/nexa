@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import mongoose from 'mongoose';
 import { z } from 'zod';
-import { requireAuth } from '../middleware/requireAuth';
+import { requireAuth, AuthenticatedUser } from '../middleware/requireAuth';
 import { AvailabilityModel } from '../models/availability';
 import { EventModel } from '../models/event';
 import { TariffModel } from '../models/tariff';
 import { ClientModel } from '../models/client';
 import { RoleModel } from '../models/role';
+import { ManagerModel } from '../models/manager';
 import { resolveManagerForRequest } from '../utils/manager';
 
 const router = Router();
@@ -417,29 +418,73 @@ router.patch('/events/:id', requireAuth, async (req, res) => {
 
 router.get('/events', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
-    const audienceKey = (req.headers['x-user-key'] as string | undefined) || undefined;
-    const lastSyncParam = req.query.lastSync as string | undefined;
+    const authUser = (req as any).user as AuthenticatedUser | undefined;
+    const audienceHeader = typeof req.headers['x-user-key'] === 'string'
+      ? (req.headers['x-user-key'] as string).trim()
+      : undefined;
+    const explicitAudienceKey =
+      audienceHeader && audienceHeader.length > 0 ? audienceHeader : undefined;
+    const derivedAudienceKey =
+      authUser?.provider && authUser.sub
+        ? `${authUser.provider}:${authUser.sub}`
+        : undefined;
+    const audienceKey = explicitAudienceKey ?? derivedAudienceKey;
 
-    const filter: any = { managerId: manager._id };
-
-    // Delta sync: only return documents updated after lastSync timestamp
-    if (lastSyncParam) {
-      try {
-        const lastSyncDate = new Date(lastSyncParam);
-        if (!isNaN(lastSyncDate.getTime())) {
-          filter.updatedAt = { $gt: lastSyncDate };
-        }
-      } catch (e) {
-        // Invalid date format, ignore and return all
-      }
+    let manager = null;
+    if (authUser?.provider && authUser.sub) {
+      manager = await ManagerModel.findOne({
+        provider: authUser.provider,
+        subject: authUser.sub,
+      });
     }
 
-    if (audienceKey) {
+    const lastSyncParam = req.query.lastSync as string | undefined;
+
+    const filter: any = {};
+
+    if (manager) {
+      filter.managerId = manager._id;
+
+      if (lastSyncParam) {
+        try {
+          const lastSyncDate = new Date(lastSyncParam);
+          if (!isNaN(lastSyncDate.getTime())) {
+            filter.updatedAt = { $gt: lastSyncDate };
+          }
+        } catch (e) {
+          // Invalid date format, ignore and return all
+        }
+      }
+
+      if (explicitAudienceKey) {
+        filter.$or = [
+          { audience_user_keys: { $size: 0 } },
+          { audience_user_keys: { $exists: false } },
+          { audience_user_keys: explicitAudienceKey },
+        ];
+      }
+    } else {
+      // Staff / audience scope: fall back to audience-based visibility when no manager record exists
+      if (!audienceKey) {
+        return res.status(403).json({ message: 'Audience access requires a valid user key' });
+      }
+
+      if (lastSyncParam) {
+        try {
+          const lastSyncDate = new Date(lastSyncParam);
+          if (!isNaN(lastSyncDate.getTime())) {
+            filter.updatedAt = { $gt: lastSyncDate };
+          }
+        } catch (e) {
+          // Ignore invalid date formats for staff scope
+        }
+      }
+
       filter.$or = [
         { audience_user_keys: { $size: 0 } },
         { audience_user_keys: { $exists: false } },
         { audience_user_keys: audienceKey },
+        { 'accepted_staff.userKey': audienceKey },
       ];
     }
     const events = await EventModel.find(filter).sort({ createdAt: -1 }).lean();
