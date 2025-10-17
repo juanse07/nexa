@@ -587,29 +587,6 @@ router.post('/teams/:teamId/invites', requireAuth, async (req, res) => {
       });
     }
 
-    if (createdInvites.length > 0) {
-      emitToManager(String(managerId), 'team:invitesCreated', {
-        teamId: teamIdString,
-        invites: createdInvites,
-      });
-
-      for (const invite of createdInvites) {
-        const provider = invite.provider?.toString();
-        const subject = invite.subject?.toString();
-        if (provider && provider.length > 0 && subject && subject.length > 0) {
-          emitToUser(
-            buildUserKey(provider, subject),
-            'team:inviteReceived',
-            {
-              ...invite,
-              teamId: teamIdString,
-              teamName: team.name,
-            },
-          );
-        }
-      }
-    }
-
     return res.status(201).json({ invites: createdInvites, skipped });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to create invites' });
@@ -685,22 +662,6 @@ router.post('/teams/:teamId/invites/:inviteId/cancel', requireAuth, async (req, 
       body: 'Invite cancelled by manager',
       payload: { inviteId: String(invite._id) },
     });
-
-    emitToManager(String(managerId), 'team:inviteCancelled', {
-      teamId: String(teamObjectId),
-      inviteId: String(invite._id),
-    });
-
-    if (invite.provider && invite.subject) {
-      emitToUser(
-        buildUserKey(invite.provider, invite.subject),
-        'team:inviteCancelled',
-        {
-          teamId: String(teamObjectId),
-          inviteId: String(invite._id),
-        },
-      );
-    }
 
     return res.json({ message: 'Invite cancelled' });
   } catch (err) {
@@ -785,15 +746,6 @@ router.post('/invites/:token/accept', requireAuth, async (req, res) => {
       createdAt: member?.createdAt,
     };
 
-    emitToManager(String(invite.managerId), 'team:memberAdded', memberPayload);
-    emitToTeams([String(invite.teamId)], 'team:memberAdded', memberPayload);
-    emitToUser(userKey, 'team:memberAdded', memberPayload);
-    emitToManager(String(invite.managerId), 'team:inviteAccepted', {
-      teamId: String(invite.teamId),
-      inviteId: String(invite._id),
-      userKey,
-    });
-
     return res.json({
       team: {
         id: String(team._id),
@@ -832,12 +784,6 @@ router.post('/invites/:token/decline', requireAuth, async (req, res) => {
       senderKey: buildUserKey(authUser.provider, authUser.sub),
       senderName: authUser.name,
       payload: { inviteId: String(invite._id) },
-    });
-
-    emitToManager(String(invite.managerId), 'team:inviteDeclined', {
-      teamId: String(invite.teamId),
-      inviteId: String(invite._id),
-      userKey: buildUserKey(authUser.provider, authUser.sub),
     });
 
     return res.json({ message: 'Invite declined' });
