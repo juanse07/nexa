@@ -76,8 +76,9 @@ function buildUserKey(provider: string, subject: string): string {
 router.get('/teams', requireAuth, async (req, res) => {
   try {
     const manager = await resolveManagerForRequest(req);
+    const managerId = manager._id as mongoose.Types.ObjectId;
 
-    const teams = await TeamModel.find({ managerId: manager._id })
+    const teams = await TeamModel.find({ managerId: managerId })
       .sort({ createdAt: -1 })
       .lean();
 
@@ -122,6 +123,7 @@ router.get('/teams', requireAuth, async (req, res) => {
 router.post('/teams', requireAuth, async (req, res) => {
   try {
     const manager = await resolveManagerForRequest(req);
+    const managerId = manager._id as mongoose.Types.ObjectId;
     const parsed = createTeamSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: 'Validation failed', details: parsed.error.format() });
@@ -130,13 +132,13 @@ router.post('/teams', requireAuth, async (req, res) => {
     const { name, description } = parsed.data;
 
     const normalizedName = normalizeTeamName(name);
-    const existing = await TeamModel.findOne({ managerId: manager._id, normalizedName }).lean();
+    const existing = await TeamModel.findOne({ managerId: managerId, normalizedName }).lean();
     if (existing) {
       return res.status(409).json({ message: 'Team with that name already exists' });
     }
 
     const created = await TeamModel.create({
-      managerId: manager._id,
+      managerId,
       name,
       normalizedName,
       description,
@@ -150,7 +152,7 @@ router.post('/teams', requireAuth, async (req, res) => {
       updatedAt: created.updatedAt,
     };
 
-    emitToManager(String(manager._id), 'team:created', payload);
+    emitToManager(String(managerId), 'team:created', payload);
 
     return res.status(201).json(payload);
   } catch (err) {
@@ -161,10 +163,12 @@ router.post('/teams', requireAuth, async (req, res) => {
 router.patch('/teams/:teamId', requireAuth, async (req, res) => {
   try {
     const manager = await resolveManagerForRequest(req);
-    const { teamId } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(teamId)) {
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const teamIdParam = req.params.teamId ?? '';
+    if (!mongoose.Types.ObjectId.isValid(teamIdParam)) {
       return res.status(400).json({ message: 'Invalid team id' });
     }
+    const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
 
     const parsed = updateTeamSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -175,9 +179,9 @@ router.patch('/teams/:teamId', requireAuth, async (req, res) => {
     if (parsed.data.name) {
       const normalizedName = normalizeTeamName(parsed.data.name);
       const conflict = await TeamModel.findOne({
-        managerId: manager._id,
+        managerId,
         normalizedName,
-        _id: { $ne: new mongoose.Types.ObjectId(teamId) },
+        _id: { $ne: teamObjectId },
       }).lean();
       if (conflict) {
         return res.status(409).json({ message: 'Another team with that name already exists' });
@@ -191,7 +195,7 @@ router.patch('/teams/:teamId', requireAuth, async (req, res) => {
     updates.updatedAt = new Date();
 
     const updated = await TeamModel.findOneAndUpdate(
-      { _id: new mongoose.Types.ObjectId(teamId), managerId: manager._id },
+      { _id: teamObjectId, managerId },
       { $set: updates },
       { new: true }
     ).lean();
@@ -208,7 +212,7 @@ router.patch('/teams/:teamId', requireAuth, async (req, res) => {
       updatedAt: updated.updatedAt,
     };
 
-    emitToManager(String(manager._id), 'team:updated', payload);
+    emitToManager(String(managerId), 'team:updated', payload);
 
     return res.json(payload);
   } catch (err) {
@@ -219,20 +223,21 @@ router.patch('/teams/:teamId', requireAuth, async (req, res) => {
 router.delete('/teams/:teamId', requireAuth, async (req, res) => {
   try {
     const manager = await resolveManagerForRequest(req);
-    const { teamId } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(teamId)) {
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const teamIdParam = req.params.teamId ?? '';
+    if (!mongoose.Types.ObjectId.isValid(teamIdParam)) {
       return res.status(400).json({ message: 'Invalid team id' });
     }
 
-    const objectId = new mongoose.Types.ObjectId(teamId);
+    const objectId = new mongoose.Types.ObjectId(teamIdParam);
 
-    const team = await TeamModel.findOne({ _id: objectId, managerId: manager._id }).lean();
+    const team = await TeamModel.findOne({ _id: objectId, managerId }).lean();
     if (!team) {
       return res.status(404).json({ message: 'Team not found' });
     }
 
     const isReferenced = await EventModel.exists({
-      managerId: manager._id,
+      managerId,
       audience_team_ids: objectId,
     });
     if (isReferenced) {
@@ -246,7 +251,7 @@ router.delete('/teams/:teamId', requireAuth, async (req, res) => {
       TeamMessageModel.deleteMany({ teamId: objectId }),
     ]);
 
-    emitToManager(String(manager._id), 'team:deleted', { teamId: String(objectId) });
+    emitToManager(String(managerId), 'team:deleted', { teamId: String(objectId) });
     emitToTeams([String(objectId)], 'team:deleted', { teamId: String(objectId) });
 
     return res.json({ message: 'Team deleted' });
@@ -258,14 +263,16 @@ router.delete('/teams/:teamId', requireAuth, async (req, res) => {
 router.get('/teams/:teamId/members', requireAuth, async (req, res) => {
   try {
     const manager = await resolveManagerForRequest(req);
-    const { teamId } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(teamId)) {
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const teamIdParam = req.params.teamId ?? '';
+    if (!mongoose.Types.ObjectId.isValid(teamIdParam)) {
       return res.status(400).json({ message: 'Invalid team id' });
     }
+    const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
 
     const members = await TeamMemberModel.find({
-      teamId: new mongoose.Types.ObjectId(teamId),
-      managerId: manager._id,
+      teamId: teamObjectId,
+      managerId,
       status: { $ne: 'left' },
     })
       .sort({ createdAt: -1 })
@@ -292,10 +299,12 @@ router.get('/teams/:teamId/members', requireAuth, async (req, res) => {
 router.post('/teams/:teamId/members', requireAuth, async (req, res) => {
   try {
     const manager = await resolveManagerForRequest(req);
-    const { teamId } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(teamId)) {
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const teamIdParam = req.params.teamId ?? '';
+    if (!mongoose.Types.ObjectId.isValid(teamIdParam)) {
       return res.status(400).json({ message: 'Invalid team id' });
     }
+    const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
 
     const parsed = addMemberSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
@@ -303,8 +312,8 @@ router.post('/teams/:teamId/members', requireAuth, async (req, res) => {
     }
 
     const team = await TeamModel.findOne({
-      _id: new mongoose.Types.ObjectId(teamId),
-      managerId: manager._id,
+      _id: teamObjectId,
+      managerId,
     }).lean();
     if (!team) {
       return res.status(404).json({ message: 'Team not found' });
@@ -314,7 +323,7 @@ router.post('/teams/:teamId/members', requireAuth, async (req, res) => {
     const desiredStatus = status ?? 'active';
 
     const setFields: Record<string, unknown> = {
-      managerId: manager._id,
+      managerId,
       email,
       name,
       status: desiredStatus,
@@ -326,7 +335,7 @@ router.post('/teams/:teamId/members', requireAuth, async (req, res) => {
 
     const member = await TeamMemberModel.findOneAndUpdate(
       {
-        teamId: new mongoose.Types.ObjectId(teamId),
+        teamId: teamObjectId,
         provider,
         subject,
       },
@@ -345,7 +354,7 @@ router.post('/teams/:teamId/members', requireAuth, async (req, res) => {
 
     await TeamInviteModel.updateMany(
       {
-        teamId: new mongoose.Types.ObjectId(teamId),
+        teamId: teamObjectId,
         provider,
         subject,
         status: 'pending',
@@ -362,7 +371,7 @@ router.post('/teams/:teamId/members', requireAuth, async (req, res) => {
     const displayName = (name ?? email ?? buildUserKey(provider, subject)).toString();
     await TeamMessageModel.create({
       teamId: member.teamId,
-      managerId: manager._id,
+      managerId,
       messageType: 'text',
       body: `${displayName} added to the team`,
       payload: {
@@ -383,7 +392,7 @@ router.post('/teams/:teamId/members', requireAuth, async (req, res) => {
       createdAt: member.createdAt,
     };
 
-    emitToManager(String(manager._id), 'team:memberAdded', memberPayload);
+    emitToManager(String(managerId), 'team:memberAdded', memberPayload);
     emitToTeams([String(member.teamId)], 'team:memberAdded', memberPayload);
     emitToUser(buildUserKey(provider, subject), 'team:memberAdded', memberPayload);
 
@@ -396,16 +405,20 @@ router.post('/teams/:teamId/members', requireAuth, async (req, res) => {
 router.delete('/teams/:teamId/members/:memberId', requireAuth, async (req, res) => {
   try {
     const manager = await resolveManagerForRequest(req);
-    const { teamId, memberId } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(teamId) || !mongoose.Types.ObjectId.isValid(memberId)) {
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const teamIdParam = req.params.teamId ?? '';
+    const memberIdParam = req.params.memberId ?? '';
+    if (!mongoose.Types.ObjectId.isValid(teamIdParam) || !mongoose.Types.ObjectId.isValid(memberIdParam)) {
       return res.status(400).json({ message: 'Invalid identifiers' });
     }
+    const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
+    const memberObjectId = new mongoose.Types.ObjectId(memberIdParam);
 
     const result = await TeamMemberModel.findOneAndUpdate(
       {
-        _id: new mongoose.Types.ObjectId(memberId),
-        teamId: new mongoose.Types.ObjectId(teamId),
-        managerId: manager._id,
+        _id: memberObjectId,
+        teamId: teamObjectId,
+        managerId,
       },
       { $set: { status: 'left', updatedAt: new Date() } },
       { new: true }
@@ -417,7 +430,7 @@ router.delete('/teams/:teamId/members/:memberId', requireAuth, async (req, res) 
 
     await TeamMessageModel.create({
       teamId: result.teamId,
-      managerId: manager._id,
+      managerId,
       messageType: 'text',
       body: `${result.name ?? buildUserKey(result.provider, result.subject)} left the team`,
     });
@@ -429,7 +442,7 @@ router.delete('/teams/:teamId/members/:memberId', requireAuth, async (req, res) 
       subject: result.subject,
     };
 
-    emitToManager(String(manager._id), 'team:memberRemoved', payload);
+    emitToManager(String(managerId), 'team:memberRemoved', payload);
     emitToTeams([String(result.teamId)], 'team:memberRemoved', payload);
     emitToUser(buildUserKey(result.provider, result.subject), 'team:memberRemoved', payload);
 
@@ -442,7 +455,8 @@ router.delete('/teams/:teamId/members/:memberId', requireAuth, async (req, res) 
 router.get('/teams/:teamId/messages', requireAuth, async (req, res) => {
   try {
     const manager = await resolveManagerForRequest(req);
-    const { teamId } = req.params;
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const teamIdParam = req.params.teamId ?? '';
     const paginationParams = paginationSchema.safeParse({
       limit: req.query.limit ? Number(req.query.limit) : undefined,
       before: req.query.before,
@@ -451,14 +465,15 @@ router.get('/teams/:teamId/messages', requireAuth, async (req, res) => {
       return res.status(400).json({ message: 'Invalid pagination params' });
     }
 
-    if (!mongoose.Types.ObjectId.isValid(teamId)) {
+    if (!mongoose.Types.ObjectId.isValid(teamIdParam)) {
       return res.status(400).json({ message: 'Invalid team id' });
     }
+    const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
 
     const { limit, before } = paginationParams.data;
     const match: Record<string, unknown> = {
-      teamId: new mongoose.Types.ObjectId(teamId),
-      managerId: manager._id,
+      teamId: teamObjectId,
+      managerId,
     };
 
     if (before) {
@@ -490,18 +505,21 @@ router.get('/teams/:teamId/messages', requireAuth, async (req, res) => {
 router.post('/teams/:teamId/invites', requireAuth, async (req, res) => {
   try {
     const manager = await resolveManagerForRequest(req);
-    const { teamId } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(teamId)) {
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const teamIdParam = req.params.teamId ?? '';
+    if (!mongoose.Types.ObjectId.isValid(teamIdParam)) {
       return res.status(400).json({ message: 'Invalid team id' });
     }
+    const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
 
     const team = await TeamModel.findOne({
-      _id: new mongoose.Types.ObjectId(teamId),
-      managerId: manager._id,
+      _id: teamObjectId,
+      managerId,
     }).lean();
     if (!team) {
       return res.status(404).json({ message: 'Team not found' });
     }
+    const teamIdString = String(team._id);
 
     const parsed = createInviteSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -522,7 +540,7 @@ router.post('/teams/:teamId/invites', requireAuth, async (req, res) => {
 
       if (recipient.provider && recipient.subject) {
         const existingMember = await TeamMemberModel.findOne({
-          teamId: team._id,
+          teamId: teamObjectId,
           provider: recipient.provider,
           subject: recipient.subject,
           status: { $ne: 'left' },
@@ -534,9 +552,9 @@ router.post('/teams/:teamId/invites', requireAuth, async (req, res) => {
       }
 
       const invite = await TeamInviteModel.create({
-        teamId: team._id,
-        managerId: manager._id,
-        invitedBy: manager._id,
+        teamId: teamObjectId,
+        managerId,
+        invitedBy: managerId,
         token: generateInviteToken(),
         email: recipient.email,
         provider: recipient.provider,
@@ -556,8 +574,8 @@ router.post('/teams/:teamId/invites', requireAuth, async (req, res) => {
       });
 
       await TeamMessageModel.create({
-        teamId: team._id,
-        managerId: manager._id,
+        teamId: teamObjectId,
+        managerId,
         messageType: 'invite_created',
         body: message ?? undefined,
         payload: {
@@ -569,9 +587,9 @@ router.post('/teams/:teamId/invites', requireAuth, async (req, res) => {
       });
     }
 
-    if (createdInvites.isNotEmpty) {
-      emitToManager(String(manager._id), 'team:invitesCreated', {
-        teamId: teamId,
+    if (createdInvites.length > 0) {
+      emitToManager(String(managerId), 'team:invitesCreated', {
+        teamId: teamIdString,
         invites: createdInvites,
       });
 
@@ -584,7 +602,7 @@ router.post('/teams/:teamId/invites', requireAuth, async (req, res) => {
             'team:inviteReceived',
             {
               ...invite,
-              teamId,
+              teamId: teamIdString,
               teamName: team.name,
             },
           );
@@ -601,14 +619,16 @@ router.post('/teams/:teamId/invites', requireAuth, async (req, res) => {
 router.get('/teams/:teamId/invites', requireAuth, async (req, res) => {
   try {
     const manager = await resolveManagerForRequest(req);
-    const { teamId } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(teamId)) {
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const teamIdParam = req.params.teamId ?? '';
+    if (!mongoose.Types.ObjectId.isValid(teamIdParam)) {
       return res.status(400).json({ message: 'Invalid team id' });
     }
+    const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
 
     const invites = await TeamInviteModel.find({
-      teamId: new mongoose.Types.ObjectId(teamId),
-      managerId: manager._id,
+      teamId: teamObjectId,
+      managerId,
     })
       .sort({ createdAt: -1 })
       .limit(200)
@@ -634,16 +654,20 @@ router.get('/teams/:teamId/invites', requireAuth, async (req, res) => {
 router.post('/teams/:teamId/invites/:inviteId/cancel', requireAuth, async (req, res) => {
   try {
     const manager = await resolveManagerForRequest(req);
-    const { teamId, inviteId } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(teamId) || !mongoose.Types.ObjectId.isValid(inviteId)) {
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const teamIdParam = req.params.teamId ?? '';
+    const inviteIdParam = req.params.inviteId ?? '';
+    if (!mongoose.Types.ObjectId.isValid(teamIdParam) || !mongoose.Types.ObjectId.isValid(inviteIdParam)) {
       return res.status(400).json({ message: 'Invalid identifiers' });
     }
+    const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
+    const inviteObjectId = new mongoose.Types.ObjectId(inviteIdParam);
 
     const invite = await TeamInviteModel.findOneAndUpdate(
       {
-        _id: new mongoose.Types.ObjectId(inviteId),
-        teamId: new mongoose.Types.ObjectId(teamId),
-        managerId: manager._id,
+        _id: inviteObjectId,
+        teamId: teamObjectId,
+        managerId,
         status: 'pending',
       },
       { $set: { status: 'cancelled', updatedAt: new Date() } },
@@ -656,14 +680,14 @@ router.post('/teams/:teamId/invites/:inviteId/cancel', requireAuth, async (req, 
 
     await TeamMessageModel.create({
       teamId: invite.teamId,
-      managerId: manager._id,
+      managerId,
       messageType: 'invite_declined',
       body: 'Invite cancelled by manager',
       payload: { inviteId: String(invite._id) },
     });
 
-    emitToManager(String(manager._id), 'team:inviteCancelled', {
-      teamId,
+    emitToManager(String(managerId), 'team:inviteCancelled', {
+      teamId: String(teamObjectId),
       inviteId: String(invite._id),
     });
 
@@ -672,7 +696,7 @@ router.post('/teams/:teamId/invites/:inviteId/cancel', requireAuth, async (req, 
         buildUserKey(invite.provider, invite.subject),
         'team:inviteCancelled',
         {
-          teamId,
+          teamId: String(teamObjectId),
           inviteId: String(invite._id),
         },
       );

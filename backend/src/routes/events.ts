@@ -245,6 +245,7 @@ async function sanitizeTeamIds(
 router.post('/events', requireAuth, async (req, res) => {
   try {
     const manager = await resolveManagerForRequest(req);
+    const managerId = manager._id as mongoose.Types.ObjectId;
     const parsed = eventSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({
@@ -254,7 +255,7 @@ router.post('/events', requireAuth, async (req, res) => {
     }
 
     const raw = parsed.data as any;
-    const teamIds = await sanitizeTeamIds(manager._id, raw.audience_team_ids);
+    const teamIds = await sanitizeTeamIds(managerId, raw.audience_team_ids);
     raw.audience_team_ids = teamIds;
     // Backwards compatibility: accept client_company_name and map to new field
     if ((raw as any).client_company_name && !(raw as any).third_party_company_name) {
@@ -319,7 +320,7 @@ router.post('/events', requireAuth, async (req, res) => {
     const created = await EventModel.create({
       ...normalized,
       role_stats,
-      managerId: manager._id,
+      managerId,
     });
     const createdObj = created.toObject();
     const responsePayload = {
@@ -332,7 +333,7 @@ router.post('/events', requireAuth, async (req, res) => {
         .filter((v: string | undefined) => !!v),
     };
 
-    emitToManager(String(manager._id), 'event:created', responsePayload);
+    emitToManager(String(managerId), 'event:created', responsePayload);
 
     const audienceTeams = (responsePayload.audience_team_ids || []) as string[];
     if (audienceTeams.length > 0) {
@@ -360,6 +361,7 @@ const updateRolesSchema = z.object({
 router.patch('/events/:id/roles', requireAuth, async (req, res) => {
   try {
     const manager = await resolveManagerForRequest(req);
+    const managerId = manager._id as mongoose.Types.ObjectId;
     const eventId = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(eventId)) {
       return res.status(400).json({ message: 'Invalid event id' });
@@ -413,7 +415,7 @@ router.patch('/events/:id/roles', requireAuth, async (req, res) => {
     const role_stats = computeRoleStats(roles as any[], accepted as any[]);
 
     const result = await EventModel.updateOne(
-      { _id: new mongoose.Types.ObjectId(eventId), managerId: manager._id },
+      { _id: new mongoose.Types.ObjectId(eventId), managerId },
       { $set: { roles, role_stats, updatedAt: new Date() } }
     );
 
@@ -423,7 +425,7 @@ router.patch('/events/:id/roles', requireAuth, async (req, res) => {
 
     const updated = await EventModel.findOne({
       _id: new mongoose.Types.ObjectId(eventId),
-      managerId: manager._id,
+      managerId,
     }).lean();
     return res.json(updated);
   } catch (err) {
@@ -437,6 +439,7 @@ router.patch('/events/:id/roles', requireAuth, async (req, res) => {
 router.patch('/events/:id', requireAuth, async (req, res) => {
   try {
     const manager = await resolveManagerForRequest(req);
+    const managerId = manager._id as mongoose.Types.ObjectId;
     const eventId = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(eventId)) {
       return res.status(400).json({ message: 'Invalid event id' });
@@ -449,7 +452,7 @@ router.patch('/events/:id', requireAuth, async (req, res) => {
     if (Object.prototype.hasOwnProperty.call(updateData, 'audience_team_ids')) {
       if (Array.isArray(updateData.audience_team_ids)) {
         updateData.audience_team_ids = await sanitizeTeamIds(
-          manager._id,
+          managerId,
           updateData.audience_team_ids
         );
       } else if (
@@ -469,7 +472,7 @@ router.patch('/events/:id', requireAuth, async (req, res) => {
 
     // Update the event
     const result = await EventModel.updateOne(
-      { _id: new mongoose.Types.ObjectId(eventId), managerId: manager._id },
+      { _id: new mongoose.Types.ObjectId(eventId), managerId },
       { $set: { ...updateData, updatedAt: new Date() } }
     );
 
@@ -479,7 +482,7 @@ router.patch('/events/:id', requireAuth, async (req, res) => {
 
     const updated = await EventModel.findOne({
       _id: new mongoose.Types.ObjectId(eventId),
-      managerId: manager._id,
+      managerId,
     }).lean();
     if (!updated) {
       return res.status(404).json({ message: 'Event not found after update' });
@@ -494,7 +497,7 @@ router.patch('/events/:id', requireAuth, async (req, res) => {
         .filter((v: string | undefined) => !!v),
     };
 
-    emitToManager(String(manager._id), 'event:updated', responsePayload);
+    emitToManager(String(managerId), 'event:updated', responsePayload);
 
     const updateTeams = (responsePayload.audience_team_ids || []) as string[];
     if (updateTeams.length > 0) {
@@ -531,6 +534,7 @@ router.get('/events', requireAuth, async (req, res) => {
 
     let managerScope = false;
     let manager: any = null;
+    let managerId: mongoose.Types.ObjectId | undefined;
 
     if (authUser?.provider && authUser.sub) {
       manager = await ManagerModel.findOne({
@@ -544,6 +548,7 @@ router.get('/events', requireAuth, async (req, res) => {
 
       if (manager && !explicitAudienceKey) {
         managerScope = true;
+        managerId = manager._id as mongoose.Types.ObjectId;
       }
     }
 
@@ -551,8 +556,8 @@ router.get('/events', requireAuth, async (req, res) => {
 
     const filter: any = {};
 
-    if (managerScope && manager) {
-      filter.managerId = manager._id;
+    if (managerScope && managerId) {
+      filter.managerId = managerId;
 
       if (lastSyncParam) {
         try {
@@ -680,7 +685,8 @@ router.get('/events', requireAuth, async (req, res) => {
 router.get('/positions', requireAuth, async (req, res) => {
   try {
     const manager = await resolveManagerForRequest(req);
-    const events = await EventModel.find({ managerId: manager._id })
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const events = await EventModel.find({ managerId })
       .sort({ createdAt: -1 })
       .lean();
     const positions = (events || []).flatMap((ev: any) => {
@@ -719,6 +725,7 @@ router.get('/positions', requireAuth, async (req, res) => {
 router.delete('/events/:id/staff/:userKey', requireAuth, async (req, res) => {
   try {
     const manager = await resolveManagerForRequest(req);
+    const managerId = manager._id as mongoose.Types.ObjectId;
     const eventId = req.params.id ?? '';
     const userKey = req.params.userKey ?? '';
 
@@ -735,7 +742,7 @@ router.delete('/events/:id/staff/:userKey', requireAuth, async (req, res) => {
 
     // Remove the staff member from accepted_staff array
     const result = await EventModel.updateOne(
-      { _id: new mongoose.Types.ObjectId(eventId), managerId: manager._id },
+      { _id: new mongoose.Types.ObjectId(eventId), managerId },
       {
         $pull: { accepted_staff: { userKey } } as any,
         $set: { updatedAt: new Date() }
@@ -749,18 +756,18 @@ router.delete('/events/:id/staff/:userKey', requireAuth, async (req, res) => {
     // Recompute and persist role_stats
     const updatedEvent = await EventModel.findOne({
       _id: new mongoose.Types.ObjectId(eventId),
-      managerId: manager._id,
+      managerId,
     }).lean();
     if (!updatedEvent) return res.status(404).json({ message: 'Event not found' });
     const role_stats = computeRoleStats((updatedEvent.roles as any[]) || [], (updatedEvent.accepted_staff as any[]) || []);
     await EventModel.updateOne(
-      { _id: new mongoose.Types.ObjectId(eventId), managerId: manager._id },
+      { _id: new mongoose.Types.ObjectId(eventId), managerId },
       { $set: { role_stats, updatedAt: new Date() } }
     );
 
     const finalDoc = await EventModel.findOne({
       _id: new mongoose.Types.ObjectId(eventId),
-      managerId: manager._id,
+      managerId,
     }).lean();
     return res.json(finalDoc);
   } catch (err) {
@@ -1240,6 +1247,7 @@ function levenshteinDistance(str1: string, str2: string): number {
 router.post('/events/:id/submit-hours', requireAuth, async (req, res) => {
   try {
     const manager = await resolveManagerForRequest(req);
+    const managerId = manager._id as mongoose.Types.ObjectId;
     const eventId = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(eventId)) {
       return res.status(400).json({ message: 'Invalid event id' });
@@ -1252,7 +1260,7 @@ router.post('/events/:id/submit-hours', requireAuth, async (req, res) => {
 
     const event = await EventModel.findOne({
       _id: new mongoose.Types.ObjectId(eventId),
-      managerId: manager._id,
+      managerId,
     });
     if (!event) return res.status(404).json({ message: 'Event not found' });
 
@@ -1430,6 +1438,7 @@ router.post('/events/:id/submit-hours', requireAuth, async (req, res) => {
 router.post('/events/:id/approve-hours/:userKey', requireAuth, async (req, res) => {
   try {
     const manager = await resolveManagerForRequest(req);
+    const managerId = manager._id as mongoose.Types.ObjectId;
     const eventId = req.params.id ?? '';
     const userKey = req.params.userKey ?? '';
 
@@ -1444,7 +1453,7 @@ router.post('/events/:id/approve-hours/:userKey', requireAuth, async (req, res) 
 
     const event = await EventModel.findOne({
       _id: new mongoose.Types.ObjectId(eventId),
-      managerId: manager._id,
+      managerId,
     });
     if (!event) return res.status(404).json({ message: 'Event not found' });
 
@@ -1480,6 +1489,7 @@ router.post('/events/:id/approve-hours/:userKey', requireAuth, async (req, res) 
 router.get('/events/:id/debug-attendance', requireAuth, async (req, res) => {
   try {
     const manager = await resolveManagerForRequest(req);
+    const managerId = manager._id as mongoose.Types.ObjectId;
     const eventId = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(eventId)) {
       return res.status(400).json({ message: 'Invalid event id' });
@@ -1487,7 +1497,7 @@ router.get('/events/:id/debug-attendance', requireAuth, async (req, res) => {
 
     const event = await EventModel.findOne({
       _id: new mongoose.Types.ObjectId(eventId),
-      managerId: manager._id,
+      managerId,
     }).lean();
     if (!event) return res.status(404).json({ message: 'Event not found' });
 
@@ -1524,6 +1534,7 @@ router.get('/events/:id/debug-attendance', requireAuth, async (req, res) => {
 router.post('/events/:id/bulk-approve-hours', requireAuth, async (req, res) => {
   try {
     const manager = await resolveManagerForRequest(req);
+    const managerId = manager._id as mongoose.Types.ObjectId;
     const eventId = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(eventId)) {
       return res.status(400).json({ message: 'Invalid event id' });
@@ -1536,7 +1547,7 @@ router.post('/events/:id/bulk-approve-hours', requireAuth, async (req, res) => {
 
     const event = await EventModel.findOne({
       _id: new mongoose.Types.ObjectId(eventId),
-      managerId: manager._id,
+      managerId,
     });
     if (!event) return res.status(404).json({ message: 'Event not found' });
 
