@@ -132,7 +132,7 @@ function normalizeTeamIds(input: Array<string | null | undefined> | string | nul
       if (value == null) {
         return '';
       }
-      return value.toString().trim();
+      return String(value).trim();
     })
     .filter((value) => value.length > 0);
 }
