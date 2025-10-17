@@ -7,7 +7,7 @@ import { ENV } from '../config/env';
 type RegistrationPayload = {
   managerId?: string | null;
   userKey?: string | null;
-  teamIds?: string[] | null;
+  teamIds?: Array<string | null | undefined> | string | null;
 };
 
 let io: IOServer | null = null;
@@ -43,16 +43,12 @@ export function initSocket(server: http.Server): IOServer {
       registerFromPayload(socket, payload);
     });
 
-    socket.on('joinTeams', (teamIds: string[] = []) => {
-      teamIds
-        .filter((id) => typeof id === 'string' && id.trim().length > 0)
-        .forEach((id) => socket.join(teamRoom(id)));
+    socket.on('joinTeams', (teamIds: Array<string | null | undefined> | string | null) => {
+      normalizeTeamIds(teamIds).forEach((id) => socket.join(teamRoom(id)));
     });
 
-    socket.on('leaveTeams', (teamIds: string[] = []) => {
-      teamIds
-        .filter((id) => typeof id === 'string' && id.trim().length > 0)
-        .forEach((id) => socket.leave(teamRoom(id)));
+    socket.on('leaveTeams', (teamIds: Array<string | null | undefined> | string | null) => {
+      normalizeTeamIds(teamIds).forEach((id) => socket.leave(teamRoom(id)));
     });
   });
 
@@ -63,7 +59,7 @@ function registerFromPayload(socket: Socket, payload?: RegistrationPayload) {
   if (!payload) return;
   const managerId = payload.managerId?.toString().trim();
   const userKey = payload.userKey?.toString().trim();
-  const teamIds = payload.teamIds ?? [];
+  const teamIds = normalizeTeamIds(payload.teamIds);
 
   if (managerId) {
     socket.join(managerRoom(managerId));
@@ -71,9 +67,7 @@ function registerFromPayload(socket: Socket, payload?: RegistrationPayload) {
   if (userKey) {
     socket.join(userRoom(userKey));
   }
-  teamIds
-    .filter((id) => typeof id === 'string' && id.trim().length > 0)
-    .forEach((id) => socket.join(teamRoom(id.trim())));
+  teamIds.forEach((id) => socket.join(teamRoom(id)));
 }
 
 export function getIO(): IOServer {
@@ -116,11 +110,29 @@ export function emitToUser(userKey: string, event: string, payload: unknown) {
   io.to(userRoom(userKey)).emit(event, payload);
 }
 
-export function emitToTeams(teamIds: string[], event: string, payload: unknown) {
+export function emitToTeams(
+  teamIds: Array<string | null | undefined> | string | null,
+  event: string,
+  payload: unknown
+) {
   if (!io) return;
-  const rooms = teamIds
-    .filter((id) => typeof id === 'string' && id.trim().length > 0)
-    .map((id) => teamRoom(id.trim()));
+  const rooms = normalizeTeamIds(teamIds).map((id) => teamRoom(id));
   if (rooms.length === 0) return;
   io.to(rooms).emit(event, payload);
+}
+
+function normalizeTeamIds(input: Array<string | null | undefined> | string | null | undefined): string[] {
+  if (input == null) return [];
+  const list = Array.isArray(input) ? input : [input];
+  return list
+    .map((value) => {
+      if (typeof value === 'string') {
+        return value.trim();
+      }
+      if (value == null) {
+        return '';
+      }
+      return value.toString().trim();
+    })
+    .filter((value) => value.length > 0);
 }
