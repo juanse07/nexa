@@ -348,7 +348,15 @@ router.post('/teams/:teamId/members', requireAuth, async (req, res) => {
       { upsert: true, new: true, setDefaultsOnInsert: true }
     ).lean();
 
-    if (!member) {
+    const resolvedMember =
+      member ??
+      (await TeamMemberModel.findOne({
+        teamId: teamObjectId,
+        provider,
+        subject,
+      }).lean());
+
+    if (!resolvedMember) {
       return res.status(500).json({ message: 'Failed to add member' });
     }
 
@@ -368,9 +376,12 @@ router.post('/teams/:teamId/members', requireAuth, async (req, res) => {
       }
     );
 
-    const displayName = (name ?? email ?? buildUserKey(provider, subject)).toString();
+    const displayName =
+      resolvedMember.name ??
+      resolvedMember.email ??
+      buildUserKey(resolvedMember.provider, resolvedMember.subject);
     await TeamMessageModel.create({
-      teamId: member.teamId,
+      teamId: resolvedMember.teamId,
       managerId,
       messageType: 'text',
       body: `${displayName} added to the team`,
@@ -381,19 +392,19 @@ router.post('/teams/:teamId/members', requireAuth, async (req, res) => {
     });
 
     const memberPayload = {
-      id: String(member._id),
-      teamId: String(member.teamId),
-      provider: member.provider,
-      subject: member.subject,
-      email: member.email,
-      name: member.name,
-      status: member.status,
-      joinedAt: member.joinedAt,
-      createdAt: member.createdAt,
+      id: String(resolvedMember._id),
+      teamId: String(resolvedMember.teamId),
+      provider: resolvedMember.provider,
+      subject: resolvedMember.subject,
+      email: resolvedMember.email,
+      name: resolvedMember.name,
+      status: resolvedMember.status,
+      joinedAt: resolvedMember.joinedAt,
+      createdAt: resolvedMember.createdAt,
     };
 
     emitToManager(String(managerId), 'team:memberAdded', memberPayload);
-    emitToTeams([String(member.teamId)], 'team:memberAdded', memberPayload);
+    emitToTeams([String(resolvedMember.teamId)], 'team:memberAdded', memberPayload);
     emitToUser(buildUserKey(provider, subject), 'team:memberAdded', memberPayload);
 
     return res.status(201).json(memberPayload);
