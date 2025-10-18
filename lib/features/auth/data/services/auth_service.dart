@@ -168,7 +168,7 @@ class AuthService {
 
       final resp = await _makeRequest(
         request: () => http.post(
-          Uri.parse('$_apiBaseUrl/auth/google'),
+          Uri.parse('$_apiBaseUrl/auth/manager/google'),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({
             if (tokenType == 'idToken') 'idToken': tokenToSend,
@@ -300,7 +300,7 @@ class AuthService {
     try {
       final resp = await _makeRequest(
         request: () => http.post(
-          Uri.parse('$_apiBaseUrl/auth/apple'),
+          Uri.parse('$_apiBaseUrl/auth/manager/apple'),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({'identityToken': identityToken}),
         ),
