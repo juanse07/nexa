@@ -62,13 +62,18 @@ class _ChatScreenState extends State<ChatScreen> {
           : true; // Accept any message if no conversation yet
 
       if (shouldAccept) {
-        setState(() {
-          // Update conversation ID if we didn't have one
-          _conversationId ??= message.conversationId;
-          _messages.add(message);
-        });
-        _scrollToBottom();
-        _markAsRead();
+        // Check for duplicate message (by ID)
+        final isDuplicate = _messages.any((m) => m.id == message.id);
+
+        if (!isDuplicate) {
+          setState(() {
+            // Update conversation ID if we didn't have one
+            _conversationId ??= message.conversationId;
+            _messages.add(message);
+          });
+          _scrollToBottom();
+          _markAsRead();
+        }
       }
     });
   }
@@ -156,12 +161,17 @@ class _ChatScreenState extends State<ChatScreen> {
 
     try {
       print('[CHAT DEBUG] Calling chatService.sendMessage...');
-      await _chatService.sendMessage(widget.targetId, message);
+      final sentMessage = await _chatService.sendMessage(widget.targetId, message);
       print('[CHAT DEBUG] Message sent successfully');
+
+      // Immediately add the sent message to UI
+      setState(() {
+        _conversationId ??= sentMessage.conversationId;
+        _messages.add(sentMessage);
+      });
+
       _messageController.clear();
       _stopTyping();
-
-      // Message will be added via socket, but scroll anyway
       _scrollToBottom();
     } catch (e) {
       print('[CHAT ERROR] Failed to send message: $e');
