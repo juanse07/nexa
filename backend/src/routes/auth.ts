@@ -48,13 +48,14 @@ if (APPLE_AUDIENCE_IDS.length === 0) {
   );
 }
 
-function issueAppJwt(profile: VerifiedProfile): string {
+function issueAppJwt(profile: VerifiedProfile, managerId?: string): string {
   const payload = {
     sub: profile.subject,
     provider: profile.provider,
     email: profile.email,
     name: profile.name,
     picture: profile.picture,
+    ...(managerId && { managerId }),
   } as const;
   return jwt.sign(payload, JWT_SECRET, { algorithm: 'HS256', expiresIn: '7d' });
 }
@@ -216,12 +217,6 @@ router.post('/google', async (req, res) => {
     }
 
     await upsertUser(profile);
-    try {
-      await ensureManagerDocument(profile);
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.warn('[auth] ensureManagerDocument failed, proceeding with login', err);
-    }
     const token = issueAppJwt(profile);
     res.json({ token, user: profile });
   } catch (err) {
@@ -238,17 +233,79 @@ router.post('/apple', async (req, res) => {
     if (!identityToken) return res.status(400).json({ message: 'identityToken is required' });
     const profile = await verifyAppleIdentityToken(identityToken);
     await upsertUser(profile);
-    try {
-      await ensureManagerDocument(profile);
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.warn('[auth] ensureManagerDocument failed, proceeding with login', err);
-    }
     const token = issueAppJwt(profile);
     res.json({ token, user: profile });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[auth] Apple verification failed:', err);
+    res.status(401).json({ message: 'Apple auth failed' });
+  }
+});
+
+// Manager-specific auth endpoints that include managerId in JWT
+router.post('/manager/google', async (req, res) => {
+  try {
+    if (!JWT_SECRET) return res.status(500).json({ message: 'Server missing JWT secret' });
+
+    const idToken = (req.body?.idToken ?? '') as string;
+    const accessToken = (req.body?.accessToken ?? '') as string;
+
+    if (!idToken && !accessToken) {
+      return res.status(400).json({ message: 'idToken or accessToken is required' });
+    }
+
+    // Prefer idToken, fall back to accessToken
+    let profile: VerifiedProfile;
+    if (idToken) {
+      profile = await verifyGoogleIdToken(idToken);
+    } else {
+      profile = await verifyGoogleAccessToken(accessToken);
+    }
+
+    // Ensure manager document exists and get managerId
+    await ensureManagerDocument(profile);
+    const manager = await ManagerModel.findOne({
+      provider: profile.provider,
+      subject: profile.subject,
+    });
+
+    if (!manager) {
+      return res.status(500).json({ message: 'Failed to create manager profile' });
+    }
+
+    const token = issueAppJwt(profile, manager._id.toString());
+    res.json({ token, user: profile });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[auth] Manager Google verification failed:', err);
+    res.status(401).json({ message: 'Google auth failed' });
+  }
+});
+
+router.post('/manager/apple', async (req, res) => {
+  try {
+    if (!JWT_SECRET) return res.status(500).json({ message: 'Server missing JWT secret' });
+    const identityToken = (req.body?.identityToken ?? '') as string;
+    if (!identityToken) return res.status(400).json({ message: 'identityToken is required' });
+
+    const profile = await verifyAppleIdentityToken(identityToken);
+
+    // Ensure manager document exists and get managerId
+    await ensureManagerDocument(profile);
+    const manager = await ManagerModel.findOne({
+      provider: profile.provider,
+      subject: profile.subject,
+    });
+
+    if (!manager) {
+      return res.status(500).json({ message: 'Failed to create manager profile' });
+    }
+
+    const token = issueAppJwt(profile, manager._id.toString());
+    res.json({ token, user: profile });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[auth] Manager Apple verification failed:', err);
     res.status(401).json({ message: 'Apple auth failed' });
   }
 });

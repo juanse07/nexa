@@ -189,16 +189,10 @@ router.post('/conversations/:targetId/messages', requireAuth, async (req, res) =
       return res.status(400).json({ error: 'Message is too long (max 5000 characters)' });
     }
 
-    // Determine if sender is a manager (check JWT first, then database)
+    // Determine if sender is a manager (only check JWT token)
     let senderManagerId: mongoose.Types.ObjectId | null = null;
     if (managerId) {
       senderManagerId = new mongoose.Types.ObjectId(managerId);
-    } else {
-      // Check if user is a manager by querying ManagerModel
-      const manager = await ManagerModel.findOne({ provider, subject: sub });
-      if (manager) {
-        senderManagerId = manager._id as mongoose.Types.ObjectId;
-      }
     }
 
     console.log('[CHAT DEBUG] Sender is manager?', !!senderManagerId, 'managerId:', senderManagerId?.toString());
