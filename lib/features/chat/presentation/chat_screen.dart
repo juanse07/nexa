@@ -295,7 +295,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ],
         ),
-        elevation: 1,
+        elevation: 0.5,
       ),
       body: Column(
         children: <Widget>[
