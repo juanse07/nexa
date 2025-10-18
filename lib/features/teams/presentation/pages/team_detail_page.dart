@@ -451,6 +451,13 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: Navigator.of(context).canPop(),
+        leading: Navigator.of(context).canPop()
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => Navigator.of(context).maybePop(),
+              )
+            : null,
         title: Text(widget.teamName),
         actions: [
           IconButton(

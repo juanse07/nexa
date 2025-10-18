@@ -187,7 +187,16 @@ class _TeamsManagementPageState extends State<TeamsManagementPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Teams')),
+      appBar: AppBar(
+        automaticallyImplyLeading: Navigator.of(context).canPop(),
+        leading: Navigator.of(context).canPop()
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => Navigator.of(context).maybePop(),
+              )
+            : null,
+        title: const Text('Teams'),
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _createTeam,
         icon: const Icon(Icons.group_add),
