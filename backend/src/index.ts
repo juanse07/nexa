@@ -18,6 +18,7 @@ import managersRouter from './routes/managers';
 import tariffsRouter from './routes/tariffs';
 import usersRouter from './routes/users';
 import syncRouter from './routes/sync';
+import chatRouter from './routes/chat';
 import { initSocket } from './socket/server';
 import teamsRouter from './routes/teams';
 
@@ -77,6 +78,7 @@ async function createServer() {
   app.use('/api', usersRouter);
   app.use('/api', managersRouter);
   app.use('/api', teamsRouter);
+  app.use('/api/chat', chatRouter);
   app.use('/api/auth', authRouter);
   app.use('/api', syncRouter);
 

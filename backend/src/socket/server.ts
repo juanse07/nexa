@@ -50,6 +50,13 @@ export function initSocket(server: http.Server): IOServer {
     socket.on('leaveTeams', (teamIds: Array<string | null | undefined> | string | null) => {
       normalizeTeamIds(teamIds).forEach((id) => socket.leave(teamRoom(id)));
     });
+
+    // Chat typing indicator
+    socket.on('chat:typing', (payload: { conversationId: string; isTyping: boolean; senderType: 'manager' | 'user' }) => {
+      const { conversationId, isTyping, senderType } = payload;
+      // Broadcast to the other party in the conversation
+      socket.broadcast.emit('chat:typing', { conversationId, isTyping, senderType });
+    });
   });
 
   return io;

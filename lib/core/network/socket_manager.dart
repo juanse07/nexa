@@ -26,6 +26,7 @@ class SocketManager {
   final Set<String> _joinedTeams = <String>{};
 
   Stream<SocketEvent> get events => _controller.stream;
+  io.Socket? get socket => _socket;
 
   Future<void> registerManager(String? managerId) async {
     if (managerId == null || managerId.isEmpty) return;
