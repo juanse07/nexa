@@ -189,12 +189,26 @@ router.post('/conversations/:targetId/messages', requireAuth, async (req, res) =
       return res.status(400).json({ error: 'Message is too long (max 5000 characters)' });
     }
 
+    // Determine if sender is a manager (check JWT first, then database)
+    let senderManagerId: mongoose.Types.ObjectId | null = null;
+    if (managerId) {
+      senderManagerId = new mongoose.Types.ObjectId(managerId);
+    } else {
+      // Check if user is a manager by querying ManagerModel
+      const manager = await ManagerModel.findOne({ provider, subject: sub });
+      if (manager) {
+        senderManagerId = manager._id as mongoose.Types.ObjectId;
+      }
+    }
+
+    console.log('[CHAT DEBUG] Sender is manager?', !!senderManagerId, 'managerId:', senderManagerId?.toString());
+
     let conversation;
     let targetManagerId: mongoose.Types.ObjectId | null = null;
     let targetUserKey: string;
     let senderType: 'manager' | 'user';
 
-    if (managerId) {
+    if (senderManagerId) {
       // Manager sending to user
       senderType = 'manager';
       targetUserKey = targetId as string;
@@ -217,17 +231,17 @@ router.post('/conversations/:targetId/messages', requireAuth, async (req, res) =
 
       // Find or create conversation
       conversation = await ConversationModel.findOneAndUpdate(
-        { managerId: new mongoose.Types.ObjectId(managerId), userKey: targetUserKey },
+        { managerId: senderManagerId, userKey: targetUserKey },
         {
           $setOnInsert: {
-            managerId: new mongoose.Types.ObjectId(managerId),
+            managerId: senderManagerId,
             userKey: targetUserKey,
           }
         },
         { upsert: true, new: true }
       );
 
-      targetManagerId = new mongoose.Types.ObjectId(managerId);
+      targetManagerId = senderManagerId;
     } else {
       // User sending to manager
       senderType = 'user';

@@ -24,13 +24,14 @@ const updateSchema = z.object({
 
 router.get('/users/me', requireAuth, async (req, res) => {
   try {
-    if (!req.user?.provider || !req.user?.sub) {
+    const authUser = (req as any).authUser;
+    if (!authUser?.provider || !authUser?.sub) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
     const user = await UserModel.findOne({
-      provider: req.user.provider,
-      subject: req.user.sub,
+      provider: authUser.provider,
+      subject: authUser.sub,
     }).lean();
 
     if (!user) return res.status(404).json({ message: 'User not found' });
@@ -52,7 +53,8 @@ router.get('/users/me', requireAuth, async (req, res) => {
 
 router.patch('/users/me', requireAuth, async (req, res) => {
   try {
-    if (!req.user?.provider || !req.user?.sub) {
+    const authUser = (req as any).authUser;
+    if (!authUser?.provider || !authUser?.sub) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
     const parsed = updateSchema.safeParse(req.body || {});
@@ -65,8 +67,8 @@ router.patch('/users/me', requireAuth, async (req, res) => {
       const conflict = await UserModel.findOne({
         app_id: parsed.data.app_id,
         $or: [
-          { provider: { $ne: req.user.provider } },
-          { subject: { $ne: req.user.sub } },
+          { provider: { $ne: authUser.provider } },
+          { subject: { $ne: authUser.sub } },
         ],
       }).lean();
       if (conflict) {
@@ -75,7 +77,7 @@ router.patch('/users/me', requireAuth, async (req, res) => {
     }
 
     const updated = await UserModel.findOneAndUpdate(
-      { provider: req.user.provider, subject: req.user.sub },
+      { provider: authUser.provider, subject: authUser.sub },
       {
         $set: { ...parsed.data, updatedAt: new Date() },
       },
