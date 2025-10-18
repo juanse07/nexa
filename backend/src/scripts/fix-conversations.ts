@@ -1,6 +1,19 @@
 /**
  * Script to check and fix conversations that might be missing managerId
- * Run with: npx ts-node src/scripts/fix-conversations.ts
+ *
+ * LOCAL USAGE:
+ *   npx ts-node src/scripts/fix-conversations.ts
+ *
+ * PRODUCTION USAGE (on server):
+ *   1. SSH into your server
+ *   2. Navigate to your backend directory
+ *   3. Run: npx ts-node src/scripts/fix-conversations.ts
+ *
+ * This script will:
+ * - Find all conversations with missing or null managerId
+ * - Try to recover the managerId from the first message in the conversation
+ * - Update the conversation with the recovered managerId
+ * - Report how many were fixed and how many couldn't be fixed
  */
 
 import mongoose from 'mongoose';

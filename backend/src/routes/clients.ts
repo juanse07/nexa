@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import { z } from 'zod';
 import { requireAuth, AuthenticatedRequest } from '../middleware/requireAuth';
 import { ClientModel } from '../models/client';
-import { resolveManagerForRequest } from '../utils/manager';
+import { ManagerModel } from '../models/manager';
 
 const router = Router();
 
@@ -14,12 +14,26 @@ const clientSchema = z.object({
 // List clients (sorted by name)
 router.get('/clients', requireAuth, async (req, res) => {
   try {
-    const { managerId } = (req as AuthenticatedRequest).authUser;
-    if (!managerId) {
-      return res.status(403).json({ message: 'Manager access required' });
+    const authUser = (req as any).authUser;
+    let managerObjectId: mongoose.Types.ObjectId;
+
+    if (authUser.managerId) {
+      // Manager ID in token
+      managerObjectId = new mongoose.Types.ObjectId(authUser.managerId);
+    } else {
+      // Look up manager by provider/subject
+      const manager = await ManagerModel.findOne({
+        provider: authUser.provider,
+        subject: authUser.sub
+      });
+      if (!manager) {
+        return res.status(403).json({ message: 'Manager not found' });
+      }
+      managerObjectId = manager._id as mongoose.Types.ObjectId;
     }
+
     const clients = await ClientModel.find(
-      { managerId: new mongoose.Types.ObjectId(managerId) },
+      { managerId: managerObjectId },
       { _id: 1, name: 1 }
     )
       .sort({ normalizedName: 1 })
@@ -34,11 +48,22 @@ router.get('/clients', requireAuth, async (req, res) => {
 // Create a client (name unique, case-insensitive)
 router.post('/clients', requireAuth, async (req, res) => {
   try {
-    const { managerId } = (req as AuthenticatedRequest).authUser;
-    if (!managerId) {
-      return res.status(403).json({ message: 'Manager access required' });
+    const authUser = (req as any).authUser;
+    let managerObjectId: mongoose.Types.ObjectId;
+
+    if (authUser.managerId) {
+      managerObjectId = new mongoose.Types.ObjectId(authUser.managerId);
+    } else {
+      const manager = await ManagerModel.findOne({
+        provider: authUser.provider,
+        subject: authUser.sub
+      });
+      if (!manager) {
+        return res.status(403).json({ message: 'Manager not found' });
+      }
+      managerObjectId = manager._id as mongoose.Types.ObjectId;
     }
-    const managerObjectId = new mongoose.Types.ObjectId(managerId);
+
     const parsed = clientSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: 'Validation failed', details: parsed.error.format() });
@@ -61,11 +86,22 @@ router.post('/clients', requireAuth, async (req, res) => {
 // Update a client name
 router.patch('/clients/:id', requireAuth, async (req, res) => {
   try {
-    const { managerId } = (req as AuthenticatedRequest).authUser;
-    if (!managerId) {
-      return res.status(403).json({ message: 'Manager access required' });
+    const authUser = (req as any).authUser;
+    let managerObjectId: mongoose.Types.ObjectId;
+
+    if (authUser.managerId) {
+      managerObjectId = new mongoose.Types.ObjectId(authUser.managerId);
+    } else {
+      const manager = await ManagerModel.findOne({
+        provider: authUser.provider,
+        subject: authUser.sub
+      });
+      if (!manager) {
+        return res.status(403).json({ message: 'Manager not found' });
+      }
+      managerObjectId = manager._id as mongoose.Types.ObjectId;
     }
-    const managerObjectId = new mongoose.Types.ObjectId(managerId);
+
     const id = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: 'Invalid client id' });
@@ -98,11 +134,22 @@ router.patch('/clients/:id', requireAuth, async (req, res) => {
 // Delete a client
 router.delete('/clients/:id', requireAuth, async (req, res) => {
   try {
-    const { managerId } = (req as AuthenticatedRequest).authUser;
-    if (!managerId) {
-      return res.status(403).json({ message: 'Manager access required' });
+    const authUser = (req as any).authUser;
+    let managerObjectId: mongoose.Types.ObjectId;
+
+    if (authUser.managerId) {
+      managerObjectId = new mongoose.Types.ObjectId(authUser.managerId);
+    } else {
+      const manager = await ManagerModel.findOne({
+        provider: authUser.provider,
+        subject: authUser.sub
+      });
+      if (!manager) {
+        return res.status(403).json({ message: 'Manager not found' });
+      }
+      managerObjectId = manager._id as mongoose.Types.ObjectId;
     }
-    const managerObjectId = new mongoose.Types.ObjectId(managerId);
+
     const id = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: 'Invalid client id' });

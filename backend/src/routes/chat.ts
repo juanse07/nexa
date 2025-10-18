@@ -72,27 +72,31 @@ router.get('/conversations', requireAuth, async (req, res) => {
         managers.map(m => [m._id.toString(), m])
       );
 
-      const result = conversations.map(conv => {
-        console.log('[CHAT DEBUG] User conversation - convId:', conv._id, 'managerId:', conv.managerId, 'type:', typeof conv.managerId);
+      const result = conversations
+        .filter(conv => {
+          if (!conv.managerId) {
+            console.log('[CHAT ERROR] Filtering out conversation with missing managerId:', conv._id);
+            return false;
+          }
+          return true;
+        })
+        .map(conv => {
+          console.log('[CHAT DEBUG] User conversation - convId:', conv._id, 'managerId:', conv.managerId, 'type:', typeof conv.managerId);
 
-        if (!conv.managerId) {
-          console.log('[CHAT ERROR] Conversation missing managerId:', conv._id);
-        }
-
-        return {
-          id: conv._id.toString(),
-          managerId: conv.managerId ? conv.managerId.toString() : null,
-          managerName: managerMap.get(conv.managerId?.toString())?.name ||
-                       managerMap.get(conv.managerId?.toString())?.first_name ||
-                       'Manager',
-          managerPicture: managerMap.get(conv.managerId?.toString())?.picture,
-          managerEmail: managerMap.get(conv.managerId?.toString())?.email,
-          lastMessageAt: conv.lastMessageAt,
-          lastMessagePreview: conv.lastMessagePreview,
-          unreadCount: conv.unreadCountUser,
-          updatedAt: conv.updatedAt,
-        };
-      });
+          return {
+            id: conv._id.toString(),
+            managerId: conv.managerId.toString(),
+            managerName: managerMap.get(conv.managerId.toString())?.name ||
+                         managerMap.get(conv.managerId.toString())?.first_name ||
+                         'Manager',
+            managerPicture: managerMap.get(conv.managerId.toString())?.picture,
+            managerEmail: managerMap.get(conv.managerId.toString())?.email,
+            lastMessageAt: conv.lastMessageAt,
+            lastMessagePreview: conv.lastMessagePreview,
+            unreadCount: conv.unreadCountUser,
+            updatedAt: conv.updatedAt,
+          };
+        });
 
       return res.json({ conversations: result });
     }
@@ -219,9 +223,14 @@ router.post('/conversations/:targetId/messages', requireAuth, async (req, res) =
 
       console.log('[CHAT DEBUG] User sending message - targetId:', targetId, 'type:', typeof targetId);
 
+      if (!targetId || targetId === 'null' || targetId === 'undefined') {
+        console.log('[CHAT ERROR] Manager ID is null or undefined');
+        return res.status(400).json({ error: 'Manager ID is required. Please contact your manager to start a conversation.' });
+      }
+
       if (!mongoose.Types.ObjectId.isValid(targetId as string)) {
         console.log('[CHAT ERROR] Invalid manager ID format:', targetId);
-        return res.status(400).json({ error: 'Invalid manager ID' });
+        return res.status(400).json({ error: 'Invalid manager ID format' });
       }
 
       targetManagerId = new mongoose.Types.ObjectId(targetId as string);
