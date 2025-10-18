@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth, AuthenticatedRequest } from '../middleware/auth';
+import { requireAuth, AuthenticatedRequest } from '../middleware/requireAuth';
 import { ConversationModel } from '../models/conversation';
 import { ChatMessageModel } from '../models/chatMessage';
 import { ManagerModel } from '../models/manager';
@@ -259,8 +259,8 @@ router.post('/conversations/:targetId/messages', requireAuth, async (req: Authen
     });
 
     const messagePayload = {
-      id: chatMessage._id.toString(),
-      conversationId: conversation._id.toString(),
+      id: String(chatMessage._id),
+      conversationId: String(conversation._id),
       senderType: chatMessage.senderType,
       senderName: chatMessage.senderName,
       senderPicture: chatMessage.senderPicture,

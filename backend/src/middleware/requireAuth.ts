@@ -8,6 +8,11 @@ export interface AuthenticatedUser {
   email?: string;
   name?: string;
   picture?: string;
+  managerId?: string;
+}
+
+export interface AuthenticatedRequest extends Request {
+  authUser: AuthenticatedUser;
 }
 
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
@@ -27,7 +32,9 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
       email: decoded.email,
       name: decoded.name,
       picture: decoded.picture,
+      managerId: decoded.managerId,
     } as AuthenticatedUser;
+    (req as any).authUser = (req as any).user; // Add authUser alias for compatibility
     next();
   } catch {
     return res.status(401).json({ message: 'Unauthorized' });
