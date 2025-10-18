@@ -13,9 +13,9 @@ const router = Router();
  * GET /chat/conversations
  * Get all conversations for the authenticated user (manager or user)
  */
-router.get('/conversations', requireAuth, async (req: AuthenticatedRequest, res) => {
+router.get('/conversations', requireAuth, async (req, res) => {
   try {
-    const { managerId, provider, sub } = req.authUser;
+    const { managerId, provider, sub } = (req as AuthenticatedRequest).authUser;
     const userKey = `${provider}:${sub}`;
 
     let conversations;
@@ -98,10 +98,10 @@ router.get('/conversations', requireAuth, async (req: AuthenticatedRequest, res)
  * GET /chat/conversations/:conversationId/messages
  * Get messages for a specific conversation
  */
-router.get('/conversations/:conversationId/messages', requireAuth, async (req: AuthenticatedRequest, res) => {
+router.get('/conversations/:conversationId/messages', requireAuth, async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const { managerId, provider, sub } = req.authUser;
+    const { managerId, provider, sub } = (req as AuthenticatedRequest).authUser;
     const userKey = `${provider}:${sub}`;
     const limit = parseInt(req.query.limit as string) || 50;
     const before = req.query.before as string; // ISO date string for pagination
@@ -160,11 +160,11 @@ router.get('/conversations/:conversationId/messages', requireAuth, async (req: A
  * Send a message to a user (if manager) or to manager (if user)
  * targetId: managerId if user is sending, userKey if manager is sending
  */
-router.post('/conversations/:targetId/messages', requireAuth, async (req: AuthenticatedRequest, res) => {
+router.post('/conversations/:targetId/messages', requireAuth, async (req, res) => {
   try {
     const { targetId } = req.params;
     const { message } = req.body;
-    const { managerId, provider, sub, name, picture } = req.authUser;
+    const { managerId, provider, sub, name, picture } = (req as AuthenticatedRequest).authUser;
     const userKey = `${provider}:${sub}`;
 
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
@@ -177,13 +177,13 @@ router.post('/conversations/:targetId/messages', requireAuth, async (req: Authen
 
     let conversation;
     let targetManagerId: mongoose.Types.ObjectId | null = null;
-    let targetUserKey: string | null = null;
+    let targetUserKey: string;
     let senderType: 'manager' | 'user';
 
     if (managerId) {
       // Manager sending to user
       senderType = 'manager';
-      targetUserKey = targetId;
+      targetUserKey = targetId as string;
 
       // Verify user exists
       const [provider, subject] = targetUserKey.split(':');
@@ -288,10 +288,10 @@ router.post('/conversations/:targetId/messages', requireAuth, async (req: Authen
  * PATCH /chat/conversations/:conversationId/read
  * Mark all messages in a conversation as read
  */
-router.patch('/conversations/:conversationId/read', requireAuth, async (req: AuthenticatedRequest, res) => {
+router.patch('/conversations/:conversationId/read', requireAuth, async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const { managerId, provider, sub } = req.authUser;
+    const { managerId, provider, sub } = (req as AuthenticatedRequest).authUser;
     const userKey = `${provider}:${sub}`;
 
     if (!mongoose.Types.ObjectId.isValid(conversationId)) {
@@ -342,9 +342,9 @@ router.patch('/conversations/:conversationId/read', requireAuth, async (req: Aut
  * GET /chat/managers
  * For users: Get list of their managers to start a chat
  */
-router.get('/managers', requireAuth, async (req: AuthenticatedRequest, res) => {
+router.get('/managers', requireAuth, async (req, res) => {
   try {
-    const { managerId, provider, sub } = req.authUser;
+    const { managerId, provider, sub } = (req as AuthenticatedRequest).authUser;
 
     if (managerId) {
       return res.status(403).json({ error: 'Only users can access this endpoint' });
