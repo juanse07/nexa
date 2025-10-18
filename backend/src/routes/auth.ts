@@ -273,7 +273,7 @@ router.post('/manager/google', async (req, res) => {
       return res.status(500).json({ message: 'Failed to create manager profile' });
     }
 
-    const token = issueAppJwt(profile, manager._id.toString());
+    const token = issueAppJwt(profile, String(manager._id));
     res.json({ token, user: profile });
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -301,7 +301,7 @@ router.post('/manager/apple', async (req, res) => {
       return res.status(500).json({ message: 'Failed to create manager profile' });
     }
 
-    const token = issueAppJwt(profile, manager._id.toString());
+    const token = issueAppJwt(profile, String(manager._id));
     res.json({ token, user: profile });
   } catch (err) {
     // eslint-disable-next-line no-console
