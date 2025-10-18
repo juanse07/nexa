@@ -135,7 +135,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => ChatScreen(
-          targetId: conversation.managerId ?? conversation.userKey!,
+          targetId: conversation.userKey ?? conversation.managerId!,
           targetName: conversation.displayName,
           targetPicture: conversation.displayPicture,
           conversationId: conversation.id,
