@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:nexa/features/teams/data/services/teams_service.dart';
 import 'package:nexa/features/extraction/services/users_service.dart';
+import 'package:nexa/features/chat/presentation/chat_screen.dart';
 
 class TeamDetailPage extends StatefulWidget {
   const TeamDetailPage({
@@ -536,19 +537,44 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
               if (provider.isNotEmpty && subject.isNotEmpty)
                 '$provider:$subject',
             ].join(' • ');
+            final userKey = provider.isNotEmpty && subject.isNotEmpty
+                ? '$provider:$subject'
+                : null;
             return Card(
               margin: const EdgeInsets.only(bottom: 8),
               child: ListTile(
                 leading: const CircleAvatar(child: Icon(Icons.person_outline)),
                 title: Text(name.isEmpty ? 'Pending member' : name),
                 subtitle: subtitle.isEmpty ? null : Text(subtitle),
-                trailing: IconButton(
-                  onPressed: memberId.isEmpty
-                      ? null
-                      : () => _removeMember(memberId),
-                  icon: const Icon(Icons.remove_circle_outline),
-                  color: Colors.redAccent,
-                  tooltip: 'Remove',
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (userKey != null)
+                      IconButton(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => ChatScreen(
+                                targetId: userKey,
+                                targetName: name.isNotEmpty ? name : email,
+                                targetPicture: member['picture']?.toString(),
+                              ),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.chat_bubble_outline),
+                        color: Colors.blue,
+                        tooltip: 'Message',
+                      ),
+                    IconButton(
+                      onPressed: memberId.isEmpty
+                          ? null
+                          : () => _removeMember(memberId),
+                      icon: const Icon(Icons.remove_circle_outline),
+                      color: Colors.redAccent,
+                      tooltip: 'Remove',
+                    ),
+                  ],
                 ),
               ),
             );
