@@ -106,7 +106,7 @@ router.get('/conversations/:conversationId/messages', requireAuth, async (req, r
     const limit = parseInt(req.query.limit as string) || 50;
     const before = req.query.before as string; // ISO date string for pagination
 
-    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+    if (!mongoose.Types.ObjectId.isValid(conversationId as string)) {
       return res.status(400).json({ error: 'Invalid conversation ID' });
     }
 
@@ -209,11 +209,11 @@ router.post('/conversations/:targetId/messages', requireAuth, async (req, res) =
       // User sending to manager
       senderType = 'user';
 
-      if (!mongoose.Types.ObjectId.isValid(targetId)) {
+      if (!mongoose.Types.ObjectId.isValid(targetId as string)) {
         return res.status(400).json({ error: 'Invalid manager ID' });
       }
 
-      targetManagerId = new mongoose.Types.ObjectId(targetId);
+      targetManagerId = new mongoose.Types.ObjectId(targetId as string);
 
       // Verify manager exists
       const manager = await ManagerModel.findById(targetManagerId);
@@ -294,7 +294,7 @@ router.patch('/conversations/:conversationId/read', requireAuth, async (req, res
     const { managerId, provider, sub } = (req as AuthenticatedRequest).authUser;
     const userKey = `${provider}:${sub}`;
 
-    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+    if (!mongoose.Types.ObjectId.isValid(conversationId as string)) {
       return res.status(400).json({ error: 'Invalid conversation ID' });
     }
 
