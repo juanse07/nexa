@@ -179,6 +179,8 @@ router.post('/conversations/:targetId/messages', requireAuth, async (req, res) =
     const { managerId, provider, sub, name, picture } = (req as AuthenticatedRequest).authUser;
     const userKey = `${provider}:${sub}`;
 
+    console.log('[CHAT DEBUG] POST message - targetId:', targetId, 'managerId:', managerId, 'userKey:', userKey);
+
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return res.status(400).json({ error: 'Message is required' });
     }
@@ -197,12 +199,21 @@ router.post('/conversations/:targetId/messages', requireAuth, async (req, res) =
       senderType = 'manager';
       targetUserKey = targetId as string;
 
+      console.log('[CHAT DEBUG] Manager sending to user. targetUserKey:', targetUserKey);
+
       // Verify user exists
-      const [provider, subject] = targetUserKey.split(':');
+      const parts = targetUserKey.split(':');
+      if (parts.length !== 2) {
+        console.log('[CHAT ERROR] Invalid userKey format:', targetUserKey);
+        return res.status(400).json({ error: 'Invalid user key format. Expected format: provider:subject' });
+      }
+      const [provider, subject] = parts;
       const user = await UserModel.findOne({ provider, subject });
       if (!user) {
+        console.log('[CHAT ERROR] User not found:', provider, subject);
         return res.status(404).json({ error: 'User not found' });
       }
+      console.log('[CHAT DEBUG] User found:', user._id);
 
       // Find or create conversation
       conversation = await ConversationModel.findOneAndUpdate(
