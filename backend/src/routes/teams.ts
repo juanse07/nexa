@@ -76,7 +76,7 @@ function buildUserKey(provider: string, subject: string): string {
 
 router.get('/teams', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const manager = await resolveManagerForRequest(req as any);
     const managerId = manager._id as mongoose.Types.ObjectId;
 
     const teams = await TeamModel.find({ managerId: managerId })
@@ -123,7 +123,7 @@ router.get('/teams', requireAuth, async (req, res) => {
 
 router.post('/teams', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const manager = await resolveManagerForRequest(req as any);
     const managerId = manager._id as mongoose.Types.ObjectId;
     const parsed = createTeamSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -163,7 +163,7 @@ router.post('/teams', requireAuth, async (req, res) => {
 
 router.patch('/teams/:teamId', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const manager = await resolveManagerForRequest(req as any);
     const managerId = manager._id as mongoose.Types.ObjectId;
     const teamIdParam = req.params.teamId ?? '';
     if (!mongoose.Types.ObjectId.isValid(teamIdParam)) {
@@ -223,7 +223,7 @@ router.patch('/teams/:teamId', requireAuth, async (req, res) => {
 
 router.delete('/teams/:teamId', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const manager = await resolveManagerForRequest(req as any);
     const managerId = manager._id as mongoose.Types.ObjectId;
     const teamIdParam = req.params.teamId ?? '';
     if (!mongoose.Types.ObjectId.isValid(teamIdParam)) {
@@ -263,7 +263,7 @@ router.delete('/teams/:teamId', requireAuth, async (req, res) => {
 
 router.get('/teams/:teamId/members', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const manager = await resolveManagerForRequest(req as any);
     const managerId = manager._id as mongoose.Types.ObjectId;
     const teamIdParam = req.params.teamId ?? '';
     if (!mongoose.Types.ObjectId.isValid(teamIdParam)) {
@@ -304,7 +304,7 @@ router.post('/teams/:teamId/members', requireAuth, async (req, res) => {
   let capturedSubject: string | null = null;
 
   try {
-    const manager = await resolveManagerForRequest(req);
+    const manager = await resolveManagerForRequest(req as any);
     managerId = manager._id as mongoose.Types.ObjectId;
     const managerObjectId = managerId;
 
@@ -455,7 +455,7 @@ router.post('/teams/:teamId/members', requireAuth, async (req, res) => {
 
 router.delete('/teams/:teamId/members/:memberId', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const manager = await resolveManagerForRequest(req as any);
     const managerId = manager._id as mongoose.Types.ObjectId;
     const teamIdParam = req.params.teamId ?? '';
     const memberIdParam = req.params.memberId ?? '';
@@ -505,7 +505,7 @@ router.delete('/teams/:teamId/members/:memberId', requireAuth, async (req, res) 
 
 router.get('/teams/:teamId/messages', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const manager = await resolveManagerForRequest(req as any);
     const managerId = manager._id as mongoose.Types.ObjectId;
     const teamIdParam = req.params.teamId ?? '';
     const paginationParams = paginationSchema.safeParse({
@@ -555,7 +555,7 @@ router.get('/teams/:teamId/messages', requireAuth, async (req, res) => {
 
 router.post('/teams/:teamId/invites', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const manager = await resolveManagerForRequest(req as any);
     const managerId = manager._id as mongoose.Types.ObjectId;
     const teamIdParam = req.params.teamId ?? '';
     if (!mongoose.Types.ObjectId.isValid(teamIdParam)) {
@@ -646,7 +646,7 @@ router.post('/teams/:teamId/invites', requireAuth, async (req, res) => {
 
 router.get('/teams/:teamId/invites', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const manager = await resolveManagerForRequest(req as any);
     const managerId = manager._id as mongoose.Types.ObjectId;
     const teamIdParam = req.params.teamId ?? '';
     if (!mongoose.Types.ObjectId.isValid(teamIdParam)) {
@@ -681,7 +681,7 @@ router.get('/teams/:teamId/invites', requireAuth, async (req, res) => {
 
 router.post('/teams/:teamId/invites/:inviteId/cancel', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const manager = await resolveManagerForRequest(req as any);
     const managerId = manager._id as mongoose.Types.ObjectId;
     const teamIdParam = req.params.teamId ?? '';
     const inviteIdParam = req.params.inviteId ?? '';

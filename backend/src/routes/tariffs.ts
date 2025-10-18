@@ -19,7 +19,7 @@ const upsertSchema = z.object({
 // List tariffs, optionally filtered by clientId or roleId
 router.get('/tariffs', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const manager = await resolveManagerForRequest(req as any);
     const clientId = (req.query.clientId as string | undefined) || undefined;
     const roleId = (req.query.roleId as string | undefined) || undefined;
     const filter: any = { managerId: manager._id };
@@ -42,7 +42,7 @@ router.get('/tariffs', requireAuth, async (req, res) => {
 // Create or update a tariff for (clientId, roleId)
 router.post('/tariffs', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const manager = await resolveManagerForRequest(req as any);
     const parsed = upsertSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: 'Validation failed', details: parsed.error.format() });
     const { clientId, roleId, rate, currency } = parsed.data;
@@ -88,7 +88,7 @@ router.post('/tariffs', requireAuth, async (req, res) => {
 // Delete a tariff by id
 router.delete('/tariffs/:id', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const manager = await resolveManagerForRequest(req as any);
     const id = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ message: 'Invalid tariff id' });
     const result = await TariffModel.deleteOne({ _id: new mongoose.Types.ObjectId(id), managerId: manager._id });

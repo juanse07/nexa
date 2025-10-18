@@ -244,7 +244,7 @@ async function sanitizeTeamIds(
 
 router.post('/events', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const manager = await resolveManagerForRequest(req as any);
     const managerId = manager._id as mongoose.Types.ObjectId;
     const parsed = eventSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -360,7 +360,7 @@ const updateRolesSchema = z.object({
 
 router.patch('/events/:id/roles', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const manager = await resolveManagerForRequest(req as any);
     const managerId = manager._id as mongoose.Types.ObjectId;
     const eventId = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(eventId)) {
@@ -438,7 +438,7 @@ router.patch('/events/:id/roles', requireAuth, async (req, res) => {
 // Update an event (partial update)
 router.patch('/events/:id', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const manager = await resolveManagerForRequest(req as any);
     const managerId = manager._id as mongoose.Types.ObjectId;
     const eventId = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(eventId)) {
@@ -543,7 +543,7 @@ router.get('/events', requireAuth, async (req, res) => {
       });
 
       if (!manager && !explicitAudienceKey) {
-        manager = await resolveManagerForRequest(req);
+        manager = await resolveManagerForRequest(req as any);
       }
 
       if (manager && !explicitAudienceKey) {
@@ -684,7 +684,7 @@ router.get('/events', requireAuth, async (req, res) => {
 // Positions view: flatten roles to position cards with remaining spots
 router.get('/positions', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const manager = await resolveManagerForRequest(req as any);
     const managerId = manager._id as mongoose.Types.ObjectId;
     const events = await EventModel.find({ managerId })
       .sort({ createdAt: -1 })
@@ -724,7 +724,7 @@ router.get('/positions', requireAuth, async (req, res) => {
 // Remove accepted staff member from event
 router.delete('/events/:id/staff/:userKey', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const manager = await resolveManagerForRequest(req as any);
     const managerId = manager._id as mongoose.Types.ObjectId;
     const eventId = req.params.id ?? '';
     const userKey = req.params.userKey ?? '';
@@ -797,32 +797,32 @@ router.post('/events/:id/respond', requireAuth, async (req, res) => {
       console.warn('[respond] missing role/position on accept');
       return res.status(400).json({ message: 'role or position is required to accept a position' });
     }
-    if (!req.user?.provider || !req.user?.sub) {
+    if (!(req as any).authUser?.provider || !(req as any).authUser?.sub) {
       // eslint-disable-next-line no-console
       console.warn('[respond] unauthorized: missing user claims');
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const userKey = `${req.user.provider}:${req.user.sub}`;
+    const userKey = `${(req as any).authUser.provider}:${(req as any).authUser.sub}`;
 
-    const firstName = req.user.name
-      ? req.user.name.trim().split(/\s+/).slice(0, -1).join(' ') || undefined
+    const firstName = (req as any).authUser.name
+      ? (req as any).authUser.name.trim().split(/\s+/).slice(0, -1).join(' ') || undefined
       : undefined;
-    const lastName = req.user.name
-      ? req.user.name.trim().split(/\s+/).slice(-1)[0] || undefined
+    const lastName = (req as any).authUser.name
+      ? (req as any).authUser.name.trim().split(/\s+/).slice(-1)[0] || undefined
       : undefined;
 
     const roleVal = roleValRaw;
 
     const staffDoc = {
       userKey,
-      provider: req.user.provider,
-      subject: req.user.sub,
-      email: req.user.email,
-      name: req.user.name,
+      provider: (req as any).authUser.provider,
+      subject: (req as any).authUser.sub,
+      email: (req as any).authUser.email,
+      name: (req as any).authUser.name,
       first_name: firstName,
       last_name: lastName,
-      picture: req.user.picture,
+      picture: (req as any).authUser.picture,
       response: responseVal,
       role: roleVal || undefined,
       respondedAt: new Date(),
@@ -988,10 +988,10 @@ router.get('/events/:id/attendance/me', requireAuth, async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(eventId)) {
       return res.status(400).json({ message: 'Invalid event id' });
     }
-    if (!req.user?.provider || !req.user?.sub) {
+    if (!(req as any).authUser?.provider || !(req as any).authUser?.sub) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
-    const userKey = `${req.user.provider}:${req.user.sub}`;
+    const userKey = `${(req as any).authUser.provider}:${(req as any).authUser.sub}`;
     const event = await EventModel.findById(eventId).lean();
     if (!event) return res.status(404).json({ message: 'Event not found' });
     const member = (event.accepted_staff || []).find((m: any) => (m?.userKey || '') === userKey);
@@ -1021,10 +1021,10 @@ router.post('/events/:id/clock-in', requireAuth, async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(eventId)) {
       return res.status(400).json({ message: 'Invalid event id' });
     }
-    if (!req.user?.provider || !req.user?.sub) {
+    if (!(req as any).authUser?.provider || !(req as any).authUser?.sub) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
-    const userKey = `${req.user.provider}:${req.user.sub}`;
+    const userKey = `${(req as any).authUser.provider}:${(req as any).authUser.sub}`;
 
     const event = await EventModel.findById(eventId).lean();
     if (!event) return res.status(404).json({ message: 'Event not found' });
@@ -1064,10 +1064,10 @@ router.post('/events/:id/clock-out', requireAuth, async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(eventId)) {
       return res.status(400).json({ message: 'Invalid event id' });
     }
-    if (!req.user?.provider || !req.user?.sub) {
+    if (!(req as any).authUser?.provider || !(req as any).authUser?.sub) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
-    const userKey = `${req.user.provider}:${req.user.sub}`;
+    const userKey = `${(req as any).authUser.provider}:${(req as any).authUser.sub}`;
 
     const event = await EventModel.findById(eventId).lean();
     if (!event) return res.status(404).json({ message: 'Event not found' });
@@ -1103,7 +1103,7 @@ router.post('/events/:id/clock-out', requireAuth, async (req, res) => {
 // Analyze sign-in sheet photo with OpenAI
 router.post('/events/:id/analyze-sheet', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const manager = await resolveManagerForRequest(req as any);
     const eventId = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(eventId)) {
       return res.status(400).json({ message: 'Invalid event id' });
@@ -1246,7 +1246,7 @@ function levenshteinDistance(str1: string, str2: string): number {
 // Submit hours from sign-in sheet
 router.post('/events/:id/submit-hours', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const manager = await resolveManagerForRequest(req as any);
     const managerId = manager._id as mongoose.Types.ObjectId;
     const eventId = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(eventId)) {
@@ -1437,7 +1437,7 @@ router.post('/events/:id/submit-hours', requireAuth, async (req, res) => {
 // Approve hours for individual staff member
 router.post('/events/:id/approve-hours/:userKey', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const manager = await resolveManagerForRequest(req as any);
     const managerId = manager._id as mongoose.Types.ObjectId;
     const eventId = req.params.id ?? '';
     const userKey = req.params.userKey ?? '';
@@ -1488,7 +1488,7 @@ router.post('/events/:id/approve-hours/:userKey', requireAuth, async (req, res) 
 // Debug endpoint: inspect event attendance data
 router.get('/events/:id/debug-attendance', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const manager = await resolveManagerForRequest(req as any);
     const managerId = manager._id as mongoose.Types.ObjectId;
     const eventId = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(eventId)) {
@@ -1533,7 +1533,7 @@ router.get('/events/:id/debug-attendance', requireAuth, async (req, res) => {
 // Bulk approve all hours for an event
 router.post('/events/:id/bulk-approve-hours', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const manager = await resolveManagerForRequest(req as any);
     const managerId = manager._id as mongoose.Types.ObjectId;
     const eventId = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(eventId)) {

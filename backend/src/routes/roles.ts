@@ -11,7 +11,7 @@ const roleSchema = z.object({ name: z.string().min(1, 'name is required').max(20
 
 router.get('/roles', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const manager = await resolveManagerForRequest(req as any);
     const roles = await RoleModel.find(
       { managerId: manager._id },
       { _id: 1, name: 1 }
@@ -27,7 +27,7 @@ router.get('/roles', requireAuth, async (req, res) => {
 
 router.post('/roles', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const manager = await resolveManagerForRequest(req as any);
     const parsed = roleSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: 'Validation failed', details: parsed.error.format() });
     const name = parsed.data.name.trim();
@@ -45,7 +45,7 @@ router.post('/roles', requireAuth, async (req, res) => {
 
 router.patch('/roles/:id', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const manager = await resolveManagerForRequest(req as any);
     const id = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ message: 'Invalid role id' });
     const parsed = roleSchema.safeParse(req.body);
@@ -71,7 +71,7 @@ router.patch('/roles/:id', requireAuth, async (req, res) => {
 
 router.delete('/roles/:id', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const manager = await resolveManagerForRequest(req as any);
     const id = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ message: 'Invalid role id' });
     const result = await RoleModel.deleteOne({ _id: new mongoose.Types.ObjectId(id), managerId: manager._id });

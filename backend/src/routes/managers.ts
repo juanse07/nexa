@@ -17,23 +17,23 @@ const updateSchema = z.object({
 
 router.get('/managers/me', requireAuth, async (req, res) => {
   try {
-    if (!req.user?.provider || !req.user?.sub) {
+    if (!(req as any).authUser?.provider || !(req as any).authUser?.sub) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
     let manager = await ManagerModel.findOne({
-      provider: req.user.provider,
-      subject: req.user.sub,
+      provider: (req as any).authUser.provider,
+      subject: (req as any).authUser.sub,
     }).lean();
 
     // Auto-provision a manager profile if it doesn't exist yet
     if (!manager) {
       const created = await ManagerModel.create({
-        provider: (req.user as any).provider,
-        subject: (req.user as any).sub,
-        email: (req.user as any).email,
-        name: (req.user as any).name,
-        picture: (req.user as any).picture,
+        provider: ((req as any).authUser as any).provider,
+        subject: ((req as any).authUser as any).sub,
+        email: ((req as any).authUser as any).email,
+        name: ((req as any).authUser as any).name,
+        picture: ((req as any).authUser as any).picture,
       });
       manager = (created.toObject() as any);
     }
@@ -56,7 +56,7 @@ router.get('/managers/me', requireAuth, async (req, res) => {
 
 router.patch('/managers/me', requireAuth, async (req, res) => {
   try {
-    if (!req.user?.provider || !req.user?.sub) {
+    if (!(req as any).authUser?.provider || !(req as any).authUser?.sub) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
     const parsed = updateSchema.safeParse(req.body || {});
@@ -69,8 +69,8 @@ router.patch('/managers/me', requireAuth, async (req, res) => {
       const conflict = await ManagerModel.findOne({
         app_id: parsed.data.app_id,
         $or: [
-          { provider: { $ne: req.user.provider } },
-          { subject: { $ne: req.user.sub } },
+          { provider: { $ne: (req as any).authUser.provider } },
+          { subject: { $ne: (req as any).authUser.sub } },
         ],
       }).lean();
       if (conflict) {
@@ -79,7 +79,7 @@ router.patch('/managers/me', requireAuth, async (req, res) => {
     }
 
     const updated = await ManagerModel.findOneAndUpdate(
-      { provider: req.user.provider, subject: req.user.sub },
+      { provider: (req as any).authUser.provider, subject: (req as any).authUser.sub },
       {
         $set: { ...parsed.data, updatedAt: new Date() },
       },

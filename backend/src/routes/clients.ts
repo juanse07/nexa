@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import mongoose from 'mongoose';
 import { z } from 'zod';
-import { requireAuth } from '../middleware/requireAuth';
+import { requireAuth, AuthenticatedRequest } from '../middleware/requireAuth';
 import { ClientModel } from '../models/client';
 import { resolveManagerForRequest } from '../utils/manager';
 
@@ -14,9 +14,12 @@ const clientSchema = z.object({
 // List clients (sorted by name)
 router.get('/clients', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const { managerId } = (req as AuthenticatedRequest).authUser;
+    if (!managerId) {
+      return res.status(403).json({ message: 'Manager access required' });
+    }
     const clients = await ClientModel.find(
-      { managerId: manager._id },
+      { managerId: new mongoose.Types.ObjectId(managerId) },
       { _id: 1, name: 1 }
     )
       .sort({ normalizedName: 1 })
@@ -31,20 +34,24 @@ router.get('/clients', requireAuth, async (req, res) => {
 // Create a client (name unique, case-insensitive)
 router.post('/clients', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const { managerId } = (req as AuthenticatedRequest).authUser;
+    if (!managerId) {
+      return res.status(403).json({ message: 'Manager access required' });
+    }
+    const managerObjectId = new mongoose.Types.ObjectId(managerId);
     const parsed = clientSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: 'Validation failed', details: parsed.error.format() });
     }
     const name = parsed.data.name.trim();
     const existing = await ClientModel.findOne({
-      managerId: manager._id,
+      managerId: managerObjectId,
       normalizedName: name.toLowerCase(),
     }).lean();
     if (existing) {
       return res.status(409).json({ message: 'Client already exists' });
     }
-    const created = await ClientModel.create({ managerId: manager._id, name });
+    const created = await ClientModel.create({ managerId: managerObjectId, name });
     return res.status(201).json({ id: String(created._id), name: created.name });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to create client' });
@@ -54,7 +61,11 @@ router.post('/clients', requireAuth, async (req, res) => {
 // Update a client name
 router.patch('/clients/:id', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const { managerId } = (req as AuthenticatedRequest).authUser;
+    if (!managerId) {
+      return res.status(403).json({ message: 'Manager access required' });
+    }
+    const managerObjectId = new mongoose.Types.ObjectId(managerId);
     const id = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: 'Invalid client id' });
@@ -65,7 +76,7 @@ router.patch('/clients/:id', requireAuth, async (req, res) => {
     }
     const name = parsed.data.name.trim();
     const conflict = await ClientModel.findOne({
-      managerId: manager._id,
+      managerId: managerObjectId,
       normalizedName: name.toLowerCase(),
       _id: { $ne: new mongoose.Types.ObjectId(id) },
     }).lean();
@@ -73,11 +84,11 @@ router.patch('/clients/:id', requireAuth, async (req, res) => {
       return res.status(409).json({ message: 'Another client with that name already exists' });
     }
     const result = await ClientModel.updateOne(
-      { _id: new mongoose.Types.ObjectId(id), managerId: manager._id },
+      { _id: new mongoose.Types.ObjectId(id), managerId: managerObjectId },
       { $set: { name, updatedAt: new Date() } }
     );
     if (result.matchedCount === 0) return res.status(404).json({ message: 'Client not found' });
-    const updated = await ClientModel.findOne({ _id: new mongoose.Types.ObjectId(id), managerId: manager._id }).lean();
+    const updated = await ClientModel.findOne({ _id: new mongoose.Types.ObjectId(id), managerId: managerObjectId }).lean();
     return res.json({ id, name: updated?.name });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to update client' });
@@ -87,14 +98,18 @@ router.patch('/clients/:id', requireAuth, async (req, res) => {
 // Delete a client
 router.delete('/clients/:id', requireAuth, async (req, res) => {
   try {
-    const manager = await resolveManagerForRequest(req);
+    const { managerId } = (req as AuthenticatedRequest).authUser;
+    if (!managerId) {
+      return res.status(403).json({ message: 'Manager access required' });
+    }
+    const managerObjectId = new mongoose.Types.ObjectId(managerId);
     const id = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: 'Invalid client id' });
     }
     const result = await ClientModel.deleteOne({
       _id: new mongoose.Types.ObjectId(id),
-      managerId: manager._id,
+      managerId: managerObjectId,
     });
     if (result.deletedCount === 0) return res.status(404).json({ message: 'Client not found' });
     return res.json({ message: 'Client deleted' });

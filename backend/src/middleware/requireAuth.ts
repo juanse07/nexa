@@ -13,6 +13,7 @@ export interface AuthenticatedUser {
 
 export interface AuthenticatedRequest extends Request {
   authUser: AuthenticatedUser;
+  user: AuthenticatedUser; // Legacy compatibility
 }
 
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
