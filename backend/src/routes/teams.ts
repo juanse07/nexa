@@ -339,9 +339,6 @@ router.post('/teams/:teamId/members', requireAuth, async (req, res) => {
       status: desiredStatus,
       updatedAt: new Date(),
     };
-    if (desiredStatus === 'active') {
-      setFields.joinedAt = new Date();
-    }
 
     const member = await TeamMemberModel.findOneAndUpdate(
       {
