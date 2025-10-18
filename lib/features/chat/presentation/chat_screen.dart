@@ -96,11 +96,36 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _loadMessages() async {
+    // If we don't have a conversationId, try to find it from the conversations list
     if (_conversationId == null) {
-      setState(() {
-        _loading = false;
-      });
-      return;
+      try {
+        setState(() {
+          _loading = true;
+          _error = null;
+        });
+
+        final conversations = await _chatService.fetchConversations();
+        final matchingConv = conversations.where((c) {
+          // For managers, match by userKey
+          return c.userKey == widget.targetId;
+        }).firstOrNull;
+
+        if (matchingConv != null) {
+          _conversationId = matchingConv.id;
+        } else {
+          // No conversation exists yet
+          setState(() {
+            _loading = false;
+          });
+          return;
+        }
+      } catch (e) {
+        setState(() {
+          _error = e.toString();
+          _loading = false;
+        });
+        return;
+      }
     }
 
     try {
