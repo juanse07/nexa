@@ -114,13 +114,19 @@ class ChatService {
   }
 
   Future<ChatMessage> sendMessage(String targetId, String message) async {
+    print('[ChatService] sendMessage called. targetId: $targetId');
+
     final token = await AuthService.getJwt();
     if (token == null) {
+      print('[ChatService] ERROR: Not authenticated');
       throw Exception('Not authenticated');
     }
 
     final baseUrl = AppConfig.instance.baseUrl;
     final url = Uri.parse('$baseUrl/chat/conversations/$targetId/messages');
+
+    print('[ChatService] POST to: $url');
+    print('[ChatService] Message: ${message.substring(0, message.length > 50 ? 50 : message.length)}...');
 
     final response = await http.post(
       url,
@@ -132,6 +138,9 @@ class ChatService {
         'message': message,
       }),
     );
+
+    print('[ChatService] Response status: ${response.statusCode}');
+    print('[ChatService] Response body: ${response.body}');
 
     if (response.statusCode == 201) {
       final data = json.decode(response.body) as Map<String, dynamic>;

@@ -138,18 +138,23 @@ class _ChatScreenState extends State<ChatScreen> {
     final message = _messageController.text.trim();
     if (message.isEmpty || _sending) return;
 
+    print('[CHAT DEBUG] Sending message. targetId: ${widget.targetId}, message length: ${message.length}');
+
     setState(() {
       _sending = true;
     });
 
     try {
+      print('[CHAT DEBUG] Calling chatService.sendMessage...');
       await _chatService.sendMessage(widget.targetId, message);
+      print('[CHAT DEBUG] Message sent successfully');
       _messageController.clear();
       _stopTyping();
 
       // Message will be added via socket, but scroll anyway
       _scrollToBottom();
     } catch (e) {
+      print('[CHAT ERROR] Failed to send message: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
