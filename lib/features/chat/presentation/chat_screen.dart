@@ -38,12 +38,14 @@ class _ChatScreenState extends State<ChatScreen> {
   SenderType? _currentUserType;
   StreamSubscription<ChatMessage>? _messageSubscription;
   StreamSubscription<Map<String, dynamic>>? _typingSubscription;
+  String? _conversationId; // Track conversation ID dynamically
 
   @override
   void initState() {
     super.initState();
     // In manager app, current user is always a manager
     _currentUserType = SenderType.manager;
+    _conversationId = widget.conversationId; // Initialize from widget
     _loadMessages();
     _listenToNewMessages();
     _listenToTypingIndicators();
@@ -52,9 +54,17 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _listenToNewMessages() {
     _messageSubscription = _chatService.messageStream.listen((message) {
-      if (widget.conversationId != null &&
-          message.conversationId == widget.conversationId) {
+      // Accept message if:
+      // 1. We have a conversation ID and it matches, OR
+      // 2. We don't have a conversation ID yet (first message from user)
+      final shouldAccept = _conversationId != null
+          ? message.conversationId == _conversationId
+          : true; // Accept any message if no conversation yet
+
+      if (shouldAccept) {
         setState(() {
+          // Update conversation ID if we didn't have one
+          _conversationId ??= message.conversationId;
           _messages.add(message);
         });
         _scrollToBottom();
@@ -65,7 +75,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _listenToTypingIndicators() {
     _typingSubscription = _chatService.typingStream.listen((data) {
-      if (data['conversationId'] == widget.conversationId) {
+      if (data['conversationId'] == _conversationId) {
         final senderType = data['senderType'] as String;
         final isTyping = data['isTyping'] as bool;
 
@@ -81,7 +91,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _loadMessages() async {
-    if (widget.conversationId == null) {
+    if (_conversationId == null) {
       setState(() {
         _loading = false;
       });
@@ -94,7 +104,7 @@ class _ChatScreenState extends State<ChatScreen> {
         _error = null;
       });
 
-      final messages = await _chatService.fetchMessages(widget.conversationId!);
+      final messages = await _chatService.fetchMessages(_conversationId!);
 
       setState(() {
         _messages
@@ -113,9 +123,9 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _markAsRead() async {
-    if (widget.conversationId != null) {
+    if (_conversationId != null) {
       try {
-        await _chatService.markAsRead(widget.conversationId!);
+        await _chatService.markAsRead(_conversationId!);
       } catch (e) {
         // Silently fail
       }
@@ -171,10 +181,10 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _onTyping() {
-    if (widget.conversationId == null || _currentUserType == null) return;
+    if (_conversationId == null || _currentUserType == null) return;
 
     _chatService.sendTypingIndicator(
-      widget.conversationId!,
+      _conversationId!,
       true,
       _currentUserType!,
     );
@@ -184,10 +194,10 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _stopTyping() {
-    if (widget.conversationId == null || _currentUserType == null) return;
+    if (_conversationId == null || _currentUserType == null) return;
 
     _chatService.sendTypingIndicator(
-      widget.conversationId!,
+      _conversationId!,
       false,
       _currentUserType!,
     );
