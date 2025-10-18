@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { Router } from 'express';
 import mongoose from 'mongoose';
+import { MongoServerError } from 'mongodb';
 import { z } from 'zod';
 
 import { requireAuth, AuthenticatedUser } from '../middleware/requireAuth';
@@ -297,14 +298,21 @@ router.get('/teams/:teamId/members', requireAuth, async (req, res) => {
 });
 
 router.post('/teams/:teamId/members', requireAuth, async (req, res) => {
+  let managerId: mongoose.Types.ObjectId | null = null;
+  let teamObjectId: mongoose.Types.ObjectId | null = null;
+  let capturedProvider: string | null = null;
+  let capturedSubject: string | null = null;
+
   try {
     const manager = await resolveManagerForRequest(req);
-    const managerId = manager._id as mongoose.Types.ObjectId;
+    managerId = manager._id as mongoose.Types.ObjectId;
+    const managerObjectId = managerId;
+
     const teamIdParam = req.params.teamId ?? '';
     if (!mongoose.Types.ObjectId.isValid(teamIdParam)) {
       return res.status(400).json({ message: 'Invalid team id' });
     }
-    const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
+    teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
 
     const parsed = addMemberSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
@@ -313,17 +321,19 @@ router.post('/teams/:teamId/members', requireAuth, async (req, res) => {
 
     const team = await TeamModel.findOne({
       _id: teamObjectId,
-      managerId,
+      managerId: managerObjectId,
     }).lean();
     if (!team) {
       return res.status(404).json({ message: 'Team not found' });
     }
 
     const { provider, subject, email, name, status } = parsed.data;
+    capturedProvider = provider;
+    capturedSubject = subject;
     const desiredStatus = status ?? 'active';
 
     const setFields: Record<string, unknown> = {
-      managerId,
+      managerId: managerObjectId,
       email,
       name,
       status: desiredStatus,
@@ -382,7 +392,7 @@ router.post('/teams/:teamId/members', requireAuth, async (req, res) => {
       buildUserKey(resolvedMember.provider, resolvedMember.subject);
     await TeamMessageModel.create({
       teamId: resolvedMember.teamId,
-      managerId,
+      managerId: managerObjectId,
       messageType: 'text',
       body: `${displayName} added to the team`,
       payload: {
@@ -403,13 +413,46 @@ router.post('/teams/:teamId/members', requireAuth, async (req, res) => {
       createdAt: resolvedMember.createdAt,
     };
 
-    emitToManager(String(managerId), 'team:memberAdded', memberPayload);
+    emitToManager(String(managerObjectId), 'team:memberAdded', memberPayload);
     emitToTeams([String(resolvedMember.teamId)], 'team:memberAdded', memberPayload);
     emitToUser(buildUserKey(provider, subject), 'team:memberAdded', memberPayload);
 
     return res.status(201).json(memberPayload);
   } catch (err) {
-    return res.status(500).json({ message: 'Failed to add member' });
+    console.error('[teams] POST /teams/:teamId/members failed', err);
+
+    if (
+      err instanceof MongoServerError &&
+      err.code === 11000 &&
+      teamObjectId &&
+      capturedProvider &&
+      capturedSubject
+    ) {
+      const existing = await TeamMemberModel.findOne({
+        teamId: teamObjectId,
+        provider: capturedProvider,
+        subject: capturedSubject,
+      }).lean();
+      if (existing) {
+        const payload = {
+          id: String(existing._id),
+          teamId: String(existing.teamId),
+          provider: existing.provider,
+          subject: existing.subject,
+          email: existing.email,
+          name: existing.name,
+          status: existing.status,
+          joinedAt: existing.joinedAt,
+          createdAt: existing.createdAt,
+        };
+        return res.status(200).json(payload);
+      }
+    }
+
+    const details = err instanceof Error ? err.message : undefined;
+    return res
+      .status(500)
+      .json(details ? { message: 'Failed to add member', details } : { message: 'Failed to add member' });
   }
 });
 
