@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../../../auth/data/services/auth_service.dart';
 import '../data/services/chat_service.dart';
 import '../domain/entities/chat_message.dart';
 
@@ -43,19 +42,12 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    _determineUserType();
+    // In manager app, current user is always a manager
+    _currentUserType = SenderType.manager;
     _loadMessages();
     _listenToNewMessages();
     _listenToTypingIndicators();
     _markAsRead();
-  }
-
-  Future<void> _determineUserType() async {
-    final user = await AuthService.getCurrentUser();
-    setState(() {
-      _currentUserType =
-          user?.managerId != null ? SenderType.manager : SenderType.user;
-    });
   }
 
   void _listenToNewMessages() {
