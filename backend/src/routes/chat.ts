@@ -614,4 +614,66 @@ router.post('/invitations/:messageId/respond', requireAuth, async (req, res) => 
   }
 });
 
+/**
+ * GET /chat/invitations/:messageId/event
+ * Fetch event details for an invitation message
+ * This bypasses normal event visibility rules since having the invitation IS permission to view
+ */
+router.get('/invitations/:messageId/event', requireAuth, async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { provider, sub } = (req as AuthenticatedRequest).authUser;
+    const userKey = `${provider}:${sub}`;
+
+    console.log('[INVITATION EVENT] Fetch event for messageId:', messageId);
+
+    // Validate messageId
+    if (!messageId || !mongoose.Types.ObjectId.isValid(messageId)) {
+      return res.status(400).json({ error: 'Invalid message ID' });
+    }
+
+    // Find the message
+    const message = await ChatMessageModel.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    // Verify user has access to this message
+    if (message.userKey !== userKey) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Verify it's an invitation
+    if (message.messageType !== 'eventInvitation') {
+      return res.status(400).json({ error: 'Message is not an event invitation' });
+    }
+
+    // Get event ID from metadata
+    const eventId = message.metadata?.eventId;
+    if (!eventId) {
+      return res.status(400).json({ error: 'No event ID in invitation' });
+    }
+
+    // Fetch the event directly (bypass visibility checks since user has invitation)
+    const { EventModel } = await import('../models/event');
+    const event = await EventModel.findById(eventId).lean();
+
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    console.log('[INVITATION EVENT] Found event:', (event as any).event_name || (event as any).title);
+
+    // Return event data in same format as /events endpoint
+    return res.json({
+      id: String(event._id),
+      ...event,
+    });
+
+  } catch (error) {
+    console.error('Error fetching invitation event:', error);
+    return res.status(500).json({ error: 'Failed to fetch event details' });
+  }
+});
+
 export default router;
