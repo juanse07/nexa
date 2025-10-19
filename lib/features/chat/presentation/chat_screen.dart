@@ -1135,14 +1135,17 @@ class _MessageBubble extends StatelessWidget {
     final theme = Theme.of(context);
     final screenWidth = MediaQuery.of(context).size.width;
     final maxBubbleWidth = screenWidth > 600 ? 500.0 : screenWidth * 0.75;
+    final edgePadding = screenWidth > 600 ? 80.0 : 0.0;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
       child: Row(
-        mainAxisAlignment:
-            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: <Widget>[
+          // Left spacer for sent messages (push away from left edge)
+          if (isMe) SizedBox(width: edgePadding),
+
+          // Incoming message avatar
           if (!isMe) ...<Widget>[
             CircleAvatar(
               radius: 14,
@@ -1163,6 +1166,8 @@ class _MessageBubble extends StatelessWidget {
             ),
             const SizedBox(width: 8),
           ],
+
+          // Message bubble
           Flexible(
             child: ConstrainedBox(
               constraints: BoxConstraints(maxWidth: maxBubbleWidth),
@@ -1212,7 +1217,12 @@ class _MessageBubble extends StatelessWidget {
               ),
             ),
           ),
-          if (isMe) const SizedBox(width: 8),
+
+          // Right spacing
+          if (isMe)
+            const SizedBox(width: 8)
+          else
+            SizedBox(width: edgePadding),
         ],
       ),
     );
