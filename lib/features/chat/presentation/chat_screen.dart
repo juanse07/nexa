@@ -105,10 +105,12 @@ class _ChatScreenState extends State<ChatScreen> {
         });
 
         final conversations = await _chatService.fetchConversations();
-        final matchingConv = conversations.where((c) {
+        final matchingList = conversations.where((c) {
           // For managers, match by userKey
           return c.userKey == widget.targetId;
-        }).firstOrNull;
+        }).toList();
+
+        final matchingConv = matchingList.isNotEmpty ? matchingList.first : null;
 
         if (matchingConv != null) {
           _conversationId = matchingConv.id;
