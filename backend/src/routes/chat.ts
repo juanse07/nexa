@@ -22,7 +22,8 @@ router.get('/conversations', requireAuth, async (req, res) => {
 
     if (managerId) {
       // Manager: get all conversations with users
-      conversations = await ConversationModel.find({ managerId })
+      const managerObjectId = new mongoose.Types.ObjectId(managerId);
+      conversations = await ConversationModel.find({ managerId: managerObjectId })
         .sort({ lastMessageAt: -1 })
         .lean();
 
@@ -30,9 +31,9 @@ router.get('/conversations', requireAuth, async (req, res) => {
       const userKeys = conversations.map(c => c.userKey);
       const users = await UserModel.find({
         $expr: {
-          $eq: [
+          $in: [
             { $concat: ['$provider', ':', '$subject'] },
-            { $in: userKeys }
+            userKeys
           ]
         }
       }).lean();
