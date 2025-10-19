@@ -2,12 +2,15 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/services/chat_service.dart';
 import '../domain/entities/chat_message.dart';
 import 'widgets/event_invitation_card.dart';
 import 'dialogs/send_event_invitation_dialog.dart';
 import '../../../features/extraction/services/event_service.dart';
+import '../../../features/extraction/services/roles_service.dart';
+import '../../../features/users/presentation/pages/user_events_screen.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
@@ -32,6 +35,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<ChatMessage> _messages = <ChatMessage>[];
+  final RolesService _rolesService = RolesService();
 
   bool _loading = true;
   String? _error;
@@ -43,6 +47,10 @@ class _ChatScreenState extends State<ChatScreen> {
   StreamSubscription<Map<String, dynamic>>? _typingSubscription;
   StreamSubscription<Map<String, dynamic>>? _invitationResponseSubscription;
   String? _conversationId; // Track conversation ID dynamically
+
+  // Favorites functionality
+  Set<String> _favoriteUsers = {};
+  List<Map<String, dynamic>>? _roles;
 
   @override
   void initState() {
@@ -65,6 +73,10 @@ class _ChatScreenState extends State<ChatScreen> {
     _listenToTypingIndicators();
     _listenToInvitationResponses();
     _markAsRead();
+
+    // Load favorites and roles for menu
+    _loadFavorites();
+    _loadRoles();
   }
 
   void _listenToNewMessages() {
@@ -86,7 +98,9 @@ class _ChatScreenState extends State<ChatScreen> {
             _conversationId ??= message.conversationId;
             _messages.add(message);
           });
-          _scrollToBottom();
+
+          // Smooth scroll to bottom for new messages
+          _scrollToBottom(animated: true);
           _markAsRead();
         }
       }
@@ -188,12 +202,15 @@ class _ChatScreenState extends State<ChatScreen> {
     print('[CHAT] _conversationId at start: $_conversationId');
     print('[CHAT] widget.targetId: ${widget.targetId}');
 
+    // Only show loading if we have no messages yet
+    final isInitialLoad = _messages.isEmpty;
+
     // If we don't have a conversationId, try to find it from the conversations list
     if (_conversationId == null) {
       try {
         print('[CHAT] No conversationId, fetching conversations to find match for targetId: ${widget.targetId}');
         setState(() {
-          _loading = true;
+          if (isInitialLoad) _loading = true;
           _error = null;
         });
 
@@ -235,7 +252,7 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       print('[CHAT] Loading messages for conversationId: $_conversationId');
       setState(() {
-        _loading = true;
+        if (isInitialLoad) _loading = true;
         _error = null;
       });
 
@@ -249,7 +266,8 @@ class _ChatScreenState extends State<ChatScreen> {
         _loading = false;
       });
 
-      _scrollToBottom();
+      // Scroll to bottom - instant on initial load, animated on refresh
+      _scrollToBottom(animated: !isInitialLoad);
     } catch (e, stack) {
       print('[CHAT ERROR] Failed to load messages: $e');
       print('[CHAT ERROR] Stack: $stack');
@@ -270,14 +288,19 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  void _scrollToBottom() {
+  void _scrollToBottom({bool animated = true}) {
+    // With reverse: true, we scroll to 0 to reach the bottom
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
+        if (animated) {
+          _scrollController.animateTo(
+            0,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+          );
+        } else {
+          _scrollController.jumpTo(0);
+        }
       }
     });
   }
@@ -292,20 +315,32 @@ class _ChatScreenState extends State<ChatScreen> {
       _sending = true;
     });
 
+    // Clear input immediately for better UX
+    _messageController.clear();
+    _stopTyping();
+
     try {
       print('[CHAT DEBUG] Calling chatService.sendMessage...');
       final sentMessage = await _chatService.sendMessage(widget.targetId, message);
-      print('[CHAT DEBUG] Message sent successfully');
+      print('[CHAT DEBUG] Message sent successfully. ID: ${sentMessage.id}');
 
-      // Immediately add the sent message to UI
-      setState(() {
-        _conversationId ??= sentMessage.conversationId;
-        _messages.add(sentMessage);
-      });
+      // Check if message already exists (from socket)
+      final isDuplicate = _messages.any((m) => m.id == sentMessage.id);
 
-      _messageController.clear();
-      _stopTyping();
-      _scrollToBottom();
+      if (!isDuplicate) {
+        // Add message to UI immediately (socket might not have received it yet)
+        setState(() {
+          _conversationId ??= sentMessage.conversationId;
+          _messages.add(sentMessage);
+        });
+        _scrollToBottom();
+      } else {
+        print('[CHAT DEBUG] Message already in list from socket, skipping duplicate');
+        // Just update conversation ID
+        setState(() {
+          _conversationId ??= sentMessage.conversationId;
+        });
+      }
     } catch (e) {
       print('[CHAT ERROR] Failed to send message: $e');
       if (mounted) {
@@ -383,13 +418,23 @@ class _ChatScreenState extends State<ChatScreen> {
       print('[INVITATION_ANALYTICS] conversationId: ${sentMessage.conversationId}');
       print('[INVITATION_ANALYTICS] sendDuration: ${duration.inMilliseconds}ms');
 
-      // Immediately add the invitation to UI
-      setState(() {
-        _conversationId ??= sentMessage.conversationId;
-        _messages.add(sentMessage);
-      });
+      // Check if message already exists (from socket)
+      final isDuplicate = _messages.any((m) => m.id == sentMessage.id);
 
-      _scrollToBottom();
+      if (!isDuplicate) {
+        // Add invitation to UI immediately (socket might not have received it yet)
+        setState(() {
+          _conversationId ??= sentMessage.conversationId;
+          _messages.add(sentMessage);
+        });
+        _scrollToBottom();
+      } else {
+        print('[INVITATION_ANALYTICS] Invitation already in list from socket, skipping duplicate');
+        // Just update conversation ID
+        setState(() {
+          _conversationId ??= sentMessage.conversationId;
+        });
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -435,58 +480,272 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: <Widget>[
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
-              backgroundImage: widget.targetPicture != null
-                  ? NetworkImage(widget.targetPicture!)
-                  : null,
-              child: widget.targetPicture == null
-                  ? Text(
-                      _getInitials(widget.targetName),
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Theme.of(context).primaryColor,
-                      ),
-                    )
-                  : null,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(65),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF7C3AED), // Purple 600
+                Color(0xFF6366F1), // Indigo 500
+                Color(0xFF8B5CF6), // Purple 500
+              ],
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    widget.targetName,
-                    style: const TextStyle(fontSize: 16),
-                    overflow: TextOverflow.ellipsis,
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF7C3AED).withOpacity(0.3),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Stack(
+            children: [
+              // Decorative shadow shapes
+              Positioned(
+                top: -20,
+                right: -40,
+                child: Container(
+                  width: 120,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.1),
                   ),
-                  if (_isTyping)
-                    const Text(
-                      'typing...',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.green,
-                        fontStyle: FontStyle.italic,
+                ),
+              ),
+              Positioned(
+                bottom: -30,
+                left: -20,
+                child: Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.black.withOpacity(0.1),
+                  ),
+                ),
+              ),
+              // AppBar content
+              AppBar(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                leading: IconButton(
+                  icon: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+                  ),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+                title: Row(
+                  children: <Widget>[
+                    Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.3),
+                          width: 2.5,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: CircleAvatar(
+                        radius: 20,
+                        backgroundColor: Colors.white,
+                        backgroundImage: widget.targetPicture != null
+                            ? NetworkImage(widget.targetPicture!)
+                            : null,
+                        child: widget.targetPicture == null
+                            ? Text(
+                                _getInitials(widget.targetName),
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF7C3AED),
+                                  letterSpacing: 0.5,
+                                ),
+                              )
+                            : null,
                       ),
                     ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: <Widget>[
+                          Text(
+                            widget.targetName,
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                              letterSpacing: 0.3,
+                              shadows: [
+                                Shadow(
+                                  color: Colors.black26,
+                                  offset: Offset(0, 1),
+                                  blurRadius: 2,
+                                ),
+                              ],
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (_isTyping)
+                            Row(
+                              children: [
+                                Container(
+                                  width: 7,
+                                  height: 7,
+                                  margin: const EdgeInsets.only(right: 6, top: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF10B981),
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFF10B981).withOpacity(0.5),
+                                        blurRadius: 4,
+                                        spreadRadius: 1,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Text(
+                                  'typing...',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w500,
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                              ],
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                actions: [
+                  Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    child: PopupMenuButton<String>(
+                      icon: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.more_vert,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      elevation: 8,
+                      offset: const Offset(0, 8),
+                      itemBuilder: (context) => [
+                        PopupMenuItem(
+                          value: 'view',
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Row(
+                              children: const [
+                                Icon(Icons.event_rounded, color: Color(0xFF7C3AED), size: 22),
+                                SizedBox(width: 14),
+                                Text(
+                                  'View Events',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w500,
+                                    color: Color(0xFF1F2937),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        if (_favoriteRoleOptions.isNotEmpty)
+                          const PopupMenuDivider(height: 8),
+                        ..._favoriteRoleOptions.map(
+                          (role) => PopupMenuItem(
+                            value: 'favorite:$role',
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    _isFavorite(widget.targetId, role)
+                                        ? Icons.star_rounded
+                                        : Icons.star_border_rounded,
+                                    color: _isFavorite(widget.targetId, role)
+                                        ? const Color(0xFFFBBF24)
+                                        : const Color(0xFF9CA3AF),
+                                    size: 22,
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Text(
+                                      '${_isFavorite(widget.targetId, role) ? 'Remove from' : 'Add to'} $role',
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w500,
+                                        color: Color(0xFF1F2937),
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                      onSelected: (value) {
+                        if (value == 'view') {
+                          // Parse targetId to create user object
+                          final parts = widget.targetId.split(':');
+                          final userMap = <String, dynamic>{
+                            'provider': parts.isNotEmpty ? parts[0] : '',
+                            'subject': parts.length > 1 ? parts.sublist(1).join(':') : '',
+                            'name': widget.targetName,
+                            'picture': widget.targetPicture,
+                          };
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => UserEventsScreen(user: userMap),
+                            ),
+                          );
+                        } else if (value.startsWith('favorite:')) {
+                          final role = value.substring('favorite:'.length);
+                          _toggleFavorite(widget.targetId, role);
+                        }
+                      },
+                    ),
+                  ),
                 ],
               ),
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: _showSendInvitationDialog,
-            tooltip: 'Send Event Invitation',
+            ],
           ),
-        ],
-        elevation: 0.5,
+        ),
       ),
       body: Column(
         children: <Widget>[
@@ -500,10 +759,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildMessageList() {
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
+    // Show error state
     if (_error != null) {
       return Center(
         child: Column(
@@ -522,7 +778,8 @@ class _ChatScreenState extends State<ChatScreen> {
       );
     }
 
-    if (_messages.isEmpty) {
+    // Show empty state only if not loading and truly empty
+    if (_messages.isEmpty && !_loading) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -543,29 +800,45 @@ class _ChatScreenState extends State<ChatScreen> {
       );
     }
 
+    // Show loading only on initial load when messages are empty
+    if (_loading && _messages.isEmpty) {
+      return const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF7C3AED)),
+        ),
+      );
+    }
+
+    // Build message list in reverse (latest at bottom, like all chat apps)
     return ListView.builder(
       controller: _scrollController,
-      padding: const EdgeInsets.all(16),
+      reverse: true, // This makes latest messages stay at bottom
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       itemCount: _messages.length,
       itemBuilder: (context, index) {
-        final message = _messages[index];
+        // Reverse the index since we're using reverse: true
+        final reversedIndex = _messages.length - 1 - index;
+        final message = _messages[reversedIndex];
         final isMe = _currentUserType == message.senderType;
-        final showDate = index == 0 ||
-            !_isSameDay(_messages[index - 1].createdAt, message.createdAt);
 
-        // Debug log to check message type
-        print('[CHAT_DEBUG] Message ${message.id}: messageType="${message.messageType}", metadata=${message.metadata}');
+        // Check if we should show date (compare with next message in original order)
+        final showDate = reversedIndex == 0 ||
+            !_isSameDay(_messages[reversedIndex - 1].createdAt, message.createdAt);
 
         return Column(
+          key: ValueKey(message.id), // Prevent unnecessary rebuilds
           children: <Widget>[
-            if (showDate) _buildDateDivider(message.createdAt),
             // Check if it's an invitation card or regular message
             message.messageType == 'eventInvitation'
                 ? _buildInvitationCard(message)
                 : _MessageBubble(
+                    key: ValueKey('bubble_${message.id}'),
                     message: message,
                     isMe: isMe,
                   ),
+            // Add small spacing between messages
+            const SizedBox(height: 4),
+            if (showDate) _buildDateDivider(message.createdAt),
           ],
         );
       },
@@ -676,6 +949,7 @@ class _ChatScreenState extends State<ChatScreen> {
             : startDate.add(const Duration(hours: 4));
 
         return EventInvitationCard(
+          key: ValueKey('invitation_${message.id}'),
           eventName: eventName,
           roleName: roleName,
           clientName: clientName,
@@ -707,6 +981,18 @@ class _ChatScreenState extends State<ChatScreen> {
       child: SafeArea(
         child: Row(
           children: <Widget>[
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                shape: BoxShape.circle,
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.add, color: Color(0xFF6366F1), size: 24),
+                onPressed: _showSendInvitationDialog,
+                tooltip: 'Send Event Invitation',
+              ),
+            ),
+            const SizedBox(width: 8),
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
@@ -745,21 +1031,10 @@ class _ChatScreenState extends State<ChatScreen> {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF7C3AED).withOpacity(0.5),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                    spreadRadius: 1,
-                  ),
-                  BoxShadow(
-                    color: const Color(0xFF4F46E5).withOpacity(0.3),
-                    blurRadius: 20,
-                    offset: const Offset(0, 8),
-                    spreadRadius: 0,
-                  ),
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 6,
+                    color: Colors.black.withOpacity(0.15),
+                    blurRadius: 8,
                     offset: const Offset(0, 2),
+                    spreadRadius: 0,
                   ),
                 ],
               ),
@@ -794,10 +1069,60 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     return (parts[0].substring(0, 1) + parts[1].substring(0, 1)).toUpperCase();
   }
+
+  // Favorites management
+  Future<void> _loadFavorites() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _favoriteUsers = prefs.getStringList('favorite_users')?.toSet() ?? {};
+    });
+  }
+
+  Future<void> _saveFavorites() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('favorite_users', _favoriteUsers.toList());
+  }
+
+  Future<void> _toggleFavorite(String userId, String role) async {
+    final key = '$userId:$role';
+    setState(() {
+      if (_favoriteUsers.contains(key)) {
+        _favoriteUsers.remove(key);
+      } else {
+        _favoriteUsers.add(key);
+      }
+    });
+    await _saveFavorites();
+  }
+
+  bool _isFavorite(String userId, String? role) {
+    if (role == null) return false;
+    return _favoriteUsers.contains('$userId:$role');
+  }
+
+  Future<void> _loadRoles() async {
+    try {
+      final roles = await _rolesService.fetchRoles();
+      setState(() {
+        _roles = roles;
+      });
+    } catch (e) {
+      print('[CHAT SCREEN] Error loading roles: $e');
+    }
+  }
+
+  List<String> get _favoriteRoleOptions {
+    final roles = _roles ?? [];
+    return roles
+        .map((r) => (r['name'] ?? '').toString())
+        .where((name) => name.isNotEmpty)
+        .toList();
+  }
 }
 
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
+    super.key,
     required this.message,
     required this.isMe,
   });

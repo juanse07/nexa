@@ -43,8 +43,10 @@ import 'package:nexa/core/network/socket_manager.dart';
 import '../../users/presentation/pages/settings_page.dart';
 import '../../users/data/services/manager_service.dart';
 import '../../hours_approval/presentation/hours_approval_list_screen.dart';
-import '../../../core/widgets/custom_sliver_app_bar.dart';
 import '../../chat/presentation/conversations_screen.dart';
+import '../../chat/data/services/chat_service.dart';
+import '../../chat/domain/entities/conversation.dart';
+import '../../chat/presentation/chat_screen.dart';
 
 class ExtractionScreen extends StatefulWidget {
   const ExtractionScreen({super.key});
@@ -169,6 +171,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     _loadProfilePicture();
     _loadFavorites();
     _loadFirstUsersPage();
+    _loadConversations();
 
     _socketSubscription = SocketManager.instance.events.listen((event) {
       if (!mounted) return;
@@ -178,6 +181,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       } else if (event.event.startsWith('team:')) {
         _loadClients();
         _loadRoles();
+      } else if (event.event == 'chat:message') {
+        _loadConversations();
       }
     });
 
@@ -661,14 +666,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         final pastCount = _eventsPast?.length ?? 0;
         final totalEvents = (pendingCount + upcomingCount + pastCount);
         return "Events • $pendingCount pending, $upcomingCount upcoming, $pastCount past";
-      case 2: // Users tab
-        final totalClients = _clients?.length ?? 0;
-        return "Clients • $totalClients active";
-      case 3: // Chat tab
+      case 2: // Chat tab
         return "Chat";
-      case 4: // Hours tab
+      case 3: // Hours tab
         return "Hours Approval";
-      case 5: // Catalog tab
+      case 4: // Catalog tab
         final clientsCount = _clients?.length ?? 0;
         final rolesCount = _roles?.length ?? 0;
         return "Catalog • $clientsCount clients, $rolesCount roles";
@@ -736,13 +738,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           }
         }
         return baseTime;
-      case 2: // Users tab
+      case 2: // Chat tab
+        return "Messages and team members • $baseTime";
+      case 3: // Hours tab
         return baseTime;
-      case 3: // Chat tab
-        return "Messages and conversations • $baseTime";
-      case 4: // Hours tab
-        return baseTime;
-      case 5: // Catalog tab
+      case 4: // Catalog tab
         final clientsCount = _clients?.length ?? 0;
         final rolesCount = _roles?.length ?? 0;
         final tariffsCount = _tariffs?.length ?? 0;
@@ -761,13 +761,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         return _buildCreateSlivers();
       case 1: // Events tab
         return _buildEventsSlivers();
-      case 2: // Users tab
-        return _buildUsersSlivers();
-      case 3: // Chat tab
+      case 2: // Chat tab
         return _buildChatSlivers();
-      case 4: // Hours tab
+      case 3: // Hours tab
         return _buildHoursSlivers();
-      case 5: // Catalog tab
+      case 4: // Catalog tab
         return _buildCatalogSlivers();
       default:
         return [];
@@ -842,7 +840,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             ),
           ),
         ];
-      case 2: // Users tab - pin the search bar
+      case 2: // Chat tab - pin the search bar
         return [
           SliverPersistentHeader(
             pinned: true,
@@ -927,11 +925,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             ),
           ),
         ];
-      case 3: // Chat tab - no pinned header needed
+      case 3: // Hours tab - no pinned header needed
         return [];
-      case 4: // Hours tab - no pinned header needed
-        return [];
-      case 5: // Catalog tab - pin the TabBar
+      case 4: // Catalog tab - pin the TabBar
         return [
           SliverPersistentHeader(
             pinned: true,
@@ -985,13 +981,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             _pastEventsInner(_eventsPast ?? const []),
           ],
         );
-      case 2: // Users tab
-        return _buildUsersContent();
-      case 3: // Chat tab
-        return const ConversationsScreen();
-      case 4: // Hours tab
+      case 2: // Chat tab
+        return _buildChatContent();
+      case 3: // Hours tab
         return const HoursApprovalListScreen();
-      case 5: // Catalog tab
+      case 4: // Catalog tab
         return TabBarView(
           controller: _catalogTabController,
           children: [_buildClientsTab(), _buildRolesTab(), _buildTariffsTab()],
@@ -1027,11 +1021,6 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               titleFontSize: _selectedIndex == 1 ? 14.0 : null,
               subtitleFontSize: _selectedIndex == 1 ? 9.0 : null,
               actions: [
-                IconButton(
-                  tooltip: 'Manage teams',
-                  icon: const Icon(Icons.groups_outlined),
-                  onPressed: _openTeamsManagementPage,
-                ),
                 _buildProfileMenu(context),
               ],
             ),
@@ -1056,10 +1045,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               children: [
                 _buildNavButton(0, Icons.add_circle_outline, 'Create'),
                 _buildNavButton(1, Icons.view_module, 'Events'),
-                _buildNavButton(2, Icons.group, 'Users'),
-                _buildNavButton(3, Icons.chat_bubble_outline, 'Chat'),
-                _buildNavButton(4, Icons.schedule, 'Hours'),
-                _buildNavButton(5, Icons.inventory_2, 'Catalog'),
+                _buildNavButton(2, Icons.chat_bubble_outline, 'Chat'),
+                _buildNavButton(3, Icons.schedule, 'Hours'),
+                _buildNavButton(4, Icons.inventory_2, 'Catalog'),
               ],
             ),
           ),
@@ -1164,10 +1152,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     'Create Event',
                   ),
                   _buildNavRailItem(1, Icons.view_module, 'Events'),
-                  _buildNavRailItem(2, Icons.group, 'Users'),
-                  _buildNavRailItem(3, Icons.chat_bubble_outline, 'Chat'),
-                  _buildNavRailItem(4, Icons.schedule, 'Hours Approval'),
-                  _buildNavRailItem(5, Icons.inventory_2, 'Catalog'),
+                  _buildNavRailItem(2, Icons.chat_bubble_outline, 'Chat'),
+                  _buildNavRailItem(3, Icons.schedule, 'Hours'),
+                  _buildNavRailItem(4, Icons.inventory_2, 'Catalog'),
                 ],
               ),
             ),
@@ -1331,6 +1318,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           Navigator.of(
             context,
           ).push(MaterialPageRoute(builder: (_) => const SettingsPage()));
+        } else if (value == 'teams') {
+          _openTeamsManagementPage();
         } else if (value == 'logout') {
           await _handleLogout(context);
         }
@@ -1348,6 +1337,13 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           child: ListTile(
             leading: Icon(Icons.settings),
             title: Text('Settings'),
+          ),
+        ),
+        const PopupMenuItem<String>(
+          value: 'teams',
+          child: ListTile(
+            leading: Icon(Icons.groups_outlined),
+            title: Text('Manage Teams'),
           ),
         ),
         const PopupMenuDivider(),
@@ -1780,14 +1776,18 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     await _loadPendingDrafts();
   }
 
-  // Users tab with search + cursor pagination
+  // Chat tab - combines users and conversations
   final UsersService _usersService = UsersService();
+  final ChatService _chatService = ChatService();
   final TextEditingController _userSearchCtrl = TextEditingController();
   List<Map<String, dynamic>> _users = const [];
+  List<Conversation> _conversations = <Conversation>[];
   String? _usersNextCursor;
   bool _isUsersLoading = false;
+  bool _isConversationsLoading = false;
   Set<String> _favoriteUsers = {};
   String? _selectedRole;
+  String _peopleFilter = 'all'; // 'all', 'with_chat', 'no_chat'
 
   // Get role options dynamically from loaded roles
   List<String> get _favoriteRoleOptions {
@@ -1889,6 +1889,390 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       });
     } catch (e) {
       setState(() => _isUsersLoading = false);
+    }
+  }
+
+  // Load conversations for People tab
+  Future<void> _loadConversations() async {
+    try {
+      setState(() => _isConversationsLoading = true);
+      final conversations = await _chatService.fetchConversations();
+      setState(() {
+        _conversations = conversations;
+        _isConversationsLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isConversationsLoading = false);
+    }
+  }
+
+  // Build Chat slivers (merged Users + Chat)
+  List<Widget> _buildChatSlivers() {
+    return [
+      SliverPersistentHeader(
+        pinned: true,
+        delegate: PinnedHeaderDelegate(
+          height: 170.0,
+          safeAreaPadding: MediaQuery.of(context).padding.top,
+          child: Material(
+            color: const Color(0xFFF8FAFC),
+            elevation: 0,
+            child: Column(
+              children: [
+                // Search bar
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _userSearchCtrl,
+                          decoration: const InputDecoration(
+                            prefixIcon: Icon(Icons.search),
+                            hintText: 'Search people...',
+                            border: OutlineInputBorder(),
+                          ),
+                          onSubmitted: (_) => _loadFirstUsersPage(),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        onPressed: () {
+                          _loadFirstUsersPage();
+                          _loadConversations();
+                        },
+                        icon: const Icon(Icons.refresh),
+                        tooltip: 'Refresh',
+                      ),
+                    ],
+                  ),
+                ),
+                // Filter chips
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Row(
+                    children: [
+                      ChoiceChip(
+                        label: const Text('All'),
+                        selected: _peopleFilter == 'all',
+                        onSelected: (selected) {
+                          if (selected) setState(() => _peopleFilter = 'all');
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      ChoiceChip(
+                        label: const Text('With Messages'),
+                        selected: _peopleFilter == 'with_chat',
+                        onSelected: (selected) {
+                          if (selected) setState(() => _peopleFilter = 'with_chat');
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      ChoiceChip(
+                        label: const Text('No Messages'),
+                        selected: _peopleFilter == 'no_chat',
+                        onSelected: (selected) {
+                          if (selected) setState(() => _peopleFilter = 'no_chat');
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                // Role filter dropdown
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Row(
+                    children: [
+                      const Text('Filter by role: '),
+                      const SizedBox(width: 8),
+                      DropdownButton<String?>(
+                        value: _selectedRole,
+                        hint: const Text('All roles'),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('All roles'),
+                          ),
+                          ..._favoriteRoleOptions.map((role) {
+                            return DropdownMenuItem<String?>(
+                              value: role,
+                              child: Text(role),
+                            );
+                          }),
+                        ],
+                        onChanged: (value) {
+                          setState(() => _selectedRole = value);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      SliverFillRemaining(child: _buildChatContent()),
+    ];
+  }
+
+  Widget _buildChatContent() {
+    // Combine conversations and users intelligently
+    final conversationUserKeys = _conversations
+        .map((c) => c.userKey ?? c.managerId ?? '')
+        .where((key) => key.isNotEmpty)
+        .toSet();
+
+    // Filter users to exclude those with conversations (no duplicates)
+    List<Map<String, dynamic>> displayUsers = [];
+    if (_peopleFilter == 'all' || _peopleFilter == 'no_chat') {
+      displayUsers = _filteredUsers.where((u) {
+        final userKey = '${u['provider']}:${u['subject']}';
+        // Always exclude users who have conversations
+        if (conversationUserKeys.contains(userKey)) {
+          return false;
+        }
+        if (_peopleFilter == 'no_chat') {
+          return true; // Already excluded conversation users above
+        }
+        return _peopleFilter == 'all';
+      }).toList();
+    }
+
+    final showConversations = _peopleFilter == 'with_chat' || _peopleFilter == 'all';
+    final conversationsCount = showConversations ? _conversations.length : 0;
+
+    // Calculate item count: header(s) + conversations + users + load more
+    int itemCount = 0;
+    if (conversationsCount > 0) itemCount += 1 + conversationsCount; // header + conversations
+    if (displayUsers.isNotEmpty) itemCount += 1 + displayUsers.length; // header + users
+    itemCount += 1; // load more button
+
+    return NotificationListener<ScrollNotification>(
+      onNotification: (n) {
+        if (n.metrics.pixels >= n.metrics.maxScrollExtent - 200) {
+          _loadMoreUsers();
+        }
+        return false;
+      },
+      child: ListView.builder(
+        itemCount: itemCount,
+        itemBuilder: (ctx, idx) {
+          int currentIdx = idx;
+
+          // Conversations section
+          if (conversationsCount > 0) {
+            if (currentIdx == 0) {
+              return _buildSectionHeader('Messages', conversationsCount);
+            }
+            currentIdx--;
+
+            if (currentIdx < conversationsCount) {
+              return _buildConversationTile(_conversations[currentIdx]);
+            }
+            currentIdx -= conversationsCount;
+          }
+
+          // Users section
+          if (displayUsers.isNotEmpty) {
+            if (currentIdx == 0) {
+              return _buildSectionHeader('All Users', displayUsers.length);
+            }
+            currentIdx--;
+
+            if (currentIdx < displayUsers.length) {
+              return _buildUserTile(displayUsers[currentIdx]);
+            }
+            currentIdx -= displayUsers.length;
+          }
+
+          // Load more button
+          if (_isUsersLoading) {
+            return const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+          if (_usersNextCursor != null) {
+            return Padding(
+              padding: const EdgeInsets.all(16),
+              child: Center(
+                child: TextButton(
+                  onPressed: _loadMoreUsers,
+                  child: const Text('Load more'),
+                ),
+              ),
+            );
+          }
+          return const SizedBox.shrink();
+        },
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, int count) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      color: const Color(0xFFF8FAFC),
+      child: Text(
+        '$title ($count)',
+        style: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF6B7280),
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConversationTile(Conversation conversation) {
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundImage: conversation.displayPicture != null
+            ? NetworkImage(conversation.displayPicture!)
+            : null,
+        child: conversation.displayPicture == null
+            ? const Icon(Icons.person)
+            : null,
+      ),
+      title: Text(conversation.displayName),
+      subtitle: Text(
+        conversation.lastMessagePreview ?? '',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: conversation.lastMessageAt != null
+          ? Text(
+              _formatTimeAgo(conversation.lastMessageAt!),
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            )
+          : null,
+      onTap: () {
+        Navigator.of(context).push<void>(
+          MaterialPageRoute<void>(
+            builder: (_) => ChatScreen(
+              targetId: conversation.userKey ?? conversation.managerId!,
+              targetName: conversation.displayName,
+              targetPicture: conversation.displayPicture,
+              conversationId: conversation.id,
+            ),
+          ),
+        ).then((_) => _loadConversations());
+      },
+    );
+  }
+
+  Widget _buildUserTile(Map<String, dynamic> u) {
+    final userId = '${u['provider']}:${u['subject']}';
+    final name = u['name']?.toString() ?? '';
+    final email = u['email']?.toString() ?? '';
+    final picture = u['picture']?.toString();
+    final roles = (u['roles'] as List?)?.whereType<String>().toList() ?? const [];
+
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundImage: picture != null ? NetworkImage(picture) : null,
+        child: picture == null ? const Icon(Icons.person) : null,
+      ),
+      title: Text(name.isNotEmpty ? name : email),
+      subtitle: Text(
+        roles.isNotEmpty ? roles.join(', ') : email,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Favorite button (if role selected)
+          if (_selectedRole != null)
+            IconButton(
+              icon: Icon(
+                _isFavorite(userId, _selectedRole)
+                    ? Icons.star
+                    : Icons.star_border,
+                color: _isFavorite(userId, _selectedRole)
+                    ? Colors.amber
+                    : null,
+              ),
+              onPressed: () => _toggleFavorite(userId, _selectedRole!),
+              tooltip: _isFavorite(userId, _selectedRole)
+                  ? 'Remove from $_selectedRole favorites'
+                  : 'Add to $_selectedRole favorites',
+            ),
+          // More options menu
+          PopupMenuButton<String>(
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'view',
+                child: ListTile(
+                  leading: Icon(Icons.event),
+                  title: Text('View Events'),
+                ),
+              ),
+              ...(_selectedRole == null
+                      ? _favoriteRoleOptions
+                      : [_selectedRole!])
+                  .map(
+                    (role) => PopupMenuItem(
+                      value: 'favorite:$role',
+                      child: ListTile(
+                        leading: Icon(
+                          _isFavorite(userId, role)
+                              ? Icons.star
+                              : Icons.star_border,
+                          color: _isFavorite(userId, role)
+                              ? Colors.amber
+                              : null,
+                        ),
+                        title: Text(
+                          '${_isFavorite(userId, role) ? 'Remove from' : 'Add to'} $role favorites',
+                        ),
+                      ),
+                    ),
+                  ),
+            ],
+            onSelected: (value) {
+              if (value == 'view') {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => UserEventsScreen(user: u),
+                  ),
+                );
+              } else if (value.startsWith('favorite:')) {
+                final role = value.substring('favorite:'.length);
+                _toggleFavorite(userId, role);
+              }
+            },
+          ),
+        ],
+      ),
+      onTap: () {
+        Navigator.of(context).push<void>(
+          MaterialPageRoute<void>(
+            builder: (_) => ChatScreen(
+              targetId: userId,
+              targetName: name.isNotEmpty ? name : email,
+              targetPicture: picture,
+            ),
+          ),
+        ).then((_) => _loadConversations());
+      },
+    );
+  }
+
+  String _formatTimeAgo(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inDays > 0) {
+      return '${difference.inDays}d ago';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}m ago';
+    } else {
+      return 'Just now';
     }
   }
 
@@ -2656,10 +3040,6 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
   List<Widget> _buildHoursSlivers() {
     return [SliverFillRemaining(child: const HoursApprovalListScreen())];
-  }
-
-  List<Widget> _buildChatSlivers() {
-    return [SliverFillRemaining(child: const ConversationsScreen())];
   }
 
   List<Widget> _buildCatalogSlivers() {
