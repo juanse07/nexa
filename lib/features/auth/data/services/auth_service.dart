@@ -104,7 +104,34 @@ class AuthService {
   }
 
   /// Retrieves the stored JWT token
-  static Future<String?> getJwt() => _storage.read(key: _jwtStorageKey);
+  static Future<String?> getJwt() async {
+    final token = await _storage.read(key: _jwtStorageKey);
+
+    // Validate token has managerId field (for manager app)
+    if (token != null && token.isNotEmpty) {
+      try {
+        // Decode JWT payload
+        final parts = token.split('.');
+        if (parts.length == 3) {
+          final payload = json.decode(
+            utf8.decode(base64Url.decode(_normalizeBase64(parts[1])))
+          ) as Map<String, dynamic>;
+
+          // Check if token has managerId (required for manager app)
+          if (!payload.containsKey('managerId')) {
+            _log('Token missing managerId field - clearing old token', isError: true);
+            // Clear the old token to force re-login
+            await signOut();
+            return null;
+          }
+        }
+      } catch (e) {
+        _log('Error validating token: $e', isError: true);
+      }
+    }
+
+    return token;
+  }
 
   /// Saves JWT token to secure storage
   static Future<void> _saveJwt(String token) async {
