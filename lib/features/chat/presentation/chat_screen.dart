@@ -948,18 +948,26 @@ class _ChatScreenState extends State<ChatScreen> {
             ? DateTime.parse(eventData['end_date'] as String)
             : startDate.add(const Duration(hours: 4));
 
-        return EventInvitationCard(
-          key: ValueKey('invitation_${message.id}'),
-          eventName: eventName,
-          roleName: roleName,
-          clientName: clientName,
-          startDate: startDate,
-          endDate: endDate,
-          venueName: venueName,
-          rate: rate?.toDouble(),
-          status: status,
-          respondedAt: respondedAt,
-          isManager: true, // Manager view - can't respond
+        return Align(
+          alignment: Alignment.center,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width > 900 ? 600 : MediaQuery.of(context).size.width * 0.85,
+            ),
+            child: EventInvitationCard(
+              key: ValueKey('invitation_${message.id}'),
+              eventName: eventName,
+              roleName: roleName,
+              clientName: clientName,
+              startDate: startDate,
+              endDate: endDate,
+              venueName: venueName,
+              rate: rate?.toDouble(),
+              status: status,
+              respondedAt: respondedAt,
+              isManager: true, // Manager view - can't respond
+            ),
+          ),
         );
       },
     );
@@ -1135,95 +1143,97 @@ class _MessageBubble extends StatelessWidget {
     final theme = Theme.of(context);
     final screenWidth = MediaQuery.of(context).size.width;
     final maxBubbleWidth = screenWidth > 600 ? 500.0 : screenWidth * 0.75;
-    final edgePadding = screenWidth > 600 ? 80.0 : 0.0;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: <Widget>[
-          // Left spacer for sent messages (push away from left edge)
-          if (isMe) SizedBox(width: edgePadding),
-
-          // Incoming message avatar
-          if (!isMe) ...<Widget>[
-            CircleAvatar(
-              radius: 14,
-              backgroundColor: theme.primaryColor.withOpacity(0.1),
-              backgroundImage: message.senderPicture != null
-                  ? NetworkImage(message.senderPicture!)
-                  : null,
-              child: message.senderPicture == null
-                  ? Text(
-                      (message.senderName ?? '?')[0].toUpperCase(),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: theme.primaryColor,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    )
-                  : null,
-            ),
-            const SizedBox(width: 8),
-          ],
-
-          // Message bubble
-          Flexible(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxBubbleWidth),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(
-                  color: isMe ? theme.primaryColor : Colors.grey[200],
-                  borderRadius: BorderRadius.only(
-                    topLeft: const Radius.circular(20),
-                    topRight: const Radius.circular(20),
-                    bottomLeft: Radius.circular(isMe ? 20 : 4),
-                    bottomRight: Radius.circular(isMe ? 4 : 20),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    if (!isMe && message.senderName != null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Text(
-                          message.senderName!,
+    return Align(
+      alignment: Alignment.center,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: screenWidth > 900 ? 800 : screenWidth,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
+          child: Row(
+            mainAxisAlignment:
+                isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: <Widget>[
+              // Incoming message avatar
+              if (!isMe) ...<Widget>[
+                CircleAvatar(
+                  radius: 14,
+                  backgroundColor: theme.primaryColor.withOpacity(0.1),
+                  backgroundImage: message.senderPicture != null
+                      ? NetworkImage(message.senderPicture!)
+                      : null,
+                  child: message.senderPicture == null
+                      ? Text(
+                          (message.senderName ?? '?')[0].toUpperCase(),
                           style: TextStyle(
                             fontSize: 12,
+                            color: theme.primaryColor,
                             fontWeight: FontWeight.w600,
-                            color: Colors.grey[700],
+                          ),
+                        )
+                      : null,
+                ),
+                const SizedBox(width: 8),
+              ],
+
+              // Message bubble
+              Flexible(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxBubbleWidth),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isMe ? theme.primaryColor : Colors.grey[200],
+                      borderRadius: BorderRadius.only(
+                        topLeft: const Radius.circular(20),
+                        topRight: const Radius.circular(20),
+                        bottomLeft: Radius.circular(isMe ? 20 : 4),
+                        bottomRight: Radius.circular(isMe ? 4 : 20),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        if (!isMe && message.senderName != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Text(
+                              message.senderName!,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey[700],
+                              ),
+                            ),
+                          ),
+                        Text(
+                          message.message,
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: isMe ? Colors.white : Colors.black87,
                           ),
                         ),
-                      ),
-                    Text(
-                      message.message,
-                      style: TextStyle(
-                        fontSize: 15,
-                        color: isMe ? Colors.white : Colors.black87,
-                      ),
+                        const SizedBox(height: 4),
+                        Text(
+                          DateFormat('h:mm a').format(message.createdAt),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isMe ? Colors.white70 : Colors.grey[600],
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      DateFormat('h:mm a').format(message.createdAt),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: isMe ? Colors.white70 : Colors.grey[600],
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ),
 
-          // Right spacing
-          if (isMe)
-            const SizedBox(width: 8)
-          else
-            SizedBox(width: edgePadding),
-        ],
+              if (isMe) const SizedBox(width: 8),
+            ],
+          ),
+        ),
       ),
     );
   }
