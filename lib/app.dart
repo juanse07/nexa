@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'package:nexa/features/auth/data/services/auth_service.dart';
@@ -10,6 +13,42 @@ import 'package:nexa/shared/presentation/theme/theme.dart';
 /// Configures the MaterialApp with theme, routing, and localization settings.
 class NexaApp extends StatelessWidget {
   const NexaApp({super.key});
+
+  static Future<String?> _validateAndGetToken() async {
+    if (kIsWeb) {
+      print('[APP] Validating token on web...');
+    }
+
+    final token = await AuthService.getJwt();
+
+    if (kIsWeb && token != null) {
+      print('[APP] Token found, length: ${token.length}');
+      // Double-check for managerId on web
+      try {
+        final parts = token.split('.');
+        if (parts.length == 3) {
+          final payload = json.decode(
+            utf8.decode(base64Url.decode(base64Url.normalize(parts[1])))
+          ) as Map<String, dynamic>;
+
+          if (kIsWeb) {
+            print('[APP] Token payload keys: ${payload.keys.toList()}');
+            print('[APP] Has managerId: ${payload.containsKey('managerId')}');
+          }
+
+          if (!payload.containsKey('managerId')) {
+            print('[APP] Token missing managerId - forcing logout');
+            await AuthService.signOut();
+            return null;
+          }
+        }
+      } catch (e) {
+        print('[APP] Error checking token: $e');
+      }
+    }
+
+    return token;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +63,7 @@ class NexaApp extends StatelessWidget {
 
       // Initial route - check authentication
       home: FutureBuilder<String?>(
-        future: AuthService.getJwt(),
+        future: _validateAndGetToken(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Scaffold(
