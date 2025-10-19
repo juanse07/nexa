@@ -92,6 +92,10 @@ class AuthService {
   static Future<void> signOut() async {
     _log('Signing out user');
     await _storage.delete(key: _jwtStorageKey);
+    // Also delete the mirrored access_token key
+    try {
+      await _storage.delete(key: 'access_token');
+    } catch (_) {}
     try {
       await _googleSignIn().signOut();
     } catch (e) {
