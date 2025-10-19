@@ -236,13 +236,13 @@ class ChatService {
     final url = Uri.parse('$baseUrl/chat/conversations/$targetId/messages');
 
     // Extract event details for the message
-    final eventName = eventData['title'] as String? ?? 'Event';
-    final roleName = (eventData['roles'] as List<dynamic>?)
-        ?.cast<Map<String, dynamic>>()
-        .firstWhere(
-          (r) => (r['_id'] ?? r['role_id']) == roleId,
-          orElse: () => <String, dynamic>{},
-        )['role_name'] as String? ?? 'Role';
+    final eventName = eventData['title'] as String? ?? eventData['event_name'] as String? ?? 'Event';
+    final roles = eventData['roles'] as List<dynamic>? ?? [];
+    final role = roles.cast<Map<String, dynamic>>().firstWhere(
+      (r) => (r['_id'] ?? r['role_id'] ?? r['role']) == roleId,
+      orElse: () => <String, dynamic>{},
+    );
+    final roleName = role['role_name'] as String? ?? role['role'] as String? ?? 'Role';
 
     final message = 'You\'ve been invited to $eventName as $roleName';
 

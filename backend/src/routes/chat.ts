@@ -156,6 +156,8 @@ router.get('/conversations/:conversationId/messages', requireAuth, async (req, r
       senderName: msg.senderName,
       senderPicture: msg.senderPicture,
       message: msg.message,
+      messageType: msg.messageType || 'text',
+      metadata: msg.metadata || null,
       readByManager: msg.readByManager,
       readByUser: msg.readByUser,
       createdAt: msg.createdAt,
@@ -176,11 +178,12 @@ router.get('/conversations/:conversationId/messages', requireAuth, async (req, r
 router.post('/conversations/:targetId/messages', requireAuth, async (req, res) => {
   try {
     const { targetId } = req.params;
-    const { message } = req.body;
+    const { message, messageType, metadata } = req.body;
     const { managerId, provider, sub, name, picture } = (req as AuthenticatedRequest).authUser;
     const userKey = `${provider}:${sub}`;
 
     console.log('[CHAT DEBUG] POST message - targetId:', targetId, 'managerId:', managerId, 'userKey:', userKey);
+    console.log('[CHAT DEBUG] messageType:', messageType, 'metadata:', metadata);
 
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return res.status(400).json({ error: 'Message is required' });
@@ -285,6 +288,8 @@ router.post('/conversations/:targetId/messages', requireAuth, async (req, res) =
       senderName: name,
       senderPicture: picture,
       message: message.trim(),
+      messageType: messageType || 'text',
+      metadata: metadata || null,
       readByManager: senderType === 'manager',
       readByUser: senderType === 'user',
     });
@@ -305,6 +310,8 @@ router.post('/conversations/:targetId/messages', requireAuth, async (req, res) =
       senderName: chatMessage.senderName,
       senderPicture: chatMessage.senderPicture,
       message: chatMessage.message,
+      messageType: chatMessage.messageType,
+      metadata: chatMessage.metadata,
       readByManager: chatMessage.readByManager,
       readByUser: chatMessage.readByUser,
       createdAt: chatMessage.createdAt,
@@ -452,6 +459,158 @@ router.get('/debug/check-conversations', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Error checking conversations:', error);
     return res.status(500).json({ error: 'Failed to check conversations' });
+  }
+});
+
+/**
+ * POST /chat/invitations/:messageId/respond
+ * Staff member accepts or declines an event invitation
+ */
+router.post('/invitations/:messageId/respond', requireAuth, async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { accept, eventId, roleId } = req.body;
+    const { managerId, provider, sub, name } = (req as AuthenticatedRequest).authUser;
+    const userKey = `${provider}:${sub}`;
+
+    console.log('[INVITATION] Respond - messageId:', messageId, 'accept:', accept, 'eventId:', eventId, 'roleId:', roleId);
+
+    // Validate input
+    if (!messageId || !mongoose.Types.ObjectId.isValid(messageId)) {
+      return res.status(400).json({ error: 'Invalid message ID' });
+    }
+
+    if (typeof accept !== 'boolean') {
+      return res.status(400).json({ error: 'accept must be a boolean' });
+    }
+
+    if (!eventId || !roleId) {
+      return res.status(400).json({ error: 'eventId and roleId are required' });
+    }
+
+    // Only users can respond to invitations (not managers)
+    if (managerId) {
+      return res.status(403).json({ error: 'Only staff members can respond to invitations' });
+    }
+
+    // Find the message
+    const message = await ChatMessageModel.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ error: 'Message not found', code: 'MESSAGE_NOT_FOUND' });
+    }
+
+    // Verify user has access to this message
+    if (message.userKey !== userKey) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Verify it's an invitation message
+    if (message.messageType !== 'eventInvitation') {
+      return res.status(400).json({ error: 'Message is not an event invitation' });
+    }
+
+    // Check if already responded
+    if (message.metadata?.status && message.metadata.status !== 'pending') {
+      return res.status(400).json({
+        error: 'Invitation already responded to',
+        code: 'INVITATION_ALREADY_RESPONDED',
+        currentStatus: message.metadata.status
+      });
+    }
+
+    // If accepting, update the event roster
+    let updatedEvent = null;
+    if (accept) {
+      const { EventModel } = await import('../models/event');
+
+      // Find the event
+      const event = await EventModel.findById(eventId);
+      if (!event) {
+        return res.status(404).json({ error: 'Event not found', code: 'EVENT_NOT_FOUND' });
+      }
+
+      // Find the role (use any to bypass TypeScript strict typing)
+      const role: any = event.roles.find((r: any) =>
+        (r._id?.toString() === roleId || r.role_id?.toString() === roleId || r.role === roleId)
+      );
+
+      if (!role) {
+        return res.status(404).json({ error: 'Role not found in event', code: 'ROLE_NOT_FOUND' });
+      }
+
+      // Check if role is full
+      const confirmedUserIds: string[] = role.confirmed_user_ids || [];
+      const quantity: number = role.quantity || role.count || 0;
+
+      if (confirmedUserIds.length >= quantity) {
+        return res.status(400).json({
+          error: 'Event role is already full',
+          code: 'EVENT_ROLE_FULL',
+          role: role.role_name || role.role,
+          filled: confirmedUserIds.length,
+          needed: quantity
+        });
+      }
+
+      // Add user to confirmed_user_ids
+      if (!confirmedUserIds.includes(userKey)) {
+        confirmedUserIds.push(userKey);
+        await EventModel.updateOne(
+          { _id: eventId, 'roles._id': role._id || role.role_id },
+          { $set: { 'roles.$.confirmed_user_ids': confirmedUserIds } }
+        );
+      }
+
+      updatedEvent = await EventModel.findById(eventId).lean();
+    }
+
+    // Update the message metadata
+    const respondedAt = new Date();
+    const updatedMessage = await ChatMessageModel.findByIdAndUpdate(
+      messageId,
+      {
+        $set: {
+          'metadata.status': accept ? 'accepted' : 'declined',
+          'metadata.respondedAt': respondedAt
+        }
+      },
+      { new: true }
+    );
+
+    // Emit socket event to manager
+    const responsePayload = {
+      messageId: messageId,
+      conversationId: message.conversationId.toString(),
+      status: accept ? 'accepted' : 'declined',
+      respondedAt: respondedAt.toISOString(),
+      userId: userKey,
+      userName: name,
+      eventId,
+      roleId
+    };
+
+    emitToManager(message.managerId.toString(), 'invitation:responded', responsePayload);
+
+    console.log('[INVITATION] Response successful - status:', accept ? 'accepted' : 'declined');
+
+    const response: any = {
+      success: true,
+      message: accept ? 'Invitation accepted' : 'Invitation declined',
+      updatedMessage: {
+        id: (updatedMessage as any)._id.toString(),
+        metadata: (updatedMessage as any).metadata
+      }
+    };
+
+    if (updatedEvent) {
+      response.updatedEvent = updatedEvent;
+    }
+
+    return res.json(response);
+
+  } catch (error) {
+    console.error('Error responding to invitation:', error);
+    return res.status(500).json({ error: 'Failed to respond to invitation' });
   }
 });
 

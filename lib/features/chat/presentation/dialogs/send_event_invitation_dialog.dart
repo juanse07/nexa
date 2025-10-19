@@ -55,11 +55,14 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
       // Filter only upcoming/future events
       final now = DateTime.now();
       final upcomingEvents = events.where((event) {
-        if (event['start_date'] != null) {
+        // Support both 'start_date' and 'date' field names
+        final dateField = event['start_date'] ?? event['date'];
+
+        if (dateField != null) {
           try {
-            final startDateStr = event['start_date'] as String;
-            print('[INVITATION_DIALOG] Event: ${event['title']}');
-            print('[INVITATION_DIALOG]   start_date: $startDateStr');
+            final startDateStr = dateField as String;
+            print('[INVITATION_DIALOG] Event: ${event['title'] ?? event['event_name']}');
+            print('[INVITATION_DIALOG]   date field: $startDateStr');
 
             // Parse date - handles both "2026-03-15" and "2026-03-15T10:00:00.000Z" formats
             DateTime startDate;
@@ -79,7 +82,7 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
             return false;
           }
         }
-        print('[INVITATION_DIALOG] Event ${event['title']} has no start_date');
+        print('[INVITATION_DIALOG] Event ${event['title'] ?? event['event_name']} has no date field');
         return false;
       }).toList();
 
@@ -465,11 +468,30 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
   }
 
   Widget _buildRoleCard(Map<String, dynamic> role) {
-    final roleId = role['_id'] as String? ?? role['role_id'] as String?;
-    final roleName = role['role_name'] as String? ?? 'Unknown Role';
-    final quantity = role['quantity'] as int? ?? 0;
-    final confirmedCount = (role['confirmed_user_ids'] as List<dynamic>?)?.length ?? 0;
-    final rate = role['rate'] as num?;
+    // Support multiple role data structures
+    final roleId = role['_id'] as String? ??
+                   role['role_id'] as String? ??
+                   role['role'] as String?; // Use role name as ID if no ID field
+
+    final roleName = role['role_name'] as String? ??
+                     role['name'] as String? ??
+                     role['role'] as String? ??
+                     'Unknown Role';
+
+    final quantity = role['quantity'] as int? ??
+                     role['needed'] as int? ??
+                     role['count'] as int? ??
+                     0;
+
+    final confirmedCount = (role['confirmed_user_ids'] as List<dynamic>?)?.length ??
+                          (role['accepted_staff'] as List<dynamic>?)?.length ??
+                          0;
+
+    // Handle nested tariff structure
+    final rate = role['rate'] as num? ??
+                 role['pay_rate'] as num? ??
+                 (role['tariff'] as Map<String, dynamic>?)?['rate'] as num?;
+
     final isSelected = _selectedRoleId == roleId;
 
     return Card(

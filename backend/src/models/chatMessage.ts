@@ -10,6 +10,13 @@ export interface ChatMessageDocument extends Document {
   senderName?: string; // sender's display name
   senderPicture?: string; // sender's profile picture
   message: string;
+  messageType?: string; // 'text' | 'eventInvitation'
+  metadata?: {
+    eventId?: string;
+    roleId?: string;
+    status?: string; // 'pending' | 'accepted' | 'declined'
+    respondedAt?: Date;
+  };
   readByManager: boolean;
   readByUser: boolean;
   createdAt: Date;
@@ -48,6 +55,15 @@ const ChatMessageSchema = new Schema<ChatMessageDocument>(
       required: true,
       trim: true,
       maxlength: 5000
+    },
+    messageType: {
+      type: String,
+      enum: ['text', 'eventInvitation'],
+      default: 'text'
+    },
+    metadata: {
+      type: Schema.Types.Mixed,
+      default: null
     },
     readByManager: { type: Boolean, default: false, index: true },
     readByUser: { type: Boolean, default: false, index: true },

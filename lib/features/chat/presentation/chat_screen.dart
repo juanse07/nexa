@@ -553,6 +553,9 @@ class _ChatScreenState extends State<ChatScreen> {
         final showDate = index == 0 ||
             !_isSameDay(_messages[index - 1].createdAt, message.createdAt);
 
+        // Debug log to check message type
+        print('[CHAT_DEBUG] Message ${message.id}: messageType="${message.messageType}", metadata=${message.metadata}');
+
         return Column(
           children: <Widget>[
             if (showDate) _buildDateDivider(message.createdAt),
@@ -655,17 +658,18 @@ class _ChatScreenState extends State<ChatScreen> {
         final eventData = snapshot.data!;
         final roles = eventData['roles'] as List<dynamic>? ?? [];
         final role = roles.cast<Map<String, dynamic>>().firstWhere(
-          (r) => (r['_id'] ?? r['role_id']) == roleId,
+          (r) => (r['_id'] ?? r['role_id'] ?? r['role']) == roleId,
           orElse: () => <String, dynamic>{},
         );
 
-        final eventName = eventData['title'] as String? ?? 'Event';
-        final roleName = role['role_name'] as String? ?? 'Role';
+        final eventName = eventData['title'] as String? ?? eventData['event_name'] as String? ?? 'Event';
+        final roleName = role['role_name'] as String? ?? role['role'] as String? ?? 'Role';
         final clientName = eventData['client_name'] as String? ?? 'Client';
         final venueName = eventData['venue_name'] as String?;
-        final rate = role['rate'] as num?;
-        final startDate = eventData['start_date'] != null
-            ? DateTime.parse(eventData['start_date'] as String)
+        final rate = role['rate'] as num? ?? (role['tariff'] as Map<String, dynamic>?)?['rate'] as num?;
+        final startDateStr = eventData['start_date'] as String? ?? eventData['date'] as String?;
+        final startDate = startDateStr != null
+            ? DateTime.parse(startDateStr)
             : DateTime.now();
         final endDate = eventData['end_date'] != null
             ? DateTime.parse(eventData['end_date'] as String)
@@ -731,9 +735,9 @@ class _ChatScreenState extends State<ChatScreen> {
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
                   colors: [
-                    Color(0xFFFFD700), // Light gold
-                    Color(0xFFFFB700), // Medium gold
-                    Color(0xFFFFA000), // Darker gold
+                    Color(0xFF7C3AED), // Light purple
+                    Color(0xFF6366F1), // Medium purple
+                    Color(0xFF4F46E5), // Darker purple
                   ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -741,13 +745,13 @@ class _ChatScreenState extends State<ChatScreen> {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFFFFD700).withOpacity(0.5),
+                    color: const Color(0xFF7C3AED).withOpacity(0.5),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                     spreadRadius: 1,
                   ),
                   BoxShadow(
-                    color: const Color(0xFFFFA000).withOpacity(0.3),
+                    color: const Color(0xFF4F46E5).withOpacity(0.3),
                     blurRadius: 20,
                     offset: const Offset(0, 8),
                     spreadRadius: 0,
@@ -771,7 +775,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             strokeWidth: 2,
                           ),
                         )
-                      : const Icon(Icons.send, color: Colors.white, size: 22),
+                      : const Icon(Icons.send, color: Color(0xFFB8860B), size: 22),
                   onPressed: _sending ? null : _sendMessage,
                 ),
               ),
