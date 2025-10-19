@@ -481,7 +481,7 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.event_available),
+            icon: const Icon(Icons.add),
             onPressed: _showSendInvitationDialog,
             tooltip: 'Send Event Invitation',
           ),
@@ -729,21 +729,51 @@ class _ChatScreenState extends State<ChatScreen> {
             const SizedBox(width: 8),
             Container(
               decoration: BoxDecoration(
-                color: Theme.of(context).primaryColor,
+                gradient: const LinearGradient(
+                  colors: [
+                    Color(0xFFFFD700), // Light gold
+                    Color(0xFFFFB700), // Medium gold
+                    Color(0xFFFFA000), // Darker gold
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
                 shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFFFD700).withOpacity(0.5),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                    spreadRadius: 1,
+                  ),
+                  BoxShadow(
+                    color: const Color(0xFFFFA000).withOpacity(0.3),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                    spreadRadius: 0,
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-              child: IconButton(
-                icon: _sending
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      )
-                    : const Icon(Icons.send, color: Colors.white),
-                onPressed: _sending ? null : _sendMessage,
+              child: Material(
+                color: Colors.transparent,
+                child: IconButton(
+                  icon: _sending
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Icon(Icons.send, color: Colors.white, size: 22),
+                  onPressed: _sending ? null : _sendMessage,
+                ),
               ),
             ),
           ],

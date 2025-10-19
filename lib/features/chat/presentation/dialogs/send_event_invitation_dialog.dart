@@ -50,21 +50,47 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
 
       final events = await _eventService.fetchEvents();
 
+      print('[INVITATION_DIALOG] Total events fetched: ${events.length}');
+
       // Filter only upcoming/future events
       final now = DateTime.now();
       final upcomingEvents = events.where((event) {
         if (event['start_date'] != null) {
-          final startDate = DateTime.parse(event['start_date'] as String);
-          return startDate.isAfter(now);
+          try {
+            final startDateStr = event['start_date'] as String;
+            print('[INVITATION_DIALOG] Event: ${event['title']}');
+            print('[INVITATION_DIALOG]   start_date: $startDateStr');
+
+            // Parse date - handles both "2026-03-15" and "2026-03-15T10:00:00.000Z" formats
+            DateTime startDate;
+            if (startDateStr.contains('T')) {
+              startDate = DateTime.parse(startDateStr);
+            } else {
+              // If date only (no time), parse as date and set to start of day
+              startDate = DateTime.parse('${startDateStr}T00:00:00.000Z');
+            }
+
+            final isFuture = startDate.isAfter(now);
+            print('[INVITATION_DIALOG]   is future: $isFuture (now: $now, start: $startDate)');
+
+            return isFuture;
+          } catch (e) {
+            print('[INVITATION_DIALOG]   ERROR parsing date: $e');
+            return false;
+          }
         }
+        print('[INVITATION_DIALOG] Event ${event['title']} has no start_date');
         return false;
       }).toList();
+
+      print('[INVITATION_DIALOG] Upcoming events: ${upcomingEvents.length}');
 
       setState(() {
         _events = upcomingEvents;
         _loading = false;
       });
     } catch (e) {
+      print('[INVITATION_DIALOG] ERROR loading events: $e');
       setState(() {
         _error = e.toString();
         _loading = false;
@@ -91,8 +117,11 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
     });
 
     try {
+      // Support both '_id' and 'id' field names
+      final eventId = _selectedEvent!['_id'] as String? ?? _selectedEvent!['id'] as String;
+
       await widget.onSendInvitation(
-        _selectedEvent!['_id'] as String,
+        eventId,
         _selectedRoleId!,
         _selectedEvent!,
       );
