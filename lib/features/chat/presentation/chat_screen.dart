@@ -30,6 +30,9 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
+// Global cache to persist event data across widget rebuilds
+final Map<String, Map<String, dynamic>> _globalEventCache = {};
+
 class _ChatScreenState extends State<ChatScreen> {
   final ChatService _chatService = ChatService();
   final TextEditingController _messageController = TextEditingController();
@@ -51,9 +54,6 @@ class _ChatScreenState extends State<ChatScreen> {
   // Favorites functionality
   Set<String> _favoriteUsers = {};
   List<Map<String, dynamic>>? _roles;
-
-  // Cache for event data to prevent reloading on scroll
-  final Map<String, Map<String, dynamic>> _eventCache = {};
 
   @override
   void initState() {
@@ -903,9 +903,9 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     // Check cache first
-    if (_eventCache.containsKey(eventId)) {
+    if (_globalEventCache.containsKey(eventId)) {
       return _buildInvitationCardWidget(
-        _eventCache[eventId]!,
+        _globalEventCache[eventId]!,
         roleId,
         status,
         respondedAt,
@@ -923,7 +923,7 @@ class _ChatScreenState extends State<ChatScreen> {
           );
           // Cache the result
           if (eventData.isNotEmpty) {
-            _eventCache[eventId] = eventData;
+            _globalEventCache[eventId] = eventData;
           }
           return eventData;
         } catch (e) {
