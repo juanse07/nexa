@@ -552,15 +552,25 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
                     if (userKey != null)
                       IconButton(
                         onPressed: () {
+                          print('[TEAM DETAIL] Chat button pressed for userKey: $userKey');
+                          print('[TEAM DETAIL] targetName: ${name.isNotEmpty ? name : email}');
+                          print('[TEAM DETAIL] About to navigate to ChatScreen...');
                           Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (_) => ChatScreen(
-                                targetId: userKey,
-                                targetName: name.isNotEmpty ? name : email,
-                                targetPicture: member['picture']?.toString(),
-                              ),
+                              builder: (_) {
+                                print('[TEAM DETAIL] Building ChatScreen widget...');
+                                return ChatScreen(
+                                  targetId: userKey,
+                                  targetName: name.isNotEmpty ? name : email,
+                                  targetPicture: member['picture']?.toString(),
+                                );
+                              },
                             ),
-                          );
+                          ).then((value) {
+                            print('[TEAM DETAIL] Navigation to ChatScreen completed');
+                          }).catchError((error) {
+                            print('[TEAM DETAIL ERROR] Failed to navigate to ChatScreen: $error');
+                          });
                         },
                         icon: const Icon(Icons.chat_bubble_outline),
                         color: Colors.blue,
