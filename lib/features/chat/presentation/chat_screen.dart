@@ -52,6 +52,9 @@ class _ChatScreenState extends State<ChatScreen> {
   Set<String> _favoriteUsers = {};
   List<Map<String, dynamic>>? _roles;
 
+  // Cache for event data to prevent reloading on scroll
+  final Map<String, Map<String, dynamic>> _eventCache = {};
+
   @override
   void initState() {
     super.initState();
@@ -899,14 +902,30 @@ class _ChatScreenState extends State<ChatScreen> {
       return const SizedBox.shrink();
     }
 
-    // Fetch event data from the service
+    // Check cache first
+    if (_eventCache.containsKey(eventId)) {
+      return _buildInvitationCardWidget(
+        _eventCache[eventId]!,
+        roleId,
+        status,
+        respondedAt,
+        message.id,
+      );
+    }
+
+    // Fetch event data from the service only if not cached
     return FutureBuilder<Map<String, dynamic>>(
       future: EventService().fetchEvents().then((events) {
         try {
-          return events.firstWhere(
+          final eventData = events.firstWhere(
             (e) => (e['_id'] ?? e['id']) == eventId,
             orElse: () => <String, dynamic>{},
           );
+          // Cache the result
+          if (eventData.isNotEmpty) {
+            _eventCache[eventId] = eventData;
+          }
+          return eventData;
         } catch (e) {
           return <String, dynamic>{};
         }
@@ -928,48 +947,63 @@ class _ChatScreenState extends State<ChatScreen> {
           );
         }
 
-        final eventData = snapshot.data!;
-        final roles = eventData['roles'] as List<dynamic>? ?? [];
-        final role = roles.cast<Map<String, dynamic>>().firstWhere(
-          (r) => (r['_id'] ?? r['role_id'] ?? r['role']) == roleId,
-          orElse: () => <String, dynamic>{},
-        );
-
-        final eventName = eventData['title'] as String? ?? eventData['event_name'] as String? ?? 'Event';
-        final roleName = role['role_name'] as String? ?? role['role'] as String? ?? 'Role';
-        final clientName = eventData['client_name'] as String? ?? 'Client';
-        final venueName = eventData['venue_name'] as String?;
-        final rate = role['rate'] as num? ?? (role['tariff'] as Map<String, dynamic>?)?['rate'] as num?;
-        final startDateStr = eventData['start_date'] as String? ?? eventData['date'] as String?;
-        final startDate = startDateStr != null
-            ? DateTime.parse(startDateStr)
-            : DateTime.now();
-        final endDate = eventData['end_date'] != null
-            ? DateTime.parse(eventData['end_date'] as String)
-            : startDate.add(const Duration(hours: 4));
-
-        return Align(
-          alignment: Alignment.center,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width > 900 ? 600 : MediaQuery.of(context).size.width * 0.85,
-            ),
-            child: EventInvitationCard(
-              key: ValueKey('invitation_${message.id}'),
-              eventName: eventName,
-              roleName: roleName,
-              clientName: clientName,
-              startDate: startDate,
-              endDate: endDate,
-              venueName: venueName,
-              rate: rate?.toDouble(),
-              status: status,
-              respondedAt: respondedAt,
-              isManager: true, // Manager view - can't respond
-            ),
-          ),
+        return _buildInvitationCardWidget(
+          snapshot.data!,
+          roleId,
+          status,
+          respondedAt,
+          message.id,
         );
       },
+    );
+  }
+
+  Widget _buildInvitationCardWidget(
+    Map<String, dynamic> eventData,
+    String roleId,
+    String? status,
+    DateTime? respondedAt,
+    String messageId,
+  ) {
+    final roles = eventData['roles'] as List<dynamic>? ?? [];
+    final role = roles.cast<Map<String, dynamic>>().firstWhere(
+      (r) => (r['_id'] ?? r['role_id'] ?? r['role']) == roleId,
+      orElse: () => <String, dynamic>{},
+    );
+
+    final eventName = eventData['title'] as String? ?? eventData['event_name'] as String? ?? 'Event';
+    final roleName = role['role_name'] as String? ?? role['role'] as String? ?? 'Role';
+    final clientName = eventData['client_name'] as String? ?? 'Client';
+    final venueName = eventData['venue_name'] as String?;
+    final rate = role['rate'] as num? ?? (role['tariff'] as Map<String, dynamic>?)?['rate'] as num?;
+    final startDateStr = eventData['start_date'] as String? ?? eventData['date'] as String?;
+    final startDate = startDateStr != null
+        ? DateTime.parse(startDateStr)
+        : DateTime.now();
+    final endDate = eventData['end_date'] != null
+        ? DateTime.parse(eventData['end_date'] as String)
+        : startDate.add(const Duration(hours: 4));
+
+    return Align(
+      alignment: Alignment.center,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width > 900 ? 600 : MediaQuery.of(context).size.width * 0.85,
+        ),
+        child: EventInvitationCard(
+          key: ValueKey('invitation_$messageId'),
+          eventName: eventName,
+          roleName: roleName,
+          clientName: clientName,
+          startDate: startDate,
+          endDate: endDate,
+          venueName: venueName,
+          rate: rate?.toDouble(),
+          status: status,
+          respondedAt: respondedAt,
+          isManager: true, // Manager view - can't respond
+        ),
+      ),
     );
   }
 
