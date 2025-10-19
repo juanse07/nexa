@@ -557,8 +557,37 @@ router.post('/invitations/:messageId/respond', requireAuth, async (req, res) => 
         confirmedUserIds.push(userKey);
         await EventModel.updateOne(
           { _id: eventId, 'roles._id': role._id || role.role_id },
-          { $set: { 'roles.$.confirmed_user_ids': confirmedUserIds } }
+          { $set: { 'roles.$.confirmed_user_ids': confirmedUserIds, updatedAt: new Date() } }
         );
+      }
+
+      // Also add user to accepted_staff array so they appear in "My Events"
+      const acceptedStaff = event.accepted_staff || [];
+      const existingStaffMember = acceptedStaff.find((s: any) => s.userKey === userKey);
+
+      if (!existingStaffMember) {
+        // Add new staff member to accepted_staff
+        const newStaffMember = {
+          userKey,
+          provider,
+          subject: sub,
+          email: (req as AuthenticatedRequest).authUser.email,
+          name: name || '',
+          picture: (req as AuthenticatedRequest).authUser.picture,
+          role: role.role_name || role.role,
+          response: 'accepted',
+          respondedAt: new Date()
+        };
+
+        console.log('[ACCEPT DEBUG] Adding to accepted_staff:', newStaffMember);
+        console.log('[ACCEPT DEBUG] Event ID:', eventId);
+        const updateResult = await EventModel.updateOne(
+          { _id: eventId },
+          { $push: { accepted_staff: newStaffMember }, $set: { updatedAt: new Date() } }
+        );
+        console.log('[ACCEPT DEBUG] Update result:', updateResult);
+      } else {
+        console.log('[ACCEPT DEBUG] User already in accepted_staff');
       }
 
       updatedEvent = await EventModel.findById(eventId).lean();
