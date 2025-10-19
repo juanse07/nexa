@@ -601,6 +601,9 @@ router.get('/events', requireAuth, async (req, res) => {
           })
         : [];
 
+      console.log('[EVENTS DEBUG] Staff access - userKey:', audienceKey);
+      console.log('[EVENTS DEBUG] Raw team memberships:', membershipTeamIdsRaw);
+
       const membershipTeamIds = (membershipTeamIdsRaw as unknown[])
         .map((value) => {
           if (!value) return null;
@@ -614,6 +617,8 @@ router.get('/events', requireAuth, async (req, res) => {
           return new mongoose.Types.ObjectId(str);
         })
         .filter((value): value is mongoose.Types.ObjectId => value !== null);
+
+      console.log('[EVENTS DEBUG] Processed team IDs:', membershipTeamIds);
 
       const visibilityFilters: any[] = [
         {
@@ -641,8 +646,16 @@ router.get('/events', requireAuth, async (req, res) => {
       }
 
       filter.$or = visibilityFilters;
+      console.log('[EVENTS DEBUG] Staff filter:', JSON.stringify(filter, null, 2));
     }
     const events = await EventModel.find(filter).sort({ createdAt: -1 }).lean();
+
+    if (!managerScope) {
+      console.log('[EVENTS DEBUG] Staff events found:', events.length);
+      if (events.length > 0 && events[0]) {
+        console.log('[EVENTS DEBUG] First event audience_team_ids:', events[0].audience_team_ids);
+      }
+    }
 
     // Enrich with tariff data
     const enrichedEvents = await enrichEventsWithTariffs(events);
