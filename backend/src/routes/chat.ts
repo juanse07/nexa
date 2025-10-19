@@ -575,7 +575,7 @@ router.post('/invitations/:messageId/respond', requireAuth, async (req, res) => 
           name: name || '',
           picture: (req as AuthenticatedRequest).authUser.picture,
           role: role.role_name || role.role,
-          response: 'accepted',
+          response: 'accept',
           respondedAt: new Date()
         };
 
