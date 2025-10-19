@@ -99,29 +99,38 @@ class _ChatScreenState extends State<ChatScreen> {
     // If we don't have a conversationId, try to find it from the conversations list
     if (_conversationId == null) {
       try {
+        print('[CHAT] No conversationId, fetching conversations to find match for targetId: ${widget.targetId}');
         setState(() {
           _loading = true;
           _error = null;
         });
 
         final conversations = await _chatService.fetchConversations();
+        print('[CHAT] Fetched ${conversations.length} conversations');
+
         final matchingList = conversations.where((c) {
           // For managers, match by userKey
+          print('[CHAT] Checking conversation: userKey=${c.userKey}, managerId=${c.managerId}');
           return c.userKey == widget.targetId;
         }).toList();
 
+        print('[CHAT] Found ${matchingList.length} matching conversations');
         final matchingConv = matchingList.isNotEmpty ? matchingList.first : null;
 
         if (matchingConv != null) {
           _conversationId = matchingConv.id;
+          print('[CHAT] Found conversationId: $_conversationId');
         } else {
           // No conversation exists yet
+          print('[CHAT] No matching conversation found, showing empty state');
           setState(() {
             _loading = false;
           });
           return;
         }
-      } catch (e) {
+      } catch (e, stack) {
+        print('[CHAT ERROR] Failed to fetch conversations: $e');
+        print('[CHAT ERROR] Stack: $stack');
         setState(() {
           _error = e.toString();
           _loading = false;
@@ -131,12 +140,14 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     try {
+      print('[CHAT] Loading messages for conversationId: $_conversationId');
       setState(() {
         _loading = true;
         _error = null;
       });
 
       final messages = await _chatService.fetchMessages(_conversationId!);
+      print('[CHAT] Loaded ${messages.length} messages');
 
       setState(() {
         _messages
@@ -146,7 +157,9 @@ class _ChatScreenState extends State<ChatScreen> {
       });
 
       _scrollToBottom();
-    } catch (e) {
+    } catch (e, stack) {
+      print('[CHAT ERROR] Failed to load messages: $e');
+      print('[CHAT ERROR] Stack: $stack');
       setState(() {
         _error = e.toString();
         _loading = false;
