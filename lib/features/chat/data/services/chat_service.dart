@@ -47,13 +47,17 @@ class ChatService {
   }
 
   Future<List<Conversation>> fetchConversations() async {
+    print('[ChatService] fetchConversations called');
     final token = await AuthService.getJwt();
     if (token == null) {
+      print('[ChatService] ERROR: No token found');
       throw Exception('Not authenticated');
     }
 
+    print('[ChatService] Token obtained (length: ${token.length})');
     final baseUrl = AppConfig.instance.baseUrl;
     final url = Uri.parse('$baseUrl/chat/conversations');
+    print('[ChatService] Fetching from: $url');
 
     final response = await http.get(
       url,
@@ -63,11 +67,15 @@ class ChatService {
       },
     );
 
+    print('[ChatService] Response status: ${response.statusCode}');
+    print('[ChatService] Response body: ${response.body}');
+
     if (response.statusCode == 200) {
       final data = json.decode(response.body) as Map<String, dynamic>;
       final conversations = (data['conversations'] as List<dynamic>)
           .map((e) => Conversation.fromJson(e as Map<String, dynamic>))
           .toList();
+      print('[ChatService] Parsed ${conversations.length} conversations');
       return conversations;
     } else {
       throw Exception('Failed to fetch conversations: ${response.body}');

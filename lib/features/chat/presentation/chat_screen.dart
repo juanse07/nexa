@@ -43,10 +43,20 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    print('[CHAT SCREEN] initState called');
+    print('[CHAT SCREEN] widget.targetId: ${widget.targetId}');
+    print('[CHAT SCREEN] widget.targetName: ${widget.targetName}');
+    print('[CHAT SCREEN] widget.conversationId: ${widget.conversationId}');
+
     // In manager app, current user is always a manager
     _currentUserType = SenderType.manager;
     _conversationId = widget.conversationId; // Initialize from widget
-    _loadMessages();
+
+    // Call _loadMessages with error handling
+    _loadMessages().catchError((e) {
+      print('[CHAT SCREEN ERROR] Failed to load messages in initState: $e');
+    });
+
     _listenToNewMessages();
     _listenToTypingIndicators();
     _markAsRead();
@@ -96,6 +106,10 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _loadMessages() async {
+    print('[CHAT] _loadMessages called');
+    print('[CHAT] _conversationId at start: $_conversationId');
+    print('[CHAT] widget.targetId: ${widget.targetId}');
+
     // If we don't have a conversationId, try to find it from the conversations list
     if (_conversationId == null) {
       try {
@@ -105,6 +119,7 @@ class _ChatScreenState extends State<ChatScreen> {
           _error = null;
         });
 
+        print('[CHAT] About to call _chatService.fetchConversations()...');
         final conversations = await _chatService.fetchConversations();
         print('[CHAT] Fetched ${conversations.length} conversations');
 
