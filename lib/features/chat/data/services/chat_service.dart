@@ -21,9 +21,13 @@ class ChatService {
       StreamController<ChatMessage>.broadcast();
   final StreamController<Map<String, dynamic>> _typingController =
       StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _invitationResponseController =
+      StreamController<Map<String, dynamic>>.broadcast();
 
   Stream<ChatMessage> get messageStream => _messageController.stream;
   Stream<Map<String, dynamic>> get typingStream => _typingController.stream;
+  Stream<Map<String, dynamic>> get invitationResponseStream =>
+      _invitationResponseController.stream;
 
   void _setupSocketListeners() {
     SocketManager.instance.events.listen((event) {
@@ -41,6 +45,13 @@ class ChatService {
           _typingController.add(event.data as Map<String, dynamic>);
         } catch (e) {
           print('Error parsing typing indicator: $e');
+        }
+      } else if (event.event == 'invitation:responded') {
+        try {
+          print('[ChatService] Invitation response received: ${event.data}');
+          _invitationResponseController.add(event.data as Map<String, dynamic>);
+        } catch (e) {
+          print('Error parsing invitation response: $e');
         }
       }
     });
@@ -206,6 +217,102 @@ class ChatService {
     }
   }
 
+  /// Send an event invitation to a user
+  Future<ChatMessage> sendEventInvitation({
+    required String targetId,
+    required String eventId,
+    required String roleId,
+    required Map<String, dynamic> eventData,
+  }) async {
+    print('[ChatService] sendEventInvitation called. targetId: $targetId, eventId: $eventId');
+
+    final token = await AuthService.getJwt();
+    if (token == null) {
+      print('[ChatService] ERROR: Not authenticated');
+      throw Exception('Not authenticated');
+    }
+
+    final baseUrl = AppConfig.instance.baseUrl;
+    final url = Uri.parse('$baseUrl/chat/conversations/$targetId/messages');
+
+    // Extract event details for the message
+    final eventName = eventData['title'] as String? ?? 'Event';
+    final roleName = (eventData['roles'] as List<dynamic>?)
+        ?.cast<Map<String, dynamic>>()
+        .firstWhere(
+          (r) => (r['_id'] ?? r['role_id']) == roleId,
+          orElse: () => <String, dynamic>{},
+        )['role_name'] as String? ?? 'Role';
+
+    final message = 'You\'ve been invited to $eventName as $roleName';
+
+    print('[ChatService] POST to: $url');
+
+    final response = await http.post(
+      url,
+      headers: <String, String>{
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: json.encode(<String, dynamic>{
+        'message': message,
+        'messageType': 'eventInvitation',
+        'metadata': <String, dynamic>{
+          'eventId': eventId,
+          'roleId': roleId,
+          'status': 'pending',
+        },
+      }),
+    );
+
+    print('[ChatService] Response status: ${response.statusCode}');
+    print('[ChatService] Response body: ${response.body}');
+
+    if (response.statusCode == 201) {
+      final data = json.decode(response.body) as Map<String, dynamic>;
+      return ChatMessage.fromJson(data['message'] as Map<String, dynamic>);
+    } else {
+      throw Exception('Failed to send invitation: ${response.body}');
+    }
+  }
+
+  /// Respond to an event invitation (accept or decline)
+  Future<void> respondToInvitation({
+    required String messageId,
+    required String eventId,
+    required String roleId,
+    required bool accept,
+  }) async {
+    print('[ChatService] respondToInvitation called. messageId: $messageId, accept: $accept');
+
+    final token = await AuthService.getJwt();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+
+    final baseUrl = AppConfig.instance.baseUrl;
+    final url = Uri.parse('$baseUrl/chat/invitations/$messageId/respond');
+
+    final response = await http.post(
+      url,
+      headers: <String, String>{
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: json.encode(<String, dynamic>{
+        'accept': accept,
+        'eventId': eventId,
+        'roleId': roleId,
+      }),
+    );
+
+    print('[ChatService] Response status: ${response.statusCode}');
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to respond to invitation: ${response.body}');
+    }
+  }
+
   void sendTypingIndicator(
     String conversationId,
     bool isTyping,
@@ -221,5 +328,6 @@ class ChatService {
   void dispose() {
     _messageController.close();
     _typingController.close();
+    _invitationResponseController.close();
   }
 }

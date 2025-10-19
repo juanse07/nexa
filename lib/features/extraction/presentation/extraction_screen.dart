@@ -44,6 +44,7 @@ import '../../users/presentation/pages/settings_page.dart';
 import '../../users/data/services/manager_service.dart';
 import '../../hours_approval/presentation/hours_approval_list_screen.dart';
 import '../../../core/widgets/custom_sliver_app_bar.dart';
+import '../../chat/presentation/conversations_screen.dart';
 
 class ExtractionScreen extends StatefulWidget {
   const ExtractionScreen({super.key});
@@ -663,9 +664,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       case 2: // Users tab
         final totalClients = _clients?.length ?? 0;
         return "Clients • $totalClients active";
-      case 3: // Hours tab
+      case 3: // Chat tab
+        return "Chat";
+      case 4: // Hours tab
         return "Hours Approval";
-      case 4: // Catalog tab
+      case 5: // Catalog tab
         final clientsCount = _clients?.length ?? 0;
         final rolesCount = _roles?.length ?? 0;
         return "Catalog • $clientsCount clients, $rolesCount roles";
@@ -735,9 +738,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         return baseTime;
       case 2: // Users tab
         return baseTime;
-      case 3: // Hours tab
+      case 3: // Chat tab
+        return "Messages and conversations • $baseTime";
+      case 4: // Hours tab
         return baseTime;
-      case 4: // Catalog tab
+      case 5: // Catalog tab
         final clientsCount = _clients?.length ?? 0;
         final rolesCount = _roles?.length ?? 0;
         final tariffsCount = _tariffs?.length ?? 0;
@@ -758,9 +763,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         return _buildEventsSlivers();
       case 2: // Users tab
         return _buildUsersSlivers();
-      case 3: // Hours tab
+      case 3: // Chat tab
+        return _buildChatSlivers();
+      case 4: // Hours tab
         return _buildHoursSlivers();
-      case 4: // Catalog tab
+      case 5: // Catalog tab
         return _buildCatalogSlivers();
       default:
         return [];
@@ -920,7 +927,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             ),
           ),
         ];
-      case 4: // Catalog tab - pin the TabBar
+      case 3: // Chat tab - no pinned header needed
+        return [];
+      case 4: // Hours tab - no pinned header needed
+        return [];
+      case 5: // Catalog tab - pin the TabBar
         return [
           SliverPersistentHeader(
             pinned: true,
@@ -976,9 +987,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         );
       case 2: // Users tab
         return _buildUsersContent();
-      case 3: // Hours tab
+      case 3: // Chat tab
+        return const ConversationsScreen();
+      case 4: // Hours tab
         return const HoursApprovalListScreen();
-      case 4: // Catalog tab
+      case 5: // Catalog tab
         return TabBarView(
           controller: _catalogTabController,
           children: [_buildClientsTab(), _buildRolesTab(), _buildTariffsTab()],
@@ -1044,8 +1057,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 _buildNavButton(0, Icons.add_circle_outline, 'Create'),
                 _buildNavButton(1, Icons.view_module, 'Events'),
                 _buildNavButton(2, Icons.group, 'Users'),
-                _buildNavButton(3, Icons.schedule, 'Hours'),
-                _buildNavButton(4, Icons.inventory_2, 'Catalog'),
+                _buildNavButton(3, Icons.chat_bubble_outline, 'Chat'),
+                _buildNavButton(4, Icons.schedule, 'Hours'),
+                _buildNavButton(5, Icons.inventory_2, 'Catalog'),
               ],
             ),
           ),
@@ -1151,8 +1165,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   ),
                   _buildNavRailItem(1, Icons.view_module, 'Events'),
                   _buildNavRailItem(2, Icons.group, 'Users'),
-                  _buildNavRailItem(3, Icons.schedule, 'Hours Approval'),
-                  _buildNavRailItem(4, Icons.inventory_2, 'Catalog'),
+                  _buildNavRailItem(3, Icons.chat_bubble_outline, 'Chat'),
+                  _buildNavRailItem(4, Icons.schedule, 'Hours Approval'),
+                  _buildNavRailItem(5, Icons.inventory_2, 'Catalog'),
                 ],
               ),
             ),
@@ -2641,6 +2656,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
   List<Widget> _buildHoursSlivers() {
     return [SliverFillRemaining(child: const HoursApprovalListScreen())];
+  }
+
+  List<Widget> _buildChatSlivers() {
+    return [SliverFillRemaining(child: const ConversationsScreen())];
   }
 
   List<Widget> _buildCatalogSlivers() {

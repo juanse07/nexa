@@ -5,6 +5,9 @@ import 'package:intl/intl.dart';
 
 import '../data/services/chat_service.dart';
 import '../domain/entities/chat_message.dart';
+import 'widgets/event_invitation_card.dart';
+import 'dialogs/send_event_invitation_dialog.dart';
+import '../../../features/extraction/services/event_service.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
@@ -38,6 +41,7 @@ class _ChatScreenState extends State<ChatScreen> {
   SenderType? _currentUserType;
   StreamSubscription<ChatMessage>? _messageSubscription;
   StreamSubscription<Map<String, dynamic>>? _typingSubscription;
+  StreamSubscription<Map<String, dynamic>>? _invitationResponseSubscription;
   String? _conversationId; // Track conversation ID dynamically
 
   @override
@@ -59,6 +63,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     _listenToNewMessages();
     _listenToTypingIndicators();
+    _listenToInvitationResponses();
     _markAsRead();
   }
 
@@ -100,6 +105,79 @@ class _ChatScreenState extends State<ChatScreen> {
           setState(() {
             _isTyping = isTyping;
           });
+        }
+      }
+    });
+  }
+
+  void _listenToInvitationResponses() {
+    _invitationResponseSubscription = _chatService.invitationResponseStream.listen((data) {
+      final receivedAt = DateTime.now();
+      print('[INVITATION_ANALYTICS] invitation_responded event received');
+      print('[INVITATION_ANALYTICS] rawData: $data');
+
+      // Update the specific message with the new status
+      final messageId = data['messageId'] as String?;
+      final status = data['status'] as String?;
+      final respondedAt = data['respondedAt'] as String?;
+      final userId = data['userId'] as String?;
+      final userName = data['userName'] as String?;
+      final eventId = data['eventId'] as String?;
+      final roleId = data['roleId'] as String?;
+
+      print('[INVITATION_ANALYTICS] messageId: $messageId');
+      print('[INVITATION_ANALYTICS] status: $status');
+      print('[INVITATION_ANALYTICS] userId: $userId');
+      print('[INVITATION_ANALYTICS] userName: $userName');
+      print('[INVITATION_ANALYTICS] eventId: $eventId');
+      print('[INVITATION_ANALYTICS] roleId: $roleId');
+
+      if (messageId != null && status != null) {
+        // Calculate response time
+        final messageIndex = _messages.indexWhere((m) => m.id == messageId);
+        if (messageIndex != -1) {
+          final originalMessage = _messages[messageIndex];
+          final sentAt = originalMessage.createdAt;
+          final responseTimeMinutes = receivedAt.difference(sentAt).inMinutes;
+
+          print('[INVITATION_ANALYTICS] responseTimeMinutes: $responseTimeMinutes');
+          print('[INVITATION_ANALYTICS] accepted: ${status == 'accepted'}');
+        }
+
+        setState(() {
+          final index = _messages.indexWhere((m) => m.id == messageId);
+          if (index != -1) {
+            // Update the message metadata
+            final message = _messages[index];
+            final updatedMetadata = Map<String, dynamic>.from(message.metadata ?? {});
+            updatedMetadata['status'] = status;
+            if (respondedAt != null) {
+              updatedMetadata['respondedAt'] = respondedAt;
+            }
+
+            // Create updated message (since ChatMessage is immutable, we need to reload)
+            print('[CHAT] Message status updated to: $status');
+          }
+        });
+
+        // Reload messages to get the updated version
+        _loadMessages();
+
+        // Show notification to manager
+        if (mounted) {
+          final targetUserName = widget.targetName;
+          final accepted = status == 'accepted';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                accepted
+                    ? '$targetUserName accepted the invitation!'
+                    : '$targetUserName declined the invitation',
+              ),
+              backgroundColor: accepted ? Colors.green : Colors.grey.shade600,
+              duration: const Duration(seconds: 3),
+            ),
+          );
         }
       }
     });
@@ -268,6 +346,81 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  Future<void> _showSendInvitationDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => SendEventInvitationDialog(
+        targetName: widget.targetName,
+        onSendInvitation: _sendEventInvitation,
+      ),
+    );
+  }
+
+  Future<void> _sendEventInvitation(
+    String eventId,
+    String roleId,
+    Map<String, dynamic> eventData,
+  ) async {
+    final startTime = DateTime.now();
+
+    try {
+      print('[INVITATION_ANALYTICS] invitation_sent event started');
+      print('[INVITATION_ANALYTICS] eventId: $eventId');
+      print('[INVITATION_ANALYTICS] roleId: $roleId');
+      print('[INVITATION_ANALYTICS] targetId: ${widget.targetId}');
+      print('[INVITATION_ANALYTICS] eventName: ${eventData['title']}');
+
+      final sentMessage = await _chatService.sendEventInvitation(
+        targetId: widget.targetId,
+        eventId: eventId,
+        roleId: roleId,
+        eventData: eventData,
+      );
+
+      final duration = DateTime.now().difference(startTime);
+      print('[INVITATION_ANALYTICS] invitation_sent success');
+      print('[INVITATION_ANALYTICS] messageId: ${sentMessage.id}');
+      print('[INVITATION_ANALYTICS] conversationId: ${sentMessage.conversationId}');
+      print('[INVITATION_ANALYTICS] sendDuration: ${duration.inMilliseconds}ms');
+
+      // Immediately add the invitation to UI
+      setState(() {
+        _conversationId ??= sentMessage.conversationId;
+        _messages.add(sentMessage);
+      });
+
+      _scrollToBottom();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Event invitation sent!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      final duration = DateTime.now().difference(startTime);
+      print('[INVITATION_ANALYTICS] invitation_error');
+      print('[INVITATION_ANALYTICS] error: $e');
+      print('[INVITATION_ANALYTICS] eventId: $eventId');
+      print('[INVITATION_ANALYTICS] targetId: ${widget.targetId}');
+      print('[INVITATION_ANALYTICS] step: send');
+      print('[INVITATION_ANALYTICS] duration: ${duration.inMilliseconds}ms');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to send invitation: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      rethrow;
+    }
+  }
+
   @override
   void dispose() {
     _messageController.dispose();
@@ -275,6 +428,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _typingTimer?.cancel();
     _messageSubscription?.cancel();
     _typingSubscription?.cancel();
+    _invitationResponseSubscription?.cancel();
     super.dispose();
   }
 
@@ -325,6 +479,13 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.event_available),
+            onPressed: _showSendInvitationDialog,
+            tooltip: 'Send Event Invitation',
+          ),
+        ],
         elevation: 0.5,
       ),
       body: Column(
@@ -395,10 +556,13 @@ class _ChatScreenState extends State<ChatScreen> {
         return Column(
           children: <Widget>[
             if (showDate) _buildDateDivider(message.createdAt),
-            _MessageBubble(
-              message: message,
-              isMe: isMe,
-            ),
+            // Check if it's an invitation card or regular message
+            message.messageType == 'eventInvitation'
+                ? _buildInvitationCard(message)
+                : _MessageBubble(
+                    message: message,
+                    isMe: isMe,
+                  ),
           ],
         );
       },
@@ -444,6 +608,83 @@ class _ChatScreenState extends State<ChatScreen> {
 
   bool _isSameDay(DateTime a, DateTime b) {
     return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  Widget _buildInvitationCard(ChatMessage message) {
+    final metadata = message.metadata ?? {};
+    final eventId = metadata['eventId'] as String?;
+    final roleId = metadata['roleId'] as String?;
+    final status = metadata['status'] as String?;
+    final respondedAt = metadata['respondedAt'] != null
+        ? DateTime.parse(metadata['respondedAt'] as String)
+        : null;
+
+    if (eventId == null || roleId == null) {
+      return const SizedBox.shrink();
+    }
+
+    // Fetch event data from the service
+    return FutureBuilder<Map<String, dynamic>>(
+      future: EventService().fetchEvents().then((events) {
+        try {
+          return events.firstWhere(
+            (e) => (e['_id'] ?? e['id']) == eventId,
+            orElse: () => <String, dynamic>{},
+          );
+        } catch (e) {
+          return <String, dynamic>{};
+        }
+      }),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.all(16),
+            child: Text('Event not found'),
+          );
+        }
+
+        final eventData = snapshot.data!;
+        final roles = eventData['roles'] as List<dynamic>? ?? [];
+        final role = roles.cast<Map<String, dynamic>>().firstWhere(
+          (r) => (r['_id'] ?? r['role_id']) == roleId,
+          orElse: () => <String, dynamic>{},
+        );
+
+        final eventName = eventData['title'] as String? ?? 'Event';
+        final roleName = role['role_name'] as String? ?? 'Role';
+        final clientName = eventData['client_name'] as String? ?? 'Client';
+        final venueName = eventData['venue_name'] as String?;
+        final rate = role['rate'] as num?;
+        final startDate = eventData['start_date'] != null
+            ? DateTime.parse(eventData['start_date'] as String)
+            : DateTime.now();
+        final endDate = eventData['end_date'] != null
+            ? DateTime.parse(eventData['end_date'] as String)
+            : startDate.add(const Duration(hours: 4));
+
+        return EventInvitationCard(
+          eventName: eventName,
+          roleName: roleName,
+          clientName: clientName,
+          startDate: startDate,
+          endDate: endDate,
+          venueName: venueName,
+          rate: rate?.toDouble(),
+          status: status,
+          respondedAt: respondedAt,
+          isManager: true, // Manager view - can't respond
+        );
+      },
+    );
   }
 
   Widget _buildMessageInput() {

@@ -9,6 +9,8 @@ class ChatMessage {
     this.senderPicture,
     this.readByManager = false,
     this.readByUser = false,
+    this.messageType = 'text',
+    this.metadata,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -24,6 +26,8 @@ class ChatMessage {
       readByManager: json['readByManager'] as bool? ?? false,
       readByUser: json['readByUser'] as bool? ?? false,
       createdAt: DateTime.parse(json['createdAt'] as String),
+      messageType: json['messageType'] as String? ?? 'text',
+      metadata: json['metadata'] as Map<String, dynamic>?,
     );
   }
 
@@ -36,6 +40,8 @@ class ChatMessage {
   final bool readByManager;
   final bool readByUser;
   final DateTime createdAt;
+  final String messageType;
+  final Map<String, dynamic>? metadata;
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
@@ -48,6 +54,8 @@ class ChatMessage {
       'readByManager': readByManager,
       'readByUser': readByUser,
       'createdAt': createdAt.toIso8601String(),
+      'messageType': messageType,
+      if (metadata != null) 'metadata': metadata,
     };
   }
 }
