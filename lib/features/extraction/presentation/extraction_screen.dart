@@ -1922,13 +1922,6 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     }
     setState(() => _isBulkProcessing = true);
     try {
-      final ok = await _ensureApiKey();
-      if (!ok) {
-        setState(() {
-          _isBulkProcessing = false;
-        });
-        return;
-      }
       final result = await FilePicker.platform.pickFiles(
         allowMultiple: true,
         type: FileType.custom,
@@ -6322,16 +6315,6 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 ? ChatInputWidget(
                     key: const ValueKey('chat-input'),
                     onSendMessage: (message) async {
-            if (apiKey.isEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('OpenAI API key not configured'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-              return;
-            }
-
             setState(() {
               _isAIChatLoading = true;
             });
