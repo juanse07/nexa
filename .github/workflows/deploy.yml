@@ -75,6 +75,7 @@ jobs:
           host: ${{ vars.SERVER_HOST }}
           username: ${{ vars.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
+          insecure: true
           script_stop: true
           script: |
             set -euo pipefail
