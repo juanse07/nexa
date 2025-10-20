@@ -166,7 +166,7 @@ router.post('/ai/chat/message', requireAuth, async (req, res) => {
       return res.status(500).json({ message: 'OpenAI API key not configured on server' });
     }
 
-    const textModel = process.env.OPENAI_TEXT_MODEL || 'gpt-4o';
+    const textModel = process.env.OPENAI_TEXT_MODEL || 'gpt-4o-mini';
     const openaiBaseUrl = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
 
     const requestBody = {
