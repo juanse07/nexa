@@ -13,9 +13,16 @@ const querySchema = z.object({
 });
 
 const updateSchema = z.object({
-  first_name: z.string().trim().min(1).max(100).optional(),
-  last_name: z.string().trim().min(1).max(100).optional(),
-  app_id: z
+  firstName: z.string().trim().min(1).max(100).optional(),
+  lastName: z.string().trim().min(1).max(100).optional(),
+  phoneNumber: z
+    .string()
+    .regex(
+      /^(\(\d{3}\)\s?\d{3}-\d{4}|\d{3}-\d{3}-\d{4}|\d{10})$/,
+      'Phone number must be in US format: (XXX) XXX-XXXX, XXX-XXX-XXXX, or XXXXXXXXXX'
+    )
+    .optional(),
+  appId: z
     .string()
     .regex(/^\d{9}$/)
     .optional(),
@@ -39,10 +46,11 @@ router.get('/users/me', requireAuth, async (req, res) => {
       id: String(user._id),
       email: user.email,
       name: user.name,
-      first_name: user.first_name,
-      last_name: user.last_name,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      phoneNumber: user.phone_number,
       picture: user.picture,
-      app_id: user.app_id,
+      appId: user.app_id,
     });
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -59,13 +67,13 @@ router.patch('/users/me', requireAuth, async (req, res) => {
     }
     const parsed = updateSchema.safeParse(req.body || {});
     if (!parsed.success) {
-      return res.status(400).json({ message: 'Validation failed', details: parsed.error.format() });
+      return res.status(400).json({ message: 'Validation failed', details: parsed.error.issues });
     }
 
-    // If app_id provided, ensure not used by another user
-    if (parsed.data.app_id) {
+    // If appId provided, ensure not used by another user
+    if (parsed.data.appId) {
       const conflict = await UserModel.findOne({
-        app_id: parsed.data.app_id,
+        app_id: parsed.data.appId,
         $or: [
           { provider: { $ne: authUser.provider } },
           { subject: { $ne: authUser.sub } },
@@ -76,10 +84,18 @@ router.patch('/users/me', requireAuth, async (req, res) => {
       }
     }
 
+    // Map camelCase to snake_case for database
+    const dbUpdate: any = { updatedAt: new Date() };
+    if (parsed.data.firstName !== undefined) dbUpdate.first_name = parsed.data.firstName;
+    if (parsed.data.lastName !== undefined) dbUpdate.last_name = parsed.data.lastName;
+    if (parsed.data.phoneNumber !== undefined) dbUpdate.phone_number = parsed.data.phoneNumber;
+    if (parsed.data.appId !== undefined) dbUpdate.app_id = parsed.data.appId;
+    if (parsed.data.picture !== undefined) dbUpdate.picture = parsed.data.picture;
+
     const updated = await UserModel.findOneAndUpdate(
       { provider: authUser.provider, subject: authUser.sub },
       {
-        $set: { ...parsed.data, updatedAt: new Date() },
+        $set: dbUpdate,
       },
       { new: true }
     ).lean();
@@ -88,10 +104,11 @@ router.patch('/users/me', requireAuth, async (req, res) => {
       id: String(updated._id),
       email: updated.email,
       name: updated.name,
-      first_name: updated.first_name,
-      last_name: updated.last_name,
+      firstName: updated.first_name,
+      lastName: updated.last_name,
+      phoneNumber: updated.phone_number,
       picture: updated.picture,
-      app_id: updated.app_id,
+      appId: updated.app_id,
     });
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -121,7 +138,7 @@ router.get('/users', async (req, res) => {
       } catch (_) {}
     }
 
-    const docs = await UserModel.find(filter, { provider: 1, subject: 1, email: 1, name: 1, first_name: 1, last_name: 1, picture: 1, app_id: 1 })
+    const docs = await UserModel.findOne(filter, { provider: 1, subject: 1, email: 1, name: 1, first_name: 1, last_name: 1, picture: 1, app_id: 1 })
       .sort({ _id: 1 })
       .limit(limit + 1)
       .lean();
@@ -154,5 +171,3 @@ router.get('/users', async (req, res) => {
 });
 
 export default router;
-
-
