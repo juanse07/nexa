@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 class HeaderCard extends StatelessWidget {
@@ -16,6 +17,11 @@ class HeaderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Hide on mobile, show on web
+    if (!kIsWeb) {
+      return const SizedBox.shrink();
+    }
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
