@@ -17,16 +17,11 @@ class TimesheetExtractionService {
     return 'https://api.nexapymesoft.com/api';
   }
 
-  /// Analyze sign-in sheet photo and extract staff hours using OpenAI
+  /// Analyze sign-in sheet photo and extract staff hours using AI
   Future<TimesheetAnalysisResult> analyzeSignInSheet({
     required String eventId,
     required String imageBase64,
   }) async {
-    final openaiKey = AppConfig.instance.openAIKey;
-    if (openaiKey.isEmpty) {
-      throw Exception('OpenAI API key not configured');
-    }
-
     try {
       final response = await http.post(
         Uri.parse('$_apiBaseUrl/events/$eventId/analyze-sheet'),
@@ -35,7 +30,6 @@ class TimesheetExtractionService {
         },
         body: jsonEncode({
           'imageBase64': imageBase64,
-          'openaiApiKey': openaiKey,
         }),
       );
 

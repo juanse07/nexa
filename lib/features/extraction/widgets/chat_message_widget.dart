@@ -6,10 +6,12 @@ import '../services/chat_event_service.dart';
 /// Widget to display a single chat message bubble
 class ChatMessageWidget extends StatelessWidget {
   final ChatMessage message;
+  final String? userProfilePicture;
 
   const ChatMessageWidget({
     super.key,
     required this.message,
+    this.userProfilePicture,
   });
 
   @override
@@ -29,13 +31,19 @@ class ChatMessageWidget extends StatelessWidget {
               width: 32,
               height: 32,
               decoration: BoxDecoration(
-                color: const Color(0xFF6366F1).withValues(alpha: 0.1),
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: const Color(0xFF6366F1).withValues(alpha: 0.2),
+                  width: 1,
+                ),
               ),
-              child: const Icon(
-                Icons.smart_toy,
-                size: 20,
-                color: Color(0xFF6366F1),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Image.asset(
+                  'assets/logo_padded_small.png',
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
             const SizedBox(width: 8),
@@ -48,9 +56,18 @@ class ChatMessageWidget extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: isUser
-                        ? const Color(0xFF6366F1)
-                        : Colors.grey.shade100,
+                    gradient: isUser
+                        ? const LinearGradient(
+                            colors: [
+                              Color(0xFF7C3AED), // Light purple
+                              Color(0xFF6366F1), // Medium purple
+                              Color(0xFF4F46E5), // Darker purple
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : null,
+                    color: isUser ? null : Colors.white,
                     borderRadius: BorderRadius.only(
                       topLeft: const Radius.circular(16),
                       topRight: const Radius.circular(16),
@@ -59,8 +76,10 @@ class ChatMessageWidget extends StatelessWidget {
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 4,
+                        color: isUser
+                            ? const Color(0xFF7C3AED).withValues(alpha: 0.3)
+                            : Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
                     ],
@@ -94,11 +113,34 @@ class ChatMessageWidget extends StatelessWidget {
                 color: const Color(0xFF6366F1),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: const Icon(
-                Icons.person,
-                size: 20,
-                color: Colors.white,
-              ),
+              child: userProfilePicture != null && userProfilePicture!.isNotEmpty
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.network(
+                        userProfilePicture!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return const Icon(
+                            Icons.person,
+                            size: 20,
+                            color: Colors.white,
+                          );
+                        },
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return const Icon(
+                            Icons.person,
+                            size: 20,
+                            color: Colors.white,
+                          );
+                        },
+                      ),
+                    )
+                  : const Icon(
+                      Icons.person,
+                      size: 20,
+                      color: Colors.white,
+                    ),
             ),
           ],
         ],

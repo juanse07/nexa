@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
-import '../../../core/config/environment.dart';
+import '../../../core/config/app_config.dart';
 import 'clients_service.dart';
 
 /// Message in a chat conversation
@@ -161,11 +161,7 @@ Be conversational and friendly. If the user provides multiple pieces of informat
   }
 
   /// Send a user message and get AI response
-  Future<ChatMessage> sendMessage(String userMessage, String apiKey) async {
-    if (apiKey.isEmpty) {
-      throw Exception('Missing OpenAI API key.');
-    }
-
+  Future<ChatMessage> sendMessage(String userMessage) async {
     // Add user message to history
     final userMsg = ChatMessage(role: 'user', content: userMessage);
     _conversationHistory.add(userMsg);
@@ -179,8 +175,8 @@ Be conversational and friendly. If the user provides multiple pieces of informat
       ..._conversationHistory.map((msg) => msg.toJson()),
     ];
 
-    // Call OpenAI API
-    final response = await _callOpenAI(messages, apiKey);
+    // Call backend API
+    final response = await _callBackendAI(messages);
 
     // Parse response
     String content = response;
@@ -208,31 +204,22 @@ Be conversational and friendly. If the user provides multiple pieces of informat
     return assistantMsg;
   }
 
-  /// Call OpenAI Chat Completions API
-  Future<String> _callOpenAI(
+  /// Call backend AI chat API
+  Future<String> _callBackendAI(
     List<Map<String, dynamic>> messages,
-    String apiKey,
   ) async {
-    final String model =
-        Environment.instance.get('OPENAI_TEXT_MODEL') ?? 'gpt-4o';
-    final Uri uri = _resolveEndpoint();
+    final String baseUrl = AppConfig.instance.baseUrl;
+    final Uri uri = Uri.parse('$baseUrl/ai/chat/message');
 
     final requestBody = {
-      'model': model,
       'messages': messages,
       'temperature': 0.7,
-      'max_tokens': 500,
+      'maxTokens': 500,
     };
 
     final headers = {
-      'Authorization': 'Bearer $apiKey',
       'Content-Type': 'application/json',
     };
-
-    final orgId = Environment.instance.get('OPENAI_ORG_ID');
-    if (orgId != null && orgId.isNotEmpty) {
-      headers['OpenAI-Organization'] = orgId;
-    }
 
     final response = await http.post(
       uri,
@@ -243,29 +230,20 @@ Be conversational and friendly. If the user provides multiple pieces of informat
     if (response.statusCode >= 300) {
       if (response.statusCode == 429) {
         throw Exception(
-          'OpenAI API rate limit reached. Please try again later.',
+          'AI chat rate limit reached. Please try again later.',
         );
       }
       throw Exception(
-        'OpenAI API error (${response.statusCode}): ${response.body}',
+        'AI chat error (${response.statusCode}): ${response.body}',
       );
     }
 
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     try {
-      return decoded['choices'][0]['message']['content'] as String;
+      return decoded['content'] as String;
     } catch (_) {
-      throw Exception('Failed to parse OpenAI response');
+      throw Exception('Failed to parse AI response');
     }
-  }
-
-  /// Resolve OpenAI endpoint URL
-  Uri _resolveEndpoint() {
-    final baseUrl = Environment.instance.get('OPENAI_BASE_URL');
-    if (baseUrl != null && baseUrl.isNotEmpty) {
-      return Uri.parse('$baseUrl/chat/completions');
-    }
-    return Uri.parse('https://api.openai.com/v1/chat/completions');
   }
 
   /// Extract field values from conversation

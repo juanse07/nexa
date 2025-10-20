@@ -1277,13 +1277,33 @@ class _MessageBubble extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     decoration: BoxDecoration(
-                      color: isMe ? theme.primaryColor : Colors.grey[200],
+                      gradient: isMe
+                          ? const LinearGradient(
+                              colors: [
+                                Color(0xFF7C3AED), // Light purple
+                                Color(0xFF6366F1), // Medium purple
+                                Color(0xFF4F46E5), // Darker purple
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            )
+                          : null,
+                      color: isMe ? null : Colors.white,
                       borderRadius: BorderRadius.only(
                         topLeft: const Radius.circular(20),
                         topRight: const Radius.circular(20),
                         bottomLeft: Radius.circular(isMe ? 20 : 4),
                         bottomRight: Radius.circular(isMe ? 4 : 20),
                       ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: isMe
+                              ? const Color(0xFF7C3AED).withValues(alpha: 0.3)
+                              : Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

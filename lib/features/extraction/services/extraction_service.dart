@@ -2,76 +2,28 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-import '../../../core/config/environment.dart';
+import '../../../core/config/app_config.dart';
 
 class ExtractionService {
   Future<Map<String, dynamic>> extractStructuredData({
     required String input,
-    required String apiKey,
   }) async {
-    if (apiKey.isEmpty) {
-      throw Exception('Missing OpenAI API key.');
-    }
-
     final bool isImage = input.startsWith('[[IMAGE_BASE64]]:');
-    final String visionModel =
-        Environment.instance.get('OPENAI_VISION_MODEL') ?? 'gpt-4o-mini';
-    final String textModel =
-        Environment.instance.get('OPENAI_TEXT_MODEL') ?? 'gpt-4o-mini';
+    final String actualInput = isImage
+        ? input.substring('[[IMAGE_BASE64]]:'.length)
+        : input;
 
     final Uri uri = _resolveEndpoint();
 
-    const String systemPrompt =
-        'You are a structured information extractor for catering event staffing. Extract fields: event_name, client_name, date (ISO 8601), start_time, end_time, venue_name, venue_address, city, state, country, contact_name, contact_phone, contact_email, setup_time, uniform, notes, headcount_total, roles (list of {role, count, call_time}), pay_rate_info. Return strict JSON.';
-
-    Map<String, dynamic> requestBody;
-    if (isImage) {
-      final String base64Image = input.substring('[[IMAGE_BASE64]]:'.length);
-      requestBody = {
-        'model': visionModel,
-        'messages': [
-          {'role': 'system', 'content': systemPrompt},
-          {
-            'role': 'user',
-            'content': [
-              {
-                'type': 'text',
-                'text':
-                    'Extract structured event staffing info and return only JSON.',
-              },
-              {
-                'type': 'image_url',
-                'image_url': {'url': 'data:image/png;base64,$base64Image'},
-              },
-            ],
-          },
-        ],
-        'temperature': 0,
-        'max_tokens': 800,
-      };
-    } else {
-      requestBody = {
-        'model': textModel,
-        'messages': [
-          {'role': 'system', 'content': systemPrompt},
-          {
-            'role': 'user',
-            'content': 'Extract JSON from the following text:\n\n$input',
-          },
-        ],
-        'temperature': 0,
-        'max_tokens': 800,
-      };
-    }
+    // Request body for backend API
+    final Map<String, dynamic> requestBody = {
+      'input': actualInput,
+      'isImage': isImage,
+    };
 
     final Map<String, String> headers = {
-      'Authorization': 'Bearer $apiKey',
       'Content-Type': 'application/json',
     };
-    final String? orgId = Environment.instance.get('OPENAI_ORG_ID');
-    if (orgId != null && orgId.isNotEmpty) {
-      headers['OpenAI-Organization'] = orgId;
-    }
 
     final http.Response httpResponse = await _postWithRetries(
       uri,
@@ -81,30 +33,18 @@ class ExtractionService {
     if (httpResponse.statusCode >= 300) {
       if (httpResponse.statusCode == 429) {
         throw Exception(
-          'OpenAI API error 429 (rate limit or quota). Add billing, slow down requests, or try later. Details: ${httpResponse.body}',
+          'AI extraction rate limit reached. Please try again later.',
         );
       }
       throw Exception(
-        'OpenAI API error (${httpResponse.statusCode}): ${httpResponse.body}',
+        'Extraction failed (${httpResponse.statusCode}): ${httpResponse.body}',
       );
     }
 
+    // Backend returns the extracted JSON directly
     final Map<String, dynamic> decoded =
         jsonDecode(httpResponse.body) as Map<String, dynamic>;
-    String content;
-    try {
-      content = decoded['choices'][0]['message']['content'] as String;
-    } catch (_) {
-      content = httpResponse.body;
-    }
-
-    final int start = content.indexOf('{');
-    final int end = content.lastIndexOf('}');
-    if (start != -1 && end != -1 && end > start) {
-      final String jsonSlice = content.substring(start, end + 1);
-      return jsonDecode(jsonSlice) as Map<String, dynamic>;
-    }
-    throw Exception('Failed to parse JSON from response: $content');
+    return decoded;
   }
 
   Future<http.Response> _postWithRetries(
@@ -139,34 +79,7 @@ class ExtractionService {
   }
 
   Uri _resolveEndpoint() {
-    final raw = Environment.instance.get('OPENAI_BASE_URL')?.trim();
-    const fallback = 'https://api.openai.com/v1/chat/completions';
-    if (raw == null || raw.isEmpty) {
-      return Uri.parse(fallback);
-    }
-
-    Uri parsed;
-    try {
-      parsed = Uri.parse(raw);
-    } catch (_) {
-      return Uri.parse(fallback);
-    }
-
-    final path = parsed.path;
-    if (path.endsWith('/chat/completions')) {
-      return parsed;
-    }
-
-    final trimmedPath =
-        path.endsWith('/') && path.length > 1 ? path.substring(0, path.length - 1) : path;
-    if (trimmedPath.isEmpty || trimmedPath == '/' || trimmedPath == '/v1') {
-      final basePath = trimmedPath.isEmpty ? '' : trimmedPath;
-      final normalizedPath = basePath.endsWith('/')
-          ? '${basePath}chat/completions'
-          : '$basePath/chat/completions';
-      return parsed.replace(path: normalizedPath);
-    }
-
-    return parsed;
+    final baseUrl = AppConfig.instance.baseUrl;
+    return Uri.parse('$baseUrl/ai/extract');
   }
 }

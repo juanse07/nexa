@@ -53,14 +53,6 @@ class AppConfig {
     return 'https://api.nexapymesoft.com/api';
   }
 
-  /// OpenAI API key
-  String get openAIKey {
-    return _env.getOrDefault(
-      'OPENAI_API_KEY',
-      '',
-    );
-  }
-
   /// Google Maps API key
   String get googleMapsKey {
     return _env.getOrDefault(

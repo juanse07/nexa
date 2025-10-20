@@ -23,12 +23,6 @@ class Environment {
     'APPLE_REDIRECT_URI',
     'GOOGLE_MAPS_API_KEY',
     'GOOGLE_MAPS_IOS_SDK_KEY',
-    'OPENAI_API_KEY',
-    'OPENAI_BASE_URL',
-    'OPENAI_VISION_MODEL',
-    'OPENAI_TEXT_MODEL',
-    'OPENAI_ORG_ID',
-    'OPENAI_PROJECT_ID',
     'PLACES_BIAS_LAT',
     'PLACES_BIAS_LNG',
     'PLACES_COMPONENTS',
@@ -147,18 +141,6 @@ class Environment {
         return _valueOrNull(
           const String.fromEnvironment('PLACES_BIAS_RADIUS_M'),
         );
-      case 'OPENAI_API_KEY':
-        return _valueOrNull(const String.fromEnvironment('OPENAI_API_KEY'));
-      case 'OPENAI_BASE_URL':
-        return _valueOrNull(const String.fromEnvironment('OPENAI_BASE_URL'));
-      case 'OPENAI_VISION_MODEL':
-        return _valueOrNull(
-          const String.fromEnvironment('OPENAI_VISION_MODEL'),
-        );
-      case 'OPENAI_TEXT_MODEL':
-        return _valueOrNull(const String.fromEnvironment('OPENAI_TEXT_MODEL'));
-      case 'OPENAI_ORG_ID':
-        return _valueOrNull(const String.fromEnvironment('OPENAI_ORG_ID'));
       case 'GOOGLE_CLIENT_ID_ANDROID':
         return _valueOrNull(
           const String.fromEnvironment('GOOGLE_CLIENT_ID_ANDROID'),

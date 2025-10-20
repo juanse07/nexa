@@ -48,62 +48,72 @@ class _ChatInputWidgetState extends State<ChatInputWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          top: BorderSide(color: Colors.grey.shade200, width: 1),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: SafeArea(
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
             Expanded(
-              child: TextField(
-                controller: _controller,
-                enabled: !widget.isLoading,
-                maxLines: null,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: InputDecoration(
-                  hintText: widget.isLoading
-                      ? 'AI is thinking...'
-                      : 'Type your message...',
-                  hintStyle: TextStyle(color: Colors.grey.shade400),
-                  filled: true,
-                  fillColor: Colors.grey.shade50,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 12,
-                  ),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 12,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
-                onSubmitted: (_) => _sendMessage(),
+                child: TextField(
+                  controller: _controller,
+                  enabled: !widget.isLoading,
+                  maxLines: null,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: InputDecoration(
+                    hintText: widget.isLoading
+                        ? 'AI is thinking...'
+                        : 'Type your message...',
+                    hintStyle: TextStyle(color: Colors.grey.shade400),
+                    filled: true,
+                    fillColor: Colors.transparent,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(28),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 14,
+                    ),
+                  ),
+                  onSubmitted: (_) => _sendMessage(),
+                ),
               ),
             ),
             const SizedBox(width: 12),
             Container(
               decoration: BoxDecoration(
-                color: _hasText && !widget.isLoading
-                    ? const Color(0xFF6366F1)
-                    : Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(24),
+                gradient: _hasText && !widget.isLoading
+                    ? const LinearGradient(
+                        colors: [
+                          Color(0xFF7C3AED), // Light purple
+                          Color(0xFF6366F1), // Medium purple
+                          Color(0xFF4F46E5), // Darker purple
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      )
+                    : null,
+                color: !_hasText || widget.isLoading ? Colors.grey.shade300 : null,
+                shape: BoxShape.circle,
                 boxShadow: _hasText && !widget.isLoading
                     ? [
                         BoxShadow(
-                          color: const Color(0xFF6366F1).withValues(alpha: 0.3),
+                          color: Colors.black.withOpacity(0.15),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
+                          spreadRadius: 0,
                         ),
                       ]
                     : [],
@@ -118,20 +128,20 @@ class _ChatInputWidgetState extends State<ChatInputWidget> {
                     height: 48,
                     alignment: Alignment.center,
                     child: widget.isLoading
-                        ? SizedBox(
+                        ? const SizedBox(
                             width: 20,
                             height: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
                               valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.grey.shade600,
+                                Colors.white,
                               ),
                             ),
                           )
                         : Icon(
                             Icons.send,
-                            color: _hasText ? Colors.white : Colors.grey.shade500,
-                            size: 20,
+                            color: _hasText ? const Color(0xFFB8860B) : Colors.grey.shade500,
+                            size: 22,
                           ),
                   ),
                 ),

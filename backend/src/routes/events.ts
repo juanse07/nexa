@@ -1122,9 +1122,15 @@ router.post('/events/:id/analyze-sheet', requireAuth, async (req, res) => {
       return res.status(400).json({ message: 'Invalid event id' });
     }
 
-    const { imageBase64, openaiApiKey } = req.body;
-    if (!imageBase64 || !openaiApiKey) {
-      return res.status(400).json({ message: 'imageBase64 and openaiApiKey required' });
+    const { imageBase64 } = req.body;
+    if (!imageBase64) {
+      return res.status(400).json({ message: 'imageBase64 required' });
+    }
+
+    const openaiApiKey = process.env.OPENAI_API_KEY;
+    if (!openaiApiKey) {
+      console.error('[analyze-sheet] OPENAI_API_KEY not configured');
+      return res.status(500).json({ message: 'OpenAI API key not configured on server' });
     }
 
     const event = await EventModel.findById(eventId).lean();

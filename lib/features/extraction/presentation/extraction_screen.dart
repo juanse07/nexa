@@ -15,7 +15,6 @@ import 'package:mime/mime.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../core/config/environment.dart';
 import '../../../features/auth/data/services/auth_service.dart';
 import '../../../features/auth/presentation/pages/login_page.dart';
 import '../../../shared/ui/widgets.dart';
@@ -64,8 +63,6 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   Map<String, dynamic>? structuredData;
   bool isLoading = false;
   String? errorMessage;
-  // Removed: we no longer prompt or store user keys on-device
-  String? userApiKey;
 
   int _selectedIndex = 0;
   late TabController _createTabController;
@@ -268,15 +265,6 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     });
 
     try {
-      final ok = await _ensureApiKey();
-      if (!ok) {
-        setState(() {
-          isLoading = false;
-          errorMessage =
-              'Missing OPENAI_API_KEY in .env. Please set it and restart the app.';
-        });
-        return;
-      }
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg', 'heic'],
@@ -319,7 +307,6 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
       final response = await _extractionService.extractStructuredData(
         input: text,
-        apiKey: userApiKey ?? Environment.instance.get('OPENAI_API_KEY') ?? '',
       );
       // Exclude any client fields from the AI output; user must pick from our DB
       final sanitized = Map<String, dynamic>.from(response);
@@ -376,18 +363,6 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         file.path ??
         '${file.name}_${file.hashCode}_${file.size}';
   }
-
-  Future<bool> _ensureApiKey() async {
-    // Always use project-level .env key; never prompt end users
-    final envKey = (Environment.instance.get('OPENAI_API_KEY') ?? '').trim();
-    if (envKey.isNotEmpty) {
-      userApiKey = envKey;
-      return true;
-    }
-    return false;
-  }
-
-  // Removed manual prompt for API key: app uses .env OPENAI_API_KEY exclusively
 
   int _extractRoleCount(List<dynamic> roles, String keyword) {
     for (final dynamic item in roles) {
@@ -644,6 +619,310 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         ),
       );
     }
+  }
+
+  /// Shows draft preview in a bottom sheet modal
+  void _showDraftPreview(BuildContext context, Map<String, dynamic> currentData) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withOpacity(0.3),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.4,
+        maxChildSize: 0.9,
+        builder: (context, scrollController) => Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFFF8F9FA),
+                Color(0xFFFFFFFF),
+              ],
+            ),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            boxShadow: [
+              BoxShadow(
+                color: Color(0x1A000000),
+                blurRadius: 24,
+                offset: Offset(0, -4),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              // Drag handle
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // Header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [
+                            Color(0xFF7C3AED),
+                            Color(0xFF6366F1),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.auto_awesome,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Event Draft',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                          Text(
+                            '${currentData.length} fields extracted',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (_aiChatService.eventComplete)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.check_circle,
+                              size: 14,
+                              color: Color(0xFF10B981),
+                            ),
+                            SizedBox(width: 4),
+                            Text(
+                              'Complete',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF10B981),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              // Content
+              Expanded(
+                child: ListView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.all(20),
+                  children: [
+                    ...currentData.entries.map((entry) {
+                      final key = entry.key;
+                      final value = entry.value;
+
+                      // Format the label
+                      final label = key
+                          .split('_')
+                          .map((word) =>
+                              word[0].toUpperCase() + word.substring(1))
+                          .join(' ');
+
+                      // Format the value
+                      String displayValue;
+                      if (value is List) {
+                        displayValue = value.map((role) {
+                          if (role is Map) {
+                            // AI uses 'role' field, but some other sources might use 'role_name'
+                            final roleName = role['role'] ?? role['role_name'] ?? 'Unknown Role';
+                            final callTime = role['call_time'] ?? '';
+                            final count = role['count'];
+                            String countStr = '';
+                            if (count != null) {
+                              final countValue = count is int ? count : int.tryParse(count.toString());
+                              if (countValue != null && countValue != 0) {
+                                countStr = ' (×$countValue)';
+                              }
+                            }
+                            return '$roleName${callTime.isNotEmpty ? " at $callTime" : ""}$countStr';
+                          }
+                          return role.toString();
+                        }).join('\n');
+                      } else {
+                        displayValue = value.toString();
+                      }
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: const Color(0xFF6366F1).withOpacity(0.1),
+                            width: 1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.04),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [
+                                        Color(0xFF8B5CF6),
+                                        Color(0xFF6366F1),
+                                      ],
+                                    ),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    label,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              displayValue,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                color: Color(0xFF0F172A),
+                                height: 1.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ],
+                ),
+              ),
+              // Save button
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.06),
+                      blurRadius: 12,
+                      offset: const Offset(0, -2),
+                    ),
+                  ],
+                ),
+                child: SafeArea(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      Navigator.pop(context);
+
+                      // Save to database as pending event
+                      final id = await _pendingService.saveDraft(currentData);
+
+                      if (!mounted) return;
+
+                      setState(() {
+                        structuredData = currentData;
+                        extractedText = 'AI Chat extracted data';
+                        errorMessage = null;
+                        _lastStructuredFromUpload = false;
+                        _aiChatService.startNewConversation();
+                        final greeting = _aiChatService.getGreeting();
+                      });
+
+                      _draftService.saveDraft(currentData);
+
+                      // Reload pending drafts to show the new one
+                      await _loadPendingDrafts();
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                              "Event saved to pending. Go to Events tab to review."),
+                          backgroundColor: Color(0xFF059669),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF6366F1),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.save, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Save to Pending',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   String _getAppBarTitle() {
@@ -1722,8 +2001,6 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           }
           final response = await _extractionService.extractStructuredData(
             input: input,
-            apiKey:
-                userApiKey ?? Environment.instance.get('OPENAI_API_KEY') ?? '',
           );
           setState(() {
             _bulkItems = List.of(_bulkItems);
@@ -5709,154 +5986,84 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   Widget _buildChatTab() {
-    final apiKey = Environment.instance.get('OPENAI_API_KEY') ?? '';
     final messages = _aiChatService.conversationHistory;
     final currentData = _aiChatService.currentEventData;
 
     return Column(
       children: [
         Expanded(
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 800),
-            padding: const EdgeInsets.all(20),
-            child: Column(
+          child: ClipRRect(
+            borderRadius: const BorderRadius.only(
+              bottomLeft: Radius.circular(28),
+              bottomRight: Radius.circular(28),
+            ),
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 800),
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+              child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                HeaderCard(
-                  title: 'AI Chat Assistant',
-                  subtitle: 'Create events through natural conversation with AI',
-                  icon: Icons.auto_awesome,
-                  gradientColors: const [Color(0xFF8B5CF6), Color(0xFFEC4899)],
-                ),
-                const SizedBox(height: 16),
-                // Current draft preview - TikTok-inspired transparent style
-                if (currentData.isNotEmpty) ...[
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Colors.white.withValues(alpha: 0.9),
-                          Colors.white.withValues(alpha: 0.7),
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.5),
-                        width: 1.5,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
-                          blurRadius: 24,
-                          offset: const Offset(0, 8),
-                          spreadRadius: 0,
-                        ),
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
-                          blurRadius: 16,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
+                Stack(
+                  children: [
+                    HeaderCard(
+                      title: 'AI Chat Assistant',
+                      subtitle: 'Create events through natural conversation with AI',
+                      icon: Icons.auto_awesome,
+                      gradientColors: const [Color(0xFF8B5CF6), Color(0xFFEC4899)],
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)],
-                                ),
-                                borderRadius: BorderRadius.circular(12),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0xFF8B5CF6).withValues(alpha: 0.3),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 2),
+                    // Clear chat button - only show if there are messages
+                    if (messages.isNotEmpty)
+                      Positioned(
+                        right: 16,
+                        top: 16,
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(20),
+                            onTap: () {
+                              showDialog(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text('Clear Chat?'),
+                                  content: const Text(
+                                    'This will delete the current conversation and any unsaved event data.',
                                   ),
-                                ],
-                              ),
-                              child: const Icon(
-                                Icons.auto_awesome,
-                                size: 16,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            const Text(
-                              'Draft',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF0F172A),
-                                letterSpacing: -0.5,
-                              ),
-                            ),
-                            const Spacer(),
-                            if (_aiChatService.eventComplete)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [Color(0xFF059669), Color(0xFF10B981)],
-                                  ),
-                                  borderRadius: BorderRadius.circular(20),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: const Color(0xFF059669).withValues(alpha: 0.3),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context),
+                                      child: const Text('Cancel'),
                                     ),
-                                  ],
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.check_circle, size: 14, color: Colors.white),
-                                    SizedBox(width: 4),
-                                    Text(
-                                      'Ready',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: 0.5,
+                                    TextButton(
+                                      onPressed: () {
+                                        Navigator.pop(context);
+                                        setState(() {
+                                          _aiChatService.startNewConversation();
+                                        });
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('Chat cleared'),
+                                            duration: Duration(seconds: 2),
+                                          ),
+                                        );
+                                      },
+                                      child: const Text(
+                                        'Clear',
+                                        style: TextStyle(color: Colors.red),
                                       ),
                                     ),
                                   ],
                                 ),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        Wrap(
-                          spacing: 10,
-                          runSpacing: 10,
-                          children: currentData.entries.map((entry) {
-                            return Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 8,
-                              ),
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.8),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: const Color(0xFF8B5CF6).withValues(alpha: 0.2),
-                                  width: 1,
-                                ),
+                                color: Colors.white.withOpacity(0.9),
+                                borderRadius: BorderRadius.circular(20),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: const Color(0xFF8B5CF6).withValues(alpha: 0.05),
-                                    blurRadius: 4,
+                                    color: Colors.black.withOpacity(0.1),
+                                    blurRadius: 8,
                                     offset: const Offset(0, 2),
                                   ),
                                 ],
@@ -5864,64 +6071,85 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Text(
-                                    entry.key.replaceAll('_', ' '),
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      color: const Color(0xFF8B5CF6).withValues(alpha: 0.8),
-                                      letterSpacing: 0.5,
-                                    ),
+                                  Icon(
+                                    Icons.delete_outline,
+                                    size: 18,
+                                    color: Colors.grey.shade700,
                                   ),
-                                  const SizedBox(width: 6),
-                                  Flexible(
-                                    child: Text(
-                                      '${entry.value}',
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                        color: Color(0xFF0F172A),
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Clear',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.grey.shade700,
                                     ),
                                   ),
                                 ],
                               ),
-                            );
-                          }).toList(),
-                        ),
-                        if (_aiChatService.eventComplete) ...[
-                          const SizedBox(height: 12),
-                          ElevatedButton.icon(
-                            onPressed: () async {
-                              // Save to pending
-                              await _pendingService.saveDraft(currentData);
-                              if (!mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Event saved to Pending!'),
-                                  backgroundColor: Color(0xFF059669),
-                                ),
-                              );
-                              // Start new conversation
-                              setState(() {
-                                _aiChatService.startNewConversation();
-                                final greeting = _aiChatService.getGreeting();
-                              });
-                            },
-                            icon: const Icon(Icons.save, size: 18),
-                            label: const Text('Save to Pending'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF059669),
-                              foregroundColor: Colors.white,
                             ),
                           ),
-                        ],
-                      ],
+                        ),
+                      ),
+                    ],
+                  ),
+                const SizedBox(height: 8),
+                // Floating draft preview button
+                if (currentData.isNotEmpty)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(24),
+                        onTap: () => _showDraftPreview(context, currentData),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(24),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF8B5CF6).withValues(alpha: 0.4),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.auto_awesome, size: 18, color: Colors.white),
+                                const SizedBox(width: 8),
+                                const Text(
+                                  'View Draft',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                if (_aiChatService.eventComplete) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(alpha: 0.3),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.check, size: 12, color: Colors.white),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 16),
-                ],
                 // Chat messages
                 Expanded(
                   child: messages.isEmpty
@@ -5958,64 +6186,142 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                   color: Colors.grey.shade600,
                                 ),
                               ),
-                              const SizedBox(height: 20),
-                              ElevatedButton.icon(
-                                onPressed: () {
-                                  setState(() {
-                                    _aiChatService.startNewConversation();
-                                    final greeting = _aiChatService.getGreeting();
-                                    // Scroll to bottom after greeting
-                                    WidgetsBinding.instance
-                                        .addPostFrameCallback((_) {
-                                      if (_aiChatScrollController.hasClients) {
-                                        _aiChatScrollController.animateTo(
-                                          _aiChatScrollController
-                                              .position.maxScrollExtent,
-                                          duration:
-                                              const Duration(milliseconds: 300),
-                                          curve: Curves.easeOut,
-                                        );
-                                      }
-                                    });
-                                  });
-                                },
-                                icon: const Icon(Icons.start),
-                                label: const Text('Start New Conversation'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF8B5CF6),
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 24,
-                                    vertical: 12,
+                              const SizedBox(height: 32),
+                              // Beautiful gradient button - constrained for mobile
+                              ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxWidth: MediaQuery.of(context).size.width - 48,
+                                ),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(30),
+                                    gradient: const LinearGradient(
+                                      colors: [
+                                        Color(0xFF7C3AED), // Light purple
+                                        Color(0xFF6366F1), // Medium purple
+                                        Color(0xFF4F46E5), // Darker purple
+                                      ],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFF7C3AED).withOpacity(0.4),
+                                        blurRadius: 20,
+                                        offset: const Offset(0, 10),
+                                        spreadRadius: 0,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(30),
+                                      onTap: () {
+                                        setState(() {
+                                          _aiChatService.startNewConversation();
+                                          final greeting = _aiChatService.getGreeting();
+                                          // Scroll to bottom after greeting
+                                          WidgetsBinding.instance
+                                              .addPostFrameCallback((_) {
+                                            if (_aiChatScrollController.hasClients) {
+                                              _aiChatScrollController.animateTo(
+                                                _aiChatScrollController
+                                                    .position.maxScrollExtent,
+                                                duration:
+                                                    const Duration(milliseconds: 300),
+                                                curve: Curves.easeOut,
+                                              );
+                                            }
+                                          });
+                                        });
+                                      },
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 24,
+                                          vertical: 16,
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.all(8),
+                                              decoration: BoxDecoration(
+                                                color: Colors.white.withOpacity(0.2),
+                                                borderRadius: BorderRadius.circular(12),
+                                              ),
+                                              child: const Icon(
+                                                Icons.auto_awesome,
+                                                color: Colors.white,
+                                                size: 22,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            const Flexible(
+                                              child: Text(
+                                                'Start New Conversation',
+                                                style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w600,
+                                                  letterSpacing: 0.3,
+                                                ),
+                                                textAlign: TextAlign.center,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
                             ],
                           ),
                         )
-                      : Container(
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade50,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: ListView.builder(
-                            controller: _aiChatScrollController,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            itemCount: messages.length,
-                            itemBuilder: (context, index) {
-                              return ChatMessageWidget(
-                                message: messages[index],
-                              );
-                            },
-                          ),
+                      : ListView.builder(
+                          controller: _aiChatScrollController,
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          itemCount: messages.length,
+                          itemBuilder: (context, index) {
+                            return ChatMessageWidget(
+                              message: messages[index],
+                              userProfilePicture: _profilePictureUrl,
+                            );
+                          },
                         ),
                 ),
               ],
             ),
           ),
         ),
-        ChatInputWidget(
-          onSendMessage: (message) async {
+        ),
+        // Only show input widget when conversation has started
+        ColoredBox(
+          color: Colors.transparent,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 400),
+            switchInCurve: Curves.easeInOut,
+            switchOutCurve: Curves.easeInOut,
+            transitionBuilder: (child, animation) {
+              return SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 1),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: FadeTransition(
+                  opacity: animation,
+                  child: child,
+                ),
+              );
+            },
+            child: messages.isNotEmpty
+                ? ChatInputWidget(
+                    key: const ValueKey('chat-input'),
+                    onSendMessage: (message) async {
             if (apiKey.isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
@@ -6032,7 +6338,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
             try {
               final response =
-                  await _aiChatService.sendMessage(message, apiKey);
+                  await _aiChatService.sendMessage(message);
 
               // Scroll to bottom after message
               WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -6068,6 +6374,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             }
           },
           isLoading: _isAIChatLoading,
+        )
+              : const SizedBox.shrink(
+                  key: ValueKey('empty'),
+                ),
+          ),
         ),
       ],
     );
