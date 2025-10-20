@@ -42,19 +42,34 @@ router.get('/conversations', requireAuth, async (req, res) => {
         users.map(u => [`${u.provider}:${u.subject}`, u])
       );
 
-      const result = conversations.map(conv => ({
-        id: conv._id.toString(),
-        userKey: conv.userKey,
-        userName: userMap.get(conv.userKey)?.name ||
-                  userMap.get(conv.userKey)?.first_name ||
-                  'User',
-        userPicture: userMap.get(conv.userKey)?.picture,
-        userEmail: userMap.get(conv.userKey)?.email,
-        lastMessageAt: conv.lastMessageAt,
-        lastMessagePreview: conv.lastMessagePreview,
-        unreadCount: conv.unreadCountManager,
-        updatedAt: conv.updatedAt,
-      }));
+      const result = conversations.map(conv => {
+        const user = userMap.get(conv.userKey);
+        let displayName = 'User';
+
+        // Build display name from firstName and lastName if available
+        if (user?.first_name || user?.last_name) {
+          displayName = [user.first_name, user.last_name]
+            .filter(Boolean)
+            .join(' ')
+            .trim();
+        } else if (user?.name) {
+          displayName = user.name;
+        }
+
+        return {
+          id: conv._id.toString(),
+          userKey: conv.userKey,
+          userName: displayName,
+          userFirstName: user?.first_name,
+          userLastName: user?.last_name,
+          userPicture: user?.picture,
+          userEmail: user?.email,
+          lastMessageAt: conv.lastMessageAt,
+          lastMessagePreview: conv.lastMessagePreview,
+          unreadCount: conv.unreadCountManager,
+          updatedAt: conv.updatedAt,
+        };
+      });
 
       return res.json({ conversations: result });
     } else {
@@ -84,14 +99,27 @@ router.get('/conversations', requireAuth, async (req, res) => {
         .map(conv => {
           console.log('[CHAT DEBUG] User conversation - convId:', conv._id, 'managerId:', conv.managerId, 'type:', typeof conv.managerId);
 
+          const manager = managerMap.get(conv.managerId.toString());
+          let displayName = 'Manager';
+
+          // Build display name from firstName and lastName if available
+          if (manager?.first_name || manager?.last_name) {
+            displayName = [manager.first_name, manager.last_name]
+              .filter(Boolean)
+              .join(' ')
+              .trim();
+          } else if (manager?.name) {
+            displayName = manager.name;
+          }
+
           return {
             id: conv._id.toString(),
             managerId: conv.managerId.toString(),
-            managerName: managerMap.get(conv.managerId.toString())?.name ||
-                         managerMap.get(conv.managerId.toString())?.first_name ||
-                         'Manager',
-            managerPicture: managerMap.get(conv.managerId.toString())?.picture,
-            managerEmail: managerMap.get(conv.managerId.toString())?.email,
+            managerName: displayName,
+            managerFirstName: manager?.first_name,
+            managerLastName: manager?.last_name,
+            managerPicture: manager?.picture,
+            managerEmail: manager?.email,
             lastMessageAt: conv.lastMessageAt,
             lastMessagePreview: conv.lastMessagePreview,
             unreadCount: conv.unreadCountUser,
