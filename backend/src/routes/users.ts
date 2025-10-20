@@ -18,8 +18,8 @@ const updateSchema = z.object({
   phoneNumber: z
     .string()
     .regex(
-      /^(\(\d{3}\)\s?\d{3}-\d{4}|\d{3}-\d{3}-\d{4}|\d{10})$/,
-      'Phone number must be in US format: (XXX) XXX-XXXX, XXX-XXX-XXXX, or XXXXXXXXXX'
+      /^(\d{3}-\d{3}-\d{4}|\d{10})$/,
+      'Phone number must be in US format: XXX-XXX-XXXX or XXXXXXXXXX'
     )
     .optional(),
   appId: z
@@ -65,10 +65,19 @@ router.patch('/users/me', requireAuth, async (req, res) => {
     if (!authUser?.provider || !authUser?.sub) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
+
+    // eslint-disable-next-line no-console
+    console.log('[users] PATCH /me - Request body:', JSON.stringify(req.body));
+
     const parsed = updateSchema.safeParse(req.body || {});
     if (!parsed.success) {
+      // eslint-disable-next-line no-console
+      console.error('[users] PATCH /me - Validation failed:', parsed.error.issues);
       return res.status(400).json({ message: 'Validation failed', details: parsed.error.issues });
     }
+
+    // eslint-disable-next-line no-console
+    console.log('[users] PATCH /me - Parsed data:', JSON.stringify(parsed.data));
 
     // If appId provided, ensure not used by another user
     if (parsed.data.appId) {
@@ -92,6 +101,9 @@ router.patch('/users/me', requireAuth, async (req, res) => {
     if (parsed.data.appId !== undefined) dbUpdate.app_id = parsed.data.appId;
     if (parsed.data.picture !== undefined) dbUpdate.picture = parsed.data.picture;
 
+    // eslint-disable-next-line no-console
+    console.log('[users] PATCH /me - DB update object:', JSON.stringify(dbUpdate));
+
     const updated = await UserModel.findOneAndUpdate(
       { provider: authUser.provider, subject: authUser.sub },
       {
@@ -100,6 +112,14 @@ router.patch('/users/me', requireAuth, async (req, res) => {
       { new: true }
     ).lean();
     if (!updated) return res.status(404).json({ message: 'User not found' });
+
+    // eslint-disable-next-line no-console
+    console.log('[users] PATCH /me - Updated user:', JSON.stringify({
+      id: updated._id,
+      first_name: updated.first_name,
+      last_name: updated.last_name,
+      phone_number: updated.phone_number,
+    }));
     return res.json({
       id: String(updated._id),
       email: updated.email,
@@ -138,7 +158,7 @@ router.get('/users', async (req, res) => {
       } catch (_) {}
     }
 
-    const docs = await UserModel.findOne(filter, { provider: 1, subject: 1, email: 1, name: 1, first_name: 1, last_name: 1, picture: 1, app_id: 1 })
+    const docs = await UserModel.find(filter, { provider: 1, subject: 1, email: 1, name: 1, first_name: 1, last_name: 1, picture: 1, app_id: 1 })
       .sort({ _id: 1 })
       .limit(limit + 1)
       .lean();
