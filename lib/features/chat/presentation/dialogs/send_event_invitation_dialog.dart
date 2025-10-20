@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import 'package:intl/intl.dart';
 
 import '../../../extraction/services/event_service.dart';
@@ -258,7 +259,7 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
             controller: _searchController,
             onChanged: (value) => setState(() => _searchQuery = value),
             decoration: InputDecoration(
-              hintText: 'Search events...',
+              hintText: AppLocalizations.of(context)!.searchJobs,
               prefixIcon: const Icon(Icons.search),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:nexa/features/hours_approval/services/timesheet_extraction_service.dart';
 import 'package:nexa/features/hours_approval/presentation/manual_hours_entry_screen.dart';
@@ -32,7 +33,7 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final eventName = widget.event['event_name']?.toString() ?? 'Event';
+    final eventName = widget.event['event_name']?.toString() ?? AppLocalizations.of(context)!.job;
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surfaceContainerLowest,
@@ -59,7 +60,7 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      widget.event['event_name']?.toString() ?? 'Event',
+                      widget.event['event_name']?.toString() ?? AppLocalizations.of(context)!.job,
                       style: theme.textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),

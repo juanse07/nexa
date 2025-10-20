@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import 'event_edit_screen.dart';
 import '../../extraction/services/event_service.dart';
 
@@ -30,7 +31,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final String title = (event['client_name'] ?? 'Client').toString();
-    final String subtitle = (event['event_name'] ?? event['venue_name'] ?? 'Untitled Event').toString();
+    final String subtitle = (event['event_name'] ?? event['venue_name'] ?? AppLocalizations.of(context)!.untitledJob).toString();
 
     String dateStr = '';
     bool isUpcoming = false;
@@ -152,19 +153,19 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             const SizedBox(height: 24),
 
             // Event Details
-            if (dateStr.isNotEmpty) _buildInfoRow(Icons.calendar_today, 'Date', dateStr),
-            if (location.isNotEmpty) _buildInfoRow(Icons.place, 'Location', location),
-            if (headcount != null) _buildInfoRow(Icons.people, 'Guests', '$headcount guests'),
-            if (event['venue_name'] != null) _buildInfoRow(Icons.location_city, 'Venue', event['venue_name'].toString()),
-            if (event['venue_address'] != null) _buildInfoRow(Icons.pin_drop, 'Address', event['venue_address'].toString()),
-            if (event['start_time'] != null) _buildInfoRow(Icons.schedule, 'Start Time', event['start_time'].toString()),
-            if (event['end_time'] != null) _buildInfoRow(Icons.schedule, 'End Time', event['end_time'].toString()),
+            if (dateStr.isNotEmpty) _buildInfoRow(Icons.calendar_today, AppLocalizations.of(context)!.date, dateStr),
+            if (location.isNotEmpty) _buildInfoRow(Icons.place, AppLocalizations.of(context)!.location, location),
+            if (headcount != null) _buildInfoRow(Icons.people, AppLocalizations.of(context)!.headcount, headcount.toString()),
+            if (event['venue_name'] != null) _buildInfoRow(Icons.location_city, AppLocalizations.of(context)!.locationName, event['venue_name'].toString()),
+            if (event['venue_address'] != null) _buildInfoRow(Icons.pin_drop, AppLocalizations.of(context)!.address, event['venue_address'].toString()),
+            if (event['start_time'] != null) _buildInfoRow(Icons.schedule, AppLocalizations.of(context)!.startTime, event['start_time'].toString()),
+            if (event['end_time'] != null) _buildInfoRow(Icons.schedule, AppLocalizations.of(context)!.endTime, event['end_time'].toString()),
 
             // Roles Section
             if (roles.isNotEmpty) ...[
               const SizedBox(height: 24),
-              const Text(
-                'Roles Needed',
+              Text(
+                AppLocalizations.of(context)!.rolesNeeded,
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,

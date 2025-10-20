@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import '../../extraction/services/event_service.dart';
 import '../../extraction/services/roles_service.dart';
 import '../../extraction/widgets/modern_address_field.dart';
@@ -320,14 +321,14 @@ class _EventEditScreenState extends State<EventEditScreen> {
               const SizedBox(height: 16),
               _buildTextField(
                 controller: _eventNameController,
-                label: 'Event Name',
+                label: AppLocalizations.of(context)!.jobTitle,
                 icon: Icons.celebration,
                 isRequired: true,
               ),
               const SizedBox(height: 16),
               _buildTextField(
                 controller: _clientNameController,
-                label: 'Client Name',
+                label: AppLocalizations.of(context)!.clientName,
                 icon: Icons.person,
                 isRequired: true,
               ),
@@ -349,13 +350,13 @@ class _EventEditScreenState extends State<EventEditScreen> {
               const SizedBox(height: 16),
               _buildTextField(
                 controller: _venueNameController,
-                label: 'Venue Name',
+                label: AppLocalizations.of(context)!.locationName,
                 icon: Icons.location_city,
               ),
               const SizedBox(height: 16),
               ModernAddressField(
                 controller: _venueAddressController,
-                label: 'Venue Address',
+                label: AppLocalizations.of(context)!.address,
                 icon: Icons.place,
                 onPlaceSelected: (place) {
                   setState(() {
@@ -370,7 +371,7 @@ class _EventEditScreenState extends State<EventEditScreen> {
                   Expanded(
                     child: _buildTextField(
                       controller: _cityController,
-                      label: 'City',
+                      label: AppLocalizations.of(context)!.city,
                       icon: Icons.location_city,
                     ),
                   ),
@@ -378,7 +379,7 @@ class _EventEditScreenState extends State<EventEditScreen> {
                   Expanded(
                     child: _buildTextField(
                       controller: _stateController,
-                      label: 'State',
+                      label: AppLocalizations.of(context)!.state,
                       icon: Icons.map,
                     ),
                   ),
@@ -392,20 +393,20 @@ class _EventEditScreenState extends State<EventEditScreen> {
               const SizedBox(height: 16),
               _buildTextField(
                 controller: _contactNameController,
-                label: 'Contact Name',
+                label: AppLocalizations.of(context)!.contactName,
                 icon: Icons.person_outline,
               ),
               const SizedBox(height: 16),
               _buildTextField(
                 controller: _contactPhoneController,
-                label: 'Contact Phone',
+                label: AppLocalizations.of(context)!.contactPhone,
                 icon: Icons.phone,
                 keyboardType: TextInputType.phone,
               ),
               const SizedBox(height: 16),
               _buildTextField(
                 controller: _contactEmailController,
-                label: 'Contact Email',
+                label: AppLocalizations.of(context)!.contactEmail,
                 icon: Icons.email,
                 keyboardType: TextInputType.emailAddress,
               ),
@@ -413,18 +414,18 @@ class _EventEditScreenState extends State<EventEditScreen> {
               const SizedBox(height: 32),
 
               // Event Details
-              _buildSectionTitle('Event Details', Icons.info),
+              _buildSectionTitle(AppLocalizations.of(context)!.jobDetails, Icons.info),
               const SizedBox(height: 16),
               _buildTextField(
                 controller: _headcountController,
-                label: 'Expected Headcount',
+                label: AppLocalizations.of(context)!.expectedHeadcount,
                 icon: Icons.people,
                 keyboardType: TextInputType.number,
               ),
               const SizedBox(height: 16),
               _buildTextField(
                 controller: _notesController,
-                label: 'Notes',
+                label: AppLocalizations.of(context)!.notes,
                 icon: Icons.notes,
                 maxLines: 4,
               ),

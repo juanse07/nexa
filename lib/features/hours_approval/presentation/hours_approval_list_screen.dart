@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import 'package:nexa/features/hours_approval/presentation/hours_approval_screen.dart';
 import 'package:nexa/features/extraction/services/event_service.dart';
 
@@ -280,7 +281,7 @@ class _HoursApprovalListScreenState extends State<HoursApprovalListScreen> {
   }
 
   Widget _buildEventCard(Map<String, dynamic> event, ThemeData theme) {
-    final eventName = event['event_name']?.toString() ?? 'Untitled Event';
+    final eventName = event['event_name']?.toString() ?? AppLocalizations.of(context)!.untitledJob;
     final clientName = event['client_name']?.toString() ?? '';
     final eventDate = _parseEventDate(event['date']);
     final hoursStatus = event['hoursStatus']?.toString();

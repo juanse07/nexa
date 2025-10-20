@@ -1021,13 +1021,34 @@ class _ChatScreenState extends State<ChatScreen> {
     final clientName = eventData['client_name'] as String? ?? 'Client';
     final venueName = eventData['venue_name'] as String?;
     final rate = role['rate'] as num? ?? (role['tariff'] as Map<String, dynamic>?)?['rate'] as num?;
-    final startDateStr = eventData['start_date'] as String? ?? eventData['date'] as String?;
-    final startDate = startDateStr != null
-        ? DateTime.parse(startDateStr)
-        : DateTime.now();
-    final endDate = eventData['end_date'] != null
-        ? DateTime.parse(eventData['end_date'] as String)
-        : startDate.add(const Duration(hours: 4));
+
+    // Parse event date and times
+    final dateStr = eventData['start_date'] as String? ?? eventData['date'] as String?;
+    final startTimeStr = eventData['start_time'] as String?;
+    final endTimeStr = eventData['end_time'] as String?;
+
+    DateTime startDate;
+    DateTime endDate;
+
+    if (dateStr != null && startTimeStr != null) {
+      // Combine date with start_time (e.g., "2025-10-31" + "09:00")
+      final datePart = dateStr.contains('T') ? dateStr.split('T')[0] : dateStr;
+      startDate = DateTime.parse('${datePart}T$startTimeStr:00.000Z');
+    } else if (dateStr != null) {
+      startDate = DateTime.parse(dateStr);
+    } else {
+      startDate = DateTime.now();
+    }
+
+    if (dateStr != null && endTimeStr != null) {
+      // Combine date with end_time (e.g., "2025-10-31" + "16:00")
+      final datePart = dateStr.contains('T') ? dateStr.split('T')[0] : dateStr;
+      endDate = DateTime.parse('${datePart}T$endTimeStr:00.000Z');
+    } else if (eventData['end_date'] != null) {
+      endDate = DateTime.parse(eventData['end_date'] as String);
+    } else {
+      endDate = startDate.add(const Duration(hours: 4));
+    }
 
     return Align(
       alignment: Alignment.center,

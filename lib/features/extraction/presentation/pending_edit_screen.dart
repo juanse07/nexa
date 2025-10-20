@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 
 import '../services/pending_events_service.dart';
 
@@ -132,8 +133,8 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             _section('Basics'),
-            _input('Event Name', _eventNameCtrl, icon: Icons.celebration),
-            _input('Client', _clientNameCtrl, icon: Icons.business),
+            _input(AppLocalizations.of(context)!.jobTitle, _eventNameCtrl, icon: Icons.celebration),
+            _input(AppLocalizations.of(context)!.client, _clientNameCtrl, icon: Icons.business),
             Row(
               children: [
                 Expanded(child: _input('Date (YYYY-MM-DD)', _dateCtrl, icon: Icons.calendar_today)),
@@ -148,8 +149,8 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
             ),
             const SizedBox(height: 12),
             _section('Location'),
-            _input('Venue', _venueNameCtrl, icon: Icons.place),
-            _input('Address', _venueAddressCtrl, icon: Icons.map),
+            _input(AppLocalizations.of(context)!.locationName, _venueNameCtrl, icon: Icons.place),
+            _input(AppLocalizations.of(context)!.address, _venueAddressCtrl, icon: Icons.map),
             Row(
               children: [
                 Expanded(child: _input('City', _cityCtrl, icon: Icons.location_city)),

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 
 import '../services/event_service.dart';
 import '../services/pending_events_service.dart';
@@ -235,7 +236,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
       Navigator.of(context).pop(true);
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Event published')));
+      ).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.jobPublished)));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -254,7 +255,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
         .toString();
     final date = (data['date'] ?? '').toString();
     return Scaffold(
-      appBar: AppBar(title: const Text('Publish Event')),
+      appBar: AppBar(title: Text(AppLocalizations.of(context)!.publishJob)),
       body: Column(
         children: [
           Padding(
@@ -495,7 +496,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
         return StatefulBuilder(
           builder: (ctx, setStateDialog) {
             return AlertDialog(
-              title: const Text('Set roles for this event'),
+              title: Text(AppLocalizations.of(context)!.setRolesForJob),
               content: SizedBox(
                 width: 400,
                 child: SingleChildScrollView(

@@ -2,11 +2,13 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'package:nexa/features/auth/data/services/auth_service.dart';
 import 'package:nexa/features/auth/presentation/pages/login_page.dart';
 import 'package:nexa/features/users/presentation/pages/manager_onboarding_page.dart';
 import 'package:nexa/shared/presentation/theme/theme.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 
 /// The root widget of the Nexa application.
 ///
@@ -55,6 +57,18 @@ class NexaApp extends StatelessWidget {
     return MaterialApp(
       title: 'Nexa',
       debugShowCheckedModeBanner: false,
+
+      // Localization configuration
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('en'), // English
+        Locale('es'), // Spanish
+      ],
 
       // Theme configuration
       theme: AppTheme.lightTheme(),

@@ -1,0 +1,256 @@
+{
+  "@@locale": "en",
+
+  "jobDataExtractor": "Job Data Extractor",
+  "@jobDataExtractor": {
+    "description": "Title for the job data extraction feature"
+  },
+  "uploadPdfToExtract": "Upload a PDF or image to extract catering job details",
+  "@uploadPdfToExtract": {
+    "description": "Subtitle explaining PDF upload feature"
+  },
+  "enterJobDetailsManually": "Enter job details manually for precise control",
+  "@enterJobDetailsManually": {
+    "description": "Subtitle for manual entry option"
+  },
+  "createJobsThroughAI": "Create jobs through natural conversation with AI",
+  "@createJobsThroughAI": {
+    "description": "Subtitle for AI chat feature"
+  },
+  "jobDetails": "Job Details",
+  "@jobDetails": {
+    "description": "Section header for job details"
+  },
+  "jobInformation": "Job Information",
+  "@jobInformation": {
+    "description": "Section header for job information form"
+  },
+  "jobTitle": "Job Title",
+  "@jobTitle": {
+    "description": "Label for job name/title field"
+  },
+  "clientName": "Client Name",
+  "@clientName": {
+    "description": "Label for client name field"
+  },
+  "startTime": "Start Time",
+  "@startTime": {
+    "description": "Label for start time field"
+  },
+  "endTime": "End Time",
+  "@endTime": {
+    "description": "Label for end time field"
+  },
+  "headcount": "Headcount",
+  "@headcount": {
+    "description": "Label for headcount/guests field"
+  },
+  "locationInformation": "Location Information",
+  "@locationInformation": {
+    "description": "Section header for location details"
+  },
+  "locationName": "Location Name",
+  "@locationName": {
+    "description": "Label for location/venue name field"
+  },
+  "address": "Address",
+  "@address": {
+    "description": "Label for address field"
+  },
+  "city": "City",
+  "@city": {
+    "description": "Label for city field"
+  },
+  "state": "State",
+  "@state": {
+    "description": "Label for state field"
+  },
+  "contactName": "Contact Name",
+  "@contactName": {
+    "description": "Label for contact name field"
+  },
+  "phoneNumber": "Phone Number",
+  "@phoneNumber": {
+    "description": "Label for phone number field"
+  },
+  "email": "Email",
+  "@email": {
+    "description": "Label for email field"
+  },
+  "notes": "Notes",
+  "@notes": {
+    "description": "Label for notes field"
+  },
+  "job": "Job",
+  "@job": {
+    "description": "Label for job in summary display"
+  },
+  "client": "Client",
+  "@client": {
+    "description": "Label for client in summary display"
+  },
+  "date": "Date",
+  "@date": {
+    "description": "Label for date in summary display"
+  },
+  "time": "Time",
+  "@time": {
+    "description": "Label for time in summary display"
+  },
+  "location": "Location",
+  "@location": {
+    "description": "Label for location in summary display"
+  },
+  "phone": "Phone",
+  "@phone": {
+    "description": "Label for phone in summary display"
+  },
+  "jobsTabLabel": "Jobs • {pendingCount} pending, {upcomingCount} upcoming, {pastCount} past",
+  "@jobsTabLabel": {
+    "description": "Tab label showing job counts",
+    "placeholders": {
+      "pendingCount": {
+        "type": "int"
+      },
+      "upcomingCount": {
+        "type": "int"
+      },
+      "pastCount": {
+        "type": "int"
+      }
+    }
+  },
+  "pendingUpcomingStatus": "{pendingCount} pending • {upcomingCount} upcoming • {baseTime}",
+  "@pendingUpcomingStatus": {
+    "description": "Status text for pending and upcoming jobs",
+    "placeholders": {
+      "pendingCount": {
+        "type": "int"
+      },
+      "upcomingCount": {
+        "type": "int"
+      },
+      "baseTime": {
+        "type": "String"
+      }
+    }
+  },
+  "upcomingPastStatus": "{upcomingCount} upcoming • {pastCount} past • {baseTime}",
+  "@upcomingPastStatus": {
+    "description": "Status text for upcoming and past jobs",
+    "placeholders": {
+      "upcomingCount": {
+        "type": "int"
+      },
+      "pastCount": {
+        "type": "int"
+      },
+      "baseTime": {
+        "type": "String"
+      }
+    }
+  },
+  "pleaseSelectDate": "Please select a date for the job",
+  "@pleaseSelectDate": {
+    "description": "Error message when date is not selected"
+  },
+  "jobSavedToPending": "Job saved to pending. Go to Jobs tab to review.",
+  "@jobSavedToPending": {
+    "description": "Success message when job is saved to pending"
+  },
+  "jobDetailsCopied": "Job details copied to clipboard",
+  "@jobDetailsCopied": {
+    "description": "Success message when job details are copied"
+  },
+  "jobPublished": "Job published",
+  "@jobPublished": {
+    "description": "Success message when job is published"
+  },
+  "jobInvitationSent": "Job invitation sent!",
+  "@jobInvitationSent": {
+    "description": "Success message when job invitation is sent"
+  },
+  "jobNotFound": "Job not found",
+  "@jobNotFound": {
+    "description": "Error message when job is not found"
+  },
+  "guests": "{count} guests",
+  "@guests": {
+    "description": "Display text for number of guests",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rolesNeeded": "Roles Needed",
+  "@rolesNeeded": {
+    "description": "Section header for roles needed"
+  },
+  "untitledJob": "Untitled Job",
+  "@untitledJob": {
+    "description": "Fallback text when job has no title"
+  },
+  "expectedHeadcount": "Expected Headcount",
+  "@expectedHeadcount": {
+    "description": "Label for expected headcount field"
+  },
+  "contactPhone": "Contact Phone",
+  "@contactPhone": {
+    "description": "Label for contact phone field"
+  },
+  "contactEmail": "Contact Email",
+  "@contactEmail": {
+    "description": "Label for contact email field"
+  },
+  "errorJobIdMissing": "Error: Job ID is missing...",
+  "@errorJobIdMissing": {
+    "description": "Error message when job ID is missing"
+  },
+  "publishJob": "Publish Job",
+  "@publishJob": {
+    "description": "Title for publish job screen"
+  },
+  "setRolesForJob": "Set roles for this job",
+  "@setRolesForJob": {
+    "description": "Dialog title for setting roles"
+  },
+  "searchJobs": "Search jobs...",
+  "@searchJobs": {
+    "description": "Hint text for job search field"
+  },
+  "locationTbd": "Location TBD",
+  "@locationTbd": {
+    "description": "Placeholder when location is to be determined"
+  },
+  "shareJobPrefix": "Job: {clientName}",
+  "@shareJobPrefix": {
+    "description": "Prefix for sharing job details",
+    "placeholders": {
+      "clientName": {
+        "type": "String"
+      }
+    }
+  },
+
+  "navCreate": "Create",
+  "@navCreate": {
+    "description": "Bottom navigation bar label for create tab"
+  },
+  "navJobs": "Jobs",
+  "@navJobs": {
+    "description": "Bottom navigation bar label for jobs/events tab"
+  },
+  "navChat": "Chat",
+  "@navChat": {
+    "description": "Bottom navigation bar label for chat tab"
+  },
+  "navHours": "Hours",
+  "@navHours": {
+    "description": "Bottom navigation bar label for hours approval tab"
+  },
+  "navCatalog": "Catalog",
+  "@navCatalog": {
+    "description": "Bottom navigation bar label for catalog tab"
+  }
+}

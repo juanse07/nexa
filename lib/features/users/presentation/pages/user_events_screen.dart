@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import '../../../extraction/services/event_service.dart';
 import '../../../events/presentation/event_detail_screen.dart';
 import '../../../../core/widgets/custom_sliver_app_bar.dart';
@@ -326,7 +327,7 @@ class _UserEventsScreenState extends State<UserEventsScreen> {
 
   Widget _buildEventCard(Map<String, dynamic> event, bool isUpcoming) {
     final clientName = event['client_name']?.toString() ?? 'Client';
-    final eventName = event['event_name']?.toString() ?? event['venue_name']?.toString() ?? 'Untitled Event';
+    final eventName = event['event_name']?.toString() ?? event['venue_name']?.toString() ?? AppLocalizations.of(context)!.untitledJob;
     final userRole = event['userRole']?.toString() ?? '';
     final dateStr = event['date']?.toString() ?? '';
     final city = event['city']?.toString() ?? '';

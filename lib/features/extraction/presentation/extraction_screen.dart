@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:get_it/get_it.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -562,9 +563,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     // Custom validation for date picker
     if (_selectedDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select a date for the event'),
-          backgroundColor: Color(0xFFEF4444),
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.pleaseSelectDate),
+          backgroundColor: const Color(0xFFEF4444),
         ),
       );
       return;
@@ -885,10 +886,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       await _loadPendingDrafts();
 
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                              "Event saved to pending. Go to Events tab to review."),
-                          backgroundColor: Color(0xFF059669),
+                        SnackBar(
+                          content: Text(AppLocalizations.of(context)!.jobSavedToPending),
+                          backgroundColor: const Color(0xFF059669),
                         ),
                       );
                     },
@@ -953,7 +953,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         final upcomingCount = _eventsUpcoming?.length ?? 0;
         final pastCount = _eventsPast?.length ?? 0;
         final totalEvents = (pendingCount + upcomingCount + pastCount);
-        return "Events • $pendingCount pending, $upcomingCount upcoming, $pastCount past";
+        return AppLocalizations.of(context)!.jobsTabLabel(
+          pendingCount,
+          upcomingCount,
+          pastCount,
+        );
       case 2: // Chat tab
         return "Chat";
       case 3: // Hours tab
@@ -1018,9 +1022,17 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         if (totalEvents > 0) {
           // Show the most relevant category first
           if (pendingCount > 0) {
-            return "$pendingCount pending • $upcomingCount upcoming • $baseTime";
+            return AppLocalizations.of(context)!.pendingUpcomingStatus(
+              pendingCount,
+              upcomingCount,
+              baseTime,
+            );
           } else if (upcomingCount > 0) {
-            return "$upcomingCount upcoming • $pastCount past • $baseTime";
+            return AppLocalizations.of(context)!.upcomingPastStatus(
+              upcomingCount,
+              pastCount,
+              baseTime,
+            );
           } else {
             return "$totalEvents total events • $baseTime";
           }
@@ -1333,11 +1345,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildNavButton(0, Icons.add_circle_outline, 'Create'),
-                _buildNavButton(1, Icons.view_module, 'Events'),
-                _buildNavButton(2, Icons.chat_bubble_outline, 'Chat'),
-                _buildNavButton(3, Icons.schedule, 'Hours'),
-                _buildNavButton(4, Icons.inventory_2, 'Catalog'),
+                _buildNavButton(0, Icons.add_circle_outline, AppLocalizations.of(context)!.navCreate),
+                _buildNavButton(1, Icons.view_module, AppLocalizations.of(context)!.navJobs),
+                _buildNavButton(2, Icons.chat_bubble_outline, AppLocalizations.of(context)!.navChat),
+                _buildNavButton(3, Icons.schedule, AppLocalizations.of(context)!.navHours),
+                _buildNavButton(4, Icons.inventory_2, AppLocalizations.of(context)!.navCatalog),
               ],
             ),
           ),
@@ -1439,12 +1451,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   _buildNavRailItem(
                     0,
                     Icons.add_circle_outline,
-                    'Create Event',
+                    AppLocalizations.of(context)!.navCreate,
                   ),
-                  _buildNavRailItem(1, Icons.view_module, 'Events'),
-                  _buildNavRailItem(2, Icons.chat_bubble_outline, 'Chat'),
-                  _buildNavRailItem(3, Icons.schedule, 'Hours'),
-                  _buildNavRailItem(4, Icons.inventory_2, 'Catalog'),
+                  _buildNavRailItem(1, Icons.view_module, AppLocalizations.of(context)!.navJobs),
+                  _buildNavRailItem(2, Icons.chat_bubble_outline, AppLocalizations.of(context)!.navChat),
+                  _buildNavRailItem(3, Icons.schedule, AppLocalizations.of(context)!.navHours),
+                  _buildNavRailItem(4, Icons.inventory_2, AppLocalizations.of(context)!.navCatalog),
                 ],
               ),
             ),
@@ -2809,8 +2821,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               HeaderCard(
-                title: 'Event Data Extractor',
-                subtitle: 'Upload a PDF or image to extract catering event details',
+                title: AppLocalizations.of(context)!.jobDataExtractor,
+                subtitle: AppLocalizations.of(context)!.uploadPdfToExtract,
                 icon: Icons.auto_awesome,
                 gradientColors: const [Color(0xFF6366F1), Color(0xFF8B5CF6)],
               ),
@@ -2853,7 +2865,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               // Hide extracted text preview in Upload flow
               if (structuredData != null) ...[
                 InfoCard(
-                  title: 'Event Details',
+                  title: AppLocalizations.of(context)!.jobDetails,
                   icon: Icons.event_note,
                   child: _buildEventDetails(structuredData!),
                 ),
@@ -5416,19 +5428,19 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
   Future<void> _shareEvent(Map<String, dynamic> event) async {
     final String clientName = (event['client_name'] ?? 'Client').toString();
-    final String venueName = (event['venue_name'] ?? 'Venue').toString();
+    final String venueName = (event['venue_name'] ?? AppLocalizations.of(context)!.location).toString();
     final String date = (event['date'] ?? '').toString();
     final String time = (event['start_time'] ?? '').toString();
 
-    String shareText = 'Event: $clientName\n';
-    shareText += 'Location: $venueName\n';
-    if (date.isNotEmpty) shareText += 'Date: $date\n';
-    if (time.isNotEmpty) shareText += 'Time: $time';
+    String shareText = AppLocalizations.of(context)!.shareJobPrefix(clientName);
+    shareText += '\n${AppLocalizations.of(context)!.location}: $venueName\n';
+    if (date.isNotEmpty) shareText += '${AppLocalizations.of(context)!.date}: $date\n';
+    if (time.isNotEmpty) shareText += '${AppLocalizations.of(context)!.time}: $time';
 
     await Clipboard.setData(ClipboardData(text: shareText));
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Event details copied to clipboard')),
+        SnackBar(content: Text(AppLocalizations.of(context)!.jobDetailsCopied)),
       );
     }
   }
@@ -5436,7 +5448,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   Widget _buildEventCard(Map<String, dynamic> e, {bool showMargin = false}) {
     // Extract essential data
     final String clientName = (e['client_name'] ?? 'Client').toString();
-    final String venueName = (e['venue_name'] ?? 'Venue TBD').toString();
+    final String venueName = (e['venue_name'] ?? AppLocalizations.of(context)!.locationTbd).toString();
     final String venueAddress = (e['venue_address'] ?? '').toString();
     final String googleMapsUrl = (e['google_maps_url'] ?? '').toString();
 
@@ -5690,25 +5702,25 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               children: [
                 HeaderCard(
                   title: 'Manual Entry',
-                  subtitle: 'Enter event details manually for precise control',
+                  subtitle: AppLocalizations.of(context)!.enterJobDetailsManually,
                   icon: Icons.edit_note,
                   gradientColors: const [Color(0xFF059669), Color(0xFF10B981)],
                 ),
                 const SizedBox(height: 24),
                 FormSection(
-                  title: 'Event Information',
+                  title: AppLocalizations.of(context)!.jobInformation,
                   icon: Icons.event,
                   children: [
                     LabeledTextField(
                       controller: _eventNameController,
-                      label: 'Event Name',
+                      label: AppLocalizations.of(context)!.jobTitle,
                       icon: Icons.celebration,
                       isRequired: true,
                     ),
                     const SizedBox(height: 16),
                     LabeledTextField(
                       controller: _clientNameController,
-                      label: 'Client Name',
+                      label: AppLocalizations.of(context)!.clientName,
                       icon: Icons.person,
                       isRequired: true,
                     ),
@@ -5733,7 +5745,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       children: [
                         Expanded(
                           child: _buildModernTimePicker(
-                            label: 'Start Time',
+                            label: AppLocalizations.of(context)!.startTime,
                             icon: Icons.access_time,
                             selectedTime: _selectedStartTime,
                             onTimeSelected: (time) {
@@ -5749,7 +5761,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         const SizedBox(width: 12),
                         Expanded(
                           child: _buildModernTimePicker(
-                            label: 'End Time',
+                            label: AppLocalizations.of(context)!.endTime,
                             icon: Icons.access_time_filled,
                             selectedTime: _selectedEndTime,
                             onTimeSelected: (time) {
@@ -5773,7 +5785,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         Expanded(
                           child: LabeledTextField(
                             controller: _headcountController,
-                            label: 'Headcount',
+                            label: AppLocalizations.of(context)!.headcount,
                             icon: Icons.people,
                             keyboardType: TextInputType.number,
                           ),
@@ -5784,18 +5796,18 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 ),
                 const SizedBox(height: 20),
                 FormSection(
-                  title: 'Venue Information',
+                  title: AppLocalizations.of(context)!.locationInformation,
                   icon: Icons.location_on,
                   children: [
                     LabeledTextField(
                       controller: _venueNameController,
-                      label: 'Venue Name',
+                      label: AppLocalizations.of(context)!.locationName,
                       icon: Icons.business,
                     ),
                     const SizedBox(height: 16),
                     ModernAddressField(
                       controller: _venueAddressController,
-                      label: 'Address',
+                      label: AppLocalizations.of(context)!.address,
                       icon: Icons.place,
                       onPlaceSelected: (placeDetails) {
                         setState(() {
@@ -5854,7 +5866,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           flex: 2,
                           child: LabeledTextField(
                             controller: _cityController,
-                            label: 'City',
+                            label: AppLocalizations.of(context)!.city,
                             icon: Icons.location_city,
                           ),
                         ),
@@ -5862,7 +5874,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         Expanded(
                           child: LabeledTextField(
                             controller: _stateController,
-                            label: 'State',
+                            label: AppLocalizations.of(context)!.state,
                             icon: Icons.map,
                           ),
                         ),
@@ -5877,20 +5889,20 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   children: [
                     LabeledTextField(
                       controller: _contactNameController,
-                      label: 'Contact Name',
+                      label: AppLocalizations.of(context)!.contactName,
                       icon: Icons.person_outline,
                     ),
                     const SizedBox(height: 16),
                     LabeledTextField(
                       controller: _contactPhoneController,
-                      label: 'Phone Number',
+                      label: AppLocalizations.of(context)!.phoneNumber,
                       icon: Icons.phone,
                       keyboardType: TextInputType.phone,
                     ),
                     const SizedBox(height: 16),
                     LabeledTextField(
                       controller: _contactEmailController,
-                      label: 'Email',
+                      label: AppLocalizations.of(context)!.email,
                       icon: Icons.email,
                       keyboardType: TextInputType.emailAddress,
                     ),
@@ -5903,7 +5915,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   children: [
                     LabeledTextField(
                       controller: _notesController,
-                      label: 'Notes',
+                      label: AppLocalizations.of(context)!.notes,
                       icon: Icons.notes,
                       maxLines: 3,
                       placeholder: 'Special requirements, setup details, etc.',
@@ -5965,7 +5977,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 const SizedBox(height: 20),
                 if (structuredData != null) ...[
                   InfoCard(
-                    title: 'Event Details',
+                    title: AppLocalizations.of(context)!.jobDetails,
                     icon: Icons.event_note,
                     child: _buildEventDetails(structuredData!),
                   ),
@@ -6000,7 +6012,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   children: [
                     HeaderCard(
                       title: 'AI Chat Assistant',
-                      subtitle: 'Create events through natural conversation with AI',
+                      subtitle: AppLocalizations.of(context)!.createJobsThroughAI,
                       icon: Icons.auto_awesome,
                       gradientColors: const [Color(0xFF8B5CF6), Color(0xFFEC4899)],
                     ),
@@ -6377,49 +6389,49 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       children: [
         if (data['event_name'] != null)
           DetailRow(
-            label: 'Event',
+            label: AppLocalizations.of(context)!.job,
             value: data['event_name'],
             icon: Icons.celebration,
           ),
         if (data['client_name'] != null)
           DetailRow(
-            label: 'Client',
+            label: AppLocalizations.of(context)!.client,
             value: data['client_name'],
             icon: Icons.person,
           ),
         if (data['date'] != null)
           DetailRow(
-            label: 'Date',
+            label: AppLocalizations.of(context)!.date,
             value: data['date'],
             icon: Icons.calendar_today,
           ),
         if (data['start_time'] != null && data['end_time'] != null)
           DetailRow(
-            label: 'Time',
+            label: AppLocalizations.of(context)!.time,
             value: '${data['start_time']} - ${data['end_time']}',
             icon: Icons.access_time,
           ),
         if (data['venue_name'] != null)
           DetailRow(
-            label: 'Venue',
+            label: AppLocalizations.of(context)!.location,
             value: data['venue_name'],
             icon: Icons.location_on,
           ),
         if (data['venue_address'] != null)
           DetailRow(
-            label: 'Address',
+            label: AppLocalizations.of(context)!.address,
             value: data['venue_address'],
             icon: Icons.place,
           ),
         if (data['contact_phone'] != null)
           DetailRow(
-            label: 'Phone',
+            label: AppLocalizations.of(context)!.phone,
             value: data['contact_phone'],
             icon: Icons.phone,
           ),
         if (data['headcount_total'] != null)
           DetailRow(
-            label: 'Headcount',
+            label: AppLocalizations.of(context)!.headcount,
             value: data['headcount_total'].toString(),
             icon: Icons.people,
           ),
