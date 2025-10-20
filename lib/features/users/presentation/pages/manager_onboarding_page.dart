@@ -11,6 +11,7 @@ import 'package:nexa/features/extraction/services/tariffs_service.dart';
 import 'package:nexa/features/extraction/presentation/extraction_screen.dart';
 import 'package:nexa/features/users/data/services/manager_service.dart';
 import 'package:nexa/features/users/presentation/pages/manager_profile_page.dart';
+import 'package:nexa/features/teams/data/services/teams_service.dart';
 import 'package:nexa/core/network/socket_manager.dart';
 
 class ManagerOnboardingGate extends StatefulWidget {
@@ -22,16 +23,20 @@ class ManagerOnboardingGate extends StatefulWidget {
 
 class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
   late final ManagerService _managerService;
+  final TeamsService _teamsService = TeamsService();
   final ClientsService _clientsService = ClientsService();
   final RolesService _rolesService = RolesService();
   final TariffsService _tariffsService = TariffsService();
 
+  final TextEditingController _teamNameCtrl = TextEditingController();
+  final TextEditingController _teamDescCtrl = TextEditingController();
   final TextEditingController _clientNameCtrl = TextEditingController();
   final TextEditingController _roleNameCtrl = TextEditingController();
   final TextEditingController _tariffRateCtrl = TextEditingController();
 
   _OnboardingSnapshot? _snapshot;
   bool _loading = true;
+  bool _creatingTeam = false;
   bool _creatingClient = false;
   bool _creatingRole = false;
   bool _creatingTariff = false;
@@ -50,6 +55,8 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
 
   @override
   void dispose() {
+    _teamNameCtrl.dispose();
+    _teamDescCtrl.dispose();
     _clientNameCtrl.dispose();
     _roleNameCtrl.dispose();
     _tariffRateCtrl.dispose();
@@ -66,11 +73,13 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
     try {
       final profile = await _managerService.getMe();
       SocketManager.instance.registerManager(profile.id);
+      final teams = await _teamsService.fetchTeams();
       final clients = await _clientsService.fetchClients();
       final roles = await _rolesService.fetchRoles();
       final tariffs = await _tariffsService.fetchTariffs();
       final snapshot = _OnboardingSnapshot(
         profile: profile,
+        teams: teams,
         clients: clients,
         roles: roles,
         tariffs: tariffs,
@@ -109,6 +118,35 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
       );
       if (!hasCurrent) {
         _selectedRoleId = _resolveId(snapshot.roles.first);
+      }
+    }
+  }
+
+  Future<void> _createTeam() async {
+    final name = _teamNameCtrl.text.trim();
+    if (name.isEmpty) {
+      _showSnack('Enter a team/company name to continue');
+      return;
+    }
+    setState(() {
+      _creatingTeam = true;
+    });
+    try {
+      await _teamsService.createTeam(
+        name: name,
+        description: _teamDescCtrl.text.trim().isEmpty ? null : _teamDescCtrl.text.trim(),
+      );
+      _teamNameCtrl.clear();
+      _teamDescCtrl.clear();
+      _showSnack('Team created successfully!');
+      await _refresh();
+    } catch (e) {
+      _showSnack('Failed to create team: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _creatingTeam = false;
+        });
       }
     }
   }
@@ -303,6 +341,8 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
             const SizedBox(height: 20),
             _buildProfileStep(snapshot),
             const SizedBox(height: 16),
+            _buildTeamStep(snapshot),
+            const SizedBox(height: 16),
             _buildClientStep(snapshot),
             const SizedBox(height: 16),
             _buildRoleStep(snapshot),
@@ -342,6 +382,10 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
                 _buildStatusChip(
                   label: 'Profile',
                   completed: snapshot.hasProfile,
+                ),
+                _buildStatusChip(
+                  label: 'Team',
+                  completed: snapshot.hasTeam,
                 ),
                 _buildStatusChip(
                   label: 'Client',
@@ -400,10 +444,64 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
     );
   }
 
+  Widget _buildTeamStep(_OnboardingSnapshot snapshot) {
+    final completed = snapshot.hasTeam;
+    return _buildStepCard(
+      title: '2. Create your team/company',
+      completed: completed,
+      subtitle: completed
+          ? 'Team ready: ${snapshot.teams.isNotEmpty ? _resolveName(snapshot.teams.first) : ""}'
+          : 'Set up your staffing company (e.g., "MES - Minneapolis Event Staffing")',
+      action: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _teamNameCtrl,
+            enabled: snapshot.hasProfile,
+            decoration: InputDecoration(
+              labelText: 'Team/Company name',
+              hintText: 'e.g. MES - Minneapolis Event Staffing',
+              helperText: snapshot.hasProfile
+                  ? null
+                  : 'Complete your profile first',
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _teamDescCtrl,
+            enabled: snapshot.hasProfile,
+            maxLines: 2,
+            decoration: InputDecoration(
+              labelText: 'Description (optional)',
+              hintText: 'Brief description of your staffing company',
+              helperText: snapshot.hasProfile
+                  ? null
+                  : 'Complete your profile first',
+            ),
+          ),
+          const SizedBox(height: 12),
+          ElevatedButton.icon(
+            onPressed: (!snapshot.hasProfile || _creatingTeam)
+                ? null
+                : _createTeam,
+            icon: _creatingTeam
+                ? const SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.business),
+            label: Text(completed ? 'Add another team' : 'Create team'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildClientStep(_OnboardingSnapshot snapshot) {
     final completed = snapshot.hasClient;
     return _buildStepCard(
-      title: '2. Create your first client',
+      title: '3. Create your first client',
       completed: completed,
       subtitle: completed
           ? 'Clients configured: ${snapshot.clients.length}'
@@ -413,18 +511,18 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
         children: [
           TextField(
             controller: _clientNameCtrl,
-            enabled: snapshot.hasProfile,
+            enabled: snapshot.hasProfile && snapshot.hasTeam,
             decoration: InputDecoration(
               labelText: 'Client name',
               hintText: 'e.g. Bluebird Catering',
-              helperText: snapshot.hasProfile
+              helperText: snapshot.hasProfile && snapshot.hasTeam
                   ? null
-                  : 'Complete your profile first',
+                  : 'Complete profile and team first',
             ),
           ),
           const SizedBox(height: 12),
           ElevatedButton.icon(
-            onPressed: (!snapshot.hasProfile || _creatingClient)
+            onPressed: (!snapshot.hasProfile || !snapshot.hasTeam || _creatingClient)
                 ? null
                 : _createClient,
             icon: _creatingClient
@@ -444,7 +542,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
   Widget _buildRoleStep(_OnboardingSnapshot snapshot) {
     final completed = snapshot.hasRole;
     return _buildStepCard(
-      title: '3. Add at least one role',
+      title: '4. Add at least one role',
       completed: completed,
       subtitle: completed
           ? 'Roles configured: ${snapshot.roles.length}'
@@ -488,7 +586,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
     final clients = snapshot.clients;
     final roles = snapshot.roles;
     return _buildStepCard(
-      title: '4. Set your first tariff',
+      title: '5. Set your first tariff',
       completed: completed,
       subtitle: completed
           ? 'Tariffs configured: ${snapshot.tariffs.length}'
@@ -642,12 +740,14 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
 class _OnboardingSnapshot {
   const _OnboardingSnapshot({
     required this.profile,
+    required this.teams,
     required this.clients,
     required this.roles,
     required this.tariffs,
   });
 
   final ManagerProfile profile;
+  final List<Map<String, dynamic>> teams;
   final List<Map<String, dynamic>> clients;
   final List<Map<String, dynamic>> roles;
   final List<Map<String, dynamic>> tariffs;
@@ -658,17 +758,20 @@ class _OnboardingSnapshot {
     return (first?.isNotEmpty ?? false) && (last?.isNotEmpty ?? false);
   }
 
+  bool get hasTeam => teams.isNotEmpty;
+
   bool get hasClient => clients.isNotEmpty;
 
   bool get hasRole => roles.isNotEmpty;
 
   bool get hasTariff => tariffs.isNotEmpty;
 
-  bool get isComplete => hasProfile && hasClient && hasRole && hasTariff;
+  bool get isComplete => hasProfile && hasTeam && hasClient && hasRole && hasTariff;
 
   List<String> get missingSteps {
     final missing = <String>[];
     if (!hasProfile) missing.add('profile');
+    if (!hasTeam) missing.add('team');
     if (!hasClient) missing.add('client');
     if (!hasRole) missing.add('role');
     if (!hasTariff) missing.add('tariff');
