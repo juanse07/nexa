@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
 import '../../../core/config/app_config.dart';
-import '../../../core/services/auth_service.dart';
+import '../../auth/data/services/auth_service.dart';
 import 'clients_service.dart';
 
 /// Message in a chat conversation

@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../../../core/config/app_config.dart';
 import '../../../core/config/environment.dart';
-import '../../../core/services/auth_service.dart';
+import '../../auth/data/services/auth_service.dart';
 
 class GooglePlacesService {
   static String get _baseUrl => AppConfig.instance.baseUrl;
