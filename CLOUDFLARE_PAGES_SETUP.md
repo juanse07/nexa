@@ -27,17 +27,15 @@ API_BASE_URL = https://api.nexapymesoft.com
 API_PATH_PREFIX = /api
 ```
 
-### Optional (if you use these features):
+### Optional (Places autocomplete configuration):
 ```
-GOOGLE_MAPS_API_KEY = <your-google-maps-api-key>
-OPENAI_API_KEY = <your-openai-api-key>
-OPENAI_BASE_URL = https://api.openai.com/v1
-OPENAI_VISION_MODEL = gpt-4o-mini
-OPENAI_TEXT_MODEL = gpt-4.1-mini
 PLACES_BIAS_LAT = 39.7392
 PLACES_BIAS_LNG = -104.9903
 PLACES_COMPONENTS = country:us
 ```
+
+> **Note**: `GOOGLE_MAPS_API_KEY` and `OPENAI_API_KEY` are NO LONGER needed on the frontend.
+> These are now securely stored on the backend API server.
 
 ## Step 2: Update Build Configuration
 
@@ -52,15 +50,13 @@ flutter build web --release \
   --dart-define=GOOGLE_SERVER_CLIENT_ID=$GOOGLE_SERVER_CLIENT_ID \
   --dart-define=APPLE_SERVICE_ID=$APPLE_SERVICE_ID \
   --dart-define=APPLE_REDIRECT_URI=$APPLE_REDIRECT_URI \
-  --dart-define=GOOGLE_MAPS_API_KEY=$GOOGLE_MAPS_API_KEY \
-  --dart-define=OPENAI_API_KEY=$OPENAI_API_KEY \
-  --dart-define=OPENAI_BASE_URL=$OPENAI_BASE_URL \
-  --dart-define=OPENAI_VISION_MODEL=$OPENAI_VISION_MODEL \
-  --dart-define=OPENAI_TEXT_MODEL=$OPENAI_TEXT_MODEL \
   --dart-define=PLACES_BIAS_LAT=$PLACES_BIAS_LAT \
   --dart-define=PLACES_BIAS_LNG=$PLACES_BIAS_LNG \
   --dart-define=PLACES_COMPONENTS=$PLACES_COMPONENTS
 ```
+
+> **Security Note**: Removed `GOOGLE_MAPS_API_KEY`, `OPENAI_API_KEY`, and related OpenAI variables.
+> These API keys are now securely stored on the backend and accessed via proxy endpoints.
 
 ### Build output directory:
 ```
