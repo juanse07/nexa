@@ -53,14 +53,6 @@ class AppConfig {
     return 'https://api.nexapymesoft.com/api';
   }
 
-  /// Google Maps API key
-  String get googleMapsKey {
-    return _env.getOrDefault(
-      'GOOGLE_MAPS_API_KEY',
-      '',
-    );
-  }
-
   /// Google Maps iOS SDK key
   String get googleMapsIosKey {
     return _env.getOrDefault(

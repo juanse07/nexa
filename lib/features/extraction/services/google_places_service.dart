@@ -2,18 +2,11 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../../core/config/app_config.dart';
 import '../../../core/config/environment.dart';
 
 class GooglePlacesService {
-  static String get _apiKey {
-    final key = Environment.instance.get('GOOGLE_MAPS_API_KEY') ?? '';
-    if (key.isEmpty) {
-      throw Exception('GOOGLE_MAPS_API_KEY not found in .env file');
-    }
-    return key;
-  }
-
-  static const String _baseUrl = 'https://maps.googleapis.com/maps/api';
+  static String get _baseUrl => AppConfig.instance.baseUrl;
 
   /// Get place predictions for autocomplete
   static Future<List<PlacePrediction>> getPlacePredictions(String input) async {
@@ -37,27 +30,24 @@ class GooglePlacesService {
         .trim();
 
     final sessionToken = DateTime.now().millisecondsSinceEpoch.toString();
-    final queryParams = [
-      'input=${Uri.encodeComponent(input)}',
-      'key=$_apiKey',
-      // Do not hard-filter to address only; allow establishments to match well-known venues
-      if (components.isNotEmpty)
-        'components=${Uri.encodeComponent(components)}',
-      'location=$biasLat,$biasLng',
-      'radius=$biasRadiusM',
-      'region=us',
-      'sessiontoken=$sessionToken',
-    ].join('&');
 
-    final url = Uri.parse('$_baseUrl/place/autocomplete/json?$queryParams');
+    final url = Uri.parse('$_baseUrl/places/autocomplete');
 
     try {
-      // Minimal debug signal without exposing the key
-      // ignore: avoid_print
-      print(
-        '[places] autocomplete request q="${input.substring(0, input.length.clamp(0, 20))}"',
+      // Call backend proxy instead of Google directly
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'input': input,
+          'biasLat': biasLat,
+          'biasLng': biasLng,
+          'biasRadiusM': biasRadiusM,
+          'components': components,
+          'sessionToken': sessionToken,
+        }),
       );
-      final response = await http.get(url);
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['status'] == 'OK') {
@@ -66,17 +56,14 @@ class GooglePlacesService {
               .toList();
           return predictions;
         }
-        // ignore: avoid_print
-        print(
-          '[places] autocomplete status=${data['status']} msg=${data['error_message'] ?? ''}',
-        );
+        if (data['status'] == 'ZERO_RESULTS') {
+          return [];
+        }
         throw Exception(
-          'Places autocomplete failed: ${data['status']} ${data['error_message'] ?? ''}',
+          'Places autocomplete failed: ${data['status']} ${data['error'] ?? ''}',
         );
       }
-      // ignore: avoid_print
-      print('[places] HTTP ${response.statusCode}: ${response.body}');
-      throw Exception('HTTP ${response.statusCode} from Places');
+      throw Exception('HTTP ${response.statusCode} from backend');
     } catch (e) {
       // ignore: avoid_print
       print('Error getting place predictions: $e');
@@ -86,32 +73,26 @@ class GooglePlacesService {
 
   /// Get place details including formatted address and coordinates
   static Future<PlaceDetails?> getPlaceDetails(String placeId) async {
-    final url = Uri.parse(
-      '$_baseUrl/place/details/json?place_id=$placeId&key=$_apiKey&fields=formatted_address,geometry,address_components',
-    );
+    final url = Uri.parse('$_baseUrl/places/details');
 
     try {
-      // ignore: avoid_print
-      print(
-        '[places] details request id=${placeId.substring(0, placeId.length.clamp(0, 12))}...',
+      // Call backend proxy instead of Google directly
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'placeId': placeId}),
       );
-      final response = await http.get(url);
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['status'] == 'OK') {
           return PlaceDetails.fromJson(data['result'], placeId: placeId);
         }
-        // ignore: avoid_print
-        print(
-          '[places] details status=${data['status']} msg=${data['error_message'] ?? ''}',
-        );
         throw Exception(
-          'Places details failed: ${data['status']} ${data['error_message'] ?? ''}',
+          'Places details failed: ${data['status']} ${data['error'] ?? ''}',
         );
       }
-      // ignore: avoid_print
-      print('[places] details HTTP ${response.statusCode}: ${response.body}');
-      throw Exception('HTTP ${response.statusCode} from Places details');
+      throw Exception('HTTP ${response.statusCode} from backend');
     } catch (e) {
       // ignore: avoid_print
       print('Error getting place details: $e');
@@ -126,12 +107,27 @@ class GooglePlacesService {
   ) async {
     final input = address.trim();
     if (input.isEmpty) return null;
+
+    final url = Uri.parse('$_baseUrl/places/resolve-address');
+
     try {
-      final preds = await getPlacePredictions(input);
-      if (preds.isEmpty) return null;
-      // Prefer a candidate with a placeId and meaningful description
-      final PlacePrediction first = preds.first;
-      return getPlaceDetails(first.placeId);
+      // Use backend convenience endpoint that combines autocomplete + details
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'address': address}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['status'] == 'OK' && data['result'] != null) {
+          // Extract placeId from result if available, otherwise use a placeholder
+          final placeId = data['result']['place_id'] ?? '';
+          return PlaceDetails.fromJson(data['result'], placeId: placeId);
+        }
+        return null; // ZERO_RESULTS or no result
+      }
+      return null;
     } catch (_) {
       return null;
     }

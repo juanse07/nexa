@@ -21,7 +21,6 @@ class Environment {
     'APPLE_BUNDLE_ID',
     'APPLE_SERVICE_ID',
     'APPLE_REDIRECT_URI',
-    'GOOGLE_MAPS_API_KEY',
     'GOOGLE_MAPS_IOS_SDK_KEY',
     'PLACES_BIAS_LAT',
     'PLACES_BIAS_LNG',
@@ -123,8 +122,6 @@ class Environment {
         return _valueOrNull(const String.fromEnvironment('API_BASE_URL'));
       case 'API_PATH_PREFIX':
         return _valueOrNull(const String.fromEnvironment('API_PATH_PREFIX'));
-      case 'GOOGLE_MAPS_API_KEY':
-        return _valueOrNull(const String.fromEnvironment('GOOGLE_MAPS_API_KEY'));
       case 'GOOGLE_CLIENT_ID_WEB':
         return _valueOrNull(const String.fromEnvironment('GOOGLE_CLIENT_ID_WEB'));
       case 'GOOGLE_SERVER_CLIENT_ID':

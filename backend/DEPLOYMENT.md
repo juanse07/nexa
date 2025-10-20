@@ -271,6 +271,12 @@ OPENAI_VISION_MODEL=gpt-4o-mini
 OPENAI_TEXT_MODEL=gpt-4o-mini
 OPENAI_ORG_ID=
 
+# Google Maps API (Required for address features)
+# - Address autocomplete in event creation
+# - Place details retrieval
+# - Address resolution from free-form text
+GOOGLE_MAPS_API_KEY=your-google-maps-api-key-here
+
 # OAuth Configuration
 GOOGLE_CLIENT_ID_WEB=...
 GOOGLE_SERVER_CLIENT_ID=...
