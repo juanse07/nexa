@@ -64,14 +64,18 @@ async function upsertUser(profile: VerifiedProfile) {
   const filter = { provider: profile.provider, subject: profile.subject } as const;
   const update = {
     $set: {
-      provider: profile.provider,
-      subject: profile.subject,
+      // Always update these OAuth fields on every login
       email: profile.email,
       name: profile.name,
       picture: profile.picture,
       updatedAt: new Date(),
     },
-    $setOnInsert: { createdAt: new Date() },
+    $setOnInsert: {
+      // Only set these on user creation - preserve custom fields on subsequent logins
+      provider: profile.provider,
+      subject: profile.subject,
+      createdAt: new Date(),
+    },
   } as const;
   await UserModel.updateOne(filter, update, { upsert: true });
 }
