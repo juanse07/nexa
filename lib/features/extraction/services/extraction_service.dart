@@ -3,11 +3,18 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../../../core/config/app_config.dart';
+import '../../../core/services/auth_service.dart';
 
 class ExtractionService {
   Future<Map<String, dynamic>> extractStructuredData({
     required String input,
   }) async {
+    // Get auth token
+    final token = await AuthService.getJwt();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+
     final bool isImage = input.startsWith('[[IMAGE_BASE64]]:');
     final String actualInput = isImage
         ? input.substring('[[IMAGE_BASE64]]:'.length)
@@ -22,6 +29,7 @@ class ExtractionService {
     };
 
     final Map<String, String> headers = {
+      'Authorization': 'Bearer $token',
       'Content-Type': 'application/json',
     };
 

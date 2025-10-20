@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
 import '../../../core/config/app_config.dart';
+import '../../../core/services/auth_service.dart';
 import 'clients_service.dart';
 
 /// Message in a chat conversation
@@ -208,6 +209,12 @@ Be conversational and friendly. If the user provides multiple pieces of informat
   Future<String> _callBackendAI(
     List<Map<String, dynamic>> messages,
   ) async {
+    // Get auth token
+    final token = await AuthService.getJwt();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+
     final String baseUrl = AppConfig.instance.baseUrl;
     final Uri uri = Uri.parse('$baseUrl/ai/chat/message');
 
@@ -218,6 +225,7 @@ Be conversational and friendly. If the user provides multiple pieces of informat
     };
 
     final headers = {
+      'Authorization': 'Bearer $token',
       'Content-Type': 'application/json',
     };
 

@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../../../core/config/app_config.dart';
 import '../../../core/config/environment.dart';
+import '../../../core/services/auth_service.dart';
 
 class GooglePlacesService {
   static String get _baseUrl => AppConfig.instance.baseUrl;
@@ -11,6 +12,12 @@ class GooglePlacesService {
   /// Get place predictions for autocomplete
   static Future<List<PlacePrediction>> getPlacePredictions(String input) async {
     if (input.isEmpty) return [];
+
+    // Get auth token
+    final token = await AuthService.getJwt();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
 
     // Optional geo bias (defaults: Colorado, USA)
     final biasLat = double.tryParse(
@@ -37,7 +44,10 @@ class GooglePlacesService {
       // Call backend proxy instead of Google directly
       final response = await http.post(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
         body: json.encode({
           'input': input,
           'biasLat': biasLat,
@@ -73,13 +83,22 @@ class GooglePlacesService {
 
   /// Get place details including formatted address and coordinates
   static Future<PlaceDetails?> getPlaceDetails(String placeId) async {
+    // Get auth token
+    final token = await AuthService.getJwt();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+
     final url = Uri.parse('$_baseUrl/places/details');
 
     try {
       // Call backend proxy instead of Google directly
       final response = await http.post(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
         body: json.encode({'placeId': placeId}),
       );
 
@@ -108,13 +127,22 @@ class GooglePlacesService {
     final input = address.trim();
     if (input.isEmpty) return null;
 
+    // Get auth token
+    final token = await AuthService.getJwt();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+
     final url = Uri.parse('$_baseUrl/places/resolve-address');
 
     try {
       // Use backend convenience endpoint that combines autocomplete + details
       final response = await http.post(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
         body: json.encode({'address': address}),
       );
 
