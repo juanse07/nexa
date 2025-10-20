@@ -144,7 +144,7 @@ router.post('/ai/extract', requireAuth, async (req, res) => {
   } catch (err: any) {
     console.error('[ai/extract] Error:', err);
     if (err instanceof z.ZodError) {
-      return res.status(400).json({ message: 'Invalid request data', errors: err.errors });
+      return res.status(400).json({ message: 'Invalid request data', errors: err.issues });
     }
     return res.status(500).json({ message: err.message || 'Failed to extract data' });
   }
@@ -213,7 +213,7 @@ router.post('/ai/chat/message', requireAuth, async (req, res) => {
   } catch (err: any) {
     console.error('[ai/chat/message] Error:', err);
     if (err instanceof z.ZodError) {
-      return res.status(400).json({ message: 'Invalid request data', errors: err.errors });
+      return res.status(400).json({ message: 'Invalid request data', errors: err.issues });
     }
     if (err.response?.status === 429) {
       return res.status(429).json({
