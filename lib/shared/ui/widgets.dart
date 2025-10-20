@@ -18,7 +18,10 @@ class HeaderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Hide on mobile, show on web
-    if (!kIsWeb) {
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    // Hide if not web OR if screen is narrow (mobile-sized)
+    if (!kIsWeb || screenWidth < 600) {
       return const SizedBox.shrink();
     }
 
@@ -696,6 +699,48 @@ class ActionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accentColor = color ?? const Color(0xFF6366F1);
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    // Show compact version on mobile (hide decorative elements, keep button)
+    final isMobile = !kIsWeb || screenWidth < 600;
+
+    if (isMobile) {
+      // Simplified mobile version - just the button
+      return SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          onPressed: isLoading ? null : onPressed,
+          icon: isLoading
+              ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                )
+              : Icon(icon),
+          label: Text(
+            actionText,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: accentColor,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            elevation: 0,
+          ),
+        ),
+      );
+    }
+
+    // Full card version for web/desktop
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(

@@ -32,7 +32,10 @@ import '../services/pending_events_service.dart';
 import '../services/roles_service.dart';
 import '../services/tariffs_service.dart';
 import '../services/users_service.dart';
+import '../services/chat_event_service.dart';
 import '../widgets/modern_address_field.dart';
+import '../../extraction/widgets/chat_message_widget.dart';
+import '../../extraction/widgets/chat_input_widget.dart';
 import 'pending_publish_screen.dart';
 import 'pending_edit_screen.dart';
 import '../../users/presentation/pages/manager_profile_page.dart';
@@ -118,6 +121,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   final PendingEventsService _pendingService = PendingEventsService();
   bool _lastStructuredFromUpload = false;
 
+  // AI Chat state
+  final ChatEventService _aiChatService = ChatEventService();
+  bool _isAIChatLoading = false;
+  final ScrollController _aiChatScrollController = ScrollController();
+
   // Profile avatar state
   late final ManagerService _managerService;
   String? _profilePictureUrl;
@@ -151,7 +159,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   @override
   void initState() {
     super.initState();
-    _createTabController = TabController(length: 3, vsync: this);
+    _createTabController = TabController(length: 4, vsync: this);
     _eventsTabController = TabController(length: 3, vsync: this);
     _catalogTabController = TabController(length: 3, vsync: this);
     _extractionService = ExtractionService();
@@ -201,6 +209,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     _createTabController.dispose();
     _eventsTabController.dispose();
     _catalogTabController.dispose();
+    _aiChatScrollController.dispose();
     _eventNameController.dispose();
     _clientNameController.dispose();
     _dateController.dispose();
@@ -801,6 +810,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           icon: Icon(Icons.cloud_upload),
                           text: 'Multi-Upload',
                         ),
+                        Tab(icon: Icon(Icons.chat), text: 'AI Chat'),
                       ],
                       labelColor: Color(0xFF6366F1),
                       unselectedLabelColor: Colors.grey,
@@ -970,6 +980,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             _buildUploadTab(),
             _buildManualEntryTab(),
             _buildBulkUploadTab(),
+            _buildChatTab(),
           ],
         );
       case 1: // Events tab
@@ -1428,6 +1439,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               Tab(icon: Icon(Icons.upload_file), text: 'Upload Document'),
               Tab(icon: Icon(Icons.edit), text: 'Manual Entry'),
               Tab(icon: Icon(Icons.cloud_upload), text: 'Multi-Upload'),
+              Tab(icon: Icon(Icons.chat), text: 'AI Chat'),
             ],
             labelColor: Color(0xFF6366F1),
             unselectedLabelColor: Colors.grey,
@@ -1441,6 +1453,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             _buildUploadTab(),
             _buildManualEntryTab(),
             _buildBulkUploadTab(),
+            _buildChatTab(),
           ],
         ),
       ),
@@ -1450,7 +1463,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   Widget _buildCreateTab() {
     return SafeArea(
       child: DefaultTabController(
-        length: 3,
+        length: 4,
         child: Column(
           children: [
             const TabBar(
@@ -1458,6 +1471,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 Tab(icon: Icon(Icons.upload_file), text: 'Upload Document'),
                 Tab(icon: Icon(Icons.edit), text: 'Manual Entry'),
                 Tab(icon: Icon(Icons.cloud_upload), text: 'Multi-Upload'),
+                Tab(icon: Icon(Icons.chat), text: 'AI Chat'),
               ],
               labelColor: Color(0xFF6366F1),
               unselectedLabelColor: Colors.grey,
@@ -1468,6 +1482,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   _buildUploadTab(),
                   _buildManualEntryTab(),
                   _buildBulkUploadTab(),
+                  _buildChatTab(),
                 ],
               ),
             ),
@@ -2523,50 +2538,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF6366F1).withOpacity(0.2),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    const Icon(
-                      Icons.auto_awesome,
-                      color: Colors.white,
-                      size: 32,
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Event Data Extractor',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Upload a PDF or image to extract catering event details',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.9),
-                        fontSize: 14,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
+              HeaderCard(
+                title: 'Event Data Extractor',
+                subtitle: 'Upload a PDF or image to extract catering event details',
+                icon: Icons.auto_awesome,
+                gradientColors: const [Color(0xFF6366F1), Color(0xFF8B5CF6)],
               ),
               const SizedBox(height: 24),
               ActionCard(
@@ -5729,6 +5705,371 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildChatTab() {
+    final apiKey = Environment.instance.get('OPENAI_API_KEY') ?? '';
+    final messages = _aiChatService.conversationHistory;
+    final currentData = _aiChatService.currentEventData;
+
+    return Column(
+      children: [
+        Expanded(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 800),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                HeaderCard(
+                  title: 'AI Chat Assistant',
+                  subtitle: 'Create events through natural conversation with AI',
+                  icon: Icons.auto_awesome,
+                  gradientColors: const [Color(0xFF8B5CF6), Color(0xFFEC4899)],
+                ),
+                const SizedBox(height: 16),
+                // Current draft preview - TikTok-inspired transparent style
+                if (currentData.isNotEmpty) ...[
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Colors.white.withValues(alpha: 0.9),
+                          Colors.white.withValues(alpha: 0.7),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.5),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
+                          blurRadius: 24,
+                          offset: const Offset(0, 8),
+                          spreadRadius: 0,
+                        ),
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 16,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)],
+                                ),
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF8B5CF6).withValues(alpha: 0.3),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.auto_awesome,
+                                size: 16,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            const Text(
+                              'Draft',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF0F172A),
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                            const Spacer(),
+                            if (_aiChatService.eventComplete)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [Color(0xFF059669), Color(0xFF10B981)],
+                                  ),
+                                  borderRadius: BorderRadius.circular(20),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF059669).withValues(alpha: 0.3),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.check_circle, size: 14, color: Colors.white),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Ready',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: currentData.entries.map((entry) {
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.8),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: const Color(0xFF8B5CF6).withValues(alpha: 0.2),
+                                  width: 1,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF8B5CF6).withValues(alpha: 0.05),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    entry.key.replaceAll('_', ' '),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: const Color(0xFF8B5CF6).withValues(alpha: 0.8),
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text(
+                                      '${entry.value}',
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF0F172A),
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                        if (_aiChatService.eventComplete) ...[
+                          const SizedBox(height: 12),
+                          ElevatedButton.icon(
+                            onPressed: () async {
+                              // Save to pending
+                              await _pendingService.saveDraft(currentData);
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Event saved to Pending!'),
+                                  backgroundColor: Color(0xFF059669),
+                                ),
+                              );
+                              // Start new conversation
+                              setState(() {
+                                _aiChatService.startNewConversation();
+                                final greeting = _aiChatService.getGreeting();
+                              });
+                            },
+                            icon: const Icon(Icons.save, size: 18),
+                            label: const Text('Save to Pending'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF059669),
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                // Chat messages
+                Expanded(
+                  child: messages.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(60),
+                                ),
+                                child: const Icon(
+                                  Icons.chat_bubble_outline,
+                                  size: 60,
+                                  color: Color(0xFF8B5CF6),
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              Text(
+                                'Start a Conversation',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade800,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'The AI will guide you through creating an event',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              ElevatedButton.icon(
+                                onPressed: () {
+                                  setState(() {
+                                    _aiChatService.startNewConversation();
+                                    final greeting = _aiChatService.getGreeting();
+                                    // Scroll to bottom after greeting
+                                    WidgetsBinding.instance
+                                        .addPostFrameCallback((_) {
+                                      if (_aiChatScrollController.hasClients) {
+                                        _aiChatScrollController.animateTo(
+                                          _aiChatScrollController
+                                              .position.maxScrollExtent,
+                                          duration:
+                                              const Duration(milliseconds: 300),
+                                          curve: Curves.easeOut,
+                                        );
+                                      }
+                                    });
+                                  });
+                                },
+                                icon: const Icon(Icons.start),
+                                label: const Text('Start New Conversation'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF8B5CF6),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 12,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : Container(
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: ListView.builder(
+                            controller: _aiChatScrollController,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            itemCount: messages.length,
+                            itemBuilder: (context, index) {
+                              return ChatMessageWidget(
+                                message: messages[index],
+                              );
+                            },
+                          ),
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        ChatInputWidget(
+          onSendMessage: (message) async {
+            if (apiKey.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('OpenAI API key not configured'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+              return;
+            }
+
+            setState(() {
+              _isAIChatLoading = true;
+            });
+
+            try {
+              final response =
+                  await _aiChatService.sendMessage(message, apiKey);
+
+              // Scroll to bottom after message
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (_aiChatScrollController.hasClients) {
+                  _aiChatScrollController.animateTo(
+                    _aiChatScrollController.position.maxScrollExtent,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOut,
+                  );
+                }
+              });
+
+              // Only save when event is complete (not after every message)
+              // This prevents duplicate saves during conversation
+              if (_aiChatService.eventComplete && _aiChatService.currentEventData.isNotEmpty) {
+                // Event complete - it will be saved when user clicks "Save to Pending" button
+                // No auto-save here to avoid duplicates
+              }
+            } catch (e) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Error: ${e.toString()}'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            } finally {
+              if (mounted) {
+                setState(() {
+                  _isAIChatLoading = false;
+                });
+              }
+            }
+          },
+          isLoading: _isAIChatLoading,
+        ),
+      ],
     );
   }
 
