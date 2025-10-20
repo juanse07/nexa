@@ -62,6 +62,20 @@ function issueAppJwt(profile: VerifiedProfile, managerId?: string): string {
 
 async function upsertUser(profile: VerifiedProfile) {
   const filter = { provider: profile.provider, subject: profile.subject } as const;
+
+  // Try to intelligently split the OAuth name into first and last name for new users
+  let firstName: string | undefined;
+  let lastName: string | undefined;
+  if (profile.name) {
+    const nameParts = profile.name.trim().split(/\s+/);
+    if (nameParts.length > 0) {
+      firstName = nameParts[0];
+      if (nameParts.length > 1) {
+        lastName = nameParts.slice(1).join(' ');
+      }
+    }
+  }
+
   const update = {
     $set: {
       // Always update these OAuth fields on every login
@@ -75,6 +89,9 @@ async function upsertUser(profile: VerifiedProfile) {
       provider: profile.provider,
       subject: profile.subject,
       createdAt: new Date(),
+      // Pre-populate first and last name from OAuth if available (only on creation)
+      ...(firstName && { first_name: firstName }),
+      ...(lastName && { last_name: lastName }),
     },
   } as const;
   await UserModel.updateOne(filter, update, { upsert: true });
