@@ -7,6 +7,7 @@ export interface UserDocument extends Document {
   name?: string; // original OAuth full name
   first_name?: string;
   last_name?: string;
+  phone_number?: string;
   picture?: string; // optional override picture
   app_id?: string; // optional 9-digit app id
   createdAt: Date;
@@ -21,6 +22,7 @@ const UserSchema = new Schema<UserDocument>(
     name: { type: String, trim: true },
     first_name: { type: String, trim: true },
     last_name: { type: String, trim: true },
+    phone_number: { type: String, trim: true },
     picture: { type: String, trim: true },
     app_id: { type: String, trim: true },
   },
