@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../data/services/chat_service.dart';
 import '../domain/entities/chat_message.dart';
@@ -384,6 +385,26 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  Future<void> _initiateCall() async {
+    // In a real app, you would fetch the user's phone number from the API
+    // For now, we'll show a message
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Calling ${widget.targetName}...'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+
+    // If you have the phone number, you can use:
+    // final phoneNumber = 'tel:+1234567890'; // Replace with actual number
+    // if (await canLaunchUrl(Uri.parse(phoneNumber))) {
+    //   await launchUrl(Uri.parse(phoneNumber));
+    // }
+  }
+
   Future<void> _showSendInvitationDialog() async {
     await showDialog<void>(
       context: context,
@@ -641,6 +662,30 @@ class _ChatScreenState extends State<ChatScreen> {
                   ],
                 ),
                 actions: [
+                  // Call button
+                  Container(
+                    margin: const EdgeInsets.only(right: 4),
+                    child: IconButton(
+                      icon: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.phone,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                      onPressed: _initiateCall,
+                    ),
+                  ),
+                  // Menu button
                   Container(
                     margin: const EdgeInsets.only(right: 8),
                     child: PopupMenuButton<String>(
