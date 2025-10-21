@@ -6062,54 +6062,6 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               icon: Icons.auto_awesome,
                               gradientColors: const [Color(0xFF8B5CF6), Color(0xFFEC4899)],
                             ),
-                            // AI Provider toggle
-                            Positioned(
-                              left: 8,
-                              top: 8,
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.25),
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: InkWell(
-                                  borderRadius: BorderRadius.circular(16),
-                                  onTap: () {
-                                    setState(() {
-                                      final newProvider = _aiChatService.aiProvider == 'openai' ? 'claude' : 'openai';
-                                      _aiChatService.setAiProvider(newProvider);
-                                    });
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('Using ${_aiChatService.aiProvider == 'openai' ? 'OpenAI' : 'Claude'} AI'),
-                                        duration: const Duration(seconds: 2),
-                                      ),
-                                    );
-                                  },
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          _aiChatService.aiProvider == 'openai' ? Icons.psychology : Icons.hub,
-                                          color: Colors.white,
-                                          size: 16,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          _aiChatService.aiProvider == 'openai' ? 'OpenAI' : 'Claude',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
                             // Clear chat button - only show if there are messages
                             if (messages.isNotEmpty)
                               Positioned(
@@ -6407,9 +6359,62 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               );
             },
             child: messages.isNotEmpty
-                ? ChatInputWidget(
-                    key: const ValueKey('chat-input'),
-                    onSendMessage: (message) async {
+                ? Padding(
+                    padding: const EdgeInsets.only(left: 8, right: 12, bottom: 6),
+                    child: Row(
+                      children: [
+                        // AI Provider toggle button
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: _aiChatService.aiProvider == 'openai'
+                                  ? [Color(0xFF10A37F), Color(0xFF059669)]
+                                  : [Color(0xFF7C3AED), Color(0xFF6366F1)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(20),
+                              onTap: () {
+                                setState(() {
+                                  final newProvider = _aiChatService.aiProvider == 'openai' ? 'claude' : 'openai';
+                                  _aiChatService.setAiProvider(newProvider);
+                                });
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Using ${_aiChatService.aiProvider == 'openai' ? 'OpenAI' : 'Claude'} AI'),
+                                    duration: const Duration(seconds: 2),
+                                  ),
+                                );
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                child: Icon(
+                                  _aiChatService.aiProvider == 'openai' ? Icons.psychology : Icons.hub,
+                                  color: Colors.white,
+                                  size: 22,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Chat input
+                        Expanded(
+                          child: ChatInputWidget(
+                            key: const ValueKey('chat-input'),
+                            onSendMessage: (message) async {
             setState(() {
               _isAIChatLoading = true;
             });
@@ -6452,7 +6457,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             }
           },
           isLoading: _isAIChatLoading,
-        )
+        ),
+                        ),
+                      ],
+                    ),
+                  )
               : const SizedBox.shrink(
                   key: ValueKey('empty'),
                 ),
