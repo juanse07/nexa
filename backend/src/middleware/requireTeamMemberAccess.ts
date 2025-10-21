@@ -113,14 +113,24 @@ export async function requireManagerAuth(
       return;
     }
 
-    // Resolve manager document
-    const manager = await ManagerModel.findOne({
-      provider: authUser.provider,
-      subject: authUser.sub
-    });
+    // Resolve manager document by managerId from JWT (more efficient and secure)
+    const managerObjectId = new mongoose.Types.ObjectId(authUser.managerId);
+    const manager = await ManagerModel.findById(managerObjectId);
 
     if (!manager) {
-      res.status(403).json({ error: 'Manager not found' });
+      res.status(403).json({
+        error: 'Manager profile not found',
+        message: 'Please sign in again using the manager app.'
+      });
+      return;
+    }
+
+    // Verify JWT claims match the manager document (prevent token tampering)
+    if (manager.provider !== authUser.provider || manager.subject !== authUser.sub) {
+      res.status(403).json({
+        error: 'Manager authentication mismatch',
+        message: 'Please sign in again.'
+      });
       return;
     }
 

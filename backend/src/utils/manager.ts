@@ -3,29 +3,30 @@ import { ManagerDocument, ManagerModel } from '../models/manager';
 
 /**
  * Resolve the Manager document for the authenticated request.
- * Automatically provisions a manager profile when first encountered.
+ * SECURITY: Requires managerId in JWT token - does NOT auto-create managers.
+ * Managers must be created explicitly via /auth/manager/* endpoints.
  */
 export async function resolveManagerForRequest(req: AuthenticatedRequest): Promise<ManagerDocument> {
   if (!req.authUser?.provider || !req.authUser?.sub) {
     throw new Error('Missing authentication claims for manager resolution');
   }
 
-  const existing = await ManagerModel.findOne({
-    provider: req.authUser.provider,
-    subject: req.authUser.sub,
-  });
-
-  if (existing) {
-    return existing;
+  // SECURITY: Require managerId in JWT token (only manager auth endpoints provide this)
+  if (!req.authUser?.managerId) {
+    throw new Error('Manager authentication required. Please sign in using the manager app.');
   }
 
-  const created = await ManagerModel.create({
-    provider: req.authUser.provider,
-    subject: req.authUser.sub,
-    email: req.authUser.email,
-    name: req.authUser.name,
-    picture: req.authUser.picture,
-  });
+  // Look up manager by the managerId claim in JWT (more efficient and secure)
+  const manager = await ManagerModel.findById(req.authUser.managerId);
 
-  return created;
+  if (!manager) {
+    throw new Error('Manager profile not found. Please sign in again using the manager app.');
+  }
+
+  // Verify the JWT claims match the manager document (prevent token tampering)
+  if (manager.provider !== req.authUser.provider || manager.subject !== req.authUser.sub) {
+    throw new Error('Manager authentication mismatch. Please sign in again.');
+  }
+
+  return manager;
 }
