@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -462,10 +463,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Event invitation sent!'),
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.jobInvitationSent),
             backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
+            duration: const Duration(seconds: 2),
           ),
         );
       }
@@ -986,9 +987,9 @@ class _ChatScreenState extends State<ChatScreen> {
         }
 
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const Padding(
-            padding: EdgeInsets.all(16),
-            child: Text('Event not found'),
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(AppLocalizations.of(context)!.jobNotFound),
           );
         }
 
