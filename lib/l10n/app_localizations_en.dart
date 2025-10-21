@@ -362,4 +362,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String addToRole(String role) {
     return 'Add to $role';
   }
+
+  @override
+  String get typeMessage => 'Type a message...';
 }

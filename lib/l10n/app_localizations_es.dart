@@ -364,4 +364,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String addToRole(String role) {
     return 'Agregar a $role';
   }
+
+  @override
+  String get typeMessage => 'Escribe un mensaje...';
 }

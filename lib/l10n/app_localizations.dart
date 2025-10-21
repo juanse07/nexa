@@ -737,6 +737,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Add to {role}'**
   String addToRole(String role);
+
+  /// Placeholder text for chat message input field
+  ///
+  /// In en, this message translates to:
+  /// **'Type a message...'**
+  String get typeMessage;
 }
 
 class _AppLocalizationsDelegate

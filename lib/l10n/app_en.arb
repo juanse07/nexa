@@ -521,5 +521,10 @@
         "type": "String"
       }
     }
+  },
+
+  "typeMessage": "Type a message...",
+  "@typeMessage": {
+    "description": "Placeholder text for chat message input field"
   }
 }
