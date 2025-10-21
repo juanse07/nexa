@@ -12,6 +12,7 @@ import { TeamMemberModel } from '../models/teamMember';
 import { TeamInviteModel } from '../models/teamInvite';
 import { TeamMessageModel } from '../models/teamMessage';
 import { EventModel } from '../models/event';
+import { UserModel } from '../models/user';
 
 const router = Router();
 
@@ -62,6 +63,14 @@ const paginationSchema = z.object({
     .max(100)
     .default(50),
   before: z.string().nullish(),
+});
+
+const teamMembersQuerySchema = z.object({
+  includeUserProfile: z
+    .string()
+    .transform((val) => val === 'true' || val === '1')
+    .optional()
+    .default('false'),
 });
 
 const defaultInviteExpiryDays = 14;
@@ -271,28 +280,116 @@ router.get('/teams/:teamId/members', requireAuth, async (req, res) => {
     }
     const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
 
-    const members = await TeamMemberModel.find({
-      teamId: teamObjectId,
-      managerId,
-      status: { $ne: 'left' },
-    })
-      .sort({ createdAt: -1 })
-      .lean();
+    // Parse query parameters
+    const queryParsed = teamMembersQuerySchema.safeParse(req.query ?? {});
+    const includeUserProfile = queryParsed.success ? queryParsed.data.includeUserProfile : false;
 
-    const payload = members.map((member) => ({
-      id: String(member._id),
-      teamId: String(member.teamId),
-      provider: member.provider,
-      subject: member.subject,
-      email: member.email,
-      name: member.name,
-      status: member.status,
-      joinedAt: member.joinedAt,
-      createdAt: member.createdAt,
-    }));
+    if (includeUserProfile) {
+      // Use aggregation pipeline to join with User collection
+      const membersWithProfiles = await TeamMemberModel.aggregate([
+        {
+          $match: {
+            teamId: teamObjectId,
+            managerId: managerId,
+            status: { $ne: 'left' },
+          },
+        },
+        {
+          $lookup: {
+            from: 'users', // MongoDB collection name (User model uses 'users')
+            let: { memberProvider: '$provider', memberSubject: '$subject' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ['$provider', '$$memberProvider'] },
+                      { $eq: ['$subject', '$$memberSubject'] },
+                    ],
+                  },
+                },
+              },
+              {
+                $project: {
+                  _id: 1,
+                  provider: 1,
+                  subject: 1,
+                  email: 1,
+                  name: 1,
+                  first_name: 1,
+                  last_name: 1,
+                  phone_number: 1,
+                  picture: 1,
+                  app_id: 1,
+                },
+              },
+            ],
+            as: 'userProfile',
+          },
+        },
+        {
+          $sort: { createdAt: -1 },
+        },
+      ]);
 
-    return res.json({ members: payload });
+      const payload = membersWithProfiles.map((member: any) => {
+        const userProfile = member.userProfile?.[0]; // $lookup returns array
+        return {
+          id: String(member._id),
+          teamId: String(member.teamId),
+          provider: member.provider,
+          subject: member.subject,
+          email: member.email,
+          name: member.name,
+          status: member.status,
+          joinedAt: member.joinedAt,
+          createdAt: member.createdAt,
+          // Include full user profile if available
+          userProfile: userProfile
+            ? {
+                id: String(userProfile._id),
+                provider: userProfile.provider,
+                subject: userProfile.subject,
+                email: userProfile.email,
+                name: userProfile.name,
+                firstName: userProfile.first_name,
+                lastName: userProfile.last_name,
+                phoneNumber: userProfile.phone_number,
+                picture: userProfile.picture,
+                appId: userProfile.app_id,
+              }
+            : null,
+        };
+      });
+
+      return res.json({ members: payload });
+    } else {
+      // Original behavior - just return team member data
+      const members = await TeamMemberModel.find({
+        teamId: teamObjectId,
+        managerId,
+        status: { $ne: 'left' },
+      })
+        .sort({ createdAt: -1 })
+        .lean();
+
+      const payload = members.map((member) => ({
+        id: String(member._id),
+        teamId: String(member.teamId),
+        provider: member.provider,
+        subject: member.subject,
+        email: member.email,
+        name: member.name,
+        status: member.status,
+        joinedAt: member.joinedAt,
+        createdAt: member.createdAt,
+      }));
+
+      return res.json({ members: payload });
+    }
   } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[teams] GET /teams/:teamId/members failed', err);
     return res.status(500).json({ message: 'Failed to fetch team members' });
   }
 });

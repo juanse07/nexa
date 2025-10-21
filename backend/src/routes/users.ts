@@ -3,6 +3,13 @@ import mongoose from 'mongoose';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/requireAuth';
 import { UserModel } from '../models/user';
+import { TeamMemberModel } from '../models/teamMember';
+import {
+  requireManagerAuth,
+  getCachedManagerId,
+  canAccessUser,
+  type AuthenticatedRequest
+} from '../middleware/requireTeamMemberAccess';
 
 const router = Router();
 
@@ -34,6 +41,14 @@ router.get('/users/me', requireAuth, async (req, res) => {
     const authUser = (req as any).authUser;
     if (!authUser?.provider || !authUser?.sub) {
       return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    // Block manager-authenticated requests (managers use /managers/me)
+    if (authUser.managerId) {
+      return res.status(403).json({
+        message: 'Manager authentication not allowed',
+        details: 'Managers should use /managers/me endpoint for their profile'
+      });
     }
 
     const user = await UserModel.findOne({
@@ -137,32 +152,191 @@ router.patch('/users/me', requireAuth, async (req, res) => {
   }
 });
 
+// Get user by provider and subject (OAuth identity)
+// SECURITY: Managers can only lookup users who are active members of their teams
+router.get('/users/by-identity', requireManagerAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { provider, subject } = req.query;
+
+    if (!provider || !subject || typeof provider !== 'string' || typeof subject !== 'string') {
+      return res.status(400).json({
+        message: 'Missing or invalid query parameters',
+        details: 'Both provider and subject are required as strings'
+      });
+    }
+
+    const managerId = getCachedManagerId(req);
+    if (!managerId) {
+      return res.status(403).json({ message: 'Manager authentication required' });
+    }
+
+    // Check authorization: user must be an active member of at least one of manager's teams
+    const hasAccess = await canAccessUser(managerId, provider, subject);
+
+    if (!hasAccess) {
+      // Return 404 instead of 403 to avoid leaking user existence
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Fetch user profile
+    const user = await UserModel.findOne({
+      provider: provider,
+      subject: subject
+    }).lean();
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    return res.json({
+      id: String(user._id),
+      provider: user.provider,
+      subject: user.subject,
+      email: user.email,
+      name: user.name,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      phoneNumber: user.phone_number,
+      picture: user.picture,
+      appId: user.app_id,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[users] GET /users/by-identity failed', err);
+    return res.status(500).json({ message: 'Failed to fetch user' });
+  }
+});
+
+// Get user by MongoDB ObjectId
+// SECURITY: Managers can only lookup users who are active members of their teams
+router.get('/users/:userId', requireManagerAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: 'Invalid user ID format' });
+    }
+
+    const managerId = getCachedManagerId(req);
+    if (!managerId) {
+      return res.status(403).json({ message: 'Manager authentication required' });
+    }
+
+    // Fetch user to get their identity
+    const userObjectId = new mongoose.Types.ObjectId(userId);
+    const user = await UserModel.findById(userObjectId).lean();
+
+    if (!user) {
+      // Return 404 for non-existent users
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Check authorization: user must be an active member of at least one of manager's teams
+    const hasAccess = await canAccessUser(managerId, user.provider, user.subject);
+
+    if (!hasAccess) {
+      // Return 404 instead of 403 to avoid leaking user existence
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    return res.json({
+      id: String(user._id),
+      provider: user.provider,
+      subject: user.subject,
+      email: user.email,
+      name: user.name,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      phoneNumber: user.phone_number,
+      picture: user.picture,
+      appId: user.app_id,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[users] GET /users/:userId failed', err);
+    return res.status(500).json({ message: 'Failed to fetch user' });
+  }
+});
+
 // Cursor-paginated, prefix search by name/email
-router.get('/users', async (req, res) => {
+// SECURITY: Managers can only see users who are active members of their teams
+router.get('/users', requireManagerAuth, async (req: AuthenticatedRequest, res) => {
   try {
     const parsed = querySchema.safeParse(req.query);
     if (!parsed.success) return res.status(400).json({ message: 'Invalid query' });
     const { q, cursor, limit } = parsed.data;
 
-    const filter: any = {};
+    const managerId = getCachedManagerId(req);
+    if (!managerId) {
+      return res.status(403).json({ message: 'Manager authentication required' });
+    }
+
+    // Build aggregation pipeline to join Users with TeamMembers
+    // Only return users who are active members of this manager's teams
+    const pipeline: any[] = [];
+
+    // Stage 1: Match active team members for this manager
+    const teamMemberMatch: any = {
+      managerId: managerId,
+      status: 'active'
+    };
+
+    // Get team members first, then lookup user details
+    const teamMembers = await TeamMemberModel.find(teamMemberMatch, {
+      provider: 1,
+      subject: 1
+    }).lean();
+
+    if (teamMembers.length === 0) {
+      // No team members, return empty result
+      return res.json({ items: [], nextCursor: undefined });
+    }
+
+    // Build filter for users based on team member identities
+    const userFilter: any = {
+      $or: teamMembers.map((tm: any) => ({
+        provider: tm.provider,
+        subject: tm.subject
+      }))
+    };
+
+    // Apply search filter if provided
     if (q && q.trim().length > 0) {
       const rx = new RegExp('^' + q.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-      filter.$or = [{ name: rx }, { email: rx }];
+      userFilter.$and = [
+        { $or: [{ name: rx }, { email: rx }, { first_name: rx }, { last_name: rx }] }
+      ];
     }
+
+    // Apply cursor pagination
     if (cursor) {
       try {
         const idStr = Buffer.from(cursor, 'base64').toString('utf8');
         if (mongoose.Types.ObjectId.isValid(idStr)) {
-          filter._id = { $gt: new mongoose.Types.ObjectId(idStr) };
+          userFilter._id = { $gt: new mongoose.Types.ObjectId(idStr) };
         }
-      } catch (_) {}
+      } catch (_) {
+        // Invalid cursor, ignore
+      }
     }
 
-    const docs = await UserModel.find(filter, { provider: 1, subject: 1, email: 1, name: 1, first_name: 1, last_name: 1, picture: 1, app_id: 1 })
+    // Query users with filter
+    const docs = await UserModel.find(userFilter, {
+      provider: 1,
+      subject: 1,
+      email: 1,
+      name: 1,
+      first_name: 1,
+      last_name: 1,
+      phone_number: 1,
+      picture: 1,
+      app_id: 1
+    })
       .sort({ _id: 1 })
       .limit(limit + 1)
       .lean();
 
+    // Handle pagination
     let nextCursor: string | undefined;
     let items = docs;
     if (docs.length > limit) {
@@ -173,19 +347,24 @@ router.get('/users', async (req, res) => {
       }
     }
 
+    // Map to response format
     const mapped = items.map((u: any) => ({
       id: String(u._id),
       provider: u.provider,
       subject: u.subject,
       email: u.email,
       name: u.name,
-      first_name: u.first_name,
-      last_name: u.last_name,
+      firstName: u.first_name,
+      lastName: u.last_name,
+      phoneNumber: u.phone_number,
       picture: u.picture,
-      app_id: u.app_id,
+      appId: u.app_id,
     }));
+
     return res.json({ items: mapped, nextCursor });
   } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[users] GET /users failed', err);
     return res.status(500).json({ message: 'Failed to fetch users' });
   }
 });

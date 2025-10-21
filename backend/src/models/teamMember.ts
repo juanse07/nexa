@@ -37,6 +37,8 @@ const TeamMemberSchema = new Schema<TeamMemberDocument>(
 
 TeamMemberSchema.index({ teamId: 1, provider: 1, subject: 1 }, { unique: true });
 TeamMemberSchema.index({ provider: 1, subject: 1, status: 1 });
+// Compound index for manager access queries - enables fast lookups for "which users can this manager access?"
+TeamMemberSchema.index({ managerId: 1, status: 1, provider: 1, subject: 1 });
 
 export const TeamMemberModel: Model<TeamMemberDocument> =
   mongoose.models.TeamMember || mongoose.model<TeamMemberDocument>('TeamMember', TeamMemberSchema);
