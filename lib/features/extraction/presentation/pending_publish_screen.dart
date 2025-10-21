@@ -40,7 +40,8 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
   final ChatService _chatService = ChatService();
   StreamSubscription<SocketEvent>? _socketSubscription;
 
-  bool _everyone = false;
+  bool _visibleToEntireTeam = false;
+  String? _selectedVisibilityTeamId; // Team for "visible to entire team" mode
   final TextEditingController _searchCtrl = TextEditingController();
   List<Map<String, dynamic>> _users = const [];
   List<Map<String, dynamic>> _roles = const [];
@@ -65,7 +66,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
     _loadRoles();
     _loadTeams();
     _loadFavorites();
-    // Load users immediately since _everyone is false by default
+    // Load users immediately since _visibleToEntireTeam is false by default
     _loadUsers(reset: true);
     // Pre-fill role counts if draft already contains roles
     final roles =
@@ -200,9 +201,15 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
   }
 
   Future<void> _publish() async {
-    if (!_everyone && _selectedKeys.isEmpty && _selectedTeamIds.isEmpty) {
+    if (!_visibleToEntireTeam && _selectedKeys.isEmpty && _selectedTeamIds.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Select at least one user or team')),
+      );
+      return;
+    }
+    if (_visibleToEntireTeam && _selectedVisibilityTeamId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Select a team for visibility')),
       );
       return;
     }
@@ -285,12 +292,14 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
         }
       }
 
-      if (!_everyone) {
+      if (_visibleToEntireTeam) {
+        // When visible to entire team, send only the team ID in audience_team_ids
+        payload['audience_user_keys'] = const <String>[];
+        payload['audience_team_ids'] = [_selectedVisibilityTeamId];
+      } else {
+        // Specific user/team selection
         payload['audience_user_keys'] = _selectedKeys.toList();
         payload['audience_team_ids'] = _selectedTeamIds.toList();
-      } else {
-        payload['audience_user_keys'] = const <String>[];
-        payload['audience_team_ids'] = const <String>[];
       }
 
       // Create the event and get the event data back
@@ -436,19 +445,47 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                   style: const TextStyle(color: Colors.grey),
                 ),
                 const SizedBox(height: 12),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Visible to everyone'),
-                  value: _everyone,
-                  onChanged: (v) {
-                    setState(() => _everyone = v);
-                    // Load users when switching to specific targeting
-                    if (!v && _users.isEmpty) {
-                      _loadUsers(reset: true);
-                    }
-                  },
+                Row(
+                  children: [
+                    Checkbox(
+                      value: _visibleToEntireTeam,
+                      onChanged: (v) {
+                        setState(() {
+                          _visibleToEntireTeam = v ?? false;
+                          // Auto-select first team if enabling and no team selected
+                          if (_visibleToEntireTeam && _selectedVisibilityTeamId == null && _teams.isNotEmpty) {
+                            _selectedVisibilityTeamId = (_teams.first['id'] ?? '').toString();
+                          }
+                        });
+                      },
+                    ),
+                    const Text('Visible to entire team:'),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: _visibleToEntireTeam ? _selectedVisibilityTeamId : null,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        ),
+                        hint: const Text('Select team'),
+                        items: _teams.map((team) {
+                          final teamId = (team['id'] ?? '').toString();
+                          final name = (team['name'] ?? 'Untitled team').toString();
+                          return DropdownMenuItem(
+                            value: teamId,
+                            child: Text(name),
+                          );
+                        }).toList(),
+                        onChanged: _visibleToEntireTeam ? (value) {
+                          setState(() => _selectedVisibilityTeamId = value);
+                        } : null,
+                      ),
+                    ),
+                  ],
                 ),
-                if (!_everyone) ...[
+                const SizedBox(height: 16),
+                if (!_visibleToEntireTeam) ...[
                   _buildTeamSelector(),
                   _buildFavoritesSection(),
                   const SizedBox(height: 16),
