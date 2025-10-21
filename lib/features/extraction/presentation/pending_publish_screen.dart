@@ -323,39 +323,83 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
   ) async {
     print('[PUBLISH] Sending job invitations to ${_selectedKeys.length} users');
 
-    // For each selected user, send them a job invitation via chat
-    for (final userKey in _selectedKeys) {
-      final userInfo = _keyToUser[userKey];
-      if (userInfo == null) {
-        print('[PUBLISH] Warning: No user info found for key: $userKey');
+    if (roles.isEmpty) {
+      print('[PUBLISH] No roles defined, skipping invitations');
+      return;
+    }
+
+    // Prompt user to select role for each selected user
+    final userRoleAssignments = await _promptRoleAssignmentsForUsers(roles);
+    if (userRoleAssignments == null) {
+      print('[PUBLISH] User cancelled role assignment');
+      return;
+    }
+
+    // For each selected user, send them a job invitation via chat with their assigned role
+    for (final entry in userRoleAssignments.entries) {
+      final userKey = entry.key;
+      final roleId = entry.value;
+
+      if (roleId == null || roleId.isEmpty) {
+        print('[PUBLISH] Skipping $userKey - no role assigned');
         continue;
       }
 
-      // Use subject:provider as targetId for chat (this is what the chat system expects)
-      final targetId = userKey;
+      try {
+        print('[PUBLISH] Sending invitation to $userKey for role $roleId');
 
-      // For now, send invitation for the first role (in the future, could prompt user to select role per person)
-      if (roles.isNotEmpty) {
-        try {
-          final firstRole = roles.first;
-          final roleId = (firstRole['role'] ?? '').toString(); // Use role name as ID for now
+        await _chatService.sendEventInvitation(
+          targetId: userKey,
+          eventId: eventId,
+          roleId: roleId,
+          eventData: eventData,
+        );
 
-          print('[PUBLISH] Sending invitation to $targetId for role $roleId');
-
-          await _chatService.sendEventInvitation(
-            targetId: targetId,
-            eventId: eventId,
-            roleId: roleId,
-            eventData: eventData,
-          );
-
-          print('[PUBLISH] Successfully sent invitation to $targetId');
-        } catch (e) {
-          print('[PUBLISH] Failed to send invitation to $targetId: $e');
-          // Continue sending to other users even if one fails
-        }
+        print('[PUBLISH] Successfully sent invitation to $userKey');
+      } catch (e) {
+        print('[PUBLISH] Failed to send invitation to $userKey: $e');
+        // Continue sending to other users even if one fails
       }
     }
+  }
+
+  Future<Map<String, String>?> _promptRoleAssignmentsForUsers(
+    List<Map<String, dynamic>> roles,
+  ) async {
+    final roleNames = roles
+        .map((r) => (r['role'] ?? r['name'] ?? '').toString())
+        .where((name) => name.isNotEmpty)
+        .toList();
+
+    if (roleNames.isEmpty) {
+      return null;
+    }
+
+    // Build a map of user key -> assigned role name
+    final Map<String, String> assignments = {};
+
+    // Initialize with first role for all users
+    for (final userKey in _selectedKeys) {
+      assignments[userKey] = roleNames.first;
+    }
+
+    final result = await showDialog<Map<String, String>?>(
+      context: context,
+      builder: (context) => _RoleAssignmentDialog(
+        users: _selectedKeys.map((key) {
+          final user = _keyToUser[key];
+          return {
+            'key': key,
+            'name': '${user?['first_name'] ?? ''} ${user?['last_name'] ?? ''}'.trim(),
+            'email': user?['email'] ?? '',
+          };
+        }).toList(),
+        roleNames: roleNames,
+        initialAssignments: assignments,
+      ),
+    );
+
+    return result;
   }
 
   @override
@@ -1207,6 +1251,113 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
           },
         );
       },
+    );
+  }
+}
+
+class _RoleAssignmentDialog extends StatefulWidget {
+  final List<Map<String, dynamic>> users;
+  final List<String> roleNames;
+  final Map<String, String> initialAssignments;
+
+  const _RoleAssignmentDialog({
+    required this.users,
+    required this.roleNames,
+    required this.initialAssignments,
+  });
+
+  @override
+  State<_RoleAssignmentDialog> createState() => _RoleAssignmentDialogState();
+}
+
+class _RoleAssignmentDialogState extends State<_RoleAssignmentDialog> {
+  late Map<String, String> assignments;
+
+  @override
+  void initState() {
+    super.initState();
+    assignments = Map.from(widget.initialAssignments);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Assign Roles to Staff'),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: ListView.builder(
+          shrinkWrap: true,
+          itemCount: widget.users.length,
+          itemBuilder: (context, index) {
+            final user = widget.users[index];
+            final userKey = user['key'] as String;
+            final userName = user['name'] as String? ?? 'Unknown';
+            final userEmail = user['email'] as String? ?? '';
+
+            return Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      userName.isNotEmpty ? userName : userEmail,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    if (userName.isNotEmpty && userEmail.isNotEmpty)
+                      Text(
+                        userEmail,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      value: assignments[userKey],
+                      decoration: const InputDecoration(
+                        labelText: 'Role',
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                      ),
+                      items: widget.roleNames.map((role) {
+                        return DropdownMenuItem(
+                          value: role,
+                          child: Text(role),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() {
+                            assignments[userKey] = value;
+                          });
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(null),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.of(context).pop(assignments),
+          child: const Text('Send Invitations'),
+        ),
+      ],
     );
   }
 }
