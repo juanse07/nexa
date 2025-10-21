@@ -2,8 +2,27 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/requireAuth';
 import axios from 'axios';
+import { getDateTimeContext, getWelcomeDateContext, getFullSystemContext } from '../utils/dateContext';
 
 const router = Router();
+
+/**
+ * GET /api/ai/system-info
+ * Returns current date/time context for AI chat welcome messages and system prompts
+ * Used by frontend to display contextual greetings
+ */
+router.get('/ai/system-info', requireAuth, async (req, res) => {
+  try {
+    return res.json({
+      dateTimeContext: getDateTimeContext(),
+      welcomeContext: getWelcomeDateContext(),
+      fullContext: getFullSystemContext(),
+    });
+  } catch (err: any) {
+    console.error('[ai/system-info] Error:', err);
+    return res.status(500).json({ message: 'Failed to get system info' });
+  }
+});
 
 // Schema for extraction request
 const extractionSchema = z.object({
@@ -200,9 +219,29 @@ async function handleOpenAIRequest(
   const textModel = process.env.OPENAI_TEXT_MODEL || 'gpt-4o-mini';
   const openaiBaseUrl = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
 
+  // Inject date/time context into system messages
+  const dateContext = getFullSystemContext();
+  const enhancedMessages = messages.map((msg, index) => {
+    // Add date context to the first system message
+    if (msg.role === 'system' && index === 0) {
+      return {
+        ...msg,
+        content: `${dateContext}\n\n${msg.content}`
+      };
+    }
+    // If no system message exists, add one at the beginning
+    return msg;
+  });
+
+  // If there's no system message, prepend one with date context
+  const hasSystemMessage = messages.some(msg => msg.role === 'system');
+  const finalMessages = hasSystemMessage
+    ? enhancedMessages
+    : [{ role: 'system', content: dateContext }, ...messages];
+
   const requestBody = {
     model: textModel,
-    messages,
+    messages: finalMessages,
     temperature,
     max_tokens: maxTokens,
   };
@@ -265,6 +304,10 @@ async function handleClaudeRequest(
   // System message goes in separate 'system' parameter with cache_control
   let systemMessage = '';
   const userMessages: any[] = [];
+
+  // Inject date/time context at the beginning of system message
+  const dateContext = getFullSystemContext();
+  systemMessage = `${dateContext}\n\n`;
 
   for (const msg of messages) {
     if (msg.role === 'system') {
