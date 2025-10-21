@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:nexa/l10n/app_localizations.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/event_service.dart';
 import '../services/pending_events_service.dart';
@@ -55,12 +56,15 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
   final Map<String, TextEditingController> _roleCountCtrls =
       <String, TextEditingController>{};
   bool _loadingTeams = false;
+  Set<String> _favoriteUsers = {};
+  String? _selectedRoleFilter; // For filtering favorites by role
 
   @override
   void initState() {
     super.initState();
     _loadRoles();
     _loadTeams();
+    _loadFavorites();
     // Load users immediately since _everyone is false by default
     _loadUsers(reset: true);
     // Pre-fill role counts if draft already contains roles
@@ -142,6 +146,55 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
         ).showSnackBar(SnackBar(content: Text('Failed to load teams: $e')));
       }
     }
+  }
+
+  Future<void> _loadFavorites() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _favoriteUsers = prefs.getStringList('favorite_users')?.toSet() ?? {};
+    });
+  }
+
+  List<Map<String, dynamic>> get _favoriteUsersList {
+    if (_users.isEmpty) return [];
+
+    // Filter users by favorites
+    final favorites = _users.where((user) {
+      final key = '${user['provider']}:${user['subject']}';
+      // Check if user is a favorite with any role OR with the selected role filter
+      if (_selectedRoleFilter != null) {
+        return _favoriteUsers.contains('$key:$_selectedRoleFilter');
+      } else {
+        // Check if user is favorite with any role
+        return _favoriteUsers.any((fav) => fav.startsWith('$key:'));
+      }
+    }).toList();
+
+    return favorites;
+  }
+
+  void _selectAllFavorites() {
+    setState(() {
+      for (final user in _favoriteUsersList) {
+        final key = '${user['provider']}:${user['subject']}';
+        _selectedKeys.add(key);
+      }
+    });
+  }
+
+  void _deselectAllFavorites() {
+    setState(() {
+      for (final user in _favoriteUsersList) {
+        final key = '${user['provider']}:${user['subject']}';
+        _selectedKeys.remove(key);
+      }
+    });
+  }
+
+  List<String> get _availableRoleFilters {
+    return _roles.map((r) => (r['name'] ?? '').toString())
+        .where((name) => name.isNotEmpty)
+        .toList();
   }
 
   Future<void> _publish() async {
@@ -351,6 +404,13 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                 ),
                 if (!_everyone) ...[
                   _buildTeamSelector(),
+                  _buildFavoritesSection(),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Tiggers',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
                   TextField(
                     controller: _searchCtrl,
                     decoration: const InputDecoration(
@@ -505,6 +565,114 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
       context,
     ).push(MaterialPageRoute(builder: (_) => const TeamsManagementPage()));
     await _loadTeams();
+  }
+
+  Widget _buildFavoritesSection() {
+    final favorites = _favoriteUsersList;
+    final allFavoritesSelected = favorites.isNotEmpty &&
+        favorites.every((user) {
+          final key = '${user['provider']}:${user['subject']}';
+          return _selectedKeys.contains(key);
+        });
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.star, color: Colors.amber, size: 20),
+            const SizedBox(width: 8),
+            const Text(
+              'Favorites',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+            ),
+            const Spacer(),
+            if (favorites.isNotEmpty)
+              TextButton(
+                onPressed: allFavoritesSelected
+                    ? _deselectAllFavorites
+                    : _selectAllFavorites,
+                child: Text(
+                  allFavoritesSelected ? 'Deselect All' : 'Select All',
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        // Role filter dropdown
+        if (_availableRoleFilters.isNotEmpty)
+          DropdownButtonFormField<String>(
+            value: _selectedRoleFilter,
+            decoration: InputDecoration(
+              labelText: 'Filter by role',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 8,
+              ),
+              prefixIcon: const Icon(Icons.filter_list),
+            ),
+            items: [
+              const DropdownMenuItem<String>(
+                value: null,
+                child: Text('All roles'),
+              ),
+              ..._availableRoleFilters.map((role) {
+                return DropdownMenuItem<String>(
+                  value: role,
+                  child: Text(role),
+                );
+              }).toList(),
+            ],
+            onChanged: (value) {
+              setState(() => _selectedRoleFilter = value);
+            },
+          ),
+        const SizedBox(height: 12),
+        if (favorites.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              _selectedRoleFilter != null
+                  ? 'No favorites found for $_selectedRoleFilter'
+                  : 'No favorites yet. Favorite users from chat to see them here.',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+            ),
+          )
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: favorites.map((user) {
+              final key = '${user['provider']}:${user['subject']}';
+              final name = (user['name'] ?? user['email'] ?? key).toString();
+              final isSelected = _selectedKeys.contains(key);
+              return FilterChip(
+                selected: isSelected,
+                label: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.star, size: 14, color: Colors.amber),
+                    const SizedBox(width: 4),
+                    Text(name),
+                  ],
+                ),
+                onSelected: (selected) {
+                  setState(() {
+                    if (selected) {
+                      _selectedKeys.add(key);
+                    } else {
+                      _selectedKeys.remove(key);
+                    }
+                  });
+                },
+              );
+            }).toList(),
+          ),
+      ],
+    );
   }
 
   @override
