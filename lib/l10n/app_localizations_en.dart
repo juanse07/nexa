@@ -337,4 +337,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get direccion => 'Address';
+
+  @override
+  String jobFor(String clientName) {
+    return 'Job for: $clientName';
+  }
+
+  @override
+  String get accepted => 'Accepted';
+
+  @override
+  String get invitation => 'Invitation';
 }

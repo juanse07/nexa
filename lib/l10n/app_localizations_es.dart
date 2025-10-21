@@ -339,4 +339,15 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get direccion => 'Dirección';
+
+  @override
+  String jobFor(String clientName) {
+    return 'Trabajo para: $clientName';
+  }
+
+  @override
+  String get accepted => 'Aceptado';
+
+  @override
+  String get invitation => 'Invitación';
 }

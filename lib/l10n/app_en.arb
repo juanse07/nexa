@@ -481,5 +481,23 @@
   "direccion": "Address",
   "@direccion": {
     "description": "Label for address/direction field (Spanish-style)"
+  },
+
+  "jobFor": "Job for: {clientName}",
+  "@jobFor": {
+    "description": "Label showing which client the job is for",
+    "placeholders": {
+      "clientName": {
+        "type": "String"
+      }
+    }
+  },
+  "accepted": "Accepted",
+  "@accepted": {
+    "description": "Status badge when invitation is accepted"
+  },
+  "invitation": "Invitation",
+  "@invitation": {
+    "description": "Status badge for pending invitation"
   }
 }

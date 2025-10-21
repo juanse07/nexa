@@ -695,6 +695,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Address'**
   String get direccion;
+
+  /// Label showing which client the job is for
+  ///
+  /// In en, this message translates to:
+  /// **'Job for: {clientName}'**
+  String jobFor(String clientName);
+
+  /// Status badge when invitation is accepted
+  ///
+  /// In en, this message translates to:
+  /// **'Accepted'**
+  String get accepted;
+
+  /// Status badge for pending invitation
+  ///
+  /// In en, this message translates to:
+  /// **'Invitation'**
+  String get invitation;
 }
 
 class _AppLocalizationsDelegate

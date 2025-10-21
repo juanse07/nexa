@@ -103,5 +103,9 @@
   "fecha": "Fecha",
   "hora": "Hora",
   "ubicacion": "Ubicación",
-  "direccion": "Dirección"
+  "direccion": "Dirección",
+
+  "jobFor": "Trabajo para: {clientName}",
+  "accepted": "Aceptado",
+  "invitation": "Invitación"
 }

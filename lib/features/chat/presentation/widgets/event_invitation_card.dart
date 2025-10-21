@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 
 /// Simple event invitation card matching Available Roles design
 class EventInvitationCard extends StatelessWidget {
@@ -100,7 +101,7 @@ class EventInvitationCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        isAccepted ? 'Accepted' : 'Invitation',
+                        isAccepted ? AppLocalizations.of(context)!.accepted : AppLocalizations.of(context)!.invitation,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 12,
@@ -171,7 +172,7 @@ class EventInvitationCard extends StatelessWidget {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    'Event for: $clientName',
+                    AppLocalizations.of(context)!.jobFor(clientName),
                     style: const TextStyle(
                       fontSize: 14,
                       color: Color(0xFF6B7280),
