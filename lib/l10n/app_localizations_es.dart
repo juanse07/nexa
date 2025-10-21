@@ -124,6 +124,14 @@ class AppLocalizationsEs extends AppLocalizations {
   String get jobPublished => 'Trabajo publicado';
 
   @override
+  String get sendJobInvitation => 'Enviar Invitación de Trabajo';
+
+  @override
+  String inviteToJob(String name) {
+    return 'Invitar a $name a un trabajo';
+  }
+
+  @override
   String get jobInvitationSent => '¡Invitación de trabajo enviada!';
 
   @override

@@ -300,6 +300,18 @@ abstract class AppLocalizations {
   /// **'Job published'**
   String get jobPublished;
 
+  /// Title for dialog to send job invitation
+  ///
+  /// In en, this message translates to:
+  /// **'Send Job Invitation'**
+  String get sendJobInvitation;
+
+  /// Subtitle for job invitation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Invite {name} to a job'**
+  String inviteToJob(String name);
+
   /// Success message when job invitation is sent
   ///
   /// In en, this message translates to:

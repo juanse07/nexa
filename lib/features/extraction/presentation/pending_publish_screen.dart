@@ -11,6 +11,7 @@ import '../services/clients_service.dart';
 import '../services/tariffs_service.dart';
 import '../../teams/data/services/teams_service.dart';
 import '../../teams/presentation/pages/teams_management_page.dart';
+import '../../chat/data/services/chat_service.dart';
 import 'package:nexa/core/network/socket_manager.dart';
 
 class PendingPublishScreen extends StatefulWidget {
@@ -35,9 +36,10 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
   final ClientsService _clientsService = ClientsService();
   final TariffsService _tariffsService = TariffsService();
   final TeamsService _teamsService = TeamsService();
+  final ChatService _chatService = ChatService();
   StreamSubscription<SocketEvent>? _socketSubscription;
 
-  bool _everyone = true;
+  bool _everyone = false;
   final TextEditingController _searchCtrl = TextEditingController();
   List<Map<String, dynamic>> _users = const [];
   List<Map<String, dynamic>> _roles = const [];
@@ -59,6 +61,8 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
     super.initState();
     _loadRoles();
     _loadTeams();
+    // Load users immediately since _everyone is false by default
+    _loadUsers(reset: true);
     // Pre-fill role counts if draft already contains roles
     final roles =
         (widget.draft['roles'] as List?)?.whereType<Map>().toList() ?? const [];
@@ -106,6 +110,9 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
           _keyToUser[key] = {
             'name': (u['name'] ?? '').toString(),
             'email': (u['email'] ?? '').toString(),
+            'id': (u['id'] ?? u['_id'] ?? '').toString(),
+            'subject': (u['subject'] ?? '').toString(),
+            'provider': (u['provider'] ?? '').toString(),
           };
         }
       });
@@ -230,7 +237,16 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
         payload['audience_user_keys'] = const <String>[];
         payload['audience_team_ids'] = const <String>[];
       }
-      await _eventService.createEvent(payload);
+
+      // Create the event and get the event data back
+      final createdEvent = await _eventService.createEvent(payload);
+      final eventId = (createdEvent['_id'] ?? createdEvent['id'] ?? '').toString();
+
+      // Send individual invitations to selected users via chat
+      if (_selectedKeys.isNotEmpty && eventId.isNotEmpty) {
+        await _sendJobInvitationsToUsers(eventId, createdEvent, roleDefs);
+      }
+
       await _pendingService.deleteDraft(widget.draftId);
       if (!mounted) return;
       Navigator.of(context).pop(true);
@@ -244,6 +260,48 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
       ).showSnackBar(SnackBar(content: Text('Publish failed: $e')));
     } finally {
       if (mounted) setState(() => _publishing = false);
+    }
+  }
+
+  Future<void> _sendJobInvitationsToUsers(
+    String eventId,
+    Map<String, dynamic> eventData,
+    List<Map<String, dynamic>> roles,
+  ) async {
+    print('[PUBLISH] Sending job invitations to ${_selectedKeys.length} users');
+
+    // For each selected user, send them a job invitation via chat
+    for (final userKey in _selectedKeys) {
+      final userInfo = _keyToUser[userKey];
+      if (userInfo == null) {
+        print('[PUBLISH] Warning: No user info found for key: $userKey');
+        continue;
+      }
+
+      // Use subject:provider as targetId for chat (this is what the chat system expects)
+      final targetId = userKey;
+
+      // For now, send invitation for the first role (in the future, could prompt user to select role per person)
+      if (roles.isNotEmpty) {
+        try {
+          final firstRole = roles.first;
+          final roleId = (firstRole['role'] ?? '').toString(); // Use role name as ID for now
+
+          print('[PUBLISH] Sending invitation to $targetId for role $roleId');
+
+          await _chatService.sendEventInvitation(
+            targetId: targetId,
+            eventId: eventId,
+            roleId: roleId,
+            eventData: eventData,
+          );
+
+          print('[PUBLISH] Successfully sent invitation to $targetId');
+        } catch (e) {
+          print('[PUBLISH] Failed to send invitation to $targetId: $e');
+          // Continue sending to other users even if one fails
+        }
+      }
     }
   }
 
@@ -283,7 +341,13 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Visible to everyone'),
                   value: _everyone,
-                  onChanged: (v) => setState(() => _everyone = v),
+                  onChanged: (v) {
+                    setState(() => _everyone = v);
+                    // Load users when switching to specific targeting
+                    if (!v && _users.isEmpty) {
+                      _loadUsers(reset: true);
+                    }
+                  },
                 ),
                 if (!_everyone) ...[
                   _buildTeamSelector(),

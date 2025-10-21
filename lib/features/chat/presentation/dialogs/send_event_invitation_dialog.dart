@@ -109,7 +109,8 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
     return _events.where((event) {
       final title = (event['title'] as String?)?.toLowerCase() ?? '';
       final client = (event['client_name'] as String?)?.toLowerCase() ?? '';
-      return title.contains(query) || client.contains(query);
+      final venue = (event['venue_name'] as String?)?.toLowerCase() ?? '';
+      return title.contains(query) || client.contains(query) || venue.contains(query);
     }).toList();
   }
 
@@ -182,16 +183,16 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Send Event Invitation',
-                          style: TextStyle(
+                        Text(
+                          AppLocalizations.of(context)!.sendJobInvitation,
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 20,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
                         Text(
-                          'Invite ${widget.targetName} to an event',
+                          AppLocalizations.of(context)!.inviteToJob(widget.targetName),
                           style: const TextStyle(
                             color: Colors.white70,
                             fontSize: 14,
@@ -277,12 +278,12 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.event_busy, size: 64, color: Colors.grey.shade300),
+                      Icon(Icons.work_off, size: 64, color: Colors.grey.shade300),
                       const SizedBox(height: 16),
                       Text(
                         _searchQuery.isEmpty
-                            ? 'No upcoming events'
-                            : 'No events match your search',
+                            ? 'No upcoming jobs'
+                            : 'No jobs match your search',
                         style: TextStyle(
                           fontSize: 16,
                           color: Colors.grey.shade600,
@@ -305,11 +306,53 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
   }
 
   Widget _buildEventCard(Map<String, dynamic> event) {
-    final title = event['title'] as String? ?? 'Untitled Event';
+    // Use client name as the primary title since job titles are often missing
     final clientName = event['client_name'] as String? ?? 'Unknown Client';
-    final startDate = event['start_date'] != null
-        ? DateTime.parse(event['start_date'] as String)
-        : null;
+
+    // Debug: Print available fields
+    print('[INVITATION_DIALOG] Event fields: ${event.keys.toList()}');
+    print('[INVITATION_DIALOG] start_time value: ${event['start_time']}');
+
+    // Parse start date and time - support both 'start_date' and 'date' field names
+    final startDateStr = (event['start_date'] ?? event['date']) as String?;
+    DateTime? startDate;
+    bool hasTimeComponent = false;
+
+    if (startDateStr != null) {
+      try {
+        // Check if the date string includes time
+        if (startDateStr.contains('T')) {
+          startDate = DateTime.parse(startDateStr);
+          // Check if time is actually specified (not midnight)
+          if (startDate.hour != 0 || startDate.minute != 0) {
+            hasTimeComponent = true;
+          }
+        } else {
+          // Date only - check for separate start_time field (support both snake_case and camelCase)
+          final startTimeStr = (event['start_time'] ?? event['startTime']) as String?;
+          if (startTimeStr != null && startTimeStr.isNotEmpty) {
+            print('[INVITATION_DIALOG] Found start_time: $startTimeStr');
+            // Parse time in HH:MM format and combine with date
+            final timeParts = startTimeStr.split(':');
+            if (timeParts.length >= 2) {
+              final hour = int.tryParse(timeParts[0]) ?? 0;
+              final minute = int.tryParse(timeParts[1]) ?? 0;
+              final dateOnly = DateTime.parse(startDateStr);
+              startDate = DateTime(dateOnly.year, dateOnly.month, dateOnly.day, hour, minute);
+              if (hour != 0 || minute != 0) {
+                hasTimeComponent = true;
+              }
+            }
+          } else {
+            // No time component, just use date
+            startDate = DateTime.parse(startDateStr);
+          }
+        }
+      } catch (e) {
+        print('[INVITATION_DIALOG] Error parsing date: $e');
+      }
+    }
+
     final venueName = event['venue_name'] as String?;
 
     return Card(
@@ -324,27 +367,96 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
+              // Client name as main title
+              Row(
+                children: [
+                  const Icon(Icons.business, size: 18, color: Color(0xFF6366F1)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      clientName,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF6366F1),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // Venue and date/time info
+              Row(
+                children: [
+                  // Venue
+                  if (venueName != null) ...[
+                    const Icon(Icons.location_on, size: 14, color: Color(0xFF059669)),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        venueName,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF059669),
+                          fontWeight: FontWeight.w500,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ] else ...[
+                    Expanded(
+                      child: Text(
+                        'No venue specified',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey.shade500,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
               const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
+              // Date and time - always show
+              Row(
                 children: [
-                  _buildChip(Icons.business, clientName, const Color(0xFF6366F1)),
-                  if (startDate != null)
-                    _buildChip(
-                      Icons.calendar_today,
+                  const Icon(Icons.calendar_today, size: 14, color: Color(0xFF8B5CF6)),
+                  const SizedBox(width: 4),
+                  if (startDate != null) ...[
+                    Text(
                       DateFormat('MMM d, yyyy').format(startDate),
-                      const Color(0xFF8B5CF6),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF8B5CF6),
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  if (venueName != null)
-                    _buildChip(Icons.location_on, venueName, const Color(0xFF059669)),
+                    // Only show time if we have a time component
+                    if (hasTimeComponent) ...[
+                      const SizedBox(width: 16),
+                      const Icon(Icons.access_time, size: 14, color: Color(0xFF8B5CF6)),
+                      const SizedBox(width: 4),
+                      Text(
+                        DateFormat('h:mm a').format(startDate),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF8B5CF6),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ] else
+                    Expanded(
+                      child: Text(
+                        'No date specified',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey.shade500,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ],
@@ -388,7 +500,7 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Select a role to invite staff member for:',
+                'Select a role for the staff member:',
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey,
@@ -408,7 +520,7 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
                       Icon(Icons.badge_outlined, size: 64, color: Colors.grey.shade300),
                       const SizedBox(height: 16),
                       Text(
-                        'No roles available for this event',
+                        'No roles available for this job',
                         style: TextStyle(
                           fontSize: 16,
                           color: Colors.grey.shade600,

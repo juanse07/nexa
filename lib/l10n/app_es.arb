@@ -34,6 +34,8 @@
   "jobSavedToPending": "Trabajo guardado como pendiente. Ve a la pestaña Trabajos para revisar.",
   "jobDetailsCopied": "Detalles del trabajo copiados al portapapeles",
   "jobPublished": "Trabajo publicado",
+  "sendJobInvitation": "Enviar Invitación de Trabajo",
+  "inviteToJob": "Invitar a {name} a un trabajo",
   "jobInvitationSent": "¡Invitación de trabajo enviada!",
   "jobNotFound": "Trabajo no encontrado",
   "guests": "{count} invitados",

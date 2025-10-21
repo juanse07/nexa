@@ -166,6 +166,19 @@
   "@jobPublished": {
     "description": "Success message when job is published"
   },
+  "sendJobInvitation": "Send Job Invitation",
+  "@sendJobInvitation": {
+    "description": "Title for dialog to send job invitation"
+  },
+  "inviteToJob": "Invite {name} to a job",
+  "@inviteToJob": {
+    "description": "Subtitle for job invitation dialog",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "jobInvitationSent": "Job invitation sent!",
   "@jobInvitationSent": {
     "description": "Success message when job invitation is sent"

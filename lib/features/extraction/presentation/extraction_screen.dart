@@ -123,6 +123,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   final ChatEventService _aiChatService = ChatEventService();
   bool _isAIChatLoading = false;
   final ScrollController _aiChatScrollController = ScrollController();
+  bool _showAIChatHeader = true;
+  double _lastScrollOffset = 0;
 
   // Profile avatar state
   late final ManagerService _managerService;
@@ -192,6 +194,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       }
     });
 
+    // Add scroll listener for AI Chat header hide/show
+    _aiChatScrollController.addListener(_handleAIChatScroll);
+
     // Start timer for real-time updates
     _updateTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
       if (mounted) {
@@ -200,6 +205,42 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         });
       }
     });
+  }
+
+  void _handleAIChatScroll() {
+    if (!_aiChatScrollController.hasClients) return;
+
+    final currentScrollOffset = _aiChatScrollController.offset;
+    final scrollingDown = currentScrollOffset > _lastScrollOffset;
+    final scrollingUp = currentScrollOffset < _lastScrollOffset;
+
+    // Only hide/show header on mobile
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = !kIsWeb || screenWidth < 600;
+
+    if (isMobile) {
+      // Hide header when scrolling down past 50px
+      if (scrollingDown && currentScrollOffset > 50 && _showAIChatHeader) {
+        setState(() {
+          _showAIChatHeader = false;
+        });
+      }
+      // Show header when scrolling up or at the top
+      else if ((scrollingUp || currentScrollOffset < 50) && !_showAIChatHeader) {
+        setState(() {
+          _showAIChatHeader = true;
+        });
+      }
+    } else {
+      // Always show header on desktop
+      if (!_showAIChatHeader) {
+        setState(() {
+          _showAIChatHeader = true;
+        });
+      }
+    }
+
+    _lastScrollOffset = currentScrollOffset;
   }
 
   @override
@@ -6008,97 +6049,89 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Stack(
-                  children: [
-                    HeaderCard(
-                      title: 'AI Chat Assistant',
-                      subtitle: AppLocalizations.of(context)!.createJobsThroughAI,
-                      icon: Icons.auto_awesome,
-                      gradientColors: const [Color(0xFF8B5CF6), Color(0xFFEC4899)],
-                    ),
-                    // Clear chat button - only show if there are messages
-                    if (messages.isNotEmpty)
-                      Positioned(
-                        right: 16,
-                        top: 16,
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(20),
-                            onTap: () {
-                              showDialog(
-                                context: context,
-                                builder: (context) => AlertDialog(
-                                  title: const Text('Clear Chat?'),
-                                  content: const Text(
-                                    'This will delete the current conversation and any unsaved event data.',
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(context),
-                                      child: const Text('Cancel'),
-                                    ),
-                                    TextButton(
-                                      onPressed: () {
-                                        Navigator.pop(context);
-                                        setState(() {
-                                          _aiChatService.startNewConversation();
-                                        });
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('Chat cleared'),
-                                            duration: Duration(seconds: 2),
+                // Header with integrated Clear button and scroll-to-hide animation
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeInOut,
+                  child: _showAIChatHeader
+                      ? Stack(
+                          children: [
+                            HeaderCard(
+                              title: 'AI Chat Assistant',
+                              subtitle: AppLocalizations.of(context)!.createJobsThroughAI,
+                              icon: Icons.auto_awesome,
+                              gradientColors: const [Color(0xFF8B5CF6), Color(0xFFEC4899)],
+                            ),
+                            // Clear chat button - only show if there are messages
+                            if (messages.isNotEmpty)
+                              Positioned(
+                                right: 8,
+                                top: 8,
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(20),
+                                    onTap: () {
+                                      showDialog(
+                                        context: context,
+                                        builder: (context) => AlertDialog(
+                                          title: const Text('Clear Chat?'),
+                                          content: const Text(
+                                            'This will delete the current conversation and any unsaved event data.',
                                           ),
-                                        );
-                                      },
-                                      child: const Text(
-                                        'Clear',
-                                        style: TextStyle(color: Colors.red),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(context),
+                                              child: const Text('Cancel'),
+                                            ),
+                                            TextButton(
+                                              onPressed: () {
+                                                Navigator.pop(context);
+                                                setState(() {
+                                                  _aiChatService.startNewConversation();
+                                                });
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text('Chat cleared'),
+                                                    duration: Duration(seconds: 2),
+                                                  ),
+                                                );
+                                              },
+                                              child: const Text(
+                                                'Clear',
+                                                style: TextStyle(color: Colors.red),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.9),
+                                        borderRadius: BorderRadius.circular(20),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(0.1),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Icon(
+                                        Icons.delete_outline,
+                                        size: 18,
+                                        color: Colors.grey.shade700,
                                       ),
                                     ),
-                                  ],
+                                  ),
                                 ),
-                              );
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.9),
-                                borderRadius: BorderRadius.circular(20),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.1),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
                               ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.delete_outline,
-                                    size: 18,
-                                    color: Colors.grey.shade700,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Clear',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                      color: Colors.grey.shade700,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                const SizedBox(height: 8),
+                          ],
+                        )
+                      : const SizedBox.shrink(),
+                ),
                 // Floating draft preview button
                 if (currentData.isNotEmpty)
                   Align(
