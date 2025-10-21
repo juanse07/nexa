@@ -258,7 +258,7 @@ async function handleClaudeRequest(
     return res.status(500).json({ message: 'Claude API key not configured on server' });
   }
 
-  const claudeModel = process.env.CLAUDE_MODEL || 'claude-3-5-sonnet-20241022';
+  const claudeModel = process.env.CLAUDE_MODEL || 'claude-3-5-sonnet-20240620';
   const claudeBaseUrl = process.env.CLAUDE_BASE_URL || 'https://api.anthropic.com/v1';
 
   // Convert OpenAI-style messages to Claude format
@@ -283,24 +283,17 @@ async function handleClaudeRequest(
     model: claudeModel,
     max_tokens: maxTokens,
     temperature,
-    system: [
-      {
-        type: 'text',
-        text: systemMessage,
-        cache_control: { type: 'ephemeral' }, // Enable prompt caching
-      },
-    ],
+    system: systemMessage || 'You are a helpful AI assistant for event staffing.',
     messages: userMessages,
   };
 
   const headers = {
     'x-api-key': claudeKey,
     'anthropic-version': '2023-06-01',
-    'anthropic-beta': 'prompt-caching-2024-07-31', // Enable caching beta
     'Content-Type': 'application/json',
   };
 
-  console.log('[Claude] Calling API with prompt caching enabled...');
+  console.log('[Claude] Calling API...');
 
   const response = await axios.post(
     `${claudeBaseUrl}/messages`,
@@ -321,21 +314,13 @@ async function handleClaudeRequest(
     });
   }
 
-  // Log cache usage statistics
+  // Log token usage statistics
   const usage = response.data.usage;
   if (usage) {
     console.log('[Claude] Token usage:', {
       input: usage.input_tokens,
       output: usage.output_tokens,
-      cache_creation: usage.cache_creation_input_tokens || 0,
-      cache_read: usage.cache_read_input_tokens || 0,
     });
-
-    // Calculate cost savings from caching
-    if (usage.cache_read_input_tokens > 0) {
-      const savings = ((usage.cache_read_input_tokens / (usage.input_tokens + usage.cache_read_input_tokens)) * 100).toFixed(1);
-      console.log(`[Claude] Prompt caching saved ${savings}% on input tokens`);
-    }
   }
 
   const content = response.data.content?.[0]?.text;
@@ -346,7 +331,6 @@ async function handleClaudeRequest(
   return res.json({
     content,
     provider: 'claude',
-    usage: usage, // Include usage stats for monitoring
   });
 }
 
