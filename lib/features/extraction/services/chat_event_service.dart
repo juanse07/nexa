@@ -291,6 +291,81 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
           print('Failed to parse event update JSON: $e');
         }
       }
+    } else if (content.contains('CLIENT_CREATE')) {
+      // Handle client creation requests
+      final jsonMatch = RegExp(r'\{[\s\S]*\}').firstMatch(content);
+      if (jsonMatch != null) {
+        try {
+          final clientData = jsonDecode(jsonMatch.group(0)!) as Map<String, dynamic>;
+          final clientName = clientData['client_name'] as String?;
+          if (clientName != null && clientName.isNotEmpty) {
+            print('Creating client from chat: $clientName');
+            final newClient = await _clientsService.createClient(clientName);
+            (_createdEntities['clients'] as List).add(newClient);
+            _existingClientNames.add(clientName);
+            print('Client created: ${newClient['_id'] ?? newClient['id']}');
+          }
+        } catch (e) {
+          print('Failed to create client from chat: $e');
+        }
+      }
+    } else if (content.contains('TARIFF_CREATE')) {
+      // Handle tariff creation requests
+      final jsonMatch = RegExp(r'\{[\s\S]*\}').firstMatch(content);
+      if (jsonMatch != null) {
+        try {
+          final tariffData = jsonDecode(jsonMatch.group(0)!) as Map<String, dynamic>;
+          final clientName = tariffData['client_name'] as String?;
+          final roleName = tariffData['role_name'] as String?;
+          final rate = tariffData['rate'] as num?;
+
+          if (clientName != null && roleName != null && rate != null) {
+            print('Creating tariff: $clientName - $roleName at \$$rate/hr');
+            // Get or create client ID
+            final clients = await _clientsService.fetchClients();
+            var client = clients.firstWhere(
+              (c) => (c['name'] as String?) == clientName,
+              orElse: () => <String, dynamic>{},
+            );
+
+            if (client.isEmpty) {
+              print('Client not found, creating: $clientName');
+              client = await _clientsService.createClient(clientName);
+              (_createdEntities['clients'] as List).add(client);
+              _existingClientNames.add(clientName);
+            }
+
+            // Get or create role ID
+            final roles = await _rolesService.fetchRoles();
+            var role = roles.firstWhere(
+              (r) => (r['name'] as String?) == roleName,
+              orElse: () => <String, dynamic>{},
+            );
+
+            if (role.isEmpty) {
+              print('Role not found, creating: $roleName');
+              role = await _rolesService.createRole(roleName);
+              (_createdEntities['roles'] as List).add(role);
+            }
+
+            // Create tariff
+            final clientId = client['_id'] ?? client['id'];
+            final roleId = role['_id'] ?? role['id'];
+
+            if (clientId != null && roleId != null) {
+              final newTariff = await _tariffsService.upsertTariff(
+                clientId: clientId.toString(),
+                roleId: roleId.toString(),
+                rate: rate.toDouble(),
+              );
+              (_createdEntities['tariffs'] as List).add(newTariff);
+              print('Tariff created successfully');
+            }
+          }
+        } catch (e) {
+          print('Failed to create tariff from chat: $e');
+        }
+      }
     } else {
       // Try to extract any field values from the conversation
       _extractFieldsFromConversation(userMessage, content);
