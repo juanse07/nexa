@@ -912,13 +912,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
                       if (!mounted) return;
 
+                      _aiChatService.startNewConversation();
+                      await _aiChatService.getGreeting();
+
                       setState(() {
                         structuredData = currentData;
                         extractedText = 'AI Chat extracted data';
                         errorMessage = null;
                         _lastStructuredFromUpload = false;
-                        _aiChatService.startNewConversation();
-                        final greeting = _aiChatService.getGreeting();
                       });
 
                       _draftService.saveDraft(currentData);
@@ -2170,7 +2171,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       return _users;
     }
     return _users.where((u) {
-      final userId = '${u['provider']}:${u['subject']}';
+      // Use userKey if available (from /chat/contacts), otherwise construct from provider:subject (from /users)
+      final userId = u['userKey']?.toString() ?? '${u['provider']}:${u['subject']}';
       return _isFavorite(userId, _selectedRole);
     }).toList();
   }
@@ -2358,7 +2360,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     List<Map<String, dynamic>> displayUsers = [];
     if (_peopleFilter == 'all' || _peopleFilter == 'no_chat') {
       displayUsers = _filteredUsers.where((u) {
-        final userKey = '${u['provider']}:${u['subject']}';
+        // Use userKey if available (from /chat/contacts), otherwise construct from provider:subject (from /users)
+        final userKey = u['userKey']?.toString() ?? '${u['provider']}:${u['subject']}';
         // Always exclude users who have conversations
         if (conversationUserKeys.contains(userKey)) {
           return false;
@@ -2495,7 +2498,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   Widget _buildUserTile(Map<String, dynamic> u) {
-    final userId = '${u['provider']}:${u['subject']}';
+    // Use userKey if available (from /chat/contacts), otherwise construct from provider:subject (from /users)
+    final userId = u['userKey']?.toString() ?? '${u['provider']}:${u['subject']}';
     final name = u['name']?.toString() ?? '';
     final email = u['email']?.toString() ?? '';
     final picture = u['picture']?.toString();
@@ -2785,7 +2789,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   );
                 }
                 final u = _filteredUsers[idx];
-                final userId = '${u['provider']}:${u['subject']}';
+                // Use userKey if available (from /chat/contacts), otherwise construct from provider:subject (from /users)
+                final userId = u['userKey']?.toString() ?? '${u['provider']}:${u['subject']}';
                 final name = u['name']?.toString() ?? '';
                 final email = u['email']?.toString() ?? '';
                 final appId = u['app_id']?.toString() ?? '';
@@ -6295,10 +6300,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                     color: Colors.transparent,
                                     child: InkWell(
                                       borderRadius: BorderRadius.circular(30),
-                                      onTap: () {
+                                      onTap: () async {
+                                        _aiChatService.startNewConversation();
+                                        await _aiChatService.getGreeting();
+
                                         setState(() {
-                                          _aiChatService.startNewConversation();
-                                          final greeting = _aiChatService.getGreeting();
                                           // Scroll to bottom after greeting
                                           WidgetsBinding.instance
                                               .addPostFrameCallback((_) {
