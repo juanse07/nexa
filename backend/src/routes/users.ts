@@ -288,8 +288,12 @@ router.get('/users', requireManagerAuth, async (req: AuthenticatedRequest, res) 
     }).lean();
 
     if (teamMembers.length === 0) {
-      // No team members, return empty result
-      return res.json({ items: [], nextCursor: undefined });
+      // No team members yet - return empty result with helpful message
+      return res.json({
+        items: [],
+        nextCursor: undefined,
+        message: 'You don\'t have any team members yet. Create an invite link to add members to your team!'
+      });
     }
 
     // Build filter for users based on team member identities
@@ -365,7 +369,20 @@ router.get('/users', requireManagerAuth, async (req: AuthenticatedRequest, res) 
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[users] GET /users failed', err);
-    return res.status(500).json({ message: 'Failed to fetch users' });
+
+    // Check if it's an authentication error
+    const errorMessage = (err as Error).message || '';
+    if (errorMessage.includes('Manager authentication required')) {
+      return res.status(403).json({
+        message: 'Manager access required',
+        hint: 'Please sign in using the manager app to view team members'
+      });
+    }
+
+    return res.status(500).json({
+      message: 'Unable to load users at this time',
+      hint: 'Please try again or contact support if the problem persists'
+    });
   }
 });
 

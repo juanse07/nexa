@@ -100,7 +100,10 @@ export async function requireManagerAuth(
     const authUser = req.authUser || req.user;
 
     if (!authUser) {
-      res.status(401).json({ error: 'Authentication required' });
+      res.status(401).json({
+        error: 'Authentication required',
+        message: 'Please sign in to continue'
+      });
       return;
     }
 
