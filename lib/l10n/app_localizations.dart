@@ -413,6 +413,138 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Catalog'**
   String get navCatalog;
+
+  /// Tab label for upload data option
+  ///
+  /// In en, this message translates to:
+  /// **'Upload Data'**
+  String get uploadData;
+
+  /// Tab label for manual entry option
+  ///
+  /// In en, this message translates to:
+  /// **'Manual Entry'**
+  String get manualEntry;
+
+  /// Tab label for multi-upload option
+  ///
+  /// In en, this message translates to:
+  /// **'Multi-Upload'**
+  String get multiUpload;
+
+  /// Tab label for AI chat option
+  ///
+  /// In en, this message translates to:
+  /// **'AI Chat'**
+  String get aiChat;
+
+  /// Button text for choosing file to upload
+  ///
+  /// In en, this message translates to:
+  /// **'Choose File'**
+  String get chooseFile;
+
+  /// Section header for detailed explanation
+  ///
+  /// In en, this message translates to:
+  /// **'Detailed Explanation'**
+  String get detailedExplanation;
+
+  /// Subtitle for chat screen
+  ///
+  /// In en, this message translates to:
+  /// **'Messages and team members'**
+  String get messagesAndTeamMembers;
+
+  /// Search field placeholder in chat
+  ///
+  /// In en, this message translates to:
+  /// **'Search name or email'**
+  String get searchNameOrEmail;
+
+  /// Filter tab for all items
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get all;
+
+  /// Role filter for bartender
+  ///
+  /// In en, this message translates to:
+  /// **'Bartender'**
+  String get bartender;
+
+  /// Role filter for server
+  ///
+  /// In en, this message translates to:
+  /// **'Server'**
+  String get server;
+
+  /// Messages section header with count
+  ///
+  /// In en, this message translates to:
+  /// **'Messages ({count})'**
+  String messages(int count);
+
+  /// Chat message preview for job invitation
+  ///
+  /// In en, this message translates to:
+  /// **'You\'ve been invited to {jobName}'**
+  String youveBeenInvitedTo(String jobName);
+
+  /// Title for hours approval screen
+  ///
+  /// In en, this message translates to:
+  /// **'Hours Approval'**
+  String get hoursApproval;
+
+  /// Badge text when sheet is needed
+  ///
+  /// In en, this message translates to:
+  /// **'Needs Sheet'**
+  String get needsSheet;
+
+  /// Badge text with count needing sheets
+  ///
+  /// In en, this message translates to:
+  /// **'{count} Needs Sheet'**
+  String needsSheetCount(int count);
+
+  /// Display text for number of staff
+  ///
+  /// In en, this message translates to:
+  /// **'{count} staff'**
+  String staffCount(int count);
+
+  /// Catalog header with counts
+  ///
+  /// In en, this message translates to:
+  /// **'Catalog • {clientCount} clients, {roleCount} roles'**
+  String catalogClientsRoles(int clientCount, int roleCount);
+
+  /// Tab label for clients
+  ///
+  /// In en, this message translates to:
+  /// **'Clients'**
+  String get clients;
+
+  /// Tab label for roles
+  ///
+  /// In en, this message translates to:
+  /// **'Roles'**
+  String get roles;
+
+  /// Tab label for tariffs
+  ///
+  /// In en, this message translates to:
+  /// **'Tariffs'**
+  String get tariffs;
+
+  /// Button text for adding a client
+  ///
+  /// In en, this message translates to:
+  /// **'Add Client'**
+  String get addClient;
 }
 
 class _AppLocalizationsDelegate

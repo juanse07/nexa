@@ -183,4 +183,80 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get navCatalog => 'Catálogo';
+
+  @override
+  String get uploadData => 'Subir Datos';
+
+  @override
+  String get manualEntry => 'Entrada Manual';
+
+  @override
+  String get multiUpload => 'Subida Múltiple';
+
+  @override
+  String get aiChat => 'Chat IA';
+
+  @override
+  String get chooseFile => 'Elegir Archivo';
+
+  @override
+  String get detailedExplanation => 'Explicación Detallada';
+
+  @override
+  String get messagesAndTeamMembers => 'Mensajes y miembros del equipo';
+
+  @override
+  String get searchNameOrEmail => 'Buscar nombre o correo';
+
+  @override
+  String get all => 'Todos';
+
+  @override
+  String get bartender => 'Bartender';
+
+  @override
+  String get server => 'Servidor';
+
+  @override
+  String messages(int count) {
+    return 'Mensajes ($count)';
+  }
+
+  @override
+  String youveBeenInvitedTo(String jobName) {
+    return 'Has sido invitado a $jobName';
+  }
+
+  @override
+  String get hoursApproval => 'Aprobación de Horas';
+
+  @override
+  String get needsSheet => 'Necesita Hoja';
+
+  @override
+  String needsSheetCount(int count) {
+    return '$count Necesita Hoja';
+  }
+
+  @override
+  String staffCount(int count) {
+    return '$count personal';
+  }
+
+  @override
+  String catalogClientsRoles(int clientCount, int roleCount) {
+    return 'Catálogo • $clientCount clientes, $roleCount roles';
+  }
+
+  @override
+  String get clients => 'Clientes';
+
+  @override
+  String get roles => 'Roles';
+
+  @override
+  String get tariffs => 'Tarifas';
+
+  @override
+  String get addClient => 'Agregar Cliente';
 }

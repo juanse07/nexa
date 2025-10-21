@@ -181,4 +181,80 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get navCatalog => 'Catalog';
+
+  @override
+  String get uploadData => 'Upload Data';
+
+  @override
+  String get manualEntry => 'Manual Entry';
+
+  @override
+  String get multiUpload => 'Multi-Upload';
+
+  @override
+  String get aiChat => 'AI Chat';
+
+  @override
+  String get chooseFile => 'Choose File';
+
+  @override
+  String get detailedExplanation => 'Detailed Explanation';
+
+  @override
+  String get messagesAndTeamMembers => 'Messages and team members';
+
+  @override
+  String get searchNameOrEmail => 'Search name or email';
+
+  @override
+  String get all => 'All';
+
+  @override
+  String get bartender => 'Bartender';
+
+  @override
+  String get server => 'Server';
+
+  @override
+  String messages(int count) {
+    return 'Messages ($count)';
+  }
+
+  @override
+  String youveBeenInvitedTo(String jobName) {
+    return 'You\'ve been invited to $jobName';
+  }
+
+  @override
+  String get hoursApproval => 'Hours Approval';
+
+  @override
+  String get needsSheet => 'Needs Sheet';
+
+  @override
+  String needsSheetCount(int count) {
+    return '$count Needs Sheet';
+  }
+
+  @override
+  String staffCount(int count) {
+    return '$count staff';
+  }
+
+  @override
+  String catalogClientsRoles(int clientCount, int roleCount) {
+    return 'Catalog • $clientCount clients, $roleCount roles';
+  }
+
+  @override
+  String get clients => 'Clients';
+
+  @override
+  String get roles => 'Roles';
+
+  @override
+  String get tariffs => 'Tariffs';
+
+  @override
+  String get addClient => 'Add Client';
 }

@@ -252,5 +252,122 @@
   "navCatalog": "Catalog",
   "@navCatalog": {
     "description": "Bottom navigation bar label for catalog tab"
+  },
+
+  "uploadData": "Upload Data",
+  "@uploadData": {
+    "description": "Tab label for upload data option"
+  },
+  "manualEntry": "Manual Entry",
+  "@manualEntry": {
+    "description": "Tab label for manual entry option"
+  },
+  "multiUpload": "Multi-Upload",
+  "@multiUpload": {
+    "description": "Tab label for multi-upload option"
+  },
+  "aiChat": "AI Chat",
+  "@aiChat": {
+    "description": "Tab label for AI chat option"
+  },
+  "chooseFile": "Choose File",
+  "@chooseFile": {
+    "description": "Button text for choosing file to upload"
+  },
+  "detailedExplanation": "Detailed Explanation",
+  "@detailedExplanation": {
+    "description": "Section header for detailed explanation"
+  },
+  "messagesAndTeamMembers": "Messages and team members",
+  "@messagesAndTeamMembers": {
+    "description": "Subtitle for chat screen"
+  },
+  "searchNameOrEmail": "Search name or email",
+  "@searchNameOrEmail": {
+    "description": "Search field placeholder in chat"
+  },
+  "all": "All",
+  "@all": {
+    "description": "Filter tab for all items"
+  },
+  "bartender": "Bartender",
+  "@bartender": {
+    "description": "Role filter for bartender"
+  },
+  "server": "Server",
+  "@server": {
+    "description": "Role filter for server"
+  },
+  "messages": "Messages ({count})",
+  "@messages": {
+    "description": "Messages section header with count",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "youveBeenInvitedTo": "You've been invited to {jobName}",
+  "@youveBeenInvitedTo": {
+    "description": "Chat message preview for job invitation",
+    "placeholders": {
+      "jobName": {
+        "type": "String"
+      }
+    }
+  },
+  "hoursApproval": "Hours Approval",
+  "@hoursApproval": {
+    "description": "Title for hours approval screen"
+  },
+  "needsSheet": "Needs Sheet",
+  "@needsSheet": {
+    "description": "Badge text when sheet is needed"
+  },
+  "needsSheetCount": "{count} Needs Sheet",
+  "@needsSheetCount": {
+    "description": "Badge text with count needing sheets",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "staffCount": "{count} staff",
+  "@staffCount": {
+    "description": "Display text for number of staff",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "catalogClientsRoles": "Catalog • {clientCount} clients, {roleCount} roles",
+  "@catalogClientsRoles": {
+    "description": "Catalog header with counts",
+    "placeholders": {
+      "clientCount": {
+        "type": "int"
+      },
+      "roleCount": {
+        "type": "int"
+      }
+    }
+  },
+  "clients": "Clients",
+  "@clients": {
+    "description": "Tab label for clients"
+  },
+  "roles": "Roles",
+  "@roles": {
+    "description": "Tab label for roles"
+  },
+  "tariffs": "Tariffs",
+  "@tariffs": {
+    "description": "Tab label for tariffs"
+  },
+  "addClient": "Add Client",
+  "@addClient": {
+    "description": "Button text for adding a client"
   }
 }

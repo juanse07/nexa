@@ -1039,7 +1039,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         }
         return baseTime;
       case 2: // Chat tab
-        return "Messages and team members • $baseTime";
+        return "${AppLocalizations.of(context)!.messagesAndTeamMembers} • $baseTime";
       case 3: // Hours tab
         return baseTime;
       case 4: // Catalog tab
@@ -1091,17 +1091,17 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     bottom: false,
                     child: TabBar(
                       controller: _createTabController,
-                      tabs: const [
+                      tabs: [
                         Tab(
                           icon: Icon(Icons.upload_file),
-                          text: 'Upload Document',
+                          text: AppLocalizations.of(context)!.uploadData,
                         ),
-                        Tab(icon: Icon(Icons.edit), text: 'Manual Entry'),
+                        Tab(icon: Icon(Icons.edit), text: AppLocalizations.of(context)!.manualEntry),
                         Tab(
                           icon: Icon(Icons.cloud_upload),
-                          text: 'Multi-Upload',
+                          text: AppLocalizations.of(context)!.multiUpload,
                         ),
-                        Tab(icon: Icon(Icons.chat), text: 'AI Chat'),
+                        Tab(icon: Icon(Icons.chat), text: AppLocalizations.of(context)!.aiChat),
                       ],
                       labelColor: Color(0xFF6366F1),
                       unselectedLabelColor: Colors.grey,
@@ -1166,9 +1166,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               Expanded(
                                 child: TextField(
                                   controller: _userSearchCtrl,
-                                  decoration: const InputDecoration(
+                                  decoration: InputDecoration(
                                     prefixIcon: Icon(Icons.search),
-                                    hintText: 'Search name or email',
+                                    hintText: AppLocalizations.of(context)!.searchNameOrEmail,
                                     border: OutlineInputBorder(),
                                     contentPadding: EdgeInsets.symmetric(
                                       vertical: 12,
@@ -1192,7 +1192,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               children: [
                                 FilterChip(
                                   selected: _selectedRole == null,
-                                  label: const Text('All'),
+                                  label: Text(AppLocalizations.of(context)!.all),
                                   onSelected: (selected) {
                                     setState(() => _selectedRole = null);
                                   },
@@ -1726,11 +1726,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           color: Colors.white,
           child: TabBar(
             controller: _createTabController,
-            tabs: const [
-              Tab(icon: Icon(Icons.upload_file), text: 'Upload Document'),
-              Tab(icon: Icon(Icons.edit), text: 'Manual Entry'),
-              Tab(icon: Icon(Icons.cloud_upload), text: 'Multi-Upload'),
-              Tab(icon: Icon(Icons.chat), text: 'AI Chat'),
+            tabs: [
+              Tab(icon: Icon(Icons.upload_file), text: AppLocalizations.of(context)!.uploadData),
+              Tab(icon: Icon(Icons.edit), text: AppLocalizations.of(context)!.manualEntry),
+              Tab(icon: Icon(Icons.cloud_upload), text: AppLocalizations.of(context)!.multiUpload),
+              Tab(icon: Icon(Icons.chat), text: AppLocalizations.of(context)!.aiChat),
             ],
             labelColor: Color(0xFF6366F1),
             unselectedLabelColor: Colors.grey,
@@ -1757,12 +1757,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         length: 4,
         child: Column(
           children: [
-            const TabBar(
+            TabBar(
               tabs: [
-                Tab(icon: Icon(Icons.upload_file), text: 'Upload Document'),
-                Tab(icon: Icon(Icons.edit), text: 'Manual Entry'),
-                Tab(icon: Icon(Icons.cloud_upload), text: 'Multi-Upload'),
-                Tab(icon: Icon(Icons.chat), text: 'AI Chat'),
+                Tab(icon: Icon(Icons.upload_file), text: AppLocalizations.of(context)!.uploadData),
+                Tab(icon: Icon(Icons.edit), text: AppLocalizations.of(context)!.manualEntry),
+                Tab(icon: Icon(Icons.cloud_upload), text: AppLocalizations.of(context)!.multiUpload),
+                Tab(icon: Icon(Icons.chat), text: AppLocalizations.of(context)!.aiChat),
               ],
               labelColor: Color(0xFF6366F1),
               unselectedLabelColor: Colors.grey,
@@ -2250,7 +2250,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   child: Row(
                     children: [
                       ChoiceChip(
-                        label: const Text('All'),
+                        label: Text(AppLocalizations.of(context)!.all),
                         selected: _peopleFilter == 'all',
                         onSelected: (selected) {
                           if (selected) setState(() => _peopleFilter = 'all');
@@ -2586,9 +2586,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     Expanded(
                       child: TextField(
                         controller: _userSearchCtrl,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           prefixIcon: Icon(Icons.search),
-                          hintText: 'Search name or email',
+                          hintText: AppLocalizations.of(context)!.searchNameOrEmail,
                           border: OutlineInputBorder(),
                         ),
                         onSubmitted: (_) => _loadFirstUsersPage(),
@@ -2617,7 +2617,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     children: [
                       FilterChip(
                         selected: _selectedRole == null,
-                        label: const Text('All'),
+                        label: Text(AppLocalizations.of(context)!.all),
                         onSelected: (selected) {
                           setState(() => _selectedRole = null);
                         },
@@ -2832,7 +2832,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 description:
                     'Select a PDF or image file to extract event details automatically using AI',
                 icon: Icons.upload_file,
-                actionText: isLoading ? 'Processing...' : 'Choose File',
+                actionText: isLoading ? 'Processing...' : AppLocalizations.of(context)!.chooseFile,
                 onPressed: _pickAndProcessFile,
                 isLoading: isLoading,
                 color: const Color(0xFF6366F1),
@@ -3241,9 +3241,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     Expanded(
                       child: TextField(
                         controller: _userSearchCtrl,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           prefixIcon: Icon(Icons.search),
-                          hintText: 'Search name or email',
+                          hintText: AppLocalizations.of(context)!.searchNameOrEmail,
                           border: OutlineInputBorder(),
                         ),
                         onSubmitted: (_) => _loadFirstUsersPage(),
@@ -3264,7 +3264,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     children: [
                       FilterChip(
                         selected: _selectedRole == null,
-                        label: const Text('All'),
+                        label: Text(AppLocalizations.of(context)!.all),
                         onSelected: (selected) {
                           setState(() => _selectedRole = null);
                         },
