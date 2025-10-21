@@ -6337,6 +6337,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           ),
         ),
         ),
+        // Show pending update previews
+        _buildUpdatePreviewCards(),
         // Only show input widget when conversation has started
         ColoredBox(
           color: Colors.transparent,
@@ -6409,6 +6411,156 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildUpdatePreviewCards() {
+    final pendingUpdates = _aiChatService.pendingUpdates;
+    if (pendingUpdates.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: pendingUpdates.map((update) {
+          final eventId = update['eventId'] as String? ?? '';
+          final updates = update['updates'] as Map<String, dynamic>? ?? {};
+          final summary = update['summary'] as String? ?? 'Update event';
+
+          // Find the event name from existing events for display
+          String eventName = 'Event';
+          final existingEvent = _aiChatService.existingEvents.firstWhere(
+            (e) => (e['_id'] ?? e['id']) == eventId,
+            orElse: () => {},
+          );
+          if (existingEvent.isNotEmpty) {
+            eventName = existingEvent['event_name'] ?? existingEvent['name'] ?? 'Event';
+          }
+
+          return Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Colors.orange.shade300, width: 2),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.update, color: Colors.orange.shade700),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Update: $eventName',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.orange.shade900,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    summary,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Changes:',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ...updates.entries.map((entry) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.arrow_forward,
+                            size: 16,
+                            color: Colors.grey.shade600,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '${entry.key}: ${entry.value}',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey.shade800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () {
+                          setState(() {
+                            _aiChatService.removePendingUpdate(update);
+                          });
+                        },
+                        child: const Text('Cancel'),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: () async {
+                          try {
+                            await _aiChatService.applyUpdate(update);
+                            if (mounted) {
+                              setState(() {});
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Updated $eventName successfully!'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Failed to update: ${e.toString()}'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange.shade700,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Apply Changes'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 

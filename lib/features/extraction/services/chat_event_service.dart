@@ -7,6 +7,9 @@ import 'package:intl/intl.dart';
 import '../../../core/config/app_config.dart';
 import '../../auth/data/services/auth_service.dart';
 import 'clients_service.dart';
+import 'event_service.dart';
+import 'roles_service.dart';
+import 'tariffs_service.dart';
 
 /// Message in a chat conversation
 class ChatMessage {
@@ -44,7 +47,26 @@ class ChatMessage {
 class ChatEventService {
   static String? _cachedInstructions;
   final ClientsService _clientsService = ClientsService();
+  final EventService _eventService = EventService();
+  final RolesService _rolesService = RolesService();
+  final TariffsService _tariffsService = TariffsService();
+
   List<String> _existingClientNames = [];
+  List<Map<String, dynamic>> _existingEvents = [];
+
+  // Track created entities during chat
+  final Map<String, dynamic> _createdEntities = {
+    'clients': <Map<String, dynamic>>[],
+    'roles': <Map<String, dynamic>>[],
+    'tariffs': <Map<String, dynamic>>[],
+  };
+
+  // Track event update requests
+  final List<Map<String, dynamic>> _pendingUpdates = [];
+
+  Map<String, dynamic> get createdEntities => Map.unmodifiable(_createdEntities);
+  List<Map<String, dynamic>> get pendingUpdates => List.unmodifiable(_pendingUpdates);
+  List<Map<String, dynamic>> get existingEvents => List.unmodifiable(_existingEvents);
 
   static const String _fallbackPrompt = '''You are a friendly AI assistant helping create catering event staffing records. Your job is to collect event details through conversation.
 
@@ -119,14 +141,59 @@ Be conversational and friendly. If the user provides multiple pieces of informat
     }
   }
 
+  /// Load existing events from the database for context
+  Future<void> _loadExistingEvents() async {
+    try {
+      _existingEvents = await _eventService.fetchEvents();
+    } catch (e) {
+      print('Failed to load events: $e');
+      _existingEvents = [];
+    }
+  }
+
+  /// Format events for AI context (concise summary)
+  String _formatEventsForContext() {
+    if (_existingEvents.isEmpty) {
+      return 'No existing events in the system.';
+    }
+
+    final buffer = StringBuffer();
+    buffer.writeln('Existing events (${_existingEvents.length} total):');
+
+    for (final event in _existingEvents) {
+      final id = event['_id'] ?? event['id'] ?? 'unknown';
+      final name = event['event_name'] ?? event['name'] ?? 'Unnamed Event';
+      final client = event['client_name'] ?? 'No Client';
+      final date = event['date'] ?? 'No Date';
+
+      // Extract roles summary
+      final roles = event['roles'];
+      String rolesText = 'No roles';
+      if (roles is List && roles.isNotEmpty) {
+        rolesText = roles.map((r) {
+          final roleName = r['role'] ?? r['name'] ?? 'Unknown';
+          final count = r['count'] ?? r['headcount'] ?? 0;
+          return '$roleName($count)';
+        }).join(', ');
+      }
+
+      buffer.writeln('  - ID: $id | "$name" | Client: $client | Date: $date | Roles: $rolesText');
+    }
+
+    return buffer.toString();
+  }
+
   /// Build system prompt with current context
   Future<String> _buildSystemPrompt() async {
     final instructions = await _loadInstructions();
     await _loadExistingClients();
+    await _loadExistingEvents();
 
     final clientsList = _existingClientNames.isEmpty
         ? 'No existing clients in system.'
         : 'Existing clients: ${_existingClientNames.join(", ")}';
+
+    final eventsContext = _formatEventsForContext();
 
     final currentYear = DateTime.now().year;
 
@@ -136,6 +203,19 @@ Be conversational and friendly. If the user provides multiple pieces of informat
 - Current year: $currentYear
 - Current date: ${DateFormat('yyyy-MM-dd').format(DateTime.now())}
 - $clientsList
+
+## Existing Events
+$eventsContext
+
+## Event Updates
+If the user wants to modify an existing event, respond with "EVENT_UPDATE" followed by a JSON object:
+{
+  "eventId": "the event ID",
+  "updates": {
+    "field_name": "new_value",
+    ...
+  }
+}
 ''';
   }
 
@@ -144,6 +224,10 @@ Be conversational and friendly. If the user provides multiple pieces of informat
     _conversationHistory.clear();
     _currentEventData.clear();
     _eventComplete = false;
+    (_createdEntities['clients'] as List).clear();
+    (_createdEntities['roles'] as List).clear();
+    (_createdEntities['tariffs'] as List).clear();
+    _pendingUpdates.clear();
   }
 
   /// Load an existing event for editing
@@ -189,8 +273,22 @@ Be conversational and friendly. If the user provides multiple pieces of informat
         try {
           final extractedData = jsonDecode(jsonMatch.group(0)!) as Map<String, dynamic>;
           _currentEventData.addAll(extractedData);
+
+          // Auto-create entities before saving to pending
+          await _createEntitiesIfNeeded(extractedData);
         } catch (e) {
           print('Failed to parse event JSON: $e');
+        }
+      }
+    } else if (content.contains('EVENT_UPDATE')) {
+      // Handle event update requests
+      final jsonMatch = RegExp(r'\{[\s\S]*\}').firstMatch(content);
+      if (jsonMatch != null) {
+        try {
+          final updateData = jsonDecode(jsonMatch.group(0)!) as Map<String, dynamic>;
+          _pendingUpdates.add(updateData);
+        } catch (e) {
+          print('Failed to parse event update JSON: $e');
         }
       }
     } else {
@@ -203,6 +301,106 @@ Be conversational and friendly. If the user provides multiple pieces of informat
     _conversationHistory.add(assistantMsg);
 
     return assistantMsg;
+  }
+
+  /// Create clients, roles, and tariffs if they don't exist
+  Future<void> _createEntitiesIfNeeded(Map<String, dynamic> eventData) async {
+    try {
+      // 1. Create client if needed
+      final clientName = eventData['client_name'] as String?;
+      if (clientName != null && clientName.isNotEmpty) {
+        // Check if client exists in our loaded list
+        if (!_existingClientNames.contains(clientName)) {
+          try {
+            print('Creating new client: $clientName');
+            final newClient = await _clientsService.createClient(clientName);
+            (_createdEntities['clients'] as List).add(newClient);
+            _existingClientNames.add(clientName);
+            print('Client created successfully: ${newClient['_id'] ?? newClient['id']}');
+          } catch (e) {
+            print('Failed to create client: $e');
+          }
+        }
+      }
+
+      // 2. Create roles if needed
+      final roles = eventData['roles'];
+      if (roles is List && roles.isNotEmpty) {
+        // Get existing roles from service
+        List<Map<String, dynamic>> existingRoles = [];
+        try {
+          existingRoles = await _rolesService.fetchRoles();
+        } catch (e) {
+          print('Failed to fetch roles: $e');
+        }
+
+        final existingRoleNames = existingRoles
+            .map((r) => (r['name'] as String?) ?? '')
+            .where((name) => name.isNotEmpty)
+            .toList();
+
+        for (final roleData in roles) {
+          final roleNameDynamic = roleData['role'] ?? roleData['name'];
+          final roleName = roleNameDynamic?.toString();
+          if (roleName != null && roleName.isNotEmpty) {
+            if (!existingRoleNames.contains(roleName)) {
+              try {
+                print('Creating new role: $roleName');
+                final newRole = await _rolesService.createRole(roleName);
+                (_createdEntities['roles'] as List).add(newRole);
+                existingRoleNames.add(roleName);
+                print('Role created successfully: ${newRole['_id'] ?? newRole['id']}');
+              } catch (e) {
+                print('Failed to create role: $e');
+              }
+            }
+          }
+        }
+      }
+
+      // 3. Create/update tariffs if pay rate info provided
+      final payRateInfo = eventData['pay_rate_info'];
+      if (payRateInfo != null && payRateInfo.toString().isNotEmpty) {
+        // This would require parsing the pay rate info and creating tariffs
+        // We'll implement this if the AI provides structured pay rate data
+        print('Pay rate info detected: $payRateInfo');
+        // TODO: Parse and create tariffs if client and role IDs are available
+      }
+    } catch (e) {
+      print('Error creating entities: $e');
+    }
+  }
+
+  /// Apply pending updates to events
+  Future<void> applyUpdate(Map<String, dynamic> updateData) async {
+    try {
+      final eventId = updateData['eventId'] as String?;
+      final updates = updateData['updates'] as Map<String, dynamic>?;
+
+      if (eventId == null || updates == null) {
+        throw Exception('Invalid update data');
+      }
+
+      print('Applying update to event $eventId: $updates');
+      await _eventService.updateEvent(eventId, updates);
+
+      // Remove from pending updates
+      _pendingUpdates.removeWhere((u) => u['eventId'] == eventId);
+
+      print('Event updated successfully');
+    } catch (e) {
+      throw Exception('Failed to apply update: $e');
+    }
+  }
+
+  /// Clear pending updates
+  void clearPendingUpdates() {
+    _pendingUpdates.clear();
+  }
+
+  /// Remove a specific pending update
+  void removePendingUpdate(Map<String, dynamic> update) {
+    _pendingUpdates.remove(update);
   }
 
   /// Call backend AI chat API
