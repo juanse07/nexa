@@ -296,13 +296,17 @@ router.post('/invites/redeem', inviteRedeemLimiter, requireAuth, async (req, res
           // Create welcome message
           const welcomeMessage = await ChatMessageModel.create({
             conversationId: conversation._id,
+            managerId: invite.managerId,
+            userKey: userKey,
             senderType: 'manager',
-            senderId: invite.managerId,
-            content: welcomeText,
+            message: welcomeText,
+            messageType: 'text',
             metadata: {
               automated: true,
               type: 'welcome',
             },
+            readByManager: true,
+            readByUser: false,
             createdAt: new Date(),
           });
 
@@ -322,9 +326,13 @@ router.post('/invites/redeem', inviteRedeemLimiter, requireAuth, async (req, res
           emitToUser(userKey, 'chat:message', {
             id: String(welcomeMessage._id),
             conversationId: String(conversation._id),
+            managerId: String(invite.managerId),
+            userKey: userKey,
             senderType: 'manager',
-            senderId: String(invite.managerId),
-            content: welcomeText,
+            message: welcomeText,
+            messageType: 'text',
+            readByManager: true,
+            readByUser: false,
             createdAt: welcomeMessage.createdAt.toISOString(),
             metadata: welcomeMessage.metadata,
           });
