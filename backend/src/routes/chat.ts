@@ -4,6 +4,7 @@ import { ConversationModel } from '../models/conversation';
 import { ChatMessageModel } from '../models/chatMessage';
 import { ManagerModel } from '../models/manager';
 import { UserModel } from '../models/user';
+import { TeamMemberModel } from '../models/teamMember';
 import { emitToManager, emitToUser } from '../socket/server';
 import mongoose from 'mongoose';
 
@@ -21,9 +22,23 @@ router.get('/conversations', requireAuth, async (req, res) => {
     let conversations;
 
     if (managerId) {
-      // Manager: get all conversations with users
+      // Manager: get all conversations with users who are active team members
       const managerObjectId = new mongoose.Types.ObjectId(managerId);
-      conversations = await ConversationModel.find({ managerId: managerObjectId })
+
+      // Get active team members for this manager
+      const teamMembers = await TeamMemberModel.find({
+        managerId: managerObjectId,
+        status: 'active'
+      }, { provider: 1, subject: 1 }).lean();
+
+      // Build userKeys from team members (format: "provider:subject")
+      const activeUserKeys = teamMembers.map((tm: any) => `${tm.provider}:${tm.subject}`);
+
+      // Only get conversations with active team members
+      conversations = await ConversationModel.find({
+        managerId: managerObjectId,
+        userKey: { $in: activeUserKeys }
+      })
         .sort({ lastMessageAt: -1 })
         .lean();
 
@@ -254,6 +269,22 @@ router.post('/conversations/:targetId/messages', requireAuth, async (req, res) =
         return res.status(404).json({ error: 'User not found' });
       }
       console.log('[CHAT DEBUG] User found:', user._id);
+
+      // SECURITY: Check if user is an active member of manager's teams
+      const isTeamMember = await TeamMemberModel.findOne({
+        managerId: senderManagerId,
+        provider: provider,
+        subject: subject,
+        status: 'active'
+      }).lean();
+
+      if (!isTeamMember) {
+        console.log('[CHAT SECURITY] Manager attempted to message user who is not a team member');
+        return res.status(403).json({
+          error: 'Cannot message users who are not members of your teams'
+        });
+      }
+      console.log('[CHAT DEBUG] User is active team member - proceeding');
 
       // Find or create conversation
       conversation = await ConversationModel.findOneAndUpdate(

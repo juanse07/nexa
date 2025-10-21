@@ -1,16 +1,22 @@
 import mongoose, { Document, Model, Schema } from 'mongoose';
 
 export type TeamInviteStatus = 'pending' | 'accepted' | 'declined' | 'cancelled' | 'expired';
+export type TeamInviteType = 'targeted' | 'link';
 
 export interface TeamInviteDocument extends Document {
   teamId: mongoose.Types.ObjectId;
   managerId: mongoose.Types.ObjectId;
   invitedBy?: mongoose.Types.ObjectId;
   token: string;
+  shortCode?: string; // NEW: 6-character code for shareable links
+  inviteType: TeamInviteType; // NEW: 'targeted' for email invites, 'link' for shareable
   email?: string;
   provider?: string;
   subject?: string;
   status: TeamInviteStatus;
+  maxUses?: number; // NEW: null/undefined = unlimited, or set limit
+  usedCount: number; // NEW: Track redemptions
+  requireApproval: boolean; // NEW: Manager must approve after join
   expiresAt?: Date;
   acceptedAt?: Date;
   claimedByKey?: string;
@@ -24,6 +30,8 @@ const TeamInviteSchema = new Schema<TeamInviteDocument>(
     managerId: { type: Schema.Types.ObjectId, ref: 'Manager', required: true, index: true },
     invitedBy: { type: Schema.Types.ObjectId, ref: 'Manager' },
     token: { type: String, required: true, unique: true, index: true },
+    shortCode: { type: String, sparse: true, unique: true, index: true, uppercase: true }, // NEW
+    inviteType: { type: String, enum: ['targeted', 'link'], default: 'targeted' }, // NEW
     email: { type: String, trim: true },
     provider: { type: String, trim: true },
     subject: { type: String, trim: true },
@@ -32,6 +40,9 @@ const TeamInviteSchema = new Schema<TeamInviteDocument>(
       enum: ['pending', 'accepted', 'declined', 'cancelled', 'expired'],
       default: 'pending',
     },
+    maxUses: { type: Number, default: null }, // NEW: null = unlimited
+    usedCount: { type: Number, default: 0 }, // NEW
+    requireApproval: { type: Boolean, default: false }, // NEW
     expiresAt: { type: Date },
     acceptedAt: { type: Date },
     claimedByKey: { type: String, trim: true },

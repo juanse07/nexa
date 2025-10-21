@@ -13,6 +13,8 @@ import { TeamInviteModel } from '../models/teamInvite';
 import { TeamMessageModel } from '../models/teamMessage';
 import { EventModel } from '../models/event';
 import { UserModel } from '../models/user';
+import { generateUniqueShortCode, isValidShortCodeFormat } from '../utils/inviteCodeGenerator';
+import { inviteCreateLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
 
@@ -71,6 +73,12 @@ const teamMembersQuerySchema = z.object({
     .transform((val) => val === 'true' || val === '1')
     .optional()
     .default('false'),
+});
+
+const createInviteLinkSchema = z.object({
+  expiresInDays: z.number().int().min(1).max(90).optional(),
+  maxUses: z.number().int().min(1).max(1000).optional().nullable(),
+  requireApproval: z.boolean().optional().default(false),
 });
 
 const defaultInviteExpiryDays = 14;
@@ -814,6 +822,159 @@ router.post('/teams/:teamId/invites/:inviteId/cancel', requireAuth, async (req, 
     return res.json({ message: 'Invite cancelled' });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to cancel invite' });
+  }
+});
+
+// Create shareable invite link
+router.post('/teams/:teamId/invites/create-link', inviteCreateLimiter, requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const teamIdParam = req.params.teamId ?? '';
+
+    if (!mongoose.Types.ObjectId.isValid(teamIdParam)) {
+      return res.status(400).json({ message: 'Invalid team id' });
+    }
+    const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
+
+    // Verify team exists and belongs to manager
+    const team = await TeamModel.findOne({
+      _id: teamObjectId,
+      managerId,
+    }).lean();
+
+    if (!team) {
+      return res.status(404).json({ message: 'Team not found' });
+    }
+
+    // Validate request body
+    const parsed = createInviteLinkSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({
+        message: 'Validation failed',
+        details: parsed.error.format(),
+      });
+    }
+
+    const { expiresInDays, maxUses, requireApproval } = parsed.data;
+
+    // Generate unique short code
+    const shortCode = await generateUniqueShortCode();
+
+    // Generate standard token for backward compatibility
+    const token = generateInviteToken();
+
+    // Calculate expiration date
+    let expiresAt: Date | undefined;
+    if (expiresInDays) {
+      expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + expiresInDays);
+    }
+
+    // Create invite
+    const invite = await TeamInviteModel.create({
+      teamId: teamObjectId,
+      managerId,
+      invitedBy: managerId,
+      token,
+      shortCode,
+      inviteType: 'link',
+      status: 'pending',
+      maxUses: maxUses ?? null,
+      usedCount: 0,
+      requireApproval: requireApproval ?? false,
+      expiresAt,
+    });
+
+    // Build deep link and store links
+    const deepLink = `nexaapp://invite/${shortCode}`;
+    const appStoreLink = 'https://apps.apple.com/app/nexa/id123456789'; // TODO: Replace with actual App Store ID
+    const playStoreLink = 'https://play.google.com/store/apps/details?id=com.nexa.app'; // TODO: Replace with actual package name
+
+    // Generate shareable message
+    const expiryText = expiresAt
+      ? `Expires: ${expiresAt.toLocaleDateString()}`
+      : 'Never expires';
+
+    const shareableMessage = `Join my team on Nexa! 🎉
+
+Already have the app?
+Tap: ${deepLink}
+
+Don't have it yet?
+1. Download Nexa from your app store
+2. Enter code: ${shortCode}
+
+${expiryText}`;
+
+    return res.status(201).json({
+      inviteId: String(invite._id),
+      shortCode: invite.shortCode,
+      deepLink,
+      appStoreLink,
+      playStoreLink,
+      shareableMessage,
+      expiresAt: invite.expiresAt,
+      maxUses: invite.maxUses,
+      usedCount: invite.usedCount,
+      requireApproval: invite.requireApproval,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[teams] POST /teams/:teamId/invites/create-link failed', err);
+    return res.status(500).json({ message: 'Failed to create invite link' });
+  }
+});
+
+// Get all invite links for a team
+router.get('/teams/:teamId/invites/links', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const teamIdParam = req.params.teamId ?? '';
+
+    if (!mongoose.Types.ObjectId.isValid(teamIdParam)) {
+      return res.status(400).json({ message: 'Invalid team id' });
+    }
+    const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
+
+    // Verify team belongs to manager
+    const team = await TeamModel.findOne({
+      _id: teamObjectId,
+      managerId,
+    }).lean();
+
+    if (!team) {
+      return res.status(404).json({ message: 'Team not found' });
+    }
+
+    // Get all link-type invites for this team
+    const invites = await TeamInviteModel.find({
+      teamId: teamObjectId,
+      managerId,
+      inviteType: 'link',
+    })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+
+    const payload = invites.map((invite) => ({
+      id: String(invite._id),
+      shortCode: invite.shortCode,
+      deepLink: `nexaapp://invite/${invite.shortCode}`,
+      status: invite.status,
+      usedCount: invite.usedCount,
+      maxUses: invite.maxUses,
+      requireApproval: invite.requireApproval,
+      expiresAt: invite.expiresAt,
+      createdAt: invite.createdAt,
+    }));
+
+    return res.json({ invites: payload });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[teams] GET /teams/:teamId/invites/links failed', err);
+    return res.status(500).json({ message: 'Failed to fetch invite links' });
   }
 });
 
