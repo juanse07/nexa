@@ -32,7 +32,7 @@ const TeamMemberSchema = new Schema<TeamMemberDocument>(
       default: 'pending',
     },
   },
-  { timestamps: true }
+  { timestamps: true, collection: 'teammembers' }
 );
 
 TeamMemberSchema.index({ teamId: 1, provider: 1, subject: 1 }, { unique: true });
