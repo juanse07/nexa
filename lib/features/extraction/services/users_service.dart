@@ -37,4 +37,35 @@ class UsersService {
       );
     }
   }
+
+  Future<Map<String, dynamic>> fetchTeamMembers({
+    String? q,
+    String? cursor,
+    int limit = 20,
+  }) async {
+    final params = <String, String>{'limit': '$limit'};
+    if (q != null && q.trim().isNotEmpty) params['q'] = q.trim();
+    if (cursor != null && cursor.isNotEmpty) params['cursor'] = cursor;
+
+    try {
+      final response = await _apiClient.get<Map<String, dynamic>>(
+        '/teams/my/members',
+        queryParameters: params,
+      );
+
+      if (response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300) {
+        return response.data ?? {};
+      }
+
+      throw Exception(
+        'Failed to load team members (${response.statusCode}): ${response.data}',
+      );
+    } on DioException catch (e) {
+      throw Exception(
+        'Failed to load team members: ${e.message}',
+      );
+    }
+  }
 }

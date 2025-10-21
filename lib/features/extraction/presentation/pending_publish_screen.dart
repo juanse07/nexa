@@ -98,7 +98,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
     if (_loadingUsers) return;
     setState(() => _loadingUsers = true);
     try {
-      final res = await _usersService.fetchUsers(
+      final res = await _usersService.fetchTeamMembers(
         q: _searchCtrl.text.trim(),
         cursor: reset ? null : _cursor,
         limit: 20,
@@ -117,6 +117,8 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
             'id': (u['id'] ?? u['_id'] ?? '').toString(),
             'subject': (u['subject'] ?? '').toString(),
             'provider': (u['provider'] ?? '').toString(),
+            'first_name': (u['first_name'] ?? '').toString(),
+            'last_name': (u['last_name'] ?? '').toString(),
           };
         }
       });
@@ -451,7 +453,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                   _buildFavoritesSection(),
                   const SizedBox(height: 16),
                   const Text(
-                    'Tiggers',
+                    'Team Members',
                     style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 8),
@@ -459,7 +461,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                     controller: _searchCtrl,
                     decoration: const InputDecoration(
                       prefixIcon: Icon(Icons.search),
-                      hintText: 'Search users',
+                      hintText: 'Search team members',
                     ),
                     onSubmitted: (_) => _loadUsers(reset: true),
                   ),
