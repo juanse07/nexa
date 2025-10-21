@@ -1164,7 +1164,7 @@ router.get('/teams/my/invites', requireAuth, async (req, res) => {
       orConditions.push({ email: authUser.email });
     }
 
-    match['\$or'] = orConditions;
+    match['$or'] = orConditions;
 
     const invites = await TeamInviteModel.find(match).sort({ createdAt: -1 }).limit(200).lean();
 
