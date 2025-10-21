@@ -1013,15 +1013,24 @@ class _ChatScreenState extends State<ChatScreen> {
   ) {
     final roles = eventData['roles'] as List<dynamic>? ?? [];
     final role = roles.cast<Map<String, dynamic>>().firstWhere(
-      (r) => (r['_id'] ?? r['role_id'] ?? r['role']) == roleId,
+      (r) {
+        final id = r['_id'] ?? r['role_id'];
+        final name = r['role'] ?? r['name'] ?? r['role_name'];
+        return id == roleId || name == roleId;
+      },
       orElse: () => <String, dynamic>{},
     );
 
+    // If role not found, use roleId as the role name for display
     final eventName = eventData['title'] as String? ?? eventData['event_name'] as String? ?? 'Event';
-    final roleName = role['role_name'] as String? ?? role['role'] as String? ?? 'Role';
+    final roleName = role.isNotEmpty
+        ? (role['role_name'] as String? ?? role['role'] as String? ?? role['name'] as String? ?? roleId)
+        : roleId;
     final clientName = eventData['client_name'] as String? ?? 'Client';
     final venueName = eventData['venue_name'] as String?;
-    final rate = role['rate'] as num? ?? (role['tariff'] as Map<String, dynamic>?)?['rate'] as num?;
+    final rate = role.isNotEmpty
+        ? (role['rate'] as num? ?? (role['tariff'] as Map<String, dynamic>?)?['rate'] as num?)
+        : null;
 
     // Parse event date and times
     final dateStr = eventData['start_date'] as String? ?? eventData['date'] as String?;
