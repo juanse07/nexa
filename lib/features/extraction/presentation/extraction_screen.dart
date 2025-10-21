@@ -6062,6 +6062,54 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               icon: Icons.auto_awesome,
                               gradientColors: const [Color(0xFF8B5CF6), Color(0xFFEC4899)],
                             ),
+                            // AI Provider toggle
+                            Positioned(
+                              left: 8,
+                              top: 8,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.25),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(16),
+                                  onTap: () {
+                                    setState(() {
+                                      final newProvider = _aiChatService.aiProvider == 'openai' ? 'claude' : 'openai';
+                                      _aiChatService.setAiProvider(newProvider);
+                                    });
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Using ${_aiChatService.aiProvider == 'openai' ? 'OpenAI' : 'Claude'} AI'),
+                                        duration: const Duration(seconds: 2),
+                                      ),
+                                    );
+                                  },
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          _aiChatService.aiProvider == 'openai' ? Icons.psychology : Icons.hub,
+                                          color: Colors.white,
+                                          size: 16,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          _aiChatService.aiProvider == 'openai' ? 'OpenAI' : 'Claude',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                             // Clear chat button - only show if there are messages
                             if (messages.isNotEmpty)
                               Positioned(

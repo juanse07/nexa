@@ -54,6 +54,11 @@ class ChatEventService {
   List<String> _existingClientNames = [];
   List<Map<String, dynamic>> _existingEvents = [];
 
+  // Cache timestamps for smart reloading
+  DateTime? _clientsCacheTime;
+  DateTime? _eventsCacheTime;
+  static const Duration _cacheValidDuration = Duration(minutes: 5);
+
   // Track created entities during chat
   final Map<String, dynamic> _createdEntities = {
     'clients': <Map<String, dynamic>>[],
@@ -127,28 +132,129 @@ Be conversational and friendly. If the user provides multiple pieces of informat
     }
   }
 
-  /// Load existing clients from the database
-  Future<void> _loadExistingClients() async {
+  /// Load existing clients from the database with caching
+  Future<void> _loadExistingClients({bool forceRefresh = false}) async {
+    // Check if cache is valid
+    if (!forceRefresh &&
+        _clientsCacheTime != null &&
+        DateTime.now().difference(_clientsCacheTime!) < _cacheValidDuration &&
+        _existingClientNames.isNotEmpty) {
+      print('Using cached clients (${_existingClientNames.length} items)');
+      return;
+    }
+
     try {
+      print('Fetching fresh clients from database...');
       final clients = await _clientsService.fetchClients();
       _existingClientNames = clients
           .map((c) => (c['name'] as String?) ?? '')
           .where((name) => name.isNotEmpty)
           .toList();
+      _clientsCacheTime = DateTime.now();
+      print('Loaded ${_existingClientNames.length} clients');
     } catch (e) {
       print('Failed to load clients: $e');
       _existingClientNames = [];
     }
   }
 
-  /// Load existing events from the database for context
-  Future<void> _loadExistingEvents() async {
+  /// Load existing events from the database with caching and optional filtering
+  Future<void> _loadExistingEvents({
+    bool forceRefresh = false,
+    String? filterByClient,
+    String? filterByMonth,
+  }) async {
+    // Check if cache is valid and no filters applied
+    if (!forceRefresh &&
+        filterByClient == null &&
+        filterByMonth == null &&
+        _eventsCacheTime != null &&
+        DateTime.now().difference(_eventsCacheTime!) < _cacheValidDuration &&
+        _existingEvents.isNotEmpty) {
+      print('Using cached events (${_existingEvents.length} items)');
+      return;
+    }
+
     try {
-      _existingEvents = await _eventService.fetchEvents();
+      print('Fetching fresh events from database...');
+      final allEvents = await _eventService.fetchEvents();
+
+      // Apply filters if specified
+      List<Map<String, dynamic>> filteredEvents = allEvents;
+
+      if (filterByClient != null) {
+        filteredEvents = filteredEvents.where((event) {
+          final clientName = (event['client_name'] as String?)?.toLowerCase() ?? '';
+          return clientName.contains(filterByClient.toLowerCase());
+        }).toList();
+        print('Filtered to ${filteredEvents.length} events for client: $filterByClient');
+      }
+
+      if (filterByMonth != null) {
+        filteredEvents = filteredEvents.where((event) {
+          final dateStr = event['date'] as String?;
+          if (dateStr == null) return false;
+          return dateStr.contains(filterByMonth);
+        }).toList();
+        print('Filtered to ${filteredEvents.length} events for month: $filterByMonth');
+      }
+
+      _existingEvents = filterByClient == null && filterByMonth == null
+          ? allEvents
+          : filteredEvents;
+
+      if (filterByClient == null && filterByMonth == null) {
+        _eventsCacheTime = DateTime.now();
+      }
+
+      print('Loaded ${_existingEvents.length} events');
     } catch (e) {
       print('Failed to load events: $e');
       _existingEvents = [];
     }
+  }
+
+  /// Invalidate cache when data changes
+  void _invalidateCache() {
+    _clientsCacheTime = null;
+    _eventsCacheTime = null;
+    print('Cache invalidated');
+  }
+
+  /// Smart context detection from user message
+  Map<String, String?> _detectContextNeeds(String userMessage) {
+    final lowerMsg = userMessage.toLowerCase();
+    String? clientFilter;
+    String? monthFilter;
+
+    // Detect specific client mentions
+    for (final clientName in _existingClientNames) {
+      if (lowerMsg.contains(clientName.toLowerCase())) {
+        clientFilter = clientName;
+        break;
+      }
+    }
+
+    // Detect month mentions
+    final months = [
+      'january', 'february', 'march', 'april', 'may', 'june',
+      'july', 'august', 'september', 'october', 'november', 'december',
+      'jan', 'feb', 'mar', 'apr', 'may', 'jun',
+      'jul', 'aug', 'sep', 'oct', 'nov', 'dec'
+    ];
+
+    for (int i = 0; i < months.length; i++) {
+      if (lowerMsg.contains(months[i])) {
+        final monthNum = ((i % 12) + 1).toString().padLeft(2, '0');
+        monthFilter = '-$monthNum-';
+        break;
+      }
+    }
+
+    return {
+      'client': clientFilter,
+      'month': monthFilter,
+    };
   }
 
   /// Format events for AI context (concise summary)
@@ -183,11 +289,26 @@ Be conversational and friendly. If the user provides multiple pieces of informat
     return buffer.toString();
   }
 
-  /// Build system prompt with current context
-  Future<String> _buildSystemPrompt() async {
+  /// Build system prompt with current context (smart loading)
+  Future<String> _buildSystemPrompt({
+    String? userMessage,
+  }) async {
     final instructions = await _loadInstructions();
+
+    // Smart context detection
+    Map<String, String?>? contextFilters;
+    if (userMessage != null) {
+      contextFilters = _detectContextNeeds(userMessage);
+    }
+
+    // Load with caching and smart filtering
     await _loadExistingClients();
-    await _loadExistingEvents();
+
+    // Only load filtered events if user mentioned specific client/month
+    await _loadExistingEvents(
+      filterByClient: contextFilters?['client'],
+      filterByMonth: contextFilters?['month'],
+    );
 
     final clientsList = _existingClientNames.isEmpty
         ? 'No existing clients in system.'
@@ -251,8 +372,8 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
     final userMsg = ChatMessage(role: 'user', content: userMessage);
     _conversationHistory.add(userMsg);
 
-    // Build system prompt with current context
-    final systemPrompt = await _buildSystemPrompt();
+    // Build system prompt with smart context loading based on user message
+    final systemPrompt = await _buildSystemPrompt(userMessage: userMessage);
 
     // Build messages for API call
     final messages = [
@@ -276,6 +397,8 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
 
           // Auto-create entities before saving to pending
           await _createEntitiesIfNeeded(extractedData);
+          // Invalidate cache since we may have created new clients/roles
+          _invalidateCache();
         } catch (e) {
           print('Failed to parse event JSON: $e');
         }
@@ -304,6 +427,8 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
             (_createdEntities['clients'] as List).add(newClient);
             _existingClientNames.add(clientName);
             print('Client created: ${newClient['_id'] ?? newClient['id']}');
+            // Invalidate cache
+            _invalidateCache();
           }
         } catch (e) {
           print('Failed to create client from chat: $e');
@@ -360,6 +485,8 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
               );
               (_createdEntities['tariffs'] as List).add(newTariff);
               print('Tariff created successfully');
+              // Invalidate cache
+              _invalidateCache();
             }
           }
         } catch (e) {
@@ -478,6 +605,20 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
     _pendingUpdates.remove(update);
   }
 
+  // AI provider preference ('openai' or 'claude')
+  String _aiProvider = 'openai'; // Default to OpenAI
+
+  /// Get current AI provider
+  String get aiProvider => _aiProvider;
+
+  /// Set AI provider
+  void setAiProvider(String provider) {
+    if (provider == 'openai' || provider == 'claude') {
+      _aiProvider = provider;
+      print('AI provider set to: $_aiProvider');
+    }
+  }
+
   /// Call backend AI chat API
   Future<String> _callBackendAI(
     List<Map<String, dynamic>> messages,
@@ -495,12 +636,15 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
       'messages': messages,
       'temperature': 0.7,
       'maxTokens': 500,
+      'provider': _aiProvider, // Include provider selection
     };
 
     final headers = {
       'Authorization': 'Bearer $token',
       'Content-Type': 'application/json',
     };
+
+    print('Sending request to AI ($aiProvider)...');
 
     final response = await http.post(
       uri,
@@ -521,7 +665,16 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
 
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     try {
-      return decoded['content'] as String;
+      final content = decoded['content'] as String;
+      final provider = decoded['provider'] as String?;
+      final usage = decoded['usage'];
+
+      print('Response from: ${provider ?? _aiProvider}');
+      if (usage != null) {
+        print('Token usage: $usage');
+      }
+
+      return content;
     } catch (_) {
       throw Exception('Failed to parse AI response');
     }

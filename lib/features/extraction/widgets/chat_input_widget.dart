@@ -50,19 +50,19 @@ class _ChatInputWidgetState extends State<ChatInputWidget> {
   Widget build(BuildContext context) {
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         child: Row(
           children: [
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(28),
+                  borderRadius: BorderRadius.circular(24),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.08),
-                      blurRadius: 12,
-                      offset: const Offset(0, 2),
+                      blurRadius: 8,
+                      offset: const Offset(0, 1),
                     ),
                   ],
                 ),
@@ -79,19 +79,19 @@ class _ChatInputWidgetState extends State<ChatInputWidget> {
                     filled: true,
                     fillColor: Colors.transparent,
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(28),
+                      borderRadius: BorderRadius.circular(24),
                       borderSide: BorderSide.none,
                     ),
                     contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 14,
+                      horizontal: 16,
+                      vertical: 10,
                     ),
                   ),
                   onSubmitted: (_) => _sendMessage(),
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 8),
             Container(
               decoration: BoxDecoration(
                 gradient: _hasText && !widget.isLoading
@@ -121,16 +121,16 @@ class _ChatInputWidgetState extends State<ChatInputWidget> {
               child: Material(
                 color: Colors.transparent,
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(20),
                   onTap: _hasText && !widget.isLoading ? _sendMessage : null,
                   child: Container(
-                    width: 48,
-                    height: 48,
+                    width: 40,
+                    height: 40,
                     alignment: Alignment.center,
                     child: widget.isLoading
                         ? const SizedBox(
-                            width: 20,
-                            height: 20,
+                            width: 18,
+                            height: 18,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
                               valueColor: AlwaysStoppedAnimation<Color>(
@@ -141,7 +141,7 @@ class _ChatInputWidgetState extends State<ChatInputWidget> {
                         : Icon(
                             Icons.send,
                             color: _hasText ? const Color(0xFFB8860B) : Colors.grey.shade500,
-                            size: 22,
+                            size: 20,
                           ),
                   ),
                 ),
