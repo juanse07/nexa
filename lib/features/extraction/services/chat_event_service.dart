@@ -725,12 +725,12 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
 
     try {
       // Fetch current date/time context from backend
-      final token = await AuthService.getToken();
+      final token = await AuthService.getJwt();
       if (token == null) {
         throw Exception('Not authenticated');
       }
 
-      final baseUrl = AppConfig.apiBaseUrl;
+      final baseUrl = AppConfig.instance.baseUrl;
       final response = await http.get(
         Uri.parse('$baseUrl/ai/system-info'),
         headers: {
