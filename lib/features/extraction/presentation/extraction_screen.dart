@@ -2182,16 +2182,16 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       _usersNextCursor = null;
     });
     try {
-      final res = await _usersService.fetchUsers(
-        q: _userSearchCtrl.text.trim(),
-        limit: 20,
+      // Use ChatService.fetchContacts() instead of UsersService.fetchUsers()
+      // This endpoint returns only team members and includes conversation status
+      final contacts = await _chatService.fetchContacts(
+        searchQuery: _userSearchCtrl.text.trim().isNotEmpty
+          ? _userSearchCtrl.text.trim()
+          : null,
       );
-      final items =
-          (res['items'] as List?)?.whereType<Map<String, dynamic>>().toList() ??
-          const [];
       setState(() {
-        _users = items;
-        _usersNextCursor = res['nextCursor']?.toString();
+        _users = contacts;
+        _usersNextCursor = null; // Contacts endpoint doesn't use pagination yet
         _isUsersLoading = false;
       });
     } catch (e) {
@@ -2199,35 +2199,28 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         _isUsersLoading = false;
       });
       if (!mounted) return;
+
+      // Show user-friendly error message
+      final errorMsg = e.toString().contains('don\'t have any team members')
+        ? 'You don\'t have any team members yet. Create an invite link to add members to your team!'
+        : 'Failed to load contacts: $e';
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to load users: $e'),
-          backgroundColor: const Color(0xFFDC2626),
+          content: Text(errorMsg),
+          backgroundColor: e.toString().contains('don\'t have any team members')
+            ? const Color(0xFF6366F1) // Blue for info
+            : const Color(0xFFDC2626), // Red for errors
         ),
       );
     }
   }
 
   Future<void> _loadMoreUsers() async {
-    if (_usersNextCursor == null || _isUsersLoading) return;
-    setState(() => _isUsersLoading = true);
-    try {
-      final res = await _usersService.fetchUsers(
-        q: _userSearchCtrl.text.trim(),
-        cursor: _usersNextCursor,
-        limit: 20,
-      );
-      final items =
-          (res['items'] as List?)?.whereType<Map<String, dynamic>>().toList() ??
-          const [];
-      setState(() {
-        _users = [..._users, ...items];
-        _usersNextCursor = res['nextCursor']?.toString();
-        _isUsersLoading = false;
-      });
-    } catch (e) {
-      setState(() => _isUsersLoading = false);
-    }
+    // Contacts endpoint doesn't support pagination yet
+    // This method is kept for compatibility but does nothing
+    // In the future, if pagination is added to /chat/contacts, implement it here
+    return;
   }
 
   // Load conversations for People tab
@@ -2691,30 +2684,77 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   Widget _buildUsersContent() {
-    return _filteredUsers.isEmpty && _selectedRole != null && !_isUsersLoading
-        ? Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.star_border, size: 64, color: Colors.grey.shade400),
-                const SizedBox(height: 16),
-                Text(
-                  'No favorite $_selectedRole yet',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey.shade700,
-                  ),
+    // Show empty state when no users AND not loading
+    if (_users.isEmpty && !_isUsersLoading) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.people_outline, size: 64, color: Colors.grey.shade400),
+              const SizedBox(height: 16),
+              Text(
+                'No team members yet',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade700,
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Star users to add them to this list',
-                  style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Create an invite link to add members to your team!',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: () {
+                  // Navigate to Teams tab
+                  setState(() => _selectedIndex = 2);
+                },
+                icon: const Icon(Icons.group_add),
+                label: const Text('Go to Teams'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6366F1),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 ),
-              ],
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Show favorite filter empty state
+    if (_filteredUsers.isEmpty && _selectedRole != null && !_isUsersLoading) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.star_border, size: 64, color: Colors.grey.shade400),
+            const SizedBox(height: 16),
+            Text(
+              'No favorite $_selectedRole yet',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey.shade700,
+              ),
             ),
-          )
-        : NotificationListener<ScrollNotification>(
+            const SizedBox(height: 8),
+            Text(
+              'Star users to add them to this list',
+              style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return NotificationListener<ScrollNotification>(
             onNotification: (n) {
               if (n.metrics.pixels >= n.metrics.maxScrollExtent - 200) {
                 _loadMoreUsers();

@@ -194,6 +194,53 @@ class TeamsService {
     }
   }
 
+  /// Create a shareable invite link for a team
+  Future<Map<String, dynamic>> createInviteLink({
+    required String teamId,
+    int? expiresInDays,
+    int? maxUses,
+    bool requireApproval = false,
+  }) async {
+    try {
+      final response = await _apiClient.post(
+        '/teams/$teamId/invites/create-link',
+        data: {
+          if (expiresInDays != null) 'expiresInDays': expiresInDays,
+          if (maxUses != null) 'maxUses': maxUses,
+          'requireApproval': requireApproval,
+        },
+      );
+      if (_isSuccess(response.statusCode)) {
+        return Map<String, dynamic>.from(response.data as Map);
+      }
+      throw Exception('Failed to create invite link (${response.statusCode})');
+    } on DioException catch (e) {
+      throw Exception('Failed to create invite link: ${e.message}');
+    }
+  }
+
+  /// Fetch all shareable invite links for a team
+  Future<List<Map<String, dynamic>>> fetchInviteLinks(String teamId) async {
+    try {
+      final response = await _apiClient.get('/teams/$teamId/invites/links');
+      if (_isSuccess(response.statusCode)) {
+        final dynamic data = response.data;
+        if (data is Map<String, dynamic>) {
+          final dynamic invites = data['invites'];
+          if (invites is List) {
+            return invites.whereType<Map<String, dynamic>>().toList(
+              growable: false,
+            );
+          }
+        }
+        return const <Map<String, dynamic>>[];
+      }
+      throw Exception('Failed to fetch invite links (${response.statusCode})');
+    } on DioException catch (e) {
+      throw Exception('Failed to fetch invite links: ${e.message}');
+    }
+  }
+
   bool _isSuccess(int? statusCode) {
     if (statusCode == null) return false;
     return statusCode >= 200 && statusCode < 300;

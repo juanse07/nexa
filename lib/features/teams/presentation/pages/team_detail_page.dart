@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:nexa/features/teams/data/services/teams_service.dart';
 import 'package:nexa/features/extraction/services/users_service.dart';
 import 'package:nexa/features/chat/presentation/chat_screen.dart';
+import 'package:nexa/features/teams/presentation/widgets/create_invite_link_dialog.dart';
 
 class TeamDetailPage extends StatefulWidget {
   const TeamDetailPage({
@@ -25,6 +26,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
   String? _error;
   List<Map<String, dynamic>> _members = const [];
   List<Map<String, dynamic>> _invites = const [];
+  List<Map<String, dynamic>> _inviteLinks = const [];
   bool _addingMember = false;
 
   @override
@@ -42,10 +44,12 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
       final results = await Future.wait([
         _teamsService.fetchMembers(widget.teamId),
         _teamsService.fetchInvites(widget.teamId),
+        _teamsService.fetchInviteLinks(widget.teamId),
       ]);
       setState(() {
         _members = results[0];
         _invites = results[1];
+        _inviteLinks = results[2];
         _loading = false;
       });
     } catch (e) {
@@ -154,6 +158,32 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Invite sent to ${emailCtrl.text.trim()}')),
       );
+      await _loadData();
+    }
+  }
+
+  Future<void> _createInviteLink() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => CreateInviteLinkDialog(
+        teamName: widget.teamName,
+        onCreateLink: ({
+          int? expiresInDays,
+          int? maxUses,
+          bool requireApproval = false,
+        }) async {
+          return await _teamsService.createInviteLink(
+            teamId: widget.teamId,
+            expiresInDays: expiresInDays,
+            maxUses: maxUses,
+            requireApproval: requireApproval,
+          );
+        },
+      ),
+    );
+
+    if (result == true && mounted) {
+      // Refresh data to show new invite in the list
       await _loadData();
     }
   }
@@ -597,10 +627,19 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
             const Spacer(),
+            ElevatedButton.icon(
+              onPressed: _createInviteLink,
+              icon: const Icon(Icons.link),
+              label: const Text('Create Invite Link'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+            ),
+            const SizedBox(width: 8),
             TextButton.icon(
               onPressed: _sendInvite,
               icon: const Icon(Icons.mark_email_unread_outlined),
-              label: const Text('Send invite'),
+              label: const Text('Send email'),
             ),
           ],
         ),
@@ -657,6 +696,49 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
               ),
             );
           }),
+        // Active Invite Links Section
+        if (_inviteLinks.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          const Text(
+            'Active Invite Links',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          ..._inviteLinks.map((link) {
+            final shortCode = (link['shortCode'] ?? '').toString();
+            final usedCount = link['usedCount'] as int? ?? 0;
+            final maxUses = link['maxUses'] as int?;
+            final status = (link['status'] ?? '').toString();
+            final expiresAt = link['expiresAt']?.toString();
+
+            String usageText;
+            if (maxUses != null) {
+              usageText = 'Used: $usedCount / $maxUses';
+            } else {
+              usageText = 'Used: $usedCount (unlimited)';
+            }
+
+            return Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Colors.blue,
+                  child: Icon(Icons.link, color: Colors.white),
+                ),
+                title: Text('Code: $shortCode'),
+                subtitle: Text('$usageText • Status: $status'),
+                trailing: status == 'pending'
+                    ? IconButton(
+                        onPressed: () async {
+                          // You can add revoke functionality here if needed
+                        },
+                        icon: const Icon(Icons.more_vert),
+                      )
+                    : null,
+              ),
+            );
+          }).toList(),
+        ],
       ],
     );
   }

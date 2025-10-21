@@ -217,6 +217,54 @@ class ChatService {
     }
   }
 
+  /// Fetch contacts (team members) for chat - FOR MANAGERS
+  /// This replaces the need to call /users endpoint
+  /// Returns team members with conversation status
+  Future<List<Map<String, dynamic>>> fetchContacts({String? searchQuery}) async {
+    print('[ChatService] fetchContacts called with query: $searchQuery');
+    final token = await AuthService.getJwt();
+    if (token == null) {
+      print('[ChatService] ERROR: No token found');
+      throw Exception('Not authenticated');
+    }
+
+    final baseUrl = AppConfig.instance.baseUrl;
+    final queryParams = searchQuery != null && searchQuery.isNotEmpty
+        ? {'q': searchQuery}
+        : null;
+
+    final url = Uri.parse('$baseUrl/chat/contacts').replace(
+      queryParameters: queryParams,
+    );
+
+    print('[ChatService] Fetching from: $url');
+
+    final response = await http.get(
+      url,
+      headers: <String, String>{
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    print('[ChatService] Response status: ${response.statusCode}');
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body) as Map<String, dynamic>;
+      final contacts = (data['contacts'] as List<dynamic>? ?? [])
+          .cast<Map<String, dynamic>>();
+      print('[ChatService] Parsed ${contacts.length} contacts');
+      return contacts;
+    } else if (response.statusCode == 403) {
+      // Manager auth required
+      print('[ChatService] ERROR 403: Manager authentication required');
+      throw Exception('Manager authentication required. Please sign in using the manager app.');
+    } else {
+      print('[ChatService] ERROR: ${response.body}');
+      throw Exception('Failed to fetch contacts: ${response.body}');
+    }
+  }
+
   /// Send an event invitation to a user
   Future<ChatMessage> sendEventInvitation({
     required String targetId,
