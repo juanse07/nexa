@@ -22,10 +22,18 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
     const token = header.startsWith('Bearer ')
       ? header.slice('Bearer '.length)
       : '';
-    if (!token) return res.status(401).json({ message: 'Unauthorized' });
+    if (!token) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: 'Please sign in to continue'
+      });
+    }
     const decoded = jwt.verify(token, ENV.jwtSecret, { algorithms: ['HS256'] }) as Partial<AuthenticatedUser & { sub: string; provider: string }>;
     if (!decoded || !decoded.sub || !decoded.provider) {
-      return res.status(401).json({ message: 'Unauthorized' });
+      return res.status(401).json({
+        error: 'Invalid authentication',
+        message: 'Please sign in again'
+      });
     }
     (req as any).user = {
       provider: decoded.provider,
@@ -37,8 +45,18 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
     } as AuthenticatedUser;
     (req as any).authUser = (req as any).user; // Add authUser alias for compatibility
     next();
-  } catch {
-    return res.status(401).json({ message: 'Unauthorized' });
+  } catch (err) {
+    const errorMessage = (err as Error).message || '';
+    if (errorMessage.includes('expired')) {
+      return res.status(401).json({
+        error: 'Session expired',
+        message: 'Please sign in again'
+      });
+    }
+    return res.status(401).json({
+      error: 'Authentication failed',
+      message: 'Please sign in to continue'
+    });
   }
 }
 

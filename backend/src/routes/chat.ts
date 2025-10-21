@@ -445,6 +445,142 @@ router.patch('/conversations/:conversationId/read', requireAuth, async (req, res
 });
 
 /**
+ * GET /chat/contacts
+ * For managers: Get searchable list of team members with conversation status
+ * Returns team members sorted by: existing conversations first, then alphabetically
+ * Supports search query parameter for filtering by name
+ */
+router.get('/contacts', requireAuth, async (req, res) => {
+  try {
+    const { managerId, provider, sub } = (req as AuthenticatedRequest).authUser;
+
+    if (!managerId) {
+      return res.status(403).json({
+        error: 'Manager authentication required',
+        message: 'This endpoint is only available for managers'
+      });
+    }
+
+    const searchQuery = (req.query.q as string) || '';
+    const managerObjectId = new mongoose.Types.ObjectId(managerId);
+
+    // Get active team members for this manager
+    const teamMembers = await TeamMemberModel.find({
+      managerId: managerObjectId,
+      status: 'active'
+    }, { provider: 1, subject: 1, email: 1, name: 1 }).lean();
+
+    if (teamMembers.length === 0) {
+      return res.json({
+        contacts: [],
+        message: 'You don\'t have any team members yet. Create an invite link to add members to your team!'
+      });
+    }
+
+    // Build userKeys from team members
+    const userKeys = teamMembers.map((tm: any) => `${tm.provider}:${tm.subject}`);
+
+    // Get user details for all team members
+    const users = await UserModel.find({
+      $or: teamMembers.map((tm: any) => ({
+        provider: tm.provider,
+        subject: tm.subject
+      }))
+    }).lean();
+
+    // Get existing conversations with team members
+    const conversations = await ConversationModel.find({
+      managerId: managerObjectId,
+      userKey: { $in: userKeys }
+    }).lean();
+
+    // Create map of userKey -> conversation
+    const conversationMap = new Map(
+      conversations.map(c => [c.userKey, c])
+    );
+
+    // Create map of userKey -> user
+    const userMap = new Map(
+      users.map(u => [`${u.provider}:${u.subject}`, u])
+    );
+
+    // Combine team members with user data and conversation status
+    let contacts = teamMembers.map((tm: any) => {
+      const userKey = `${tm.provider}:${tm.subject}`;
+      const user = userMap.get(userKey);
+      const conversation = conversationMap.get(userKey);
+
+      // Build display name
+      let displayName = 'Team Member';
+      if (user?.first_name || user?.last_name) {
+        displayName = [user.first_name, user.last_name]
+          .filter(Boolean)
+          .join(' ')
+          .trim();
+      } else if (user?.name) {
+        displayName = user.name;
+      } else if (tm.name) {
+        displayName = tm.name;
+      }
+
+      return {
+        userKey,
+        name: displayName,
+        firstName: user?.first_name,
+        lastName: user?.last_name,
+        email: user?.email || tm.email,
+        picture: user?.picture,
+
+        // Conversation data (if exists)
+        hasConversation: !!conversation,
+        conversationId: conversation?._id ? String(conversation._id) : null,
+        lastMessageAt: conversation?.lastMessageAt || null,
+        lastMessagePreview: conversation?.lastMessagePreview || null,
+        unreadCount: conversation?.unreadCountManager || 0,
+      };
+    });
+
+    // Apply search filter if provided
+    if (searchQuery && searchQuery.trim().length > 0) {
+      const query = searchQuery.trim().toLowerCase();
+      contacts = contacts.filter(contact =>
+        contact.name.toLowerCase().includes(query) ||
+        (contact.email && contact.email.toLowerCase().includes(query)) ||
+        (contact.firstName && contact.firstName.toLowerCase().includes(query)) ||
+        (contact.lastName && contact.lastName.toLowerCase().includes(query))
+      );
+    }
+
+    // Sort: existing conversations first (by lastMessageAt), then alphabetically by name
+    contacts.sort((a, b) => {
+      // Both have conversations - sort by most recent
+      if (a.hasConversation && b.hasConversation) {
+        const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+        const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+        return bTime - aTime; // Most recent first
+      }
+
+      // Only A has conversation - A comes first
+      if (a.hasConversation && !b.hasConversation) return -1;
+
+      // Only B has conversation - B comes first
+      if (!a.hasConversation && b.hasConversation) return 1;
+
+      // Neither has conversation - sort alphabetically
+      return a.name.localeCompare(b.name);
+    });
+
+    return res.json({ contacts });
+  } catch (error) {
+    console.error('Error fetching chat contacts:', error);
+    return res.status(500).json({
+      error: 'Unable to load contacts',
+      message: 'Please try again or contact support if the problem persists'
+    });
+  }
+});
+
+/**
  * GET /chat/managers
  * For users: Get list of their managers to start a chat
  */
