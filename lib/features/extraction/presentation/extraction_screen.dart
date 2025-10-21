@@ -3193,7 +3193,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 Expanded(
                   child: TabBar(
                     controller: _eventsTabController,
-                    tabs: const [
+                    tabs: [
                       Tab(text: AppLocalizations.of(context)!.pending),
                       Tab(text: AppLocalizations.of(context)!.upcoming),
                       Tab(text: AppLocalizations.of(context)!.past),
@@ -3343,7 +3343,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: TabBar(
                       tabs: [
                         Tab(text: AppLocalizations.of(context)!.pending),
