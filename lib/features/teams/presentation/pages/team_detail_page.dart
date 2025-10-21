@@ -541,12 +541,6 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
               'Members',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
-            const Spacer(),
-            TextButton.icon(
-              onPressed: _addingMember ? null : () => _openAddMemberSheet(),
-              icon: const Icon(Icons.person_add_alt_1_outlined),
-              label: const Text('Add member'),
-            ),
           ],
         ),
         const SizedBox(height: 8),
