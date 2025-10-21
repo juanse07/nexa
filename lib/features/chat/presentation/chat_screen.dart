@@ -1040,7 +1040,7 @@ class _ChatScreenState extends State<ChatScreen> {
     DateTime startDate;
     DateTime endDate;
 
-    if (dateStr != null && startTimeStr != null) {
+    if (dateStr != null && startTimeStr != null && startTimeStr.isNotEmpty) {
       // Combine date with start_time (e.g., "2025-10-31" + "09:00")
       final datePart = dateStr.contains('T') ? dateStr.split('T')[0] : dateStr;
       startDate = DateTime.parse('${datePart}T$startTimeStr:00.000Z');
@@ -1050,7 +1050,7 @@ class _ChatScreenState extends State<ChatScreen> {
       startDate = DateTime.now();
     }
 
-    if (dateStr != null && endTimeStr != null) {
+    if (dateStr != null && endTimeStr != null && endTimeStr.isNotEmpty) {
       // Combine date with end_time (e.g., "2025-10-31" + "16:00")
       final datePart = dateStr.contains('T') ? dateStr.split('T')[0] : dateStr;
       endDate = DateTime.parse('${datePart}T$endTimeStr:00.000Z');
