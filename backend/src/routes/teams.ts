@@ -1154,6 +1154,9 @@ router.get('/teams/my/members', requireAuth, async (req, res) => {
     }
     const managerId = manager._id as mongoose.Types.ObjectId;
 
+    // eslint-disable-next-line no-console
+    console.log(`[teams/my/members] managerId=${managerId}, q=${req.query.q}`);
+
     // Parse query parameters
     const q = (req.query.q ?? '').toString().trim();
     const cursor = (req.query.cursor ?? '').toString();
@@ -1168,6 +1171,9 @@ router.get('/teams/my/members', requireAuth, async (req, res) => {
         },
       },
     ];
+
+    // eslint-disable-next-line no-console
+    console.log(`[teams/my/members] Initial match:`, JSON.stringify(pipeline[0]));
 
     // Add search filter if provided
     if (q) {
@@ -1236,6 +1242,9 @@ router.get('/teams/my/members', requireAuth, async (req, res) => {
     pipeline.push({ $limit: limit + 1 });
 
     const members = await TeamMemberModel.aggregate(pipeline);
+
+    // eslint-disable-next-line no-console
+    console.log(`[teams/my/members] Found ${members.length} members`);
 
     // Determine if there are more results
     const hasMore = members.length > limit;
