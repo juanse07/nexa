@@ -6363,43 +6363,36 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     padding: const EdgeInsets.only(left: 8, right: 12, bottom: 6),
                     child: Row(
                       children: [
-                        // AI Provider toggle button
-                        Opacity(
-                          opacity: 0.5,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: _aiChatService.aiProvider == 'openai'
-                                    ? [Color(0xFF10A37F), Color(0xFF059669)]
-                                    : [Color(0xFF7C3AED), Color(0xFF6366F1)],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(12),
-                                onTap: () {
-                                  setState(() {
-                                    final newProvider = _aiChatService.aiProvider == 'openai' ? 'claude' : 'openai';
-                                    _aiChatService.setAiProvider(newProvider);
-                                  });
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Using ${_aiChatService.aiProvider == 'openai' ? 'OpenAI' : 'Claude'} AI'),
-                                      duration: const Duration(seconds: 2),
-                                    ),
-                                  );
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.all(6),
-                                  child: Icon(
-                                    _aiChatService.aiProvider == 'openai' ? Icons.psychology : Icons.hub,
-                                    color: Colors.white,
-                                    size: 16,
+                        // AI Provider toggle button - smaller with solid colors
+                        Container(
+                          decoration: BoxDecoration(
+                            color: _aiChatService.aiProvider == 'openai'
+                                ? Colors.black
+                                : Colors.orange,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: () {
+                                setState(() {
+                                  final newProvider = _aiChatService.aiProvider == 'openai' ? 'claude' : 'openai';
+                                  _aiChatService.setAiProvider(newProvider);
+                                });
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Using ${_aiChatService.aiProvider == 'openai' ? 'OpenAI' : 'Claude'} AI'),
+                                    duration: const Duration(seconds: 2),
                                   ),
+                                );
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.all(4),
+                                child: Icon(
+                                  _aiChatService.aiProvider == 'openai' ? Icons.psychology : Icons.hub,
+                                  color: Colors.white,
+                                  size: 14,
                                 ),
                               ),
                             ),
