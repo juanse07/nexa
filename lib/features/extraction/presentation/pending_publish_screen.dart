@@ -447,39 +447,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                 const SizedBox(height: 12),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: Text(
-                    _visibleToEntireTeam && _selectedVisibilityTeamId != null
-                        ? 'Visible to entire team: ${_teams.firstWhere(
-                            (t) => (t['id'] ?? '').toString() == _selectedVisibilityTeamId,
-                            orElse: () => {'name': 'Select team'},
-                          )['name']}'
-                        : 'Visible to entire team',
-                  ),
-                  subtitle: _visibleToEntireTeam && _teams.isNotEmpty
-                      ? DropdownButtonFormField<String>(
-                          value: _selectedVisibilityTeamId,
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            isDense: true,
-                          ),
-                          hint: const Text('Select team'),
-                          items: _teams.map((team) {
-                            final teamId = (team['id'] ?? '').toString();
-                            final name = (team['name'] ?? 'Untitled team').toString();
-                            return DropdownMenuItem(
-                              value: teamId,
-                              child: Text(name),
-                            );
-                          }).toList(),
-                          onChanged: (value) {
-                            setState(() => _selectedVisibilityTeamId = value);
-                          },
-                        )
-                      : null,
+                  title: const Text('Visible to entire team'),
                   value: _visibleToEntireTeam,
                   onChanged: (v) {
                     setState(() {
@@ -494,6 +462,32 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                     });
                   },
                 ),
+                if (_visibleToEntireTeam) ...[
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: _selectedVisibilityTeamId,
+                    decoration: const InputDecoration(
+                      labelText: 'Select team',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
+                    ),
+                    hint: const Text('Select team'),
+                    items: _teams.map((team) {
+                      final teamId = (team['id'] ?? '').toString();
+                      final name = (team['name'] ?? 'Untitled team').toString();
+                      return DropdownMenuItem(
+                        value: teamId,
+                        child: Text(name),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() => _selectedVisibilityTeamId = value);
+                    },
+                  ),
+                ],
                 const SizedBox(height: 16),
                 if (!_visibleToEntireTeam) ...[
                   _buildTeamSelector(),
