@@ -286,6 +286,7 @@ router.post('/invites/redeem', inviteRedeemLimiter, requireAuth, async (req, res
               managerId: invite.managerId,
               userKey: userKey,
               lastMessageAt: new Date(),
+              lastMessagePreview: welcomeText.substring(0, 200),
               unreadCountManager: 0,
               unreadCountUser: 1,
               createdAt: new Date(),
@@ -316,6 +317,7 @@ router.post('/invites/redeem', inviteRedeemLimiter, requireAuth, async (req, res
             {
               $set: {
                 lastMessageAt: new Date(),
+                lastMessagePreview: welcomeText.substring(0, 200),
                 unreadCountUser: conversation.unreadCountUser + 1,
                 updatedAt: new Date(),
               },
