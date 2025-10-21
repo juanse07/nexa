@@ -76,5 +76,24 @@
   "clients": "Clientes",
   "roles": "Roles",
   "tariffs": "Tarifas",
-  "addClient": "Agregar Cliente"
+  "addClient": "Agregar Cliente",
+
+  "teams": "Equipos",
+  "members": "{count} miembros",
+  "pendingInvites": "{count} invitaciones pendientes",
+  "viewDetails": "Ver detalles",
+  "newTeam": "Nuevo equipo",
+  "myProfile": "Mi Perfil",
+  "settings": "Configuración",
+  "manageTeams": "Gestionar Equipos",
+  "logout": "Cerrar Sesión",
+  "selectFiles": "Seleccionar Archivos",
+  "multiSelectTip": "Consejo: Mantén presionado para seleccionar múltiples archivos. O usa Agregar Más para añadir.",
+  "contactInformation": "Información de Contacto",
+  "additionalNotes": "Notas Adicionales",
+  "saveJobDetails": "Guardar Detalles del Trabajo",
+  "saveToPending": "Guardar como Pendiente",
+  "pending": "Pendiente",
+  "upcoming": "Próximo",
+  "past": "Pasado"
 }

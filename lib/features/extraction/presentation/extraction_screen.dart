@@ -901,13 +901,13 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       ),
                       elevation: 0,
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(Icons.save, size: 20),
                         SizedBox(width: 8),
                         Text(
-                          'Save to Pending',
+                          AppLocalizations.of(context)!.saveToPending,
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -965,7 +965,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       case 4: // Catalog tab
         final clientsCount = _clients?.length ?? 0;
         final rolesCount = _roles?.length ?? 0;
-        return "Catalog • $clientsCount clients, $rolesCount roles";
+        return AppLocalizations.of(context)!.catalogClientsRoles(clientsCount, rolesCount);
       default:
         return greeting;
     }
@@ -1127,10 +1127,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     bottom: false,
                     child: TabBar(
                       controller: _eventsTabController,
-                      tabs: const [
-                        Tab(text: 'Pending'),
-                        Tab(text: 'Upcoming'),
-                        Tab(text: 'Past'),
+                      tabs: [
+                        Tab(text: AppLocalizations.of(context)!.pending),
+                        Tab(text: AppLocalizations.of(context)!.upcoming),
+                        Tab(text: AppLocalizations.of(context)!.past),
                       ],
                       labelColor: Color(0xFF6366F1),
                       unselectedLabelColor: Colors.grey,
@@ -1809,7 +1809,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         ? null
                         : () => _pickAndProcessMultipleFiles(append: false),
                     icon: const Icon(Icons.folder_open),
-                    label: const Text('Select Files'),
+                    label: Text(AppLocalizations.of(context)!.selectFiles),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF6366F1),
                       foregroundColor: Colors.white,
@@ -2958,7 +2958,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       await _draftService.clearDraft();
                     },
                     icon: const Icon(Icons.save, size: 18),
-                    label: const Text('Save to Pending'),
+                    label: Text(AppLocalizations.of(context)!.saveToPending),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF6366F1),
                       foregroundColor: Colors.white,
@@ -3194,9 +3194,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   child: TabBar(
                     controller: _eventsTabController,
                     tabs: const [
-                      Tab(text: 'Pending'),
-                      Tab(text: 'Upcoming'),
-                      Tab(text: 'Past'),
+                      Tab(text: AppLocalizations.of(context)!.pending),
+                      Tab(text: AppLocalizations.of(context)!.upcoming),
+                      Tab(text: AppLocalizations.of(context)!.past),
                     ],
                     labelColor: const Color(0xFF6366F1),
                     unselectedLabelColor: Colors.grey,
@@ -3346,9 +3346,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   const Expanded(
                     child: TabBar(
                       tabs: [
-                        Tab(text: 'Pending'),
-                        Tab(text: 'Upcoming'),
-                        Tab(text: 'Past'),
+                        Tab(text: AppLocalizations.of(context)!.pending),
+                        Tab(text: AppLocalizations.of(context)!.upcoming),
+                        Tab(text: AppLocalizations.of(context)!.past),
                       ],
                       labelColor: Color(0xFF6366F1),
                       unselectedLabelColor: Colors.grey,
@@ -5884,7 +5884,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 ),
                 const SizedBox(height: 20),
                 FormSection(
-                  title: 'Contact Information',
+                  title: AppLocalizations.of(context)!.contactInformation,
                   icon: Icons.contact_phone,
                   children: [
                     LabeledTextField(
@@ -5910,7 +5910,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 ),
                 const SizedBox(height: 20),
                 FormSection(
-                  title: 'Additional Notes',
+                  title: AppLocalizations.of(context)!.additionalNotes,
                   icon: Icons.note,
                   children: [
                     LabeledTextField(
@@ -5926,8 +5926,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 ElevatedButton.icon(
                   onPressed: _submitManualEntry,
                   icon: const Icon(Icons.save, size: 20),
-                  label: const Text(
-                    'Save Event Details',
+                  label: Text(
+                    AppLocalizations.of(context)!.saveJobDetails,
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                   ),
                   style: ElevatedButton.styleFrom(
@@ -5967,7 +5967,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                             await _draftService.clearDraft();
                           },
                     icon: const Icon(Icons.save, size: 18),
-                    label: const Text('Save to Pending'),
+                    label: Text(AppLocalizations.of(context)!.saveToPending),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF6366F1),
                       foregroundColor: Colors.white,

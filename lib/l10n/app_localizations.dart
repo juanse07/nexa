@@ -545,6 +545,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Add Client'**
   String get addClient;
+
+  /// Title for teams screen
+  ///
+  /// In en, this message translates to:
+  /// **'Teams'**
+  String get teams;
+
+  /// Display text for number of members
+  ///
+  /// In en, this message translates to:
+  /// **'{count} members'**
+  String members(int count);
+
+  /// Display text for pending invites
+  ///
+  /// In en, this message translates to:
+  /// **'{count} pending invites'**
+  String pendingInvites(int count);
+
+  /// Link text to view details
+  ///
+  /// In en, this message translates to:
+  /// **'View details'**
+  String get viewDetails;
+
+  /// Button text for creating new team
+  ///
+  /// In en, this message translates to:
+  /// **'New team'**
+  String get newTeam;
+
+  /// Menu item for user profile
+  ///
+  /// In en, this message translates to:
+  /// **'My Profile'**
+  String get myProfile;
+
+  /// Menu item for settings
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get settings;
+
+  /// Menu item for managing teams
+  ///
+  /// In en, this message translates to:
+  /// **'Manage Teams'**
+  String get manageTeams;
+
+  /// Menu item for logging out
+  ///
+  /// In en, this message translates to:
+  /// **'Logout'**
+  String get logout;
+
+  /// Button text for selecting files
+  ///
+  /// In en, this message translates to:
+  /// **'Select Files'**
+  String get selectFiles;
+
+  /// Tooltip for multi-select functionality
+  ///
+  /// In en, this message translates to:
+  /// **'Tip: Long-press to multi-select in the picker. Or use Add More to append.'**
+  String get multiSelectTip;
+
+  /// Section header for contact information
+  ///
+  /// In en, this message translates to:
+  /// **'Contact Information'**
+  String get contactInformation;
+
+  /// Section header for additional notes
+  ///
+  /// In en, this message translates to:
+  /// **'Additional Notes'**
+  String get additionalNotes;
+
+  /// Button text for saving job details
+  ///
+  /// In en, this message translates to:
+  /// **'Save Job Details'**
+  String get saveJobDetails;
+
+  /// Button text for saving to pending
+  ///
+  /// In en, this message translates to:
+  /// **'Save to Pending'**
+  String get saveToPending;
+
+  /// Tab label for pending items
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get pending;
+
+  /// Tab label for upcoming items
+  ///
+  /// In en, this message translates to:
+  /// **'Upcoming'**
+  String get upcoming;
+
+  /// Tab label for past items
+  ///
+  /// In en, this message translates to:
+  /// **'Past'**
+  String get past;
 }
 
 class _AppLocalizationsDelegate

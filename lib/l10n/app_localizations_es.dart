@@ -259,4 +259,63 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get addClient => 'Agregar Cliente';
+
+  @override
+  String get teams => 'Equipos';
+
+  @override
+  String members(int count) {
+    return '$count miembros';
+  }
+
+  @override
+  String pendingInvites(int count) {
+    return '$count invitaciones pendientes';
+  }
+
+  @override
+  String get viewDetails => 'Ver detalles';
+
+  @override
+  String get newTeam => 'Nuevo equipo';
+
+  @override
+  String get myProfile => 'Mi Perfil';
+
+  @override
+  String get settings => 'Configuración';
+
+  @override
+  String get manageTeams => 'Gestionar Equipos';
+
+  @override
+  String get logout => 'Cerrar Sesión';
+
+  @override
+  String get selectFiles => 'Seleccionar Archivos';
+
+  @override
+  String get multiSelectTip =>
+      'Consejo: Mantén presionado para seleccionar múltiples archivos. O usa Agregar Más para añadir.';
+
+  @override
+  String get contactInformation => 'Información de Contacto';
+
+  @override
+  String get additionalNotes => 'Notas Adicionales';
+
+  @override
+  String get saveJobDetails => 'Guardar Detalles del Trabajo';
+
+  @override
+  String get saveToPending => 'Guardar como Pendiente';
+
+  @override
+  String get pending => 'Pendiente';
+
+  @override
+  String get upcoming => 'Próximo';
+
+  @override
+  String get past => 'Pasado';
 }

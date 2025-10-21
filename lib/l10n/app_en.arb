@@ -369,5 +369,88 @@
   "addClient": "Add Client",
   "@addClient": {
     "description": "Button text for adding a client"
+  },
+
+  "teams": "Teams",
+  "@teams": {
+    "description": "Title for teams screen"
+  },
+  "members": "{count} members",
+  "@members": {
+    "description": "Display text for number of members",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pendingInvites": "{count} pending invites",
+  "@pendingInvites": {
+    "description": "Display text for pending invites",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "viewDetails": "View details",
+  "@viewDetails": {
+    "description": "Link text to view details"
+  },
+  "newTeam": "New team",
+  "@newTeam": {
+    "description": "Button text for creating new team"
+  },
+  "myProfile": "My Profile",
+  "@myProfile": {
+    "description": "Menu item for user profile"
+  },
+  "settings": "Settings",
+  "@settings": {
+    "description": "Menu item for settings"
+  },
+  "manageTeams": "Manage Teams",
+  "@manageTeams": {
+    "description": "Menu item for managing teams"
+  },
+  "logout": "Logout",
+  "@logout": {
+    "description": "Menu item for logging out"
+  },
+  "selectFiles": "Select Files",
+  "@selectFiles": {
+    "description": "Button text for selecting files"
+  },
+  "multiSelectTip": "Tip: Long-press to multi-select in the picker. Or use Add More to append.",
+  "@multiSelectTip": {
+    "description": "Tooltip for multi-select functionality"
+  },
+  "contactInformation": "Contact Information",
+  "@contactInformation": {
+    "description": "Section header for contact information"
+  },
+  "additionalNotes": "Additional Notes",
+  "@additionalNotes": {
+    "description": "Section header for additional notes"
+  },
+  "saveJobDetails": "Save Job Details",
+  "@saveJobDetails": {
+    "description": "Button text for saving job details"
+  },
+  "saveToPending": "Save to Pending",
+  "@saveToPending": {
+    "description": "Button text for saving to pending"
+  },
+  "pending": "Pending",
+  "@pending": {
+    "description": "Tab label for pending items"
+  },
+  "upcoming": "Upcoming",
+  "@upcoming": {
+    "description": "Tab label for upcoming items"
+  },
+  "past": "Past",
+  "@past": {
+    "description": "Tab label for past items"
   }
 }
