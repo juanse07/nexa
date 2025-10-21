@@ -6,6 +6,7 @@ import { requireAuth, AuthenticatedUser } from '../middleware/requireAuth';
 import { TeamModel } from '../models/team';
 import { TeamMemberModel } from '../models/teamMember';
 import { TeamInviteModel } from '../models/teamInvite';
+import { UserModel } from '../models/user';
 import { isValidShortCodeFormat } from '../utils/inviteCodeGenerator';
 import { inviteValidateLimiter, inviteRedeemLimiter } from '../middleware/rateLimiter';
 
