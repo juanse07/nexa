@@ -6364,46 +6364,42 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     child: Row(
                       children: [
                         // AI Provider toggle button
-                        Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: _aiChatService.aiProvider == 'openai'
-                                  ? [Color(0xFF10A37F), Color(0xFF059669)]
-                                  : [Color(0xFF7C3AED), Color(0xFF6366F1)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 6,
-                                offset: const Offset(0, 2),
+                        Opacity(
+                          opacity: 0.5,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: _aiChatService.aiProvider == 'openai'
+                                    ? [Color(0xFF10A37F), Color(0xFF059669)]
+                                    : [Color(0xFF7C3AED), Color(0xFF6366F1)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
                               ),
-                            ],
-                          ),
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(20),
-                              onTap: () {
-                                setState(() {
-                                  final newProvider = _aiChatService.aiProvider == 'openai' ? 'claude' : 'openai';
-                                  _aiChatService.setAiProvider(newProvider);
-                                });
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Using ${_aiChatService.aiProvider == 'openai' ? 'OpenAI' : 'Claude'} AI'),
-                                    duration: const Duration(seconds: 2),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(12),
+                                onTap: () {
+                                  setState(() {
+                                    final newProvider = _aiChatService.aiProvider == 'openai' ? 'claude' : 'openai';
+                                    _aiChatService.setAiProvider(newProvider);
+                                  });
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Using ${_aiChatService.aiProvider == 'openai' ? 'OpenAI' : 'Claude'} AI'),
+                                      duration: const Duration(seconds: 2),
+                                    ),
+                                  );
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.all(6),
+                                  child: Icon(
+                                    _aiChatService.aiProvider == 'openai' ? Icons.psychology : Icons.hub,
+                                    color: Colors.white,
+                                    size: 16,
                                   ),
-                                );
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                child: Icon(
-                                  _aiChatService.aiProvider == 'openai' ? Icons.psychology : Icons.hub,
-                                  color: Colors.white,
-                                  size: 22,
                                 ),
                               ),
                             ),
