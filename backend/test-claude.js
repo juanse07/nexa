@@ -9,10 +9,16 @@ async function testClaude() {
   }
 
   const requestBody = {
-    model: 'claude-3-5-sonnet-20240620',
+    model: 'claude-sonnet-4-5-20250929',
     max_tokens: 100,
     temperature: 0.7,
-    system: 'You are a helpful AI assistant.',
+    system: [
+      {
+        type: 'text',
+        text: 'You are a helpful AI assistant.',
+        cache_control: { type: 'ephemeral' }
+      }
+    ],
     messages: [
       {
         role: 'user',
@@ -24,6 +30,7 @@ async function testClaude() {
   const headers = {
     'x-api-key': claudeKey,
     'anthropic-version': '2023-06-01',
+    'anthropic-beta': 'prompt-caching-2024-07-31',
     'Content-Type': 'application/json',
   };
 
@@ -43,6 +50,11 @@ async function testClaude() {
       console.log('✅ Success! Response:', response.data.content[0].text);
       if (response.data.usage) {
         console.log('Token usage:', response.data.usage);
+        const usage = response.data.usage;
+        if (usage.cache_read_input_tokens > 0) {
+          const savings = ((usage.cache_read_input_tokens / (usage.input_tokens + usage.cache_read_input_tokens)) * 100).toFixed(1);
+          console.log(`💰 Prompt caching saved ${savings}% on input tokens!`);
+        }
       }
     } else {
       console.error('❌ Error:', response.status, response.statusText);
