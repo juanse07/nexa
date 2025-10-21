@@ -7,8 +7,12 @@ import { TeamModel } from '../models/team';
 import { TeamMemberModel } from '../models/teamMember';
 import { TeamInviteModel } from '../models/teamInvite';
 import { UserModel } from '../models/user';
+import { ManagerModel } from '../models/manager';
+import { ConversationModel } from '../models/conversation';
+import { ChatMessageModel } from '../models/chatMessage';
 import { isValidShortCodeFormat } from '../utils/inviteCodeGenerator';
 import { inviteValidateLimiter, inviteRedeemLimiter } from '../middleware/rateLimiter';
+import { emitToUser } from '../socket/server';
 
 const router = Router();
 
@@ -255,6 +259,84 @@ router.post('/invites/redeem', inviteRedeemLimiter, requireAuth, async (req, res
         { _id: invite._id },
         { $set: { status: 'accepted' } }
       );
+    }
+
+    // Send automated welcome message (only if member is active, not pending)
+    if (memberStatus === 'active') {
+      try {
+        // Get manager details for the message sender
+        const manager = await ManagerModel.findById(invite.managerId).lean();
+        if (manager) {
+          // Build userKey for the new member
+          const userKey = `${authUser.provider}:${authUser.sub}`;
+
+          // Use team's custom welcome message or default template
+          const welcomeText = team.welcomeMessage
+            ? team.welcomeMessage.replace('{teamName}', team.name)
+            : `Welcome to ${team.name}! We're excited to have you on the team.`;
+
+          // Create or get conversation
+          let conversation = await ConversationModel.findOne({
+            managerId: invite.managerId,
+            userKey: userKey,
+          });
+
+          if (!conversation) {
+            conversation = await ConversationModel.create({
+              managerId: invite.managerId,
+              userKey: userKey,
+              lastMessageAt: new Date(),
+              unreadCountManager: 0,
+              unreadCountUser: 1,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            });
+          }
+
+          // Create welcome message
+          const welcomeMessage = await ChatMessageModel.create({
+            conversationId: conversation._id,
+            senderType: 'manager',
+            senderId: invite.managerId,
+            content: welcomeText,
+            metadata: {
+              automated: true,
+              type: 'welcome',
+            },
+            createdAt: new Date(),
+          });
+
+          // Update conversation
+          await ConversationModel.updateOne(
+            { _id: conversation._id },
+            {
+              $set: {
+                lastMessageAt: new Date(),
+                unreadCountUser: conversation.unreadCountUser + 1,
+                updatedAt: new Date(),
+              },
+            }
+          );
+
+          // Emit message to user via Socket.IO for real-time delivery
+          emitToUser(userKey, 'chat:message', {
+            id: String(welcomeMessage._id),
+            conversationId: String(conversation._id),
+            senderType: 'manager',
+            senderId: String(invite.managerId),
+            content: welcomeText,
+            createdAt: welcomeMessage.createdAt.toISOString(),
+            metadata: welcomeMessage.metadata,
+          });
+
+          // eslint-disable-next-line no-console
+          console.log(`[invites] Sent welcome message to ${userKey} for team ${team.name}`);
+        }
+      } catch (welcomeErr) {
+        // Log error but don't fail the invite redemption
+        // eslint-disable-next-line no-console
+        console.error('[invites] Failed to send welcome message (non-fatal):', welcomeErr);
+      }
     }
 
     return res.json({

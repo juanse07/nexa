@@ -5,6 +5,7 @@ export interface TeamDocument extends Document {
   name: string;
   normalizedName: string;
   description?: string;
+  welcomeMessage?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -19,6 +20,7 @@ const TeamSchema = new Schema<TeamDocument>(
     name: { type: String, required: true, trim: true },
     normalizedName: { type: String, required: true, trim: true },
     description: { type: String, trim: true },
+    welcomeMessage: { type: String, trim: true, maxlength: 500 },
   },
   { timestamps: true }
 );
