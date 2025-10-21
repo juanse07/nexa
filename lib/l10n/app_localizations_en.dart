@@ -316,4 +316,25 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get past => 'Past';
+
+  @override
+  String get startConversation => 'Start a Conversation';
+
+  @override
+  String get aiWillGuideYou => 'The AI will guide you through creating a job';
+
+  @override
+  String get startNewConversation => 'Start New Conversation';
+
+  @override
+  String get fecha => 'Date';
+
+  @override
+  String get hora => 'Time';
+
+  @override
+  String get ubicacion => 'Location';
+
+  @override
+  String get direccion => 'Address';
 }

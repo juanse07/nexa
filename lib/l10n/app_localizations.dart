@@ -653,6 +653,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Past'**
   String get past;
+
+  /// Header for AI chat empty state
+  ///
+  /// In en, this message translates to:
+  /// **'Start a Conversation'**
+  String get startConversation;
+
+  /// Subtitle explaining AI chat functionality
+  ///
+  /// In en, this message translates to:
+  /// **'The AI will guide you through creating a job'**
+  String get aiWillGuideYou;
+
+  /// Button text to start new AI conversation
+  ///
+  /// In en, this message translates to:
+  /// **'Start New Conversation'**
+  String get startNewConversation;
+
+  /// Label for date field (Spanish-style)
+  ///
+  /// In en, this message translates to:
+  /// **'Date'**
+  String get fecha;
+
+  /// Label for time/hour field (Spanish-style)
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get hora;
+
+  /// Label for location field (Spanish-style)
+  ///
+  /// In en, this message translates to:
+  /// **'Location'**
+  String get ubicacion;
+
+  /// Label for address/direction field (Spanish-style)
+  ///
+  /// In en, this message translates to:
+  /// **'Address'**
+  String get direccion;
 }
 
 class _AppLocalizationsDelegate

@@ -6176,7 +6176,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               ),
                               const SizedBox(height: 20),
                               Text(
-                                'Start a Conversation',
+                                AppLocalizations.of(context)!.startConversation,
                                 style: TextStyle(
                                   fontSize: 20,
                                   fontWeight: FontWeight.w600,
@@ -6185,7 +6185,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                'The AI will guide you through creating an event',
+                                AppLocalizations.of(context)!.aiWillGuideYou,
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: Colors.grey.shade600,
@@ -6263,9 +6263,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                               ),
                                             ),
                                             const SizedBox(width: 12),
-                                            const Flexible(
+                                            Flexible(
                                               child: Text(
-                                                'Start New Conversation',
+                                                AppLocalizations.of(context)!.startNewConversation,
                                                 style: TextStyle(
                                                   color: Colors.white,
                                                   fontSize: 16,

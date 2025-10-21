@@ -95,5 +95,13 @@
   "saveToPending": "Guardar como Pendiente",
   "pending": "Pendiente",
   "upcoming": "Próximo",
-  "past": "Pasado"
+  "past": "Pasado",
+
+  "startConversation": "Iniciar una Conversación",
+  "aiWillGuideYou": "La IA te guiará para crear un trabajo",
+  "startNewConversation": "Iniciar Nueva Conversación",
+  "fecha": "Fecha",
+  "hora": "Hora",
+  "ubicacion": "Ubicación",
+  "direccion": "Dirección"
 }

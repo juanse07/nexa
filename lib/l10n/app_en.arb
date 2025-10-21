@@ -452,5 +452,34 @@
   "past": "Past",
   "@past": {
     "description": "Tab label for past items"
+  },
+
+  "startConversation": "Start a Conversation",
+  "@startConversation": {
+    "description": "Header for AI chat empty state"
+  },
+  "aiWillGuideYou": "The AI will guide you through creating a job",
+  "@aiWillGuideYou": {
+    "description": "Subtitle explaining AI chat functionality"
+  },
+  "startNewConversation": "Start New Conversation",
+  "@startNewConversation": {
+    "description": "Button text to start new AI conversation"
+  },
+  "fecha": "Date",
+  "@fecha": {
+    "description": "Label for date field (Spanish-style)"
+  },
+  "hora": "Time",
+  "@hora": {
+    "description": "Label for time/hour field (Spanish-style)"
+  },
+  "ubicacion": "Location",
+  "@ubicacion": {
+    "description": "Label for location field (Spanish-style)"
+  },
+  "direccion": "Address",
+  "@direccion": {
+    "description": "Label for address/direction field (Spanish-style)"
   }
 }

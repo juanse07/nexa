@@ -318,4 +318,25 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get past => 'Pasado';
+
+  @override
+  String get startConversation => 'Iniciar una Conversación';
+
+  @override
+  String get aiWillGuideYou => 'La IA te guiará para crear un trabajo';
+
+  @override
+  String get startNewConversation => 'Iniciar Nueva Conversación';
+
+  @override
+  String get fecha => 'Fecha';
+
+  @override
+  String get hora => 'Hora';
+
+  @override
+  String get ubicacion => 'Ubicación';
+
+  @override
+  String get direccion => 'Dirección';
 }
