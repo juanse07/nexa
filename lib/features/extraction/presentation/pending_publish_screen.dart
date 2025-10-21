@@ -445,44 +445,54 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                   style: const TextStyle(color: Colors.grey),
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Checkbox(
-                      value: _visibleToEntireTeam,
-                      onChanged: (v) {
-                        setState(() {
-                          _visibleToEntireTeam = v ?? false;
-                          // Auto-select first team if enabling and no team selected
-                          if (_visibleToEntireTeam && _selectedVisibilityTeamId == null && _teams.isNotEmpty) {
-                            _selectedVisibilityTeamId = (_teams.first['id'] ?? '').toString();
-                          }
-                        });
-                      },
-                    ),
-                    const Text('Visible to entire team:'),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: _visibleToEntireTeam ? _selectedVisibilityTeamId : null,
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        ),
-                        hint: const Text('Select team'),
-                        items: _teams.map((team) {
-                          final teamId = (team['id'] ?? '').toString();
-                          final name = (team['name'] ?? 'Untitled team').toString();
-                          return DropdownMenuItem(
-                            value: teamId,
-                            child: Text(name),
-                          );
-                        }).toList(),
-                        onChanged: _visibleToEntireTeam ? (value) {
-                          setState(() => _selectedVisibilityTeamId = value);
-                        } : null,
-                      ),
-                    ),
-                  ],
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    _visibleToEntireTeam && _selectedVisibilityTeamId != null
+                        ? 'Visible to entire team: ${_teams.firstWhere(
+                            (t) => (t['id'] ?? '').toString() == _selectedVisibilityTeamId,
+                            orElse: () => {'name': 'Select team'},
+                          )['name']}'
+                        : 'Visible to entire team',
+                  ),
+                  subtitle: _visibleToEntireTeam && _teams.isNotEmpty
+                      ? DropdownButtonFormField<String>(
+                          value: _selectedVisibilityTeamId,
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            isDense: true,
+                          ),
+                          hint: const Text('Select team'),
+                          items: _teams.map((team) {
+                            final teamId = (team['id'] ?? '').toString();
+                            final name = (team['name'] ?? 'Untitled team').toString();
+                            return DropdownMenuItem(
+                              value: teamId,
+                              child: Text(name),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            setState(() => _selectedVisibilityTeamId = value);
+                          },
+                        )
+                      : null,
+                  value: _visibleToEntireTeam,
+                  onChanged: (v) {
+                    setState(() {
+                      _visibleToEntireTeam = v;
+                      // Auto-select first team if enabling and no team selected
+                      if (_visibleToEntireTeam &&
+                          _selectedVisibilityTeamId == null &&
+                          _teams.isNotEmpty) {
+                        _selectedVisibilityTeamId =
+                            (_teams.first['id'] ?? '').toString();
+                      }
+                    });
+                  },
                 ),
                 const SizedBox(height: 16),
                 if (!_visibleToEntireTeam) ...[
@@ -500,53 +510,67 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                       prefixIcon: Icon(Icons.search),
                       hintText: 'Search team members',
                     ),
+                    onChanged: (_) => _loadUsers(reset: true),
                     onSubmitted: (_) => _loadUsers(reset: true),
                   ),
                   const SizedBox(height: 8),
                   SizedBox(
                     height: 220,
-                    child: NotificationListener<ScrollNotification>(
-                      onNotification: (n) {
-                        if (n.metrics.pixels >=
-                                n.metrics.maxScrollExtent - 100 &&
-                            _cursor != null) {
-                          _loadUsers();
-                        }
-                        return false;
-                      },
-                      child: ListView.builder(
-                        itemCount: _users.length + (_loadingUsers ? 1 : 0),
-                        itemBuilder: (ctx, idx) {
-                          if (idx >= _users.length) {
-                            return const Center(
-                              child: Padding(
-                                padding: EdgeInsets.all(12),
-                                child: CircularProgressIndicator(),
+                    child: _users.isEmpty && !_loadingUsers
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Text(
+                                _searchCtrl.text.trim().isEmpty
+                                    ? 'No team members yet.\nAdd members to your teams first.'
+                                    : 'No team members found matching "${_searchCtrl.text.trim()}"',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colors.grey.shade600),
                               ),
-                            );
-                          }
-                          final u = _users[idx];
-                          final key = '${u['provider']}:${u['subject']}';
-                          final selected = _selectedKeys.contains(key);
-                          return CheckboxListTile(
-                            value: selected,
-                            onChanged: (_) {
-                              setState(() {
-                                if (selected) {
-                                  _selectedKeys.remove(key);
-                                } else {
-                                  _selectedKeys.add(key);
-                                }
-                              });
-                            },
-                            title: Text(
-                              (u['name'] ?? u['email'] ?? key).toString(),
                             ),
-                            subtitle: Text((u['email'] ?? '').toString()),
-                          );
-                        },
-                      ),
-                    ),
+                          )
+                        : NotificationListener<ScrollNotification>(
+                            onNotification: (n) {
+                              if (n.metrics.pixels >=
+                                      n.metrics.maxScrollExtent - 100 &&
+                                  _cursor != null) {
+                                _loadUsers();
+                              }
+                              return false;
+                            },
+                            child: ListView.builder(
+                              itemCount: _users.length + (_loadingUsers ? 1 : 0),
+                              itemBuilder: (ctx, idx) {
+                                if (idx >= _users.length) {
+                                  return const Center(
+                                    child: Padding(
+                                      padding: EdgeInsets.all(12),
+                                      child: CircularProgressIndicator(),
+                                    ),
+                                  );
+                                }
+                                final u = _users[idx];
+                                final key = '${u['provider']}:${u['subject']}';
+                                final selected = _selectedKeys.contains(key);
+                                return CheckboxListTile(
+                                  value: selected,
+                                  onChanged: (_) {
+                                    setState(() {
+                                      if (selected) {
+                                        _selectedKeys.remove(key);
+                                      } else {
+                                        _selectedKeys.add(key);
+                                      }
+                                    });
+                                  },
+                                  title: Text(
+                                    (u['name'] ?? u['email'] ?? key).toString(),
+                                  ),
+                                  subtitle: Text((u['email'] ?? '').toString()),
+                                );
+                              },
+                            ),
+                          ),
                   ),
                   Wrap(
                     spacing: 8,
