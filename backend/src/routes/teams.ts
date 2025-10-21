@@ -1149,6 +1149,9 @@ router.get('/teams/my', requireAuth, async (req, res) => {
 router.get('/teams/my/members', requireAuth, async (req, res) => {
   try {
     const manager = await resolveManagerForRequest(req as any);
+    if (!manager || !manager._id) {
+      return res.status(400).json({ message: 'Manager not found' });
+    }
     const managerId = manager._id as mongoose.Types.ObjectId;
 
     // Parse query parameters
@@ -1259,9 +1262,13 @@ router.get('/teams/my/members', requireAuth, async (req, res) => {
       items: payload,
       nextCursor,
     });
-  } catch (err) {
+  } catch (err: any) {
     // eslint-disable-next-line no-console
     console.error('[teams] GET /teams/my/members failed', err);
+    // If it's a manager resolution error, return 400 with the specific message
+    if (err.message && err.message.includes('Manager')) {
+      return res.status(400).json({ message: err.message });
+    }
     return res.status(500).json({ message: 'Failed to load team members' });
   }
 });
