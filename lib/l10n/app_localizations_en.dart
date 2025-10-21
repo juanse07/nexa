@@ -348,4 +348,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get invitation => 'Invitation';
+
+  @override
+  String get viewJobs => 'View Jobs';
+
+  @override
+  String get addToBartender => 'Add to Bartender';
+
+  @override
+  String get addToServer => 'Add to Server';
+
+  @override
+  String addToRole(String role) {
+    return 'Add to $role';
+  }
 }

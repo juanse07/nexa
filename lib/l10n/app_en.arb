@@ -499,5 +499,27 @@
   "invitation": "Invitation",
   "@invitation": {
     "description": "Status badge for pending invitation"
+  },
+
+  "viewJobs": "View Jobs",
+  "@viewJobs": {
+    "description": "Button to view jobs/events"
+  },
+  "addToBartender": "Add to Bartender",
+  "@addToBartender": {
+    "description": "Action to add user to bartender role"
+  },
+  "addToServer": "Add to Server",
+  "@addToServer": {
+    "description": "Action to add user to server role"
+  },
+  "addToRole": "Add to {role}",
+  "@addToRole": {
+    "description": "Generic action to add user to a role",
+    "placeholders": {
+      "role": {
+        "type": "String"
+      }
+    }
   }
 }

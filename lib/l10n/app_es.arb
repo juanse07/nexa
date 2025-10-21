@@ -107,5 +107,10 @@
 
   "jobFor": "Trabajo para: {clientName}",
   "accepted": "Aceptado",
-  "invitation": "Invitación"
+  "invitation": "Invitación",
+
+  "viewJobs": "Ver Trabajos",
+  "addToBartender": "Agregar a Bartender",
+  "addToServer": "Agregar a Servidor",
+  "addToRole": "Agregar a {role}"
 }

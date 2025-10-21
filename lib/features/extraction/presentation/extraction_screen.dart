@@ -2500,11 +2500,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           // More options menu
           PopupMenuButton<String>(
             itemBuilder: (context) => [
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'view',
                 child: ListTile(
                   leading: Icon(Icons.event),
-                  title: Text('View Events'),
+                  title: Text(AppLocalizations.of(context)!.viewJobs),
                 ),
               ),
               ...(_selectedRole == null

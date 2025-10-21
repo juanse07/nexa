@@ -713,6 +713,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Invitation'**
   String get invitation;
+
+  /// Button to view jobs/events
+  ///
+  /// In en, this message translates to:
+  /// **'View Jobs'**
+  String get viewJobs;
+
+  /// Action to add user to bartender role
+  ///
+  /// In en, this message translates to:
+  /// **'Add to Bartender'**
+  String get addToBartender;
+
+  /// Action to add user to server role
+  ///
+  /// In en, this message translates to:
+  /// **'Add to Server'**
+  String get addToServer;
+
+  /// Generic action to add user to a role
+  ///
+  /// In en, this message translates to:
+  /// **'Add to {role}'**
+  String addToRole(String role);
 }
 
 class _AppLocalizationsDelegate

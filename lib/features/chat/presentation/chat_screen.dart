@@ -717,11 +717,11 @@ class _ChatScreenState extends State<ChatScreen> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 4),
                             child: Row(
-                              children: const [
+                              children: [
                                 Icon(Icons.event_rounded, color: Color(0xFF7C3AED), size: 22),
                                 SizedBox(width: 14),
                                 Text(
-                                  'View Events',
+                                  AppLocalizations.of(context)!.viewJobs,
                                   style: TextStyle(
                                     fontSize: 15,
                                     fontWeight: FontWeight.w500,

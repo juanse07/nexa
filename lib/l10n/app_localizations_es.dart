@@ -350,4 +350,18 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get invitation => 'Invitación';
+
+  @override
+  String get viewJobs => 'Ver Trabajos';
+
+  @override
+  String get addToBartender => 'Agregar a Bartender';
+
+  @override
+  String get addToServer => 'Agregar a Servidor';
+
+  @override
+  String addToRole(String role) {
+    return 'Agregar a $role';
+  }
 }
