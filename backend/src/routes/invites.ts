@@ -194,6 +194,27 @@ router.post('/invites/redeem', inviteRedeemLimiter, requireAuth, async (req, res
     // Determine member status based on requireApproval
     const memberStatus = invite.requireApproval ? 'pending' : 'active';
 
+    // Create or update user record (required for chat functionality)
+    await UserModel.findOneAndUpdate(
+      {
+        provider: authUser.provider,
+        subject: authUser.sub,
+      },
+      {
+        $setOnInsert: {
+          provider: authUser.provider,
+          subject: authUser.sub,
+          createdAt: new Date(),
+        },
+        $set: {
+          email: authUser.email,
+          name: authUser.name,
+          updatedAt: new Date(),
+        },
+      },
+      { upsert: true, setDefaultsOnInsert: true }
+    );
+
     // Create team member
     const member = await TeamMemberModel.findOneAndUpdate(
       {
