@@ -74,26 +74,32 @@ class EventService {
 
   Future<Map<String, dynamic>> updateEvent(String eventId, Map<String, dynamic> updates) async {
     try {
-      print('DEBUG: Updating event at path: /events/$eventId');
-      print('DEBUG: Event ID: $eventId');
+      print('[EventService.updateEvent] Starting update...');
+      print('[EventService.updateEvent] Event ID: "$eventId" (length: ${eventId.length})');
+      print('[EventService.updateEvent] Updates: $updates');
+      print('[EventService.updateEvent] Path: /events/$eventId');
 
       final response = await _apiClient.patch(
         '/events/$eventId',
         data: updates,
       );
 
-      print('DEBUG: Response status: ${response.statusCode}');
-      print('DEBUG: Response data: ${response.data}');
+      print('[EventService.updateEvent] Response status: ${response.statusCode}');
+      print('[EventService.updateEvent] Response data: ${response.data}');
 
       if (response.statusCode != null &&
           response.statusCode! >= 200 &&
           response.statusCode! < 300) {
+        print('[EventService.updateEvent] ✓ Update successful');
         return response.data as Map<String, dynamic>;
       }
       throw Exception(
         'Failed to update event (${response.statusCode}): ${response.data}',
       );
     } on DioException catch (e) {
+      print('[EventService.updateEvent] ✗ DioException: ${e.message}');
+      print('[EventService.updateEvent] ✗ Response: ${e.response?.data}');
+      print('[EventService.updateEvent] ✗ Status code: ${e.response?.statusCode}');
       throw Exception('Failed to update event: ${e.message}');
     }
   }

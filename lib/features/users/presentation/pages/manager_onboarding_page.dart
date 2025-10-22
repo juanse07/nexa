@@ -8,7 +8,7 @@ import 'package:nexa/features/auth/presentation/pages/login_page.dart';
 import 'package:nexa/features/extraction/services/clients_service.dart';
 import 'package:nexa/features/extraction/services/roles_service.dart';
 import 'package:nexa/features/extraction/services/tariffs_service.dart';
-import 'package:nexa/features/extraction/presentation/extraction_screen.dart';
+import 'package:nexa/features/main/presentation/main_screen.dart';
 import 'package:nexa/features/users/data/services/manager_service.dart';
 import 'package:nexa/features/users/presentation/pages/manager_profile_page.dart';
 import 'package:nexa/features/teams/data/services/teams_service.dart';
@@ -301,7 +301,27 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
                   style: const TextStyle(color: Colors.redAccent),
                 ),
                 const SizedBox(height: 16),
-                ElevatedButton(onPressed: _refresh, child: const Text('Retry')),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ElevatedButton(
+                      onPressed: _refresh,
+                      child: const Text('Retry'),
+                    ),
+                    const SizedBox(width: 16),
+                    OutlinedButton(
+                      onPressed: () {
+                        // Skip error and navigate to main screen anyway
+                        Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(
+                            builder: (_) => const MainScreen(),
+                          ),
+                        );
+                      },
+                      child: const Text('Skip'),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -315,7 +335,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
     }
 
     if (snapshot.isComplete) {
-      return const ExtractionScreen();
+      return const MainScreen();
     }
 
     return Scaffold(

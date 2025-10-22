@@ -56,9 +56,20 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Messages'),
+        backgroundColor: Colors.white,
         elevation: 0,
+        title: const Text(
+          'Chats',
+          style: TextStyle(
+            color: Color(0xFF1F2937),
+            fontSize: 24,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.5,
+          ),
+        ),
+        iconTheme: const IconThemeData(color: Color(0xFF1F2937)),
       ),
       body: _buildBody(),
     );

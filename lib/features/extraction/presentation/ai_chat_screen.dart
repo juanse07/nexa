@@ -75,15 +75,20 @@ class _AIChatScreenState extends State<AIChatScreen> {
     final hasEventData = currentData.isNotEmpty;
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Row(
-          children: [
-            Icon(Icons.auto_awesome, size: 22),
-            SizedBox(width: 8),
-            Text('AI Assistant'),
-          ],
-        ),
+        backgroundColor: Colors.white,
         elevation: 0,
+        title: const Text(
+          'AI Chat',
+          style: TextStyle(
+            color: Color(0xFF1F2937),
+            fontSize: 24,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.5,
+          ),
+        ),
+        iconTheme: const IconThemeData(color: Color(0xFF1F2937)),
         actions: [
           // AI Provider toggle - only on web
           if (kIsWeb)
@@ -249,53 +254,6 @@ class _AIChatScreenState extends State<AIChatScreen> {
                       ),
                     ],
                   ),
-                  if (_aiChatService.eventComplete) ...[
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: () async {
-                          try {
-                            await _pendingService.saveDraft(currentData);
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Event saved to Pending!'),
-                                backgroundColor: Color(0xFF059669),
-                              ),
-                            );
-                            // Clear conversation after save
-                            setState(() {
-                              _aiChatService.startNewConversation();
-                            });
-                            _loadGreeting();
-                          } catch (e) {
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Failed to save: $e'),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                          }
-                        },
-                        icon: const Icon(Icons.save, size: 14),
-                        label: const Text('Save to Pending'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: const Color(0xFF8B5CF6),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          textStyle: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -370,6 +328,43 @@ class _AIChatScreenState extends State<AIChatScreen> {
 
                   try {
                     await _aiChatService.sendMessage(message);
+
+                    // Auto-save if event is complete
+                    if (_aiChatService.eventComplete && _aiChatService.currentEventData.isNotEmpty) {
+                      print('[AIChatScreen] Event complete detected - auto-saving...');
+                      try {
+                        final currentData = Map<String, dynamic>.from(_aiChatService.currentEventData);
+                        await _pendingService.saveDraft(currentData);
+
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Event saved to Pending!'),
+                              backgroundColor: Color(0xFF059669),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+
+                          // Clear conversation after auto-save
+                          setState(() {
+                            _aiChatService.startNewConversation();
+                          });
+                          _loadGreeting();
+                        }
+
+                        print('[AIChatScreen] ✓ Event auto-saved successfully');
+                      } catch (e) {
+                        print('[AIChatScreen] ✗ Failed to auto-save event: $e');
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Failed to save: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
+                    }
 
                     // Scroll to bottom after message
                     _scrollToBottom(animated: true);

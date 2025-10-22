@@ -352,6 +352,8 @@ Be conversational and friendly. If the user provides multiple pieces of informat
       final client = event['client_name'] ?? 'No Client';
       final date = event['date'] ?? 'No Date';
 
+      print('[ChatEventService._formatEventsForContext] Event: id=$id, _id=${event['_id']}, id_field=${event['id']}, name=$name');
+
       // Extract roles summary
       final roles = event['roles'];
       String rolesText = 'No roles';
@@ -366,7 +368,9 @@ Be conversational and friendly. If the user provides multiple pieces of informat
       buffer.writeln('  - ID: $id | "$name" | Client: $client | Date: $date | Roles: $rolesText');
     }
 
-    return buffer.toString();
+    final contextText = buffer.toString();
+    print('[ChatEventService._formatEventsForContext] Context:\n$contextText');
+    return contextText;
   }
 
   /// Format team members list for AI context with availability
@@ -556,15 +560,36 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
         }
       }
     } else if (content.contains('EVENT_UPDATE')) {
-      // Handle event update requests
+      // Handle event update requests - auto-apply immediately
+      print('[ChatEventService] EVENT_UPDATE detected in response');
       final jsonMatch = RegExp(r'\{[\s\S]*\}').firstMatch(content);
       if (jsonMatch != null) {
+        Map<String, dynamic>? updateData;
         try {
-          final updateData = jsonDecode(jsonMatch.group(0)!) as Map<String, dynamic>;
-          _pendingUpdates.add(updateData);
+          print('[ChatEventService] Raw JSON match: ${jsonMatch.group(0)}');
+          updateData = jsonDecode(jsonMatch.group(0)!) as Map<String, dynamic>;
+          print('[ChatEventService] Parsed update data: $updateData');
+          print('[ChatEventService] Event ID: ${updateData['eventId']}');
+          print('[ChatEventService] Updates: ${updateData['updates']}');
+
+          // Auto-apply the update immediately instead of adding to pending list
+          print('[ChatEventService] Auto-applying update...');
+          await applyUpdate(updateData);
+          print('[ChatEventService] ✓ Update applied successfully');
+
+          // Refresh events to get the updated data
+          await _loadExistingEvents(forceRefresh: true);
+          print('[ChatEventService] ✓ Events refreshed');
         } catch (e) {
-          print('Failed to parse event update JSON: $e');
+          print('[ChatEventService] ✗ Failed to auto-apply update: $e');
+          // If auto-apply fails, add to pending updates as fallback
+          if (updateData != null) {
+            _pendingUpdates.add(updateData);
+            print('[ChatEventService] Added to pending updates as fallback (total: ${_pendingUpdates.length})');
+          }
         }
+      } else {
+        print('[ChatEventService] No JSON match found in EVENT_UPDATE response');
       }
     } else if (content.contains('CLIENT_CREATE')) {
       // Handle client creation requests
@@ -728,21 +753,30 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
   /// Apply pending updates to events
   Future<void> applyUpdate(Map<String, dynamic> updateData) async {
     try {
+      print('[ChatEventService.applyUpdate] Starting update...');
+      print('[ChatEventService.applyUpdate] Update data: $updateData');
+
       final eventId = updateData['eventId'] as String?;
       final updates = updateData['updates'] as Map<String, dynamic>?;
 
+      print('[ChatEventService.applyUpdate] Extracted eventId: $eventId');
+      print('[ChatEventService.applyUpdate] Extracted updates: $updates');
+
       if (eventId == null || updates == null) {
-        throw Exception('Invalid update data');
+        throw Exception('Invalid update data: eventId=$eventId, updates=$updates');
       }
 
-      print('Applying update to event $eventId: $updates');
-      await _eventService.updateEvent(eventId, updates);
+      print('[ChatEventService.applyUpdate] Calling _eventService.updateEvent...');
+      final result = await _eventService.updateEvent(eventId, updates);
+      print('[ChatEventService.applyUpdate] Backend response: $result');
 
       // Remove from pending updates
       _pendingUpdates.removeWhere((u) => u['eventId'] == eventId);
 
-      print('Event updated successfully');
-    } catch (e) {
+      print('[ChatEventService.applyUpdate] Event updated successfully');
+    } catch (e, stackTrace) {
+      print('[ChatEventService.applyUpdate] ERROR: $e');
+      print('[ChatEventService.applyUpdate] Stack trace: $stackTrace');
       throw Exception('Failed to apply update: $e');
     }
   }

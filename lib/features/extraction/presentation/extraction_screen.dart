@@ -57,7 +57,14 @@ import '../../chat/presentation/chat_screen.dart';
 import 'ai_chat_screen.dart';
 
 class ExtractionScreen extends StatefulWidget {
-  const ExtractionScreen({super.key});
+  final int initialIndex; // For Create tab chips
+  final int initialScreenIndex; // For main screen tabs (Create=0, Events=1, etc.)
+
+  const ExtractionScreen({
+    super.key,
+    this.initialIndex = 0,
+    this.initialScreenIndex = 0,
+  });
 
   @override
   State<ExtractionScreen> createState() => _ExtractionScreenState();
@@ -71,7 +78,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   String? errorMessage;
 
   int _selectedIndex = 0;
-  late TabController _createTabController;
+  late TabController _createTabController; // Back to TabController for Create tabs
   late TabController _eventsTabController;
   late TabController _catalogTabController;
 
@@ -165,9 +172,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   @override
   void initState() {
     super.initState();
-    _createTabController = TabController(length: 4, vsync: this);
+    _selectedIndex = widget.initialScreenIndex; // Set main screen tab
+    _createTabController = TabController(length: 3, vsync: this, initialIndex: widget.initialIndex);
     _eventsTabController = TabController(length: 3, vsync: this);
     _catalogTabController = TabController(length: 3, vsync: this);
+
     _extractionService = ExtractionService();
     _eventService = EventService();
     _clientsService = ClientsService();
@@ -978,23 +987,13 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         }
         return greeting;
       case 1: // Events tab
-        final pendingCount = _pendingDrafts.length;
-        final upcomingCount = _eventsUpcoming?.length ?? 0;
-        final pastCount = _eventsPast?.length ?? 0;
-        final totalEvents = (pendingCount + upcomingCount + pastCount);
-        return AppLocalizations.of(context)!.jobsTabLabel(
-          pendingCount,
-          upcomingCount,
-          pastCount,
-        );
+        return 'Jobs';
       case 2: // Chat tab
         return "Chat";
       case 3: // Hours tab
         return "Hours Approval";
       case 4: // Catalog tab
-        final clientsCount = _clients?.length ?? 0;
-        final rolesCount = _roles?.length ?? 0;
-        return AppLocalizations.of(context)!.catalogClientsRoles(clientsCount, rolesCount);
+        return 'Catalog';
       default:
         return greeting;
     }
@@ -1043,41 +1042,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         }
         return baseTime;
       case 1: // Events tab
-        final pendingCount = _pendingDrafts.length;
-        final upcomingCount = _eventsUpcoming?.length ?? 0;
-        final pastCount = _eventsPast?.length ?? 0;
-        final totalEvents = (pendingCount + upcomingCount + pastCount);
-
-        if (totalEvents > 0) {
-          // Show the most relevant category first
-          if (pendingCount > 0) {
-            return AppLocalizations.of(context)!.pendingUpcomingStatus(
-              pendingCount,
-              upcomingCount,
-              baseTime,
-            );
-          } else if (upcomingCount > 0) {
-            return AppLocalizations.of(context)!.upcomingPastStatus(
-              upcomingCount,
-              pastCount,
-              baseTime,
-            );
-          } else {
-            return "$totalEvents total events • $baseTime";
-          }
-        }
         return baseTime;
       case 2: // Chat tab
         return "${AppLocalizations.of(context)!.messagesAndTeamMembers} • $baseTime";
       case 3: // Hours tab
         return baseTime;
       case 4: // Catalog tab
-        final clientsCount = _clients?.length ?? 0;
-        final rolesCount = _roles?.length ?? 0;
-        final tariffsCount = _tariffs?.length ?? 0;
-        if (clientsCount > 0 || rolesCount > 0) {
-          return "$clientsCount clients • $rolesCount roles • $tariffsCount tariffs • $baseTime";
-        }
         return baseTime;
       default:
         return baseTime;
@@ -1105,35 +1075,39 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final topPadding = MediaQuery.of(context).padding.top;
 
     switch (_selectedIndex) {
-      case 0: // Create tab - pin the TabBar
+      case 0: // Create tab - pin the chip selector
         return [
           SliverPersistentHeader(
             pinned: true,
             delegate: PinnedHeaderDelegate(
-              height: 64.0,
-              safeAreaPadding: topPadding,
-              child: Material(
-                elevation: 4.0,
-                child: Container(
-                  color: Colors.white,
-                  child: SafeArea(
-                    bottom: false,
+              height: 46.0,
+              safeAreaPadding: topPadding, // This handles the notch when pinned
+              child: Container(
+                color: Colors.white,
+                child: SafeArea(
+                  top: false, // Don't double-add top padding
+                  bottom: false,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
                     child: TabBar(
                       controller: _createTabController,
                       tabs: [
-                        Tab(
-                          icon: Icon(Icons.upload_file),
-                          text: AppLocalizations.of(context)!.uploadData,
-                        ),
+                        Tab(icon: Icon(Icons.upload_file), text: AppLocalizations.of(context)!.uploadData),
+                        Tab(icon: Icon(Icons.auto_awesome), text: AppLocalizations.of(context)!.aiChat),
                         Tab(icon: Icon(Icons.edit), text: AppLocalizations.of(context)!.manualEntry),
-                        Tab(
-                          icon: Icon(Icons.cloud_upload),
-                          text: AppLocalizations.of(context)!.multiUpload,
-                        ),
-                        Tab(icon: Icon(Icons.chat), text: AppLocalizations.of(context)!.aiChat),
                       ],
-                      labelColor: Color(0xFF6366F1),
+                      labelColor: const Color(0xFF7C3AED),
                       unselectedLabelColor: Colors.grey,
+                      indicatorColor: const Color(0xFF7C3AED),
                     ),
                   ),
                 ),
@@ -1141,35 +1115,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             ),
           ),
         ];
-      case 1: // Events tab - pin the TabBar
-        return [
-          SliverPersistentHeader(
-            pinned: true,
-            delegate: PinnedHeaderDelegate(
-              height: 44.0,
-              safeAreaPadding: topPadding,
-              child: Material(
-                elevation: 4.0,
-                child: Container(
-                  color: Colors.white,
-                  child: SafeArea(
-                    bottom: false,
-                    child: TabBar(
-                      controller: _eventsTabController,
-                      tabs: [
-                        Tab(text: AppLocalizations.of(context)!.pending),
-                        Tab(text: AppLocalizations.of(context)!.upcoming),
-                        Tab(text: AppLocalizations.of(context)!.past),
-                      ],
-                      labelColor: Color(0xFF6366F1),
-                      unselectedLabelColor: Colors.grey,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ];
+      case 1: // Events tab - no pinned headers (tabs are in fixed header)
+        return [];
       case 2: // Chat tab - pin the search bar
         return [
           SliverPersistentHeader(
@@ -1257,35 +1204,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         ];
       case 3: // Hours tab - no pinned header needed
         return [];
-      case 4: // Catalog tab - pin the TabBar
-        return [
-          SliverPersistentHeader(
-            pinned: true,
-            delegate: PinnedHeaderDelegate(
-              height: 44.0,
-              safeAreaPadding: topPadding,
-              child: Material(
-                elevation: 4.0,
-                child: Container(
-                  color: Colors.white,
-                  child: SafeArea(
-                    bottom: false,
-                    child: TabBar(
-                      controller: _catalogTabController,
-                      tabs: const [
-                        Tab(text: 'Clients'),
-                        Tab(text: 'Roles'),
-                        Tab(text: 'Tariffs'),
-                      ],
-                      labelColor: Color(0xFF6366F1),
-                      unselectedLabelColor: Colors.grey,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ];
+      case 4: // Catalog tab - no pinned headers (tabs are in fixed header)
+        return [];
       default:
         return [];
     }
@@ -1298,9 +1218,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           controller: _createTabController,
           children: [
             _buildUploadTab(),
-            _buildManualEntryTab(),
-            _buildBulkUploadTab(),
             _buildChatTab(),
+            _buildManualEntryTab(),
           ],
         );
       case 1: // Events tab
@@ -1342,49 +1261,247 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   Widget _buildMobileLayout(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      body: NestedScrollView(
-        headerSliverBuilder: (context, innerBoxIsScrolled) {
-          return [
-            CustomSliverAppBar(
-              title: _getAppBarTitle(),
-              subtitle: _getAppBarSubtitle(),
-              expandedHeight: 120.0,
-              titleFontSize: _selectedIndex == 1 ? 14.0 : null,
-              subtitleFontSize: _selectedIndex == 1 ? 9.0 : null,
-              actions: [
-                _buildProfileMenu(context),
-              ],
-            ),
-            ..._buildPinnedHeaders(),
-          ];
-        },
-        body: _buildBody(),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF7C3AED),
+        elevation: 0,
+        title: Text(
+          _getAppBarTitle(),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        actions: [
+          _buildProfileMenu(context),
+        ],
       ),
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-            colors: [Color(0xFF7A3AFB), Color(0xFF5B27D8)],
-          ),
-        ),
-        child: SafeArea(
-          child: SizedBox(
-            height: 56,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildNavButton(0, Icons.add_circle_outline, AppLocalizations.of(context)!.navCreate),
-                _buildNavButton(1, Icons.view_module, AppLocalizations.of(context)!.navJobs),
-                _buildNavButton(2, Icons.chat_bubble_outline, AppLocalizations.of(context)!.navChat),
-                _buildNavButton(3, Icons.schedule, AppLocalizations.of(context)!.navHours),
-                _buildNavButton(4, Icons.inventory_2, AppLocalizations.of(context)!.navCatalog),
-              ],
+      body: Column(
+        children: [
+          _buildTabSelector(),
+          Expanded(
+            child: CustomScrollView(
+              slivers: _buildSliverContent(),
             ),
           ),
-        ),
+        ],
       ),
     );
+  }
+
+  Widget _buildTabSelector() {
+    // Create tab
+    if (_selectedIndex == 0) {
+      return Container(
+        color: Colors.white,
+        child: TabBar(
+          controller: _createTabController,
+          tabs: [
+            Tab(icon: Icon(Icons.upload_file), text: AppLocalizations.of(context)!.uploadData),
+            Tab(icon: Icon(Icons.auto_awesome), text: AppLocalizations.of(context)!.aiChat),
+            Tab(icon: Icon(Icons.edit), text: AppLocalizations.of(context)!.manualEntry),
+          ],
+          labelColor: const Color(0xFF7C3AED),
+          unselectedLabelColor: Colors.grey,
+          indicatorColor: const Color(0xFF7C3AED),
+        ),
+      );
+    }
+
+    // Events/Jobs tab - floating header card
+    if (_selectedIndex == 1) {
+      final pendingCount = _pendingDrafts.length;
+      final upcomingCount = _eventsUpcoming?.length ?? 0;
+      final pastCount = _eventsPast?.length ?? 0;
+      final totalEvents = (_events?.length ?? 0);
+
+      return Container(
+        margin: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF06B6D4), Color(0xFF14B8A6)], // Turquoise gradient
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.event_note, color: Colors.white, size: 24),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Events Management',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$totalEvents total • $pendingCount pending • $upcomingCount upcoming • $pastCount past',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.9),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(16),
+                  bottomRight: Radius.circular(16),
+                ),
+              ),
+              child: TabBar(
+                controller: _eventsTabController,
+                tabs: [
+                  Tab(text: AppLocalizations.of(context)!.pending),
+                  Tab(text: AppLocalizations.of(context)!.upcoming),
+                  Tab(text: AppLocalizations.of(context)!.past),
+                ],
+                labelColor: const Color(0xFF7C3AED),
+                unselectedLabelColor: Colors.grey,
+                indicatorColor: const Color(0xFF7C3AED),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Catalog tab - floating header card
+    if (_selectedIndex == 4) {
+      final clientsCount = _clients?.length ?? 0;
+      final rolesCount = _roles?.length ?? 0;
+      final tariffsCount = _tariffs?.length ?? 0;
+
+      return Container(
+        margin: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)], // Coral gradient
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.inventory_2, color: Colors.white, size: 24),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Catalog Management',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$clientsCount clients • $rolesCount roles • $tariffsCount tariffs',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.9),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(16),
+                  bottomRight: Radius.circular(16),
+                ),
+              ),
+              child: TabBar(
+                controller: _catalogTabController,
+                tabs: const [
+                  Tab(text: 'Clients'),
+                  Tab(text: 'Roles'),
+                  Tab(text: 'Tariffs'),
+                ],
+                labelColor: const Color(0xFF7C3AED),
+                unselectedLabelColor: Colors.grey,
+                indicatorColor: const Color(0xFF7C3AED),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
   }
 
   Widget _buildDesktopLayout(BuildContext context) {
@@ -1635,6 +1752,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     );
   }
 
+  // Removed _buildCompactChip - now using TabBar instead
+
   Widget _buildProfileMenu(BuildContext context) {
     final theme = Theme.of(context);
     return PopupMenuButton<String>(
@@ -1750,30 +1869,13 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
   List<Widget> _buildCreateSlivers() {
     return [
-      SliverToBoxAdapter(
-        child: Container(
-          color: Colors.white,
-          child: TabBar(
-            controller: _createTabController,
-            tabs: [
-              Tab(icon: Icon(Icons.upload_file), text: AppLocalizations.of(context)!.uploadData),
-              Tab(icon: Icon(Icons.edit), text: AppLocalizations.of(context)!.manualEntry),
-              Tab(icon: Icon(Icons.cloud_upload), text: AppLocalizations.of(context)!.multiUpload),
-              Tab(icon: Icon(Icons.chat), text: AppLocalizations.of(context)!.aiChat),
-            ],
-            labelColor: Color(0xFF6366F1),
-            unselectedLabelColor: Colors.grey,
-          ),
-        ),
-      ),
       SliverFillRemaining(
         child: TabBarView(
           controller: _createTabController,
           children: [
             _buildUploadTab(),
-            _buildManualEntryTab(),
-            _buildBulkUploadTab(),
             _buildChatTab(),
+            _buildManualEntryTab(),
           ],
         ),
       ),
@@ -2871,20 +2973,127 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 title: AppLocalizations.of(context)!.jobDataExtractor,
                 subtitle: AppLocalizations.of(context)!.uploadPdfToExtract,
                 icon: Icons.auto_awesome,
-                gradientColors: const [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                gradientColors: const [Color(0xFFF59E0B), Color(0xFFFBBF24)], // Gold gradient
               ),
               const SizedBox(height: 24),
-              ActionCard(
-                title: 'Upload Document',
-                description:
-                    'Select a PDF or image file to extract event details automatically using AI',
-                icon: Icons.upload_file,
-                actionText: isLoading ? 'Processing...' : AppLocalizations.of(context)!.chooseFile,
-                onPressed: _pickAndProcessFile,
-                isLoading: isLoading,
-                color: const Color(0xFF6366F1),
+              Row(
+                children: [
+                  Expanded(
+                    child: ActionCard(
+                      title: 'Single Upload',
+                      description: 'Upload one PDF or image file',
+                      icon: Icons.upload_file,
+                      actionText: isLoading ? 'Processing...' : 'Choose 1 File',
+                      onPressed: _pickAndProcessFile,
+                      isLoading: isLoading,
+                      color: const Color(0xFF6366F1),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ActionCard(
+                      title: 'Multi Upload',
+                      description: 'Upload multiple files at once',
+                      icon: Icons.folder_open,
+                      actionText: _isBulkProcessing ? 'Processing...' : 'Choose Multiple Files',
+                      onPressed: () => _pickAndProcessMultipleFiles(append: false),
+                      isLoading: _isBulkProcessing,
+                      color: const Color(0xFF8B5CF6),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 20),
+              if (_bulkItems.isNotEmpty) ...[
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Uploaded Files (${_bulkItems.length})',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          if (_bulkItems.any((e) => e['data'] != null))
+                            ElevatedButton.icon(
+                              onPressed: _isBulkProcessing ? null : _confirmAllBulkToPending,
+                              icon: const Icon(Icons.done_all, size: 18),
+                              label: const Text('Confirm All'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF059669),
+                                foregroundColor: Colors.white,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      ..._bulkItems.asMap().entries.map((entry) {
+                        final int index = entry.key;
+                        final Map<String, dynamic> item = entry.value;
+                        final String name = (item['name'] ?? 'File').toString();
+                        final String status = (item['status'] ?? 'queued').toString();
+                        final Map<String, dynamic>? data = (item['data'] as Map?)?.cast<String, dynamic>();
+                        final String subtitle = data == null
+                            ? status[0].toUpperCase() + status.substring(1)
+                            : _summarizeEvent(data);
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.grey.shade200),
+                          ),
+                          child: ListTile(
+                            dense: true,
+                            leading: Icon(
+                              data != null ? Icons.check_circle : status == 'error' ? Icons.error : Icons.hourglass_bottom,
+                              color: data != null ? const Color(0xFF059669) : status == 'error' ? const Color(0xFFDC2626) : const Color(0xFF6366F1),
+                              size: 20,
+                            ),
+                            title: Text(name, style: const TextStyle(fontSize: 13)),
+                            subtitle: Text(subtitle, style: const TextStyle(fontSize: 11)),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (data != null)
+                                  TextButton(
+                                    onPressed: () => _confirmSingleBulkToPending(index),
+                                    child: const Text('Confirm', style: TextStyle(fontSize: 12)),
+                                  ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline, size: 18),
+                                  onPressed: () {
+                                    setState(() {
+                                      _bulkItems = List.of(_bulkItems)..removeAt(index);
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
               if (isLoading) ...[
                 Container(
                   padding: const EdgeInsets.all(20),
@@ -3223,42 +3432,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   List<Widget> _buildEventsSlivers() {
-    final List<Map<String, dynamic>> all = _events ?? const [];
     final List<Map<String, dynamic>> upcoming = _eventsUpcoming ?? const [];
     final List<Map<String, dynamic>> past = _eventsPast ?? const [];
 
+    // Tabs are in the floating header, just return content
     return [
-      SliverPersistentHeader(
-        pinned: true,
-        delegate: PinnedHeaderDelegate(
-          height: 48.0,
-          child: Container(
-            color: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TabBar(
-                    controller: _eventsTabController,
-                    tabs: [
-                      Tab(text: AppLocalizations.of(context)!.pending),
-                      Tab(text: AppLocalizations.of(context)!.upcoming),
-                      Tab(text: AppLocalizations.of(context)!.past),
-                    ],
-                    labelColor: const Color(0xFF6366F1),
-                    unselectedLabelColor: Colors.grey,
-                  ),
-                ),
-                if (kIsWeb)
-                  _maybeWebRefreshButton(
-                    onPressed: _loadEvents,
-                    label: 'Refresh',
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
       SliverFillRemaining(
         child: TabBarView(
           controller: _eventsTabController,
@@ -3348,26 +3526,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   List<Widget> _buildCatalogSlivers() {
+    // Tabs are in the floating header, just return content
     return [
-      SliverPersistentHeader(
-        pinned: true,
-        delegate: PinnedHeaderDelegate(
-          height: 48.0,
-          child: Container(
-            color: Colors.white,
-            child: TabBar(
-              controller: _catalogTabController,
-              tabs: const [
-                Tab(text: 'Clients'),
-                Tab(text: 'Roles'),
-                Tab(text: 'Tariffs'),
-              ],
-              labelColor: Color(0xFF6366F1),
-              unselectedLabelColor: Colors.grey,
-            ),
-          ),
-        ),
-      ),
       SliverFillRemaining(
         child: TabBarView(
           controller: _catalogTabController,
@@ -3986,12 +4146,6 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(20),
           children: [
-            HeaderCard(
-              title: 'Clients',
-              subtitle: 'Manage third-party clients for quick selection',
-              icon: Icons.business,
-              gradientColors: const [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-            ),
             if (kIsWeb)
               Align(
                 alignment: Alignment.centerRight,
@@ -4567,102 +4721,99 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         ],
       ),
       child: Padding(
-        padding: EdgeInsets.all(isWeb ? 20 : 16),
-        child: Row(
+        padding: EdgeInsets.all(isWeb ? 20 : 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: EdgeInsets.all(isWeb ? 12 : 10),
-              decoration: BoxDecoration(
-                color: const Color(0xFF059669).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                Icons.attach_money,
-                color: const Color(0xFF059669),
-                size: isWeb ? 28 : 24,
-              ),
-            ),
-            SizedBox(width: isWeb ? 20 : 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '$clientName',
-                    style: TextStyle(
-                      fontSize: isWeb ? 17 : 16,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF1F2937),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF059669).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  const SizedBox(height: 4),
-                  Row(
+                  child: const Icon(
+                    Icons.attach_money,
+                    color: Color(0xFF059669),
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(
-                        Icons.work_outline,
-                        size: 14,
-                        color: Colors.grey[600],
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          roleName ?? 'Unknown Role',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey[600],
-                            fontWeight: FontWeight.w500,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                      Text(
+                        '$clientName',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1F2937),
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        roleName ?? 'Unknown Role',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF6366F1).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      '\$$rate $currency/hr',
-                      style: TextStyle(
-                        fontSize: isWeb ? 15 : 14,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF6366F1),
-                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF6366F1).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '\$$rate $currency/hr',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF6366F1),
                     ),
                   ),
-                ],
-              ),
-            ),
-            SizedBox(width: isWeb ? 12 : 8),
-            // Edit button
-            IconButton(
-              icon: const Icon(Icons.edit_outlined),
-              color: const Color(0xFF6366F1),
-              iconSize: isWeb ? 24 : 22,
-              tooltip: 'Edit tariff',
-              onPressed: () => _showEditTariffDialog(
-                tariffId: id,
-                clientId: clientId,
-                roleId: roleId,
-                currentRate: double.tryParse(rate) ?? 0.0,
-              ),
-            ),
-            // Delete button
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              color: const Color(0xFFDC2626),
-              iconSize: isWeb ? 24 : 22,
-              tooltip: 'Delete tariff',
-              onPressed: () => _confirmDeleteTariff(id),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined),
+                  color: const Color(0xFF6366F1),
+                  iconSize: 20,
+                  tooltip: 'Edit',
+                  padding: const EdgeInsets.all(8),
+                  constraints: const BoxConstraints(),
+                  onPressed: () => _showEditTariffDialog(
+                    tariffId: id,
+                    clientId: clientId,
+                    roleId: roleId,
+                    currentRate: double.tryParse(rate) ?? 0.0,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline),
+                  color: const Color(0xFFDC2626),
+                  iconSize: 20,
+                  tooltip: 'Delete',
+                  padding: const EdgeInsets.all(8),
+                  constraints: const BoxConstraints(),
+                  onPressed: () => _confirmDeleteTariff(id),
+                ),
+              ],
             ),
           ],
         ),
@@ -6138,8 +6289,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         )
                       : const SizedBox.shrink(),
                 ),
-                // Floating draft preview button
-                if (currentData.isNotEmpty)
+                // Floating draft preview button (hidden when event is auto-saved)
+                if (currentData.isNotEmpty && !_aiChatService.eventComplete)
                   Align(
                     alignment: Alignment.centerRight,
                     child: Material(
@@ -6266,7 +6417,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                         if (!kIsWeb) {
                                           await Navigator.of(context).push(
                                             MaterialPageRoute(
-                                              builder: (_) => const AIChatScreen(),
+                                              builder: (_) => const AIChatScreen(startNewConversation: true),
                                             ),
                                           );
                                           // Refresh state after returning
@@ -6433,6 +6584,44 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               final response =
                   await _aiChatService.sendMessage(message);
 
+              print('[ExtractionScreen] AI response received');
+              print('[ExtractionScreen] Response content: ${response.content}');
+              print('[ExtractionScreen] Pending updates count: ${_aiChatService.pendingUpdates.length}');
+
+              // Check if an update was auto-applied (response contains success confirmation)
+              if (response.content.contains('EVENT_UPDATE')) {
+                // Show beautiful success banner
+                if (mounted) {
+                  _showSuccessBanner(context, 'Event updated successfully!');
+                }
+              }
+
+              // Check if event creation is complete - auto-save it
+              if (_aiChatService.eventComplete && _aiChatService.currentEventData.isNotEmpty) {
+                print('[ExtractionScreen] Event complete detected - auto-saving...');
+                try {
+                  final currentData = Map<String, dynamic>.from(_aiChatService.currentEventData);
+
+                  setState(() {
+                    structuredData = currentData;
+                    extractedText = 'AI Chat extracted data';
+                    errorMessage = null;
+                    _lastStructuredFromUpload = false;
+                  });
+
+                  _draftService.saveDraft(currentData);
+                  await _loadPendingDrafts();
+
+                  if (mounted) {
+                    _showSuccessBanner(context, 'Event created and saved to pending!');
+                  }
+
+                  print('[ExtractionScreen] ✓ Event auto-saved successfully');
+                } catch (e) {
+                  print('[ExtractionScreen] ✗ Failed to auto-save event: $e');
+                }
+              }
+
               // Scroll to bottom after message
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (_aiChatScrollController.hasClients) {
@@ -6444,11 +6633,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 }
               });
 
-              // Only save when event is complete (not after every message)
-              // This prevents duplicate saves during conversation
-              if (_aiChatService.eventComplete && _aiChatService.currentEventData.isNotEmpty) {
-                // Event complete - it will be saved when user clicks "Save to Pending" button
-                // No auto-save here to avoid duplicates
+              // Force UI refresh to show any pending updates (fallback)
+              if (mounted) {
+                setState(() {
+                  print('[ExtractionScreen] setState called to refresh UI');
+                });
               }
             } catch (e) {
               if (!mounted) return;
@@ -6483,10 +6672,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
   Widget _buildUpdatePreviewCards() {
     final pendingUpdates = _aiChatService.pendingUpdates;
+    print('[ExtractionScreen._buildUpdatePreviewCards] Called with ${pendingUpdates.length} pending updates');
+
     if (pendingUpdates.isEmpty) {
+      print('[ExtractionScreen._buildUpdatePreviewCards] No pending updates, returning empty widget');
       return const SizedBox.shrink();
     }
 
+    print('[ExtractionScreen._buildUpdatePreviewCards] Building ${pendingUpdates.length} update cards');
     return Container(
       padding: const EdgeInsets.all(12),
       child: Column(
@@ -7260,5 +7453,165 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       'December',
     ];
     return months[month - 1];
+  }
+
+  /// Show a beautiful translucent success banner
+  void _showSuccessBanner(BuildContext context, String message) {
+    final overlay = Overlay.of(context);
+    late OverlayEntry overlayEntry;
+
+    overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: MediaQuery.of(context).padding.top + 16,
+        left: 16,
+        right: 16,
+        child: _AnimatedSuccessBanner(
+          message: message,
+          onDismiss: () {
+            overlayEntry.remove();
+          },
+        ),
+      ),
+    );
+
+    overlay.insert(overlayEntry);
+
+    // Auto-dismiss after 3 seconds
+    Future.delayed(const Duration(seconds: 3), () {
+      if (overlayEntry.mounted) {
+        overlayEntry.remove();
+      }
+    });
+  }
+}
+
+/// Animated success banner widget
+class _AnimatedSuccessBanner extends StatefulWidget {
+  final String message;
+  final VoidCallback onDismiss;
+
+  const _AnimatedSuccessBanner({
+    required this.message,
+    required this.onDismiss,
+  });
+
+  @override
+  State<_AnimatedSuccessBanner> createState() => _AnimatedSuccessBannerState();
+}
+
+class _AnimatedSuccessBannerState extends State<_AnimatedSuccessBanner>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<Offset> _slideAnimation;
+  late Animation<double> _fadeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, -1),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutBack,
+    ));
+
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeIn,
+    ));
+
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SlideTransition(
+      position: _slideAnimation,
+      child: FadeTransition(
+        opacity: _fadeAnimation,
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.green.shade400.withOpacity(0.95),
+                  Colors.green.shade600.withOpacity(0.95),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.green.withOpacity(0.3),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+              border: Border.all(
+                color: Colors.white.withOpacity(0.2),
+                width: 1.5,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.check_circle,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    widget.message,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                  onPressed: () {
+                    _controller.reverse().then((_) {
+                      widget.onDismiss();
+                    });
+                  },
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

@@ -9,22 +9,43 @@ class TeamsService {
 
   Future<List<Map<String, dynamic>>> fetchTeams() async {
     try {
+      print('[TeamsService.fetchTeams] Starting request...');
       final response = await _apiClient.get('/teams');
+      print('[TeamsService.fetchTeams] Response status: ${response.statusCode}');
+      print('[TeamsService.fetchTeams] Response data type: ${response.data.runtimeType}');
+      print('[TeamsService.fetchTeams] Response data: ${response.data}');
+
       if (_isSuccess(response.statusCode)) {
         final dynamic data = response.data;
         if (data is Map<String, dynamic>) {
           final dynamic teams = data['teams'];
+          print('[TeamsService.fetchTeams] Teams field type: ${teams.runtimeType}');
           if (teams is List) {
+            print('[TeamsService.fetchTeams] Found ${teams.length} teams');
             return teams.whereType<Map<String, dynamic>>().toList(
               growable: false,
             );
           }
+        } else if (data is List) {
+          // Handle case where response is directly a list
+          print('[TeamsService.fetchTeams] Response is directly a list with ${data.length} items');
+          return data.whereType<Map<String, dynamic>>().toList(growable: false);
         }
+        print('[TeamsService.fetchTeams] No teams found, returning empty list');
         return const <Map<String, dynamic>>[];
       }
+      print('[TeamsService.fetchTeams] ✗ Non-success status: ${response.statusCode}');
       throw Exception('Failed to fetch teams (${response.statusCode})');
     } on DioException catch (e) {
+      print('[TeamsService.fetchTeams] ✗ DioException: ${e.type}');
+      print('[TeamsService.fetchTeams] ✗ Message: ${e.message}');
+      print('[TeamsService.fetchTeams] ✗ Response: ${e.response?.data}');
+      print('[TeamsService.fetchTeams] ✗ Status code: ${e.response?.statusCode}');
       throw Exception('Failed to fetch teams: ${e.message}');
+    } catch (e, stackTrace) {
+      print('[TeamsService.fetchTeams] ✗ Unexpected error: $e');
+      print('[TeamsService.fetchTeams] ✗ Stack trace: $stackTrace');
+      rethrow;
     }
   }
 

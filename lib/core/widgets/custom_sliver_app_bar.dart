@@ -15,14 +15,14 @@ class AppBarClipper extends CustomClipper<Path> {
     path.lineTo(width, 0);
 
     // Right edge - go down but stop before the corner for the curve
-    path.lineTo(width, height - 80);
+    path.lineTo(width, height - 30);
 
     // Beautiful elliptical rounded bottom-right corner
-    // Using cubicTo for ultra-smooth curve with larger curve
+    // Using cubicTo for ultra-smooth curve with minimal curve
     path.cubicTo(
-      width, height - 40, // First control point - ease out from vertical
-      width - 40, height, // Second control point - ease into horizontal
-      width - 80, height, // End point - curved inward (larger curve)
+      width, height - 15, // First control point - ease out from vertical
+      width - 15, height, // Second control point - ease into horizontal
+      width - 30, height, // End point - curved inward (minimal curve)
     );
 
     // Bottom edge - straight across to left
@@ -142,7 +142,7 @@ class CustomSliverAppBar extends StatelessWidget {
             Positioned(
               left: 20,
               right: 20,
-              bottom: 20,
+              bottom: 8,
               child: SafeArea(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
