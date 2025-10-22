@@ -278,6 +278,144 @@ router.delete('/teams/:teamId', requireAuth, async (req, res) => {
   }
 });
 
+// IMPORTANT: Specific routes like /teams/my/members must come BEFORE parameterized routes like /teams/:teamId/members
+// Get all team members across all manager's teams (for job publishing)
+router.get('/teams/my/members', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    if (!manager || !manager._id) {
+      return res.status(400).json({ message: 'Manager not found' });
+    }
+    const managerId = manager._id as mongoose.Types.ObjectId;
+
+    // eslint-disable-next-line no-console
+    console.log(`[teams/my/members] managerId=${managerId}, q=${req.query.q}`);
+
+    // Parse query parameters
+    const q = (req.query.q ?? '').toString().trim();
+    const cursor = (req.query.cursor ?? '').toString();
+    const limit = Math.min(parseInt((req.query.limit ?? '20').toString(), 10) || 20, 100);
+
+    // Build aggregation pipeline
+    const pipeline: any[] = [
+      {
+        $match: {
+          managerId: managerId,
+          status: 'active', // Only active members for job assignment
+        },
+      },
+    ];
+
+    // eslint-disable-next-line no-console
+    console.log(`[teams/my/members] Initial match:`, JSON.stringify(pipeline[0]));
+
+    // Add search filter if provided
+    if (q) {
+      pipeline.push({
+        $match: {
+          $or: [
+            { name: { $regex: q, $options: 'i' } },
+            { email: { $regex: q, $options: 'i' } },
+          ],
+        },
+      });
+    }
+
+    // Add cursor-based pagination if provided
+    if (cursor) {
+      try {
+        const cursorId = new mongoose.Types.ObjectId(cursor);
+        pipeline.push({
+          $match: {
+            _id: { $gt: cursorId },
+          },
+        });
+      } catch (e) {
+        // Invalid cursor, ignore
+      }
+    }
+
+    // Join with users collection to get full profile
+    pipeline.push({
+      $lookup: {
+        from: 'users',
+        let: { memberProvider: '$provider', memberSubject: '$subject' },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ['$provider', '$$memberProvider'] },
+                  { $eq: ['$subject', '$$memberSubject'] },
+                ],
+              },
+            },
+          },
+          {
+            $project: {
+              _id: 1,
+              provider: 1,
+              subject: 1,
+              email: 1,
+              name: 1,
+              first_name: 1,
+              last_name: 1,
+              phone_number: 1,
+              picture: 1,
+            },
+          },
+        ],
+        as: 'userProfile',
+      },
+    });
+
+    // Sort by creation date
+    pipeline.push({ $sort: { _id: 1 } });
+
+    // Limit results
+    pipeline.push({ $limit: limit + 1 });
+
+    const members = await TeamMemberModel.aggregate(pipeline);
+
+    // eslint-disable-next-line no-console
+    console.log(`[teams/my/members] Found ${members.length} members`);
+
+    // Determine if there are more results
+    const hasMore = members.length > limit;
+    const items = hasMore ? members.slice(0, limit) : members;
+    const nextCursor = hasMore ? String(items[items.length - 1]._id) : null;
+
+    // Format response
+    const payload = items.map((member: any) => {
+      const userProfile = member.userProfile?.[0];
+      return {
+        id: String(member._id),
+        provider: member.provider,
+        subject: member.subject,
+        email: userProfile?.email || member.email,
+        name: userProfile?.name || member.name,
+        first_name: userProfile?.first_name,
+        last_name: userProfile?.last_name,
+        phone_number: userProfile?.phone_number,
+        picture: userProfile?.picture,
+      };
+    });
+
+    return res.json({
+      items: payload,
+      nextCursor,
+    });
+  } catch (err: any) {
+    // eslint-disable-next-line no-console
+    console.error('[teams] GET /teams/my/members failed', err);
+    // If it's a manager resolution error, return 400 with the specific message
+    if (err.message && err.message.includes('Manager')) {
+      return res.status(400).json({ message: err.message });
+    }
+    return res.status(500).json({ message: 'Failed to load team members' });
+  }
+});
+
 router.get('/teams/:teamId/members', requireAuth, async (req, res) => {
   try {
     const manager = await resolveManagerForRequest(req as any);
@@ -1142,143 +1280,6 @@ router.get('/teams/my', requireAuth, async (req, res) => {
     return res.json({ teams: payload });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to load my teams' });
-  }
-});
-
-// Get all team members across all manager's teams (for job publishing)
-router.get('/teams/my/members', requireAuth, async (req, res) => {
-  try {
-    const manager = await resolveManagerForRequest(req as any);
-    if (!manager || !manager._id) {
-      return res.status(400).json({ message: 'Manager not found' });
-    }
-    const managerId = manager._id as mongoose.Types.ObjectId;
-
-    // eslint-disable-next-line no-console
-    console.log(`[teams/my/members] managerId=${managerId}, q=${req.query.q}`);
-
-    // Parse query parameters
-    const q = (req.query.q ?? '').toString().trim();
-    const cursor = (req.query.cursor ?? '').toString();
-    const limit = Math.min(parseInt((req.query.limit ?? '20').toString(), 10) || 20, 100);
-
-    // Build aggregation pipeline
-    const pipeline: any[] = [
-      {
-        $match: {
-          managerId: managerId,
-          status: 'active', // Only active members for job assignment
-        },
-      },
-    ];
-
-    // eslint-disable-next-line no-console
-    console.log(`[teams/my/members] Initial match:`, JSON.stringify(pipeline[0]));
-
-    // Add search filter if provided
-    if (q) {
-      pipeline.push({
-        $match: {
-          $or: [
-            { name: { $regex: q, $options: 'i' } },
-            { email: { $regex: q, $options: 'i' } },
-          ],
-        },
-      });
-    }
-
-    // Add cursor-based pagination if provided
-    if (cursor) {
-      try {
-        const cursorId = new mongoose.Types.ObjectId(cursor);
-        pipeline.push({
-          $match: {
-            _id: { $gt: cursorId },
-          },
-        });
-      } catch (e) {
-        // Invalid cursor, ignore
-      }
-    }
-
-    // Join with users collection to get full profile
-    pipeline.push({
-      $lookup: {
-        from: 'users',
-        let: { memberProvider: '$provider', memberSubject: '$subject' },
-        pipeline: [
-          {
-            $match: {
-              $expr: {
-                $and: [
-                  { $eq: ['$provider', '$$memberProvider'] },
-                  { $eq: ['$subject', '$$memberSubject'] },
-                ],
-              },
-            },
-          },
-          {
-            $project: {
-              _id: 1,
-              provider: 1,
-              subject: 1,
-              email: 1,
-              name: 1,
-              first_name: 1,
-              last_name: 1,
-              phone_number: 1,
-              picture: 1,
-            },
-          },
-        ],
-        as: 'userProfile',
-      },
-    });
-
-    // Sort by creation date
-    pipeline.push({ $sort: { _id: 1 } });
-
-    // Limit results
-    pipeline.push({ $limit: limit + 1 });
-
-    const members = await TeamMemberModel.aggregate(pipeline);
-
-    // eslint-disable-next-line no-console
-    console.log(`[teams/my/members] Found ${members.length} members`);
-
-    // Determine if there are more results
-    const hasMore = members.length > limit;
-    const items = hasMore ? members.slice(0, limit) : members;
-    const nextCursor = hasMore ? String(items[items.length - 1]._id) : null;
-
-    // Format response
-    const payload = items.map((member: any) => {
-      const userProfile = member.userProfile?.[0];
-      return {
-        id: String(member._id),
-        provider: member.provider,
-        subject: member.subject,
-        email: userProfile?.email || member.email,
-        name: userProfile?.name || member.name,
-        first_name: userProfile?.first_name,
-        last_name: userProfile?.last_name,
-        phone_number: userProfile?.phone_number,
-        picture: userProfile?.picture,
-      };
-    });
-
-    return res.json({
-      items: payload,
-      nextCursor,
-    });
-  } catch (err: any) {
-    // eslint-disable-next-line no-console
-    console.error('[teams] GET /teams/my/members failed', err);
-    // If it's a manager resolution error, return 400 with the specific message
-    if (err.message && err.message.includes('Manager')) {
-      return res.status(400).json({ message: err.message });
-    }
-    return res.status(500).json({ message: 'Failed to load team members' });
   }
 });
 
