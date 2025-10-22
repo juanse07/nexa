@@ -27,6 +27,7 @@ import '../services/clients_service.dart';
 import '../services/draft_service.dart';
 import '../services/event_service.dart';
 import '../services/extraction_service.dart';
+import '../services/file_processor_service.dart';
 import '../services/google_places_service.dart';
 import '../services/pending_events_service.dart';
 import '../services/roles_service.dart';
@@ -34,8 +35,11 @@ import '../services/tariffs_service.dart';
 import '../services/users_service.dart';
 import '../services/chat_event_service.dart';
 import '../widgets/modern_address_field.dart';
+import '../widgets/upload_container.dart';
+import '../widgets/event_data_preview_card.dart';
 import '../../extraction/widgets/chat_message_widget.dart';
 import '../../extraction/widgets/chat_input_widget.dart';
+import 'mixins/event_data_mixin.dart';
 import 'pending_publish_screen.dart';
 import 'pending_edit_screen.dart';
 import '../../users/presentation/pages/manager_profile_page.dart';
@@ -50,6 +54,7 @@ import '../../chat/presentation/conversations_screen.dart';
 import '../../chat/data/services/chat_service.dart';
 import '../../chat/domain/entities/conversation.dart';
 import '../../chat/presentation/chat_screen.dart';
+import 'ai_chat_screen.dart';
 
 class ExtractionScreen extends StatefulWidget {
   const ExtractionScreen({super.key});
@@ -59,7 +64,7 @@ class ExtractionScreen extends StatefulWidget {
 }
 
 class _ExtractionScreenState extends State<ExtractionScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, EventDataMixin {
   String? extractedText;
   Map<String, dynamic>? structuredData;
   bool isLoading = false;
@@ -115,6 +120,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   late final EventService _eventService;
   late final ClientsService _clientsService;
   late final RolesService _rolesService;
+  late final FileProcessorService _fileProcessorService;
   final DraftService _draftService = DraftService();
   final PendingEventsService _pendingService = PendingEventsService();
   bool _lastStructuredFromUpload = false;
@@ -166,6 +172,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     _eventService = EventService();
     _clientsService = ClientsService();
     _rolesService = RolesService();
+    _fileProcessorService = FileProcessorService(extractionService: _extractionService);
     // Initialize ManagerService via GetIt
     final api = GetIt.I<ApiClient>();
     final storage = GetIt.I<FlutterSecureStorage>();
@@ -320,51 +327,30 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       }
 
       final platformFile = result.files.single;
-      final bytes = await _resolvePlatformFileBytes(platformFile);
-      final headerBytes = bytes.length > 20 ? bytes.sublist(0, 20) : bytes;
-      final fileName = platformFile.name;
-      final lowerName = fileName.toLowerCase();
-      final lookupName = kIsWeb ? fileName : (platformFile.path ?? fileName);
-      final mimeType =
-          lookupMimeType(lookupName, headerBytes: headerBytes) ?? '';
 
-      String text;
-      if (mimeType.contains('pdf') || lowerName.endsWith('.pdf')) {
-        text = await _extractTextFromPdfBytes(bytes);
-      } else if (mimeType.startsWith('image/') ||
-          lowerName.endsWith('.png') ||
-          lowerName.endsWith('.jpg') ||
-          lowerName.endsWith('.jpeg') ||
-          lowerName.endsWith('.heic')) {
-        text = '[[IMAGE_BASE64]]:${base64Encode(bytes)}';
-      } else {
-        throw Exception('Unsupported file type: $mimeType');
+      // Use FileProcessorService to handle all processing
+      final processResult = await _fileProcessorService.processFile(platformFile);
+
+      if (!processResult.success) {
+        setState(() {
+          errorMessage = processResult.error;
+          isLoading = false;
+        });
+        return;
       }
 
-      setState(() {
-        extractedText = text.length > 2000
-            ? '${text.substring(0, 2000)}... [truncated]'
-            : text;
-      });
-
-      final response = await _extractionService.extractStructuredData(
-        input: text,
-      );
-      // Exclude any client fields from the AI output; user must pick from our DB
-      final sanitized = Map<String, dynamic>.from(response);
-      sanitized.remove('client_name');
-      sanitized.remove('client_company_name');
-      sanitized.remove('third_party_company_name');
       _clientNameController.text = '';
       setState(() {
-        structuredData = sanitized;
+        extractedText = processResult.extractedText;
+        structuredData = processResult.structuredData;
         isLoading = false;
         _lastStructuredFromUpload = true;
       });
+
       // Persist draft to allow switching tabs
-      try {
-        await _draftService.saveDraft(sanitized);
-      } catch (_) {}
+      if (processResult.structuredData != null) {
+        await saveDraft(processResult.structuredData!);
+      }
     } catch (e) {
       setState(() {
         errorMessage = e.toString();
@@ -808,7 +794,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           if (role is Map) {
                             // AI uses 'role' field, but some other sources might use 'role_name'
                             final roleName = role['role'] ?? role['role_name'] ?? 'Unknown Role';
-                            final callTime = role['call_time'] ?? '';
+                            final callTimeRaw = role['call_time'];
+                            final callTime = callTimeRaw?.toString() ?? '';
                             final count = role['count'];
                             String countStr = '';
                             if (count != null) {
@@ -1993,7 +1980,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       // Append new entries, dedup by unique identifier
       final added = <Map<String, dynamic>>[];
       for (final f in picked) {
-        final id = _resolvePlatformFileId(f);
+        final id = _fileProcessorService.resolvePlatformFileId(f);
         final already =
             existing.any((e) => e['id'] == id) ||
             added.any((e) => e['id'] == id);
@@ -2025,40 +2012,21 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             'status': 'processing',
           };
         });
-        try {
-          final bytes = await _readBytesFromBulkItem(original);
-          final headerBytes = bytes.length > 20 ? bytes.sublist(0, 20) : bytes;
-          final name = (original['name']?.toString() ?? '');
-          final lowerName = name.toLowerCase();
-          final rawPath = (original['path']?.toString() ?? '');
-          final lookupName = rawPath.isNotEmpty ? rawPath : name;
-          final mimeType =
-              lookupMimeType(lookupName, headerBytes: headerBytes) ?? '';
-          String input;
-          if (mimeType.contains('pdf') || lowerName.endsWith('.pdf')) {
-            input = await _extractTextFromPdfBytes(bytes);
-          } else if (mimeType.startsWith('image/') ||
-              lowerName.endsWith('.png') ||
-              lowerName.endsWith('.jpg') ||
-              lowerName.endsWith('.jpeg') ||
-              lowerName.endsWith('.heic')) {
-            input = '[[IMAGE_BASE64]]:${base64Encode(bytes)}';
-          } else {
-            throw Exception('Unsupported type: $mimeType');
-          }
-          final response = await _extractionService.extractStructuredData(
-            input: input,
-          );
+
+        // Use FileProcessorService for bulk item processing
+        final processResult = await _fileProcessorService.processBulkItem(original);
+
+        if (processResult.success) {
           setState(() {
             _bulkItems = List.of(_bulkItems);
             _bulkItems[currentIndex] = {
               ..._bulkItems[currentIndex],
               'status': 'done',
-              'data': response,
+              'data': processResult.structuredData,
               'bytes': null,
             };
           });
-        } catch (_) {
+        } else {
           setState(() {
             _bulkItems = List.of(_bulkItems);
             _bulkItems[currentIndex] = {
@@ -2079,16 +2047,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final Map<String, dynamic>? data = (item['data'] as Map?)
         ?.cast<String, dynamic>();
     if (data == null) return;
-    final id = await _pendingService.saveDraft(data);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Saved to Pending (' + (item['name']?.toString() ?? 'File') + ')',
-        ),
-        backgroundColor: const Color(0xFF059669),
-      ),
+
+    final fileName = item['name']?.toString() ?? 'File';
+    await saveToPendingWithFeedback(
+      data,
+      customMessage: 'Saved to Pending ($fileName)',
     );
+
+    if (!mounted) return;
     setState(() {
       _bulkItems = List.of(_bulkItems);
       _bulkItems.removeAt(index);
@@ -2102,15 +2068,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         .whereType<Map<String, dynamic>>()
         .toList();
     for (final d in ready) {
-      await _pendingService.saveDraft(d);
+      await saveToPending(d);
     }
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('All ready items saved to Pending'),
-        backgroundColor: Color(0xFF059669),
-      ),
-    );
+    showSuccessSnackBar('All ready items saved to Pending');
     setState(() => _bulkItems = const []);
     await _loadPendingDrafts();
   }
@@ -6301,24 +6262,36 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                     child: InkWell(
                                       borderRadius: BorderRadius.circular(30),
                                       onTap: () async {
-                                        _aiChatService.startNewConversation();
-                                        await _aiChatService.getGreeting();
+                                        // On mobile, launch full-screen AI chat
+                                        if (!kIsWeb) {
+                                          await Navigator.of(context).push(
+                                            MaterialPageRoute(
+                                              builder: (_) => const AIChatScreen(),
+                                            ),
+                                          );
+                                          // Refresh state after returning
+                                          setState(() {});
+                                        } else {
+                                          // On web, show inline chat
+                                          _aiChatService.startNewConversation();
+                                          await _aiChatService.getGreeting();
 
-                                        setState(() {
-                                          // Scroll to bottom after greeting
-                                          WidgetsBinding.instance
-                                              .addPostFrameCallback((_) {
-                                            if (_aiChatScrollController.hasClients) {
-                                              _aiChatScrollController.animateTo(
-                                                _aiChatScrollController
-                                                    .position.maxScrollExtent,
-                                                duration:
-                                                    const Duration(milliseconds: 300),
-                                                curve: Curves.easeOut,
-                                              );
-                                            }
+                                          setState(() {
+                                            // Scroll to bottom after greeting
+                                            WidgetsBinding.instance
+                                                .addPostFrameCallback((_) {
+                                              if (_aiChatScrollController.hasClients) {
+                                                _aiChatScrollController.animateTo(
+                                                  _aiChatScrollController
+                                                      .position.maxScrollExtent,
+                                                  duration:
+                                                      const Duration(milliseconds: 300),
+                                                  curve: Curves.easeOut,
+                                                );
+                                              }
+                                            });
                                           });
-                                        });
+                                        }
                                       },
                                       child: Padding(
                                         padding: const EdgeInsets.symmetric(
@@ -6409,42 +6382,44 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     padding: const EdgeInsets.only(left: 8, right: 12, bottom: 6),
                     child: Row(
                       children: [
-                        // AI Provider toggle button - smaller with solid colors
-                        Container(
-                          decoration: BoxDecoration(
-                            color: _aiChatService.aiProvider == 'openai'
-                                ? Colors.black
-                                : Colors.orange,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
+                        // AI Provider toggle button - only visible on web
+                        if (kIsWeb) ...[
+                          Container(
+                            decoration: BoxDecoration(
+                              color: _aiChatService.aiProvider == 'openai'
+                                  ? Colors.black
+                                  : Colors.orange,
                               borderRadius: BorderRadius.circular(8),
-                              onTap: () {
-                                setState(() {
-                                  final newProvider = _aiChatService.aiProvider == 'openai' ? 'claude' : 'openai';
-                                  _aiChatService.setAiProvider(newProvider);
-                                });
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Using ${_aiChatService.aiProvider == 'openai' ? 'OpenAI' : 'Claude'} AI'),
-                                    duration: const Duration(seconds: 2),
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(8),
+                                onTap: () {
+                                  setState(() {
+                                    final newProvider = _aiChatService.aiProvider == 'openai' ? 'claude' : 'openai';
+                                    _aiChatService.setAiProvider(newProvider);
+                                  });
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Using ${_aiChatService.aiProvider == 'openai' ? 'OpenAI' : 'Claude'} AI'),
+                                      duration: const Duration(seconds: 2),
+                                    ),
+                                  );
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.all(4),
+                                  child: Icon(
+                                    _aiChatService.aiProvider == 'openai' ? Icons.psychology : Icons.hub,
+                                    color: Colors.white,
+                                    size: 14,
                                   ),
-                                );
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.all(4),
-                                child: Icon(
-                                  _aiChatService.aiProvider == 'openai' ? Icons.psychology : Icons.hub,
-                                  color: Colors.white,
-                                  size: 14,
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
+                          const SizedBox(width: 8),
+                        ],
                         // Chat input
                         Expanded(
                           child: ChatInputWidget(
@@ -6528,7 +6503,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             orElse: () => {},
           );
           if (existingEvent.isNotEmpty) {
-            eventName = existingEvent['event_name'] ?? existingEvent['name'] ?? 'Event';
+            final nameRaw = existingEvent['event_name'] ?? existingEvent['name'];
+            eventName = nameRaw?.toString() ?? 'Event';
           }
 
           return Card(
@@ -6667,19 +6643,19 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         if (data['event_name'] != null)
           DetailRow(
             label: AppLocalizations.of(context)!.job,
-            value: data['event_name'],
+            value: data['event_name'].toString(),
             icon: Icons.celebration,
           ),
         if (data['client_name'] != null)
           DetailRow(
             label: AppLocalizations.of(context)!.client,
-            value: data['client_name'],
+            value: data['client_name'].toString(),
             icon: Icons.person,
           ),
         if (data['date'] != null)
           DetailRow(
             label: AppLocalizations.of(context)!.date,
-            value: data['date'],
+            value: data['date'].toString(),
             icon: Icons.calendar_today,
           ),
         if (data['start_time'] != null && data['end_time'] != null)
@@ -6691,19 +6667,19 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         if (data['venue_name'] != null)
           DetailRow(
             label: AppLocalizations.of(context)!.location,
-            value: data['venue_name'],
+            value: data['venue_name'].toString(),
             icon: Icons.location_on,
           ),
         if (data['venue_address'] != null)
           DetailRow(
             label: AppLocalizations.of(context)!.address,
-            value: data['venue_address'],
+            value: data['venue_address'].toString(),
             icon: Icons.place,
           ),
         if (data['contact_phone'] != null)
           DetailRow(
             label: AppLocalizations.of(context)!.phone,
-            value: data['contact_phone'],
+            value: data['contact_phone'].toString(),
             icon: Icons.phone,
           ),
         if (data['headcount_total'] != null)
@@ -6753,7 +6729,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   ),
                   if (role['call_time'] != null)
                     Text(
-                      role['call_time'],
+                      role['call_time'].toString(),
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey.shade600,

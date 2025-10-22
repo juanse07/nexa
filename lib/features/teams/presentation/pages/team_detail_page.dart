@@ -614,26 +614,33 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
             );
           }),
         const SizedBox(height: 24),
+        const Text(
+          'Invites',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 12),
         Row(
           children: [
-            const Text(
-              'Invites',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-            ),
-            const Spacer(),
-            ElevatedButton.icon(
-              onPressed: _createInviteLink,
-              icon: const Icon(Icons.link),
-              label: const Text('Create Invite Link'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: _createInviteLink,
+                icon: const Icon(Icons.link, size: 18),
+                label: const Text('Create Invite Link'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                ),
               ),
             ),
             const SizedBox(width: 8),
-            TextButton.icon(
-              onPressed: _sendInvite,
-              icon: const Icon(Icons.mark_email_unread_outlined),
-              label: const Text('Send email'),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _sendInvite,
+                icon: const Icon(Icons.mail_outline, size: 18),
+                label: const Text('Send email'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                ),
+              ),
             ),
           ],
         ),

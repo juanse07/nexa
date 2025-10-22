@@ -109,7 +109,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
           const [];
       setState(() {
         _users = reset ? items : [..._users, ...items];
-        _cursor = (res['nextCursor'] as String?).toString();
+        _cursor = res['nextCursor'] as String?;
         for (final u in items) {
           final key = '${u['provider']}:${u['subject']}';
           _keyToUser[key] = {
@@ -424,11 +424,13 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
       appBar: AppBar(title: Text(AppLocalizations.of(context)!.publishJob)),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+          Expanded(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                 Text(
                   client.isNotEmpty ? client : 'Client',
                   style: const TextStyle(
@@ -527,7 +529,9 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                             onNotification: (n) {
                               if (n.metrics.pixels >=
                                       n.metrics.maxScrollExtent - 100 &&
-                                  _cursor != null) {
+                                  _cursor != null &&
+                                  _cursor != 'null' &&
+                                  !_loadingUsers) {
                                 _loadUsers();
                               }
                               return false;
@@ -581,17 +585,48 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                     }).toList(),
                   ),
                 ],
-              ],
+                  ],
+                ),
+              ),
             ),
           ),
-          const Spacer(),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _publishing ? null : _publish,
-                child: Text(_publishing ? 'Publishing...' : 'Publish'),
+          // Pinned publish button at bottom
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, -2),
+                ),
+              ],
+            ),
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _publishing ? null : _publish,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      backgroundColor: const Color(0xFF6366F1),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: Text(
+                      _publishing ? 'Publishing...' : 'Publish',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
