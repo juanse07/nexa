@@ -758,7 +758,7 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
   }
 
   // AI provider preference ('openai' or 'claude')
-  String _aiProvider = 'openai'; // Default to OpenAI
+  String _aiProvider = 'claude'; // Default to Claude for chat
 
   /// Get current AI provider
   String get aiProvider => _aiProvider;
