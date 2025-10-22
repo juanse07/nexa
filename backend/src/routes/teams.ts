@@ -13,6 +13,7 @@ import { TeamInviteModel } from '../models/teamInvite';
 import { TeamMessageModel } from '../models/teamMessage';
 import { EventModel } from '../models/event';
 import { UserModel } from '../models/user';
+import { AvailabilityModel } from '../models/availability';
 import { generateUniqueShortCode, isValidShortCodeFormat } from '../utils/inviteCodeGenerator';
 import { inviteCreateLimiter } from '../middleware/rateLimiter';
 
@@ -1339,6 +1340,67 @@ router.get('/teams/my/invites', requireAuth, async (req, res) => {
     return res.json({ invites: payload });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to load invites' });
+  }
+});
+
+/**
+ * GET /teams/members/availability
+ * Get availability for all team members across all manager's teams
+ * Returns upcoming availability (from today onwards) for all active team members
+ */
+router.get('/teams/members/availability', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    const managerId = manager._id as mongoose.Types.ObjectId;
+
+    // Get all active team members for this manager
+    const teamMembers = await TeamMemberModel.find({
+      managerId: managerId,
+      status: 'active',
+    }).lean();
+
+    // Build array of userKeys (provider:subject format)
+    const userKeys = teamMembers.map((member: any) => `${member.provider}:${member.subject}`);
+
+    if (userKeys.length === 0) {
+      return res.json({ availability: [] });
+    }
+
+    // Get today's date in YYYY-MM-DD format
+    const today = new Date().toISOString().split('T')[0];
+
+    // Fetch availability for all team members (from today onwards)
+    const availabilityDocs = await AvailabilityModel.find({
+      userKey: { $in: userKeys },
+      date: { $gte: today },
+    })
+      .sort({ userKey: 1, date: 1, startTime: 1 })
+      .lean();
+
+    // Map availability docs to include member info
+    const availabilityWithMembers = availabilityDocs.map((avail: any) => {
+      const member = teamMembers.find(
+        (m: any) => `${m.provider}:${m.subject}` === avail.userKey
+      );
+
+      return {
+        id: String(avail._id),
+        userKey: avail.userKey,
+        memberName: member?.name || 'Unknown',
+        memberEmail: member?.email || '',
+        date: avail.date,
+        startTime: avail.startTime,
+        endTime: avail.endTime,
+        status: avail.status,
+        createdAt: avail.createdAt,
+        updatedAt: avail.updatedAt,
+      };
+    });
+
+    return res.json({ availability: availabilityWithMembers });
+  } catch (err) {
+    console.error('[teams] GET /teams/members/availability failed', err);
+    return res.status(500).json({ message: 'Failed to fetch team members availability' });
   }
 });
 

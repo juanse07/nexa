@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../auth/data/services/auth_service.dart';
+import '../../teams/data/services/teams_service.dart';
 import 'clients_service.dart';
 import 'event_service.dart';
 import 'roles_service.dart';
@@ -50,13 +51,18 @@ class ChatEventService {
   final EventService _eventService = EventService();
   final RolesService _rolesService = RolesService();
   final TariffsService _tariffsService = TariffsService();
+  final TeamsService _teamsService = TeamsService();
 
   List<String> _existingClientNames = [];
   List<Map<String, dynamic>> _existingEvents = [];
+  List<Map<String, dynamic>> _existingTeamMembers = [];
+  List<Map<String, dynamic>> _membersAvailability = [];
 
   // Cache timestamps for smart reloading
   DateTime? _clientsCacheTime;
   DateTime? _eventsCacheTime;
+  DateTime? _teamMembersCacheTime;
+  DateTime? _availabilityCacheTime;
   static const Duration _cacheValidDuration = Duration(minutes: 5);
 
   // Track created entities during chat
@@ -214,10 +220,84 @@ Be conversational and friendly. If the user provides multiple pieces of informat
     }
   }
 
+  /// Load existing team members from the database with caching
+  Future<void> _loadExistingTeamMembers({bool forceRefresh = false}) async {
+    // Check if cache is valid
+    if (!forceRefresh &&
+        _teamMembersCacheTime != null &&
+        DateTime.now().difference(_teamMembersCacheTime!) < _cacheValidDuration &&
+        _existingTeamMembers.isNotEmpty) {
+      print('Using cached team members (${_existingTeamMembers.length} members)');
+      return;
+    }
+
+    try {
+      print('Fetching fresh team members from database...');
+      final teams = await _teamsService.fetchTeams();
+
+      final List<Map<String, dynamic>> allMembers = [];
+
+      // Fetch members for each team
+      for (final team in teams) {
+        final teamId = team['id'] as String?;
+        final teamName = team['name'] as String? ?? 'Unknown Team';
+
+        if (teamId == null) continue;
+
+        try {
+          final members = await _teamsService.fetchMembers(teamId);
+
+          // Add team name to each member
+          for (final member in members) {
+            allMembers.add({
+              ...member,
+              'teamName': teamName,
+            });
+          }
+        } catch (e) {
+          print('Failed to load members for team $teamName: $e');
+        }
+      }
+
+      _existingTeamMembers = allMembers;
+      _teamMembersCacheTime = DateTime.now();
+      print('Loaded ${_existingTeamMembers.length} team members from ${teams.length} teams');
+    } catch (e) {
+      print('Failed to load team members: $e');
+      _existingTeamMembers = [];
+    }
+  }
+
+  /// Load team members availability from the database with caching
+  Future<void> _loadMembersAvailability({bool forceRefresh = false}) async {
+    // Check if cache is valid
+    if (!forceRefresh &&
+        _availabilityCacheTime != null &&
+        DateTime.now().difference(_availabilityCacheTime!) < _cacheValidDuration &&
+        _membersAvailability.isNotEmpty) {
+      print('Using cached availability (${_membersAvailability.length} records)');
+      return;
+    }
+
+    try {
+      print('Fetching fresh availability from database...');
+      final availability = await _teamsService.fetchMembersAvailability();
+
+      _membersAvailability = availability;
+      _availabilityCacheTime = DateTime.now();
+      print('Loaded ${_membersAvailability.length} availability records');
+    } catch (e) {
+      print('Failed to load availability: $e');
+      _membersAvailability = [];
+    }
+  }
+
   /// Invalidate cache when data changes
   void _invalidateCache() {
     _clientsCacheTime = null;
     _eventsCacheTime = null;
+    _teamMembersCacheTime = null;
+    _availabilityCacheTime = null;
     print('Cache invalidated');
   }
 
@@ -289,6 +369,74 @@ Be conversational and friendly. If the user provides multiple pieces of informat
     return buffer.toString();
   }
 
+  /// Format team members list for AI context with availability
+  String _formatTeamMembersForContext() {
+    if (_existingTeamMembers.isEmpty) {
+      return 'No team members in the system.';
+    }
+
+    final buffer = StringBuffer();
+    buffer.writeln('Your team members (${_existingTeamMembers.length} total):');
+
+    // Group members by team for better organization
+    final Map<String, List<Map<String, dynamic>>> membersByTeam = {};
+
+    for (final member in _existingTeamMembers) {
+      final teamName = member['teamName'] as String? ?? 'Unknown Team';
+      membersByTeam.putIfAbsent(teamName, () => []);
+      membersByTeam[teamName]!.add(member);
+    }
+
+    // Format by team
+    for (final teamEntry in membersByTeam.entries) {
+      final teamName = teamEntry.key;
+      final members = teamEntry.value;
+
+      buffer.writeln('\n$teamName (${members.length} members):');
+
+      for (final member in members) {
+        final name = member['name'] as String? ?? 'Unknown';
+        final email = member['email'] as String? ?? '';
+        final status = member['status'] as String? ?? 'unknown';
+        final provider = member['provider'] as String? ?? '';
+        final subject = member['subject'] as String? ?? '';
+
+        final emailPart = email.isNotEmpty ? ' ($email)' : '';
+        final statusIcon = status == 'active' ? '✓' : status == 'pending' ? '⏳' : '○';
+
+        // Get availability for this member
+        final userKey = '$provider:$subject';
+        final memberAvailability = _membersAvailability
+            .where((avail) => avail['userKey'] == userKey)
+            .toList();
+
+        buffer.write('  $statusIcon $name$emailPart');
+
+        if (memberAvailability.isNotEmpty) {
+          // Show next available/unavailable slots (limit to next 3)
+          final upcoming = memberAvailability.take(3).toList();
+          final availSummary = upcoming.map((avail) {
+            final date = avail['date'] as String? ?? '';
+            final startTime = avail['startTime'] as String? ?? '';
+            final endTime = avail['endTime'] as String? ?? '';
+            final availStatus = avail['status'] as String? ?? 'available';
+
+            final icon = availStatus == 'available' ? '✓' : '✗';
+            return '$icon $date $startTime-$endTime';
+          }).join(', ');
+
+          buffer.write(' | Availability: $availSummary');
+        } else {
+          buffer.write(' | Availability: Not set');
+        }
+
+        buffer.writeln();
+      }
+    }
+
+    return buffer.toString();
+  }
+
   /// Build system prompt with current context (smart loading)
   Future<String> _buildSystemPrompt({
     String? userMessage,
@@ -310,16 +458,24 @@ Be conversational and friendly. If the user provides multiple pieces of informat
       filterByMonth: contextFilters?['month'],
     );
 
+    // Load team members and their availability for AI context
+    await _loadExistingTeamMembers();
+    await _loadMembersAvailability();
+
     final clientsList = _existingClientNames.isEmpty
         ? 'No existing clients in system.'
         : 'Existing clients: ${_existingClientNames.join(", ")}';
 
     final eventsContext = _formatEventsForContext();
+    final teamMembersContext = _formatTeamMembersForContext();
 
     return '''$instructions
 
 ## Current Context
 - $clientsList
+
+## Team Members
+$teamMembersContext
 
 ## Existing Events
 $eventsContext

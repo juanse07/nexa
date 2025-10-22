@@ -2,21 +2,64 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/requireAuth';
 import axios from 'axios';
+import geoip from 'geoip-lite';
 import { getDateTimeContext, getWelcomeDateContext, getFullSystemContext } from '../utils/dateContext';
 
 const router = Router();
 
 /**
+ * Get the user's timezone from their IP address
+ * Falls back to UTC if geolocation fails
+ */
+function getTimezoneFromRequest(req: any): string {
+  try {
+    // Get IP address from request
+    // Check x-forwarded-for header first (for proxies/load balancers)
+    const forwarded = req.headers['x-forwarded-for'];
+    let ip = forwarded ? forwarded.split(',')[0].trim() : req.ip || req.connection.remoteAddress;
+
+    // Remove IPv6 prefix if present
+    if (ip && ip.startsWith('::ffff:')) {
+      ip = ip.substring(7);
+    }
+
+    // Skip localhost/private IPs
+    if (!ip || ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.')) {
+      console.log('[Timezone] Using UTC for localhost/private IP:', ip);
+      return 'UTC';
+    }
+
+    // Lookup IP geolocation
+    const geo = geoip.lookup(ip);
+
+    if (geo?.timezone) {
+      console.log(`[Timezone] Detected timezone ${geo.timezone} for IP ${ip}`);
+      return geo.timezone;
+    }
+
+    console.log(`[Timezone] No timezone found for IP ${ip}, using UTC`);
+    return 'UTC';
+  } catch (error) {
+    console.error('[Timezone] Error detecting timezone:', error);
+    return 'UTC';
+  }
+}
+
+/**
  * GET /api/ai/system-info
  * Returns current date/time context for AI chat welcome messages and system prompts
+ * Automatically detects user's timezone from IP address
  * Used by frontend to display contextual greetings
  */
 router.get('/ai/system-info', requireAuth, async (req, res) => {
   try {
+    const timezone = getTimezoneFromRequest(req);
+
     return res.json({
-      dateTimeContext: getDateTimeContext(),
-      welcomeContext: getWelcomeDateContext(),
-      fullContext: getFullSystemContext(),
+      dateTimeContext: getDateTimeContext(timezone),
+      welcomeContext: getWelcomeDateContext(timezone),
+      fullContext: getFullSystemContext(timezone),
+      detectedTimezone: timezone,
     });
   } catch (err: any) {
     console.error('[ai/system-info] Error:', err);
@@ -182,10 +225,13 @@ router.post('/ai/chat/message', requireAuth, async (req, res) => {
 
     console.log(`[ai/chat/message] Using provider: ${provider}`);
 
+    // Detect user's timezone from IP
+    const timezone = getTimezoneFromRequest(req);
+
     if (provider === 'claude') {
-      return await handleClaudeRequest(messages, temperature, maxTokens, res);
+      return await handleClaudeRequest(messages, temperature, maxTokens, res, timezone);
     } else {
-      return await handleOpenAIRequest(messages, temperature, maxTokens, res);
+      return await handleOpenAIRequest(messages, temperature, maxTokens, res, timezone);
     }
   } catch (err: any) {
     console.error('[ai/chat/message] Error:', err);
@@ -208,7 +254,8 @@ async function handleOpenAIRequest(
   messages: any[],
   temperature: number,
   maxTokens: number,
-  res: any
+  res: any,
+  timezone?: string
 ) {
   const openaiKey = process.env.OPENAI_API_KEY;
   if (!openaiKey) {
@@ -219,8 +266,8 @@ async function handleOpenAIRequest(
   const textModel = process.env.OPENAI_TEXT_MODEL || 'gpt-4o-mini';
   const openaiBaseUrl = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
 
-  // Inject date/time context into system messages
-  const dateContext = getFullSystemContext();
+  // Inject date/time context into system messages with user's timezone
+  const dateContext = getFullSystemContext(timezone);
   const enhancedMessages = messages.map((msg, index) => {
     // Add date context to the first system message
     if (msg.role === 'system' && index === 0) {
@@ -289,7 +336,8 @@ async function handleClaudeRequest(
   messages: any[],
   temperature: number,
   maxTokens: number,
-  res: any
+  res: any,
+  timezone?: string
 ) {
   const claudeKey = process.env.CLAUDE_API_KEY;
   if (!claudeKey) {
@@ -305,8 +353,8 @@ async function handleClaudeRequest(
   let systemMessage = '';
   const userMessages: any[] = [];
 
-  // Inject date/time context at the beginning of system message
-  const dateContext = getFullSystemContext();
+  // Inject date/time context at the beginning of system message with user's timezone
+  const dateContext = getFullSystemContext(timezone);
   systemMessage = `${dateContext}\n\n`;
 
   for (const msg of messages) {

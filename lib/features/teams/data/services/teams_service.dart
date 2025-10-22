@@ -241,6 +241,28 @@ class TeamsService {
     }
   }
 
+  /// Fetch availability for all team members
+  Future<List<Map<String, dynamic>>> fetchMembersAvailability() async {
+    try {
+      final response = await _apiClient.get('/teams/members/availability');
+      if (_isSuccess(response.statusCode)) {
+        final dynamic data = response.data;
+        if (data is Map<String, dynamic>) {
+          final dynamic availability = data['availability'];
+          if (availability is List) {
+            return availability.whereType<Map<String, dynamic>>().toList(
+              growable: false,
+            );
+          }
+        }
+        return const <Map<String, dynamic>>[];
+      }
+      throw Exception('Failed to fetch members availability (${response.statusCode})');
+    } on DioException catch (e) {
+      throw Exception('Failed to fetch members availability: ${e.message}');
+    }
+  }
+
   bool _isSuccess(int? statusCode) {
     if (statusCode == null) return false;
     return statusCode >= 200 && statusCode < 300;
