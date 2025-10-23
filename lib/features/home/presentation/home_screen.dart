@@ -29,6 +29,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   String _teamName = 'My Team';
   bool _statsLoading = true;
 
+  // Filter dropdown
+  String _selectedFilter = 'Jobs';
+
   final List<FeatureItem> _features = [
     FeatureItem(
       icon: Icons.chat_bubble_outline,
@@ -167,6 +170,43 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         transitionDuration: const Duration(milliseconds: 400),
       ),
     );
+  }
+
+  void _handleFilterSelection(String filter) {
+    HapticFeedback.lightImpact();
+
+    switch (filter) {
+      case 'Jobs':
+        // Navigate to Jobs tab (MainScreen index 2)
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const MainScreen(initialIndex: 2)),
+        );
+        break;
+      case 'Clients':
+        // Navigate to Catalog tab (MainScreen index 4)
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const MainScreen(initialIndex: 4)),
+        );
+        break;
+      case 'Teams':
+        // Navigate to Teams Management (separate screen, not a main tab)
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const TeamsManagementPage()),
+        );
+        break;
+      case 'Catalog':
+        // Navigate to Catalog tab (MainScreen index 4)
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const MainScreen(initialIndex: 4)),
+        );
+        break;
+      case 'AI Chat':
+        // Navigate to AI Chat screen (separate screen, not a main tab)
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const AIChatScreen(startNewConversation: true)),
+        );
+        break;
+    }
   }
 
   void _navigateToTab(int index, {int? tabIndex}) {
@@ -367,39 +407,114 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                               ),
                             ),
                             const SizedBox(height: 20),
-                            // Search bar (expanded version)
+                            // Filter dropdown (expanded version)
                             AnimatedOpacity(
                               opacity: expandRatio > 0.5 ? 1.0 : 0.0,
                               duration: const Duration(milliseconds: 150),
                               child: Container(
                                 height: 52,
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
                                 decoration: BoxDecoration(
-                                  color: Colors.white,
+                                  color: Colors.white.withOpacity(0.15),
                                   borderRadius: BorderRadius.circular(16),
-                                  boxShadow: const [
-                                    BoxShadow(
-                                      color: Color(0x14000000), // 8% black
-                                      blurRadius: 10,
-                                      offset: Offset(0, 4),
-                                    ),
-                                  ],
+                                  border: Border.all(
+                                    color: Colors.white.withOpacity(0.2),
+                                    width: 1,
+                                  ),
                                 ),
-                                child: TextField(
-                                  decoration: InputDecoration(
-                                    hintText: 'Search events, teams, or chats...',
-                                    hintStyle: TextStyle(
-                                      color: Colors.grey.shade400,
-                                      fontSize: 14,
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<String>(
+                                    value: _selectedFilter,
+                                    icon: const Icon(
+                                      Icons.keyboard_arrow_down,
+                                      color: Colors.white,
+                                      size: 24,
                                     ),
-                                    prefixIcon: const Icon(
-                                      Icons.search,
-                                      color: Color(0xFF7C3AED),
+                                    dropdownColor: const Color(0xFF7C3AED),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
                                     ),
-                                    border: InputBorder.none,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 20,
-                                      vertical: 16,
-                                    ),
+                                    isExpanded: true,
+                                    menuMaxHeight: 400,
+                                    alignment: AlignmentDirectional.bottomStart,
+                                    items: [
+                                      DropdownMenuItem(
+                                        value: 'Jobs',
+                                        child: IconTheme(
+                                          data: const IconThemeData(color: Colors.white),
+                                          child: Row(
+                                            children: const [
+                                              Icon(Icons.work_outline, size: 18),
+                                              SizedBox(width: 12),
+                                              Text('Jobs'),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'Clients',
+                                        child: IconTheme(
+                                          data: const IconThemeData(color: Colors.white),
+                                          child: Row(
+                                            children: const [
+                                              Icon(Icons.business, size: 18),
+                                              SizedBox(width: 12),
+                                              Text('Clients'),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'Teams',
+                                        child: IconTheme(
+                                          data: const IconThemeData(color: Colors.white),
+                                          child: Row(
+                                            children: const [
+                                              Icon(Icons.group, size: 18),
+                                              SizedBox(width: 12),
+                                              Text('Teams'),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'Catalog',
+                                        child: IconTheme(
+                                          data: const IconThemeData(color: Colors.white),
+                                          child: Row(
+                                            children: const [
+                                              Icon(Icons.inventory_2_outlined, size: 18),
+                                              SizedBox(width: 12),
+                                              Text('Catalog'),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'AI Chat',
+                                        child: IconTheme(
+                                          data: const IconThemeData(color: Colors.white),
+                                          child: Row(
+                                            children: const [
+                                              Icon(Icons.auto_awesome, size: 18),
+                                              SizedBox(width: 12),
+                                              Text('AI Chat'),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                    onChanged: (String? newValue) {
+                                      if (newValue != null) {
+                                        setState(() {
+                                          _selectedFilter = newValue;
+                                        });
+                                        // Handle filter action
+                                        _handleFilterSelection(newValue);
+                                      }
+                                    },
                                   ),
                                 ),
                               ),
@@ -412,7 +527,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 ),
               ),
 
-              // Collapsed search bar
+              // Collapsed filter dropdown
               Positioned(
                 left: 20,
                 right: 20,
@@ -422,8 +537,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   duration: const Duration(milliseconds: 150),
                   child: Container(
                     height: 40,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.95),
+                      color: Colors.white.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(12),
                       boxShadow: const [
                         BoxShadow(
@@ -433,27 +549,98 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         ),
                       ],
                     ),
-                    child: TextField(
-                      decoration: InputDecoration(
-                        hintText: 'Search...',
-                        hintStyle: TextStyle(
-                          color: Colors.grey.shade400,
-                          fontSize: 13,
-                        ),
-                        prefixIcon: const Icon(
-                          Icons.search,
-                          color: Color(0xFF7C3AED),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _selectedFilter,
+                        icon: const Icon(
+                          Icons.keyboard_arrow_down,
+                          color: Colors.white,
                           size: 20,
                         ),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
+                        dropdownColor: const Color(0xFF7C3AED),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
                         ),
-                      ),
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF0F172A),
+                        isExpanded: true,
+                        menuMaxHeight: 400,
+                        alignment: AlignmentDirectional.bottomStart,
+                        items: [
+                          DropdownMenuItem(
+                            value: 'Jobs',
+                            child: IconTheme(
+                              data: const IconThemeData(color: Colors.white),
+                              child: Row(
+                                children: const [
+                                  Icon(Icons.work_outline, size: 16),
+                                  SizedBox(width: 8),
+                                  Text('Jobs'),
+                                ],
+                              ),
+                            ),
+                          ),
+                          DropdownMenuItem(
+                            value: 'Clients',
+                            child: IconTheme(
+                              data: const IconThemeData(color: Colors.white),
+                              child: Row(
+                                children: const [
+                                  Icon(Icons.business, size: 16),
+                                  SizedBox(width: 8),
+                                  Text('Clients'),
+                                ],
+                              ),
+                            ),
+                          ),
+                          DropdownMenuItem(
+                            value: 'Teams',
+                            child: IconTheme(
+                              data: const IconThemeData(color: Colors.white),
+                              child: Row(
+                                children: const [
+                                  Icon(Icons.group, size: 16),
+                                  SizedBox(width: 8),
+                                  Text('Teams'),
+                                ],
+                              ),
+                            ),
+                          ),
+                          DropdownMenuItem(
+                            value: 'Catalog',
+                            child: IconTheme(
+                              data: const IconThemeData(color: Colors.white),
+                              child: Row(
+                                children: const [
+                                  Icon(Icons.inventory_2_outlined, size: 16),
+                                  SizedBox(width: 8),
+                                  Text('Catalog'),
+                                ],
+                              ),
+                            ),
+                          ),
+                          DropdownMenuItem(
+                            value: 'AI Chat',
+                            child: IconTheme(
+                              data: const IconThemeData(color: Colors.white),
+                              child: Row(
+                                children: const [
+                                  Icon(Icons.auto_awesome, size: 16),
+                                  SizedBox(width: 8),
+                                  Text('AI Chat'),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                        onChanged: (String? newValue) {
+                          if (newValue != null) {
+                            setState(() {
+                              _selectedFilter = newValue;
+                            });
+                            _handleFilterSelection(newValue);
+                          }
+                        },
                       ),
                     ),
                   ),
@@ -470,49 +657,64 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   Widget _buildOverlappingStatsSection() {
     return SliverToBoxAdapter(
       child: RepaintBoundary(
-        child: Container(
-          height: 70,
-          margin: const EdgeInsets.only(left: 12, right: 12, top: 10, bottom: 10), // Natural spacing
-          child: _statsLoading
-              ? const Center(child: CircularProgressIndicator())
-              : ListView(
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                children: [
-                  SizedBox(
-                    width: 110,
-                    child: StatsCard(
-                      title: 'Jobs',
-                      value: _upcomingJobsCount.toString(),
-                      icon: Icons.work_outline,
-                      color: const Color(0xFF6366F1),
-                      subtitle: 'Upcoming',
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    width: 110,
-                    child: StatsCard(
-                      title: 'Team Members',
-                      value: _teamMembersCount.toString(),
-                      icon: Icons.people_outline,
-                      color: const Color(0xFF8B5CF6),
-                      subtitle: _teamName,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    width: 110,
-                    child: StatsCard(
-                      title: 'Hours',
-                      value: _weekHours.toString(),
-                      icon: Icons.access_time,
-                      color: const Color(0xFFF59E0B),
-                      subtitle: 'This Week',
-                    ),
-                  ),
-                ],
+        child: Builder(
+          builder: (context) {
+            final screenWidth = MediaQuery.of(context).size.width;
+            final isDesktop = screenWidth >= 1200;
+            final cardHeight = isDesktop ? 120.0 : 70.0;
+            final cardWidth = isDesktop ? 180.0 : 110.0;
+            final spacing = isDesktop ? 16.0 : 8.0;
+
+            return Container(
+              height: cardHeight,
+              margin: EdgeInsets.only(
+                left: isDesktop ? 20 : 12,
+                right: isDesktop ? 20 : 12,
+                top: 10,
+                bottom: 10,
               ),
+              child: _statsLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : ListView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    children: [
+                      SizedBox(
+                        width: cardWidth,
+                        child: StatsCard(
+                          title: 'Jobs',
+                          value: _upcomingJobsCount.toString(),
+                          icon: Icons.work_outline,
+                          color: const Color(0xFF6366F1),
+                          subtitle: 'Upcoming',
+                        ),
+                      ),
+                      SizedBox(width: spacing),
+                      SizedBox(
+                        width: cardWidth,
+                        child: StatsCard(
+                          title: 'Team Members',
+                          value: _teamMembersCount.toString(),
+                          icon: Icons.people_outline,
+                          color: const Color(0xFF8B5CF6),
+                          subtitle: _teamName,
+                        ),
+                      ),
+                      SizedBox(width: spacing),
+                      SizedBox(
+                        width: cardWidth,
+                        child: StatsCard(
+                          title: 'Hours',
+                          value: _weekHours.toString(),
+                          icon: Icons.access_time,
+                          color: const Color(0xFFF59E0B),
+                          subtitle: 'This Week',
+                        ),
+                      ),
+                    ],
+                  ),
+            );
+          },
         ),
       ),
     );
@@ -600,23 +802,33 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   Widget _buildFeaturesGrid() {
-    return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 16), // Proper padding
-      sliver: SliverGrid(
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 10,
-          childAspectRatio: 1.15, // Taller cards to prevent text overflow
-        ),
-        delegate: SliverChildBuilderDelegate(
-          (context, index) {
-            final feature = _features[index];
-            return _buildFeatureCard(feature, index);
-          },
-          childCount: _features.length,
-        ),
-      ),
+    return Builder(
+      builder: (context) {
+        final screenWidth = MediaQuery.of(context).size.width;
+        final isDesktop = screenWidth >= 1200;
+        final crossAxisCount = isDesktop ? 4 : 2;
+        final childAspectRatio = isDesktop ? 1.3 : 1.15;
+        final spacing = isDesktop ? 16.0 : 10.0;
+
+        return SliverPadding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+          sliver: SliverGrid(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: crossAxisCount,
+              mainAxisSpacing: spacing,
+              crossAxisSpacing: spacing,
+              childAspectRatio: childAspectRatio,
+            ),
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final feature = _features[index];
+                return _buildFeatureCard(feature, index);
+              },
+              childCount: _features.length,
+            ),
+          ),
+        );
+      },
     );
   }
 

@@ -55,10 +55,12 @@ import '../../chat/data/services/chat_service.dart';
 import '../../chat/domain/entities/conversation.dart';
 import '../../chat/presentation/chat_screen.dart';
 import 'ai_chat_screen.dart';
+import '../../../core/widgets/section_navigation_dropdown.dart';
+import '../../main/presentation/main_screen.dart';
 
 class ExtractionScreen extends StatefulWidget {
-  final int initialIndex; // For Create tab chips
-  final int initialScreenIndex; // For main screen tabs (Create=0, Events=1, etc.)
+  final int initialIndex; // For Post a Job tab chips
+  final int initialScreenIndex; // For main screen tabs (Post a Job=0, Events=1, etc.)
 
   const ExtractionScreen({
     super.key,
@@ -78,7 +80,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   String? errorMessage;
 
   int _selectedIndex = 0;
-  late TabController _createTabController; // Back to TabController for Create tabs
+  late TabController _createTabController; // Back to TabController for Post a Job tabs
   late TabController _eventsTabController;
   late TabController _catalogTabController;
 
@@ -977,7 +979,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     }
 
     switch (_selectedIndex) {
-      case 0: // Create tab
+      case 0: // Post a Job tab
         if (structuredData != null && structuredData!.isNotEmpty) {
           final eventName =
               structuredData!['event_name']?.toString() ?? 'Untitled Event';
@@ -996,6 +998,56 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         return 'Catalog';
       default:
         return greeting;
+    }
+  }
+
+  String _getCurrentSectionName() {
+    switch (_selectedIndex) {
+      case 0:
+        return 'Jobs'; // Create is treated as part of Jobs
+      case 1:
+        return 'Jobs';
+      case 4:
+        return 'Catalog';
+      default:
+        return 'Jobs';
+    }
+  }
+
+  void _handleNavigationDropdown(String section) {
+    HapticFeedback.lightImpact();
+
+    switch (section) {
+      case 'Jobs':
+        // Navigate to Jobs tab (MainScreen index 2)
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const MainScreen(initialIndex: 2)),
+        );
+        break;
+      case 'Clients':
+        // Navigate to Catalog tab (MainScreen index 4)
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const MainScreen(initialIndex: 4)),
+        );
+        break;
+      case 'Teams':
+        // Navigate to Teams Management (separate screen, not a main tab)
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const TeamsManagementPage()),
+        );
+        break;
+      case 'Catalog':
+        // Navigate to Catalog tab (MainScreen index 4)
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const MainScreen(initialIndex: 4)),
+        );
+        break;
+      case 'AI Chat':
+        // Navigate to AI Chat screen (separate screen, not a main tab)
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const AIChatScreen()),
+        );
+        break;
     }
   }
 
@@ -1029,7 +1081,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final baseTime = "$weekday, $month ${now.day} at $timeStr";
 
     switch (_selectedIndex) {
-      case 0: // Create tab
+      case 0: // Post a Job tab
         if (structuredData != null && structuredData!.isNotEmpty) {
           final clientName = structuredData!['client_name']?.toString();
           final date = structuredData!['date']?.toString();
@@ -1056,7 +1108,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
   List<Widget> _buildSliverContent() {
     switch (_selectedIndex) {
-      case 0: // Create tab
+      case 0: // Post a Job tab
         return _buildCreateSlivers();
       case 1: // Events tab
         return _buildEventsSlivers();
@@ -1075,7 +1127,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final topPadding = MediaQuery.of(context).padding.top;
 
     switch (_selectedIndex) {
-      case 0: // Create tab - pin the chip selector
+      case 0: // Post a Job tab - pin the chip selector
         return [
           SliverPersistentHeader(
             pinned: true,
@@ -1213,7 +1265,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
   Widget _buildBody() {
     switch (_selectedIndex) {
-      case 0: // Create tab
+      case 0: // Post a Job tab
         return TabBarView(
           controller: _createTabController,
           children: [
@@ -1259,19 +1311,28 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   Widget _buildMobileLayout(BuildContext context) {
+    // Show dropdown only for Create (0), Jobs (1), and Catalog (4) tabs
+    final bool shouldShowDropdown = _selectedIndex == 0 || _selectedIndex == 1 || _selectedIndex == 4;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         backgroundColor: const Color(0xFF7C3AED),
         elevation: 0,
-        title: Text(
-          _getAppBarTitle(),
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        title: shouldShowDropdown
+            ? SectionNavigationDropdown(
+                selectedSection: _getCurrentSectionName(),
+                onNavigate: _handleNavigationDropdown,
+                isFixed: true,
+              )
+            : Text(
+                _getAppBarTitle(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
         actions: [
           _buildProfileMenu(context),
         ],
@@ -1290,20 +1351,94 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   Widget _buildTabSelector() {
-    // Create tab
+    // Post a Job tab - floating header card
     if (_selectedIndex == 0) {
       return Container(
-        color: Colors.white,
-        child: TabBar(
-          controller: _createTabController,
-          tabs: [
-            Tab(icon: Icon(Icons.upload_file), text: AppLocalizations.of(context)!.uploadData),
-            Tab(icon: Icon(Icons.auto_awesome), text: AppLocalizations.of(context)!.aiChat),
-            Tab(icon: Icon(Icons.edit), text: AppLocalizations.of(context)!.manualEntry),
+        margin: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
           ],
-          labelColor: const Color(0xFF7C3AED),
-          unselectedLabelColor: Colors.grey,
-          indicatorColor: const Color(0xFF7C3AED),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFFD4AF37), Color(0xFFFFD700)], // Golden gradient
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.add_circle_outline, color: Colors.white, size: 24),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Post a New Job',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Upload, create with AI, or enter manually',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.9),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(16),
+                  bottomRight: Radius.circular(16),
+                ),
+              ),
+              child: TabBar(
+                controller: _createTabController,
+                tabs: [
+                  Tab(icon: Icon(Icons.upload_file), text: AppLocalizations.of(context)!.uploadData),
+                  Tab(icon: Icon(Icons.auto_awesome), text: AppLocalizations.of(context)!.aiChat),
+                  Tab(icon: Icon(Icons.edit), text: AppLocalizations.of(context)!.manualEntry),
+                ],
+                labelColor: const Color(0xFF7C3AED),
+                unselectedLabelColor: Colors.grey,
+                indicatorColor: const Color(0xFF7C3AED),
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -1507,29 +1642,18 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   Widget _buildDesktopLayout(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      body: Row(
+      body: Column(
         children: [
-          // Side navigation rail
-          _buildNavigationRail(context),
-          // Main content area
+          // Content
           Expanded(
-            child: Column(
-              children: [
-                // Top app bar for desktop
-                _buildDesktopAppBar(context),
-                // Content
-                Expanded(
-                  child: ResponsiveContainer(
-                    maxWidth: 1600,
-                    child: NestedScrollView(
-                      headerSliverBuilder: (context, innerBoxIsScrolled) {
-                        return [..._buildPinnedHeaders()];
-                      },
-                      body: _buildBody(),
-                    ),
-                  ),
-                ),
-              ],
+            child: ResponsiveContainer(
+              maxWidth: 1600,
+              child: NestedScrollView(
+                headerSliverBuilder: (context, innerBoxIsScrolled) {
+                  return [..._buildPinnedHeaders()];
+                },
+                body: _buildBody(),
+              ),
             ),
           ),
         ],
@@ -2969,13 +3093,6 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              HeaderCard(
-                title: AppLocalizations.of(context)!.jobDataExtractor,
-                subtitle: AppLocalizations.of(context)!.uploadPdfToExtract,
-                icon: Icons.auto_awesome,
-                gradientColors: const [Color(0xFFF59E0B), Color(0xFFFBBF24)], // Gold gradient
-              ),
-              const SizedBox(height: 24),
               Row(
                 children: [
                   Expanded(
@@ -5898,13 +6015,6 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                HeaderCard(
-                  title: 'Manual Entry',
-                  subtitle: AppLocalizations.of(context)!.enterJobDetailsManually,
-                  icon: Icons.edit_note,
-                  gradientColors: const [Color(0xFF059669), Color(0xFF10B981)],
-                ),
-                const SizedBox(height: 24),
                 FormSection(
                   title: AppLocalizations.of(context)!.jobInformation,
                   icon: Icons.event,
@@ -6206,89 +6316,74 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Header with integrated Clear button and scroll-to-hide animation
-                AnimatedSize(
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.easeInOut,
-                  child: _showAIChatHeader
-                      ? Stack(
-                          children: [
-                            HeaderCard(
-                              title: 'AI Chat Assistant',
-                              subtitle: AppLocalizations.of(context)!.createJobsThroughAI,
-                              icon: Icons.auto_awesome,
-                              gradientColors: const [Color(0xFF8B5CF6), Color(0xFFEC4899)],
-                            ),
-                            // Clear chat button - only show if there are messages
-                            if (messages.isNotEmpty)
-                              Positioned(
-                                right: 8,
-                                top: 8,
-                                child: Material(
-                                  color: Colors.transparent,
-                                  child: InkWell(
-                                    borderRadius: BorderRadius.circular(20),
-                                    onTap: () {
-                                      showDialog(
-                                        context: context,
-                                        builder: (context) => AlertDialog(
-                                          title: const Text('Clear Chat?'),
-                                          content: const Text(
-                                            'This will delete the current conversation and any unsaved event data.',
-                                          ),
-                                          actions: [
-                                            TextButton(
-                                              onPressed: () => Navigator.pop(context),
-                                              child: const Text('Cancel'),
-                                            ),
-                                            TextButton(
-                                              onPressed: () {
-                                                Navigator.pop(context);
-                                                setState(() {
-                                                  _aiChatService.startNewConversation();
-                                                });
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  const SnackBar(
-                                                    content: Text('Chat cleared'),
-                                                    duration: Duration(seconds: 2),
-                                                  ),
-                                                );
-                                              },
-                                              child: const Text(
-                                                'Clear',
-                                                style: TextStyle(color: Colors.red),
-                                              ),
-                                            ),
-                                          ],
+                // Clear chat button - only show if there are messages
+                if (messages.isNotEmpty && _showAIChatHeader)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(20),
+                          onTap: () {
+                            showDialog(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('Clear Chat?'),
+                                content: const Text(
+                                  'This will delete the current conversation and any unsaved event data.',
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context),
+                                    child: const Text('Cancel'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () {
+                                      Navigator.pop(context);
+                                      setState(() {
+                                        _aiChatService.startNewConversation();
+                                      });
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Chat cleared'),
+                                          duration: Duration(seconds: 2),
                                         ),
                                       );
                                     },
-                                    child: Container(
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withOpacity(0.9),
-                                        borderRadius: BorderRadius.circular(20),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.black.withOpacity(0.1),
-                                            blurRadius: 8,
-                                            offset: const Offset(0, 2),
-                                          ),
-                                        ],
-                                      ),
-                                      child: Icon(
-                                        Icons.delete_outline,
-                                        size: 18,
-                                        color: Colors.grey.shade700,
-                                      ),
+                                    child: const Text(
+                                      'Clear',
+                                      style: TextStyle(color: Colors.red),
                                     ),
                                   ),
-                                ),
+                                ],
                               ),
-                          ],
-                        )
-                      : const SizedBox.shrink(),
-                ),
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.9),
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              Icons.delete_outline,
+                              size: 18,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 // Floating draft preview button (hidden when event is auto-saved)
                 if (currentData.isNotEmpty && !_aiChatService.eventComplete)
                   Align(
