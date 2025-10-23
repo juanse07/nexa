@@ -4262,14 +4262,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               ),
             ),
           ..._pendingDrafts.map((d) {
-            final data =
-                (d['data'] as Map?)?.cast<String, dynamic>() ??
-                <String, dynamic>{};
-            final client = (data['client_name'] ?? '').toString();
+            // Backend events have data at top level (not wrapped in 'data' field)
+            final client = (d['client_name'] ?? '').toString();
             final name =
-                (data['event_name'] ?? data['venue_name'] ?? 'Untitled')
+                (d['event_name'] ?? d['venue_name'] ?? 'Untitled')
                     .toString();
-            final date = (data['date'] ?? '').toString();
+            final date = (d['date'] ?? '').toString();
+            final id = (d['id'] ?? d['_id'] ?? '').toString();
+
             return Container(
               margin: const EdgeInsets.only(bottom: 12),
               decoration: BoxDecoration(
@@ -4290,15 +4290,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   children: [
                     TextButton(
                       onPressed: () async {
-                        final data =
-                            (d['data'] as Map?)?.cast<String, dynamic>() ??
-                            <String, dynamic>{};
-                        final id = (d['id'] ?? '').toString();
                         if (!mounted) return;
                         final changed = await Navigator.of(context).push<bool>(
                           MaterialPageRoute(
                             builder: (_) =>
-                                PendingEditScreen(draft: data, draftId: id),
+                                PendingEditScreen(draft: d, draftId: id),
                           ),
                         );
                         if (changed == true) {
@@ -4309,15 +4305,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     ),
                     TextButton(
                       onPressed: () async {
-                        final data =
-                            (d['data'] as Map?)?.cast<String, dynamic>() ??
-                            <String, dynamic>{};
-                        final id = (d['id'] ?? '').toString();
                         if (!mounted) return;
                         final changed = await Navigator.of(context).push<bool>(
                           MaterialPageRoute(
                             builder: (_) =>
-                                PendingPublishScreen(draft: data, draftId: id),
+                                PendingPublishScreen(draft: d, draftId: id),
                           ),
                         );
                         if (changed == true) {

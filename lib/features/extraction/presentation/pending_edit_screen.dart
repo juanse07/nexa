@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:nexa/l10n/app_localizations.dart';
 
-import '../services/pending_events_service.dart';
+import '../services/event_service.dart';
 
 class PendingEditScreen extends StatefulWidget {
   final Map<String, dynamic> draft;
@@ -18,7 +18,7 @@ class PendingEditScreen extends StatefulWidget {
 }
 
 class _PendingEditScreenState extends State<PendingEditScreen> {
-  final PendingEventsService _pendingService = PendingEventsService();
+  final EventService _eventService = EventService();
 
   late final TextEditingController _eventNameCtrl;
   late final TextEditingController _clientNameCtrl;
@@ -76,9 +76,7 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
   Future<void> _save() async {
     setState(() => _saving = true);
     try {
-      final updated = <String, dynamic>{
-        ...widget.draft,
-        'id': widget.draftId,
+      final updates = <String, dynamic>{
         'event_name': _eventNameCtrl.text.trim(),
         'client_name': _clientNameCtrl.text.trim(),
         'date': _dateCtrl.text.trim(),
@@ -93,7 +91,10 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
         'contact_email': _contactEmailCtrl.text.trim(),
         'notes': _notesCtrl.text.trim(),
       };
-      await _pendingService.saveDraft(updated);
+
+      // Update the draft event in backend
+      await _eventService.updateEvent(widget.draftId, updates);
+
       if (!mounted) return;
       Navigator.of(context).pop(true);
       ScaffoldMessenger.of(context).showSnackBar(
