@@ -52,6 +52,12 @@ export interface RoleStat {
 
 export interface EventDocument extends Document {
   managerId: mongoose.Types.ObjectId;
+
+  // Event lifecycle status
+  status: 'draft' | 'published' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
+  publishedAt?: Date;
+  publishedBy?: string;
+
   event_name?: string;
   client_name?: string;
   third_party_company_name?: string;
@@ -157,6 +163,18 @@ const RoleStatSchema = new Schema<RoleStat>(
 const EventSchema = new Schema<EventDocument>(
   {
     managerId: { type: Schema.Types.ObjectId, ref: 'Manager', required: true, index: true },
+
+    // Event lifecycle status
+    status: {
+      type: String,
+      enum: ['draft', 'published', 'confirmed', 'in_progress', 'completed', 'cancelled'],
+      default: 'draft',
+      required: true,
+      index: true,
+    },
+    publishedAt: { type: Date },
+    publishedBy: { type: String, trim: true },
+
     event_name: { type: String, trim: true },
     client_name: { type: String, trim: true },
     third_party_company_name: { type: String, trim: true },
@@ -209,6 +227,9 @@ const EventSchema = new Schema<EventDocument>(
   },
   { timestamps: true }
 );
+
+// Compound index for efficient filtering by manager and status
+EventSchema.index({ managerId: 1, status: 1 });
 
 export const EventModel: Model<EventDocument> =
   mongoose.models.Event || mongoose.model<EventDocument>('Event', EventSchema);

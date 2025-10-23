@@ -38,6 +38,7 @@ const acceptedStaffSchema = z.object({
 });
 
 const eventSchema = z.object({
+  status: z.enum(['draft', 'published', 'confirmed', 'in_progress', 'completed', 'cancelled']).nullish(),
   event_name: z.string().nullish(),
   client_name: z.string().nullish(),
   third_party_company_name: z.string().nullish(),
@@ -321,6 +322,8 @@ router.post('/events', requireAuth, async (req, res) => {
       ...normalized,
       role_stats,
       managerId,
+      // Status defaults to 'draft' from schema, but can be overridden
+      status: normalized.status || 'draft',
     });
     const createdObj = created.toObject();
     const responsePayload = {
@@ -333,7 +336,154 @@ router.post('/events', requireAuth, async (req, res) => {
         .filter((v: string | undefined) => !!v),
     };
 
+    // Always notify the manager about their own event creation
     emitToManager(String(managerId), 'event:created', responsePayload);
+
+    // Only notify staff if the event is published (not a draft)
+    if (createdObj.status !== 'draft') {
+      const audienceTeams = (responsePayload.audience_team_ids || []) as string[];
+      if (audienceTeams.length > 0) {
+        emitToTeams(audienceTeams, 'event:created', responsePayload);
+      }
+
+      const audienceUsers = (responsePayload.audience_user_keys || []) as string[];
+      for (const key of audienceUsers) {
+        emitToUser(key, 'event:created', responsePayload);
+      }
+    }
+
+    return res.status(201).json(responsePayload);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('Failed to create event', err);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Publish a draft event (transition from draft → published)
+const publishEventSchema = z.object({
+  audience_user_keys: z.array(z.string()).nullish(),
+  audience_team_ids: z.array(z.string()).nullish(),
+});
+
+router.post('/events/:id/publish', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const eventId = req.params.id;
+
+    if (!eventId || !mongoose.Types.ObjectId.isValid(eventId)) {
+      return res.status(400).json({ message: 'Invalid event ID' });
+    }
+
+    const event = await EventModel.findOne({
+      _id: new mongoose.Types.ObjectId(eventId),
+      managerId,
+    });
+
+    if (!event) {
+      return res.status(404).json({ message: 'Event not found or not owned by you' });
+    }
+
+    if (event.status !== 'draft') {
+      return res.status(400).json({
+        message: `Cannot publish event with status '${event.status}'. Only draft events can be published.`,
+      });
+    }
+
+    // Validate and sanitize audience data
+    const parsed = publishEventSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: parsed.error.format(),
+      });
+    }
+
+    const { audience_user_keys, audience_team_ids } = parsed.data;
+    const teamIds = await sanitizeTeamIds(managerId, audience_team_ids);
+
+    // Check availability conflicts for staff in the audience
+    const availabilityWarnings: any[] = [];
+
+    if (event.date && event.start_time && event.end_time) {
+      const eventDate = new Date(event.date);
+      const eventDateStr = eventDate.toISOString().split('T')[0]; // YYYY-MM-DD
+
+      // Get all user keys we're publishing to
+      const targetUserKeys: string[] = [];
+
+      if (audience_user_keys && audience_user_keys.length > 0) {
+        targetUserKeys.push(...audience_user_keys);
+      }
+
+      // Get user keys from teams
+      if (teamIds.length > 0) {
+        const teamMembers = await TeamMemberModel.find({
+          teamId: { $in: teamIds },
+          status: 'active',
+        }).lean();
+
+        for (const member of teamMembers) {
+          if (member.provider && member.subject) {
+            const userKey = `${member.provider}:${member.subject}`;
+            if (!targetUserKeys.includes(userKey)) {
+              targetUserKeys.push(userKey);
+            }
+          }
+        }
+      }
+
+      // Check availability for each user
+      if (targetUserKeys.length > 0) {
+        const unavailableStaff = await AvailabilityModel.find({
+          userKey: { $in: targetUserKeys },
+          date: eventDateStr,
+          status: 'unavailable',
+        }).lean();
+
+        // Check if event time overlaps with unavailable periods
+        for (const avail of unavailableStaff) {
+          // Simple overlap check: if unavailable period overlaps with event time
+          const eventStartMinutes = timeToMinutes(event.start_time);
+          const eventEndMinutes = timeToMinutes(event.end_time);
+          const unavailStartMinutes = timeToMinutes(avail.startTime);
+          const unavailEndMinutes = timeToMinutes(avail.endTime);
+
+          // Check for overlap: A starts before B ends AND A ends after B starts
+          if (eventStartMinutes < unavailEndMinutes && eventEndMinutes > unavailStartMinutes) {
+            availabilityWarnings.push({
+              userKey: avail.userKey,
+              date: avail.date,
+              unavailableFrom: avail.startTime,
+              unavailableTo: avail.endTime,
+            });
+          }
+        }
+      }
+    }
+
+    // Update event to published status
+    event.status = 'published';
+    event.publishedAt = new Date();
+    event.publishedBy = manager.email || manager.name || String(managerId);
+    event.audience_user_keys = audience_user_keys || [];
+    event.audience_team_ids = teamIds;
+
+    await event.save();
+
+    const eventObj = event.toObject();
+    const responsePayload = {
+      ...eventObj,
+      id: String(eventObj._id),
+      managerId: String(eventObj.managerId),
+      audience_user_keys: (eventObj.audience_user_keys || []).map(String),
+      audience_team_ids: (eventObj.audience_team_ids || []).map(String),
+      availabilityWarnings,
+    };
+
+    // Emit socket events to notify staff
+    emitToManager(String(managerId), 'event:published', responsePayload);
 
     const audienceTeams = (responsePayload.audience_team_ids || []) as string[];
     if (audienceTeams.length > 0) {
@@ -345,13 +495,23 @@ router.post('/events', requireAuth, async (req, res) => {
       emitToUser(key, 'event:created', responsePayload);
     }
 
-    return res.status(201).json(responsePayload);
+    return res.json(responsePayload);
   } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error('Failed to create event', err);
-    return res.status(500).json({ error: 'Internal Server Error' });
+    console.error('[publish event] failed', err);
+    return res.status(500).json({ message: 'Failed to publish event' });
   }
 });
+
+// Helper function to convert "HH:mm" time string to minutes since midnight
+function timeToMinutes(timeStr: string | undefined): number {
+  if (!timeStr) return 0;
+  const parts = timeStr.split(':');
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return 0;
+  const hours = parseInt(parts[0], 10);
+  const minutes = parseInt(parts[1], 10);
+  if (isNaN(hours) || isNaN(minutes)) return 0;
+  return hours * 60 + minutes;
+}
 
 // Update roles for an event with capacity validation
 const updateRolesSchema = z.object({
@@ -558,6 +718,7 @@ router.get('/events', requireAuth, async (req, res) => {
 
     if (managerScope && managerId) {
       filter.managerId = managerId;
+      // Managers see all their events (including drafts)
 
       if (lastSyncParam) {
         try {
@@ -646,6 +807,10 @@ router.get('/events', requireAuth, async (req, res) => {
       }
 
       filter.$or = visibilityFilters;
+
+      // Staff NEVER see draft events - only published and beyond
+      filter.status = { $ne: 'draft' };
+
       console.log('[EVENTS DEBUG] Staff filter:', JSON.stringify(filter, null, 2));
     }
     const events = await EventModel.find(filter).sort({ createdAt: -1 }).lean();

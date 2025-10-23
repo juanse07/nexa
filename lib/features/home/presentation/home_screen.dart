@@ -422,24 +422,47 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                     width: 1,
                                   ),
                                 ),
-                                child: DropdownButtonHideUnderline(
-                                  child: DropdownButton<String>(
-                                    value: _selectedFilter,
-                                    icon: const Icon(
-                                      Icons.keyboard_arrow_down,
-                                      color: Colors.white,
-                                      size: 24,
+                                child: Theme(
+                                  data: Theme.of(context).copyWith(
+                                    dropdownMenuTheme: DropdownMenuThemeData(
+                                      menuStyle: MenuStyle(
+                                        alignment: Alignment.bottomLeft,
+                                      ),
                                     ),
-                                    dropdownColor: const Color(0xFF7C3AED),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                    isExpanded: true,
-                                    menuMaxHeight: 400,
-                                    alignment: AlignmentDirectional.bottomStart,
-                                    items: [
+                                  ),
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<String>(
+                                      value: _selectedFilter,
+                                      icon: const Icon(
+                                        Icons.keyboard_arrow_down,
+                                        color: Colors.white,
+                                        size: 24,
+                                      ),
+                                      dropdownColor: const Color(0xFF7C3AED),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      isExpanded: true,
+                                      menuMaxHeight: 400,
+                                      alignment: AlignmentDirectional.bottomStart,
+                                      selectedItemBuilder: (BuildContext context) {
+                                        return ['Jobs', 'Clients', 'Teams', 'Catalog', 'AI Chat'].map((String value) {
+                                          return Align(
+                                            alignment: Alignment.centerLeft,
+                                            child: Text(
+                                              value,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          );
+                                        }).toList();
+                                      },
+                                      items: [
                                       DropdownMenuItem(
                                         value: 'Jobs',
                                         child: IconTheme(
@@ -506,15 +529,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                         ),
                                       ),
                                     ],
-                                    onChanged: (String? newValue) {
-                                      if (newValue != null) {
-                                        setState(() {
-                                          _selectedFilter = newValue;
-                                        });
-                                        // Handle filter action
-                                        _handleFilterSelection(newValue);
-                                      }
-                                    },
+                                      onChanged: (String? newValue) {
+                                        if (newValue != null) {
+                                          setState(() {
+                                            _selectedFilter = newValue;
+                                          });
+                                          // Handle filter action
+                                          _handleFilterSelection(newValue);
+                                        }
+                                      },
+                                    ),
                                   ),
                                 ),
                               ),
@@ -549,24 +573,47 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         ),
                       ],
                     ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _selectedFilter,
-                        icon: const Icon(
-                          Icons.keyboard_arrow_down,
-                          color: Colors.white,
-                          size: 20,
+                    child: Theme(
+                      data: Theme.of(context).copyWith(
+                        dropdownMenuTheme: DropdownMenuThemeData(
+                          menuStyle: MenuStyle(
+                            alignment: Alignment.bottomLeft,
+                          ),
                         ),
-                        dropdownColor: const Color(0xFF7C3AED),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        isExpanded: true,
-                        menuMaxHeight: 400,
-                        alignment: AlignmentDirectional.bottomStart,
-                        items: [
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedFilter,
+                          icon: const Icon(
+                            Icons.keyboard_arrow_down,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                          dropdownColor: const Color(0xFF7C3AED),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          isExpanded: true,
+                          menuMaxHeight: 400,
+                          alignment: AlignmentDirectional.bottomStart,
+                          selectedItemBuilder: (BuildContext context) {
+                            return ['Jobs', 'Clients', 'Teams', 'Catalog', 'AI Chat'].map((String value) {
+                              return Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  value,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              );
+                            }).toList();
+                          },
+                          items: [
                           DropdownMenuItem(
                             value: 'Jobs',
                             child: IconTheme(
@@ -633,14 +680,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             ),
                           ),
                         ],
-                        onChanged: (String? newValue) {
-                          if (newValue != null) {
-                            setState(() {
-                              _selectedFilter = newValue;
-                            });
-                            _handleFilterSelection(newValue);
-                          }
-                        },
+                          onChanged: (String? newValue) {
+                            if (newValue != null) {
+                              setState(() {
+                                _selectedFilter = newValue;
+                              });
+                              _handleFilterSelection(newValue);
+                            }
+                          },
+                        ),
                       ),
                     ),
                   ),

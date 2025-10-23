@@ -29,7 +29,7 @@ import '../services/event_service.dart';
 import '../services/extraction_service.dart';
 import '../services/file_processor_service.dart';
 import '../services/google_places_service.dart';
-import '../services/pending_events_service.dart';
+// import '../services/pending_events_service.dart'; // DEPRECATED: Now using backend draft events
 import '../services/roles_service.dart';
 import '../services/tariffs_service.dart';
 import '../services/users_service.dart';
@@ -56,6 +56,7 @@ import '../../chat/domain/entities/conversation.dart';
 import '../../chat/presentation/chat_screen.dart';
 import 'ai_chat_screen.dart';
 import '../../../core/widgets/section_navigation_dropdown.dart';
+import '../../../core/widgets/web_tab_navigation.dart';
 import '../../main/presentation/main_screen.dart';
 
 class ExtractionScreen extends StatefulWidget {
@@ -131,7 +132,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   late final RolesService _rolesService;
   late final FileProcessorService _fileProcessorService;
   final DraftService _draftService = DraftService();
-  final PendingEventsService _pendingService = PendingEventsService();
+  // final PendingEventsService _pendingService = PendingEventsService(); // DEPRECATED: Now using backend
   bool _lastStructuredFromUpload = false;
 
   // AI Chat state
@@ -178,6 +179,25 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     _createTabController = TabController(length: 3, vsync: this, initialIndex: widget.initialIndex);
     _eventsTabController = TabController(length: 3, vsync: this);
     _catalogTabController = TabController(length: 3, vsync: this);
+
+    // Add listeners for web tab navigation updates
+    if (kIsWeb) {
+      _createTabController.addListener(() {
+        if (_createTabController.indexIsChanging) {
+          setState(() {});
+        }
+      });
+      _eventsTabController.addListener(() {
+        if (_eventsTabController.indexIsChanging) {
+          setState(() {});
+        }
+      });
+      _catalogTabController.addListener(() {
+        if (_catalogTabController.indexIsChanging) {
+          setState(() {});
+        }
+      });
+    }
 
     _extractionService = ExtractionService();
     _eventService = EventService();
@@ -905,25 +925,41 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     onPressed: () async {
                       Navigator.pop(context);
 
-                      // Save to database as pending event
-                      final id = await _pendingService.saveDraft(currentData);
+                      // Save to backend as draft event
+                      try {
+                        final draftPayload = {
+                          ...currentData,
+                          'status': 'draft', // Set status to draft
+                        };
+                        final createdEvent = await _eventService.createEvent(draftPayload);
+                        final id = createdEvent['id'] ?? createdEvent['_id'];
 
-                      if (!mounted) return;
+                        if (!mounted) return;
 
-                      _aiChatService.startNewConversation();
-                      await _aiChatService.getGreeting();
+                        _aiChatService.startNewConversation();
+                        await _aiChatService.getGreeting();
 
-                      setState(() {
-                        structuredData = currentData;
-                        extractedText = 'AI Chat extracted data';
-                        errorMessage = null;
-                        _lastStructuredFromUpload = false;
-                      });
+                        setState(() {
+                          structuredData = currentData;
+                          extractedText = 'AI Chat extracted data';
+                          errorMessage = null;
+                          _lastStructuredFromUpload = false;
+                        });
 
-                      _draftService.saveDraft(currentData);
+                        _draftService.saveDraft(currentData);
 
-                      // Reload pending drafts to show the new one
-                      await _loadPendingDrafts();
+                        // Reload pending drafts to show the new one
+                        await _loadPendingDrafts();
+                      } catch (e) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Failed to save draft: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
 
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
@@ -1150,17 +1186,32 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         ),
                       ],
                     ),
-                    child: TabBar(
-                      controller: _createTabController,
-                      tabs: [
-                        Tab(icon: Icon(Icons.upload_file), text: AppLocalizations.of(context)!.uploadData),
-                        Tab(icon: Icon(Icons.auto_awesome), text: AppLocalizations.of(context)!.aiChat),
-                        Tab(icon: Icon(Icons.edit), text: AppLocalizations.of(context)!.manualEntry),
-                      ],
-                      labelColor: const Color(0xFF7C3AED),
-                      unselectedLabelColor: Colors.grey,
-                      indicatorColor: const Color(0xFF7C3AED),
-                    ),
+                    child: kIsWeb
+                        ? WebTabNavigation(
+                            tabs: [
+                              WebTab(icon: Icons.upload_file, text: AppLocalizations.of(context)!.uploadData),
+                              WebTab(icon: Icons.auto_awesome, text: AppLocalizations.of(context)!.aiChat),
+                              WebTab(icon: Icons.edit, text: AppLocalizations.of(context)!.manualEntry),
+                            ],
+                            selectedIndex: _createTabController.index,
+                            onTabSelected: (index) {
+                              setState(() {
+                                _createTabController.animateTo(index);
+                              });
+                            },
+                            selectedColor: const Color(0xFF7C3AED),
+                          )
+                        : TabBar(
+                            controller: _createTabController,
+                            tabs: [
+                              Tab(icon: Icon(Icons.upload_file), text: AppLocalizations.of(context)!.uploadData),
+                              Tab(icon: Icon(Icons.auto_awesome), text: AppLocalizations.of(context)!.aiChat),
+                              Tab(icon: Icon(Icons.edit), text: AppLocalizations.of(context)!.manualEntry),
+                            ],
+                            labelColor: const Color(0xFF7C3AED),
+                            unselectedLabelColor: Colors.grey,
+                            indicatorColor: const Color(0xFF7C3AED),
+                          ),
                   ),
                 ),
               ),
@@ -1523,17 +1574,32 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   bottomRight: Radius.circular(16),
                 ),
               ),
-              child: TabBar(
-                controller: _eventsTabController,
-                tabs: [
-                  Tab(text: AppLocalizations.of(context)!.pending),
-                  Tab(text: AppLocalizations.of(context)!.upcoming),
-                  Tab(text: AppLocalizations.of(context)!.past),
-                ],
-                labelColor: const Color(0xFF7C3AED),
-                unselectedLabelColor: Colors.grey,
-                indicatorColor: const Color(0xFF7C3AED),
-              ),
+              child: kIsWeb
+                  ? WebTabNavigation(
+                      tabs: [
+                        WebTab(text: AppLocalizations.of(context)!.pending),
+                        WebTab(text: AppLocalizations.of(context)!.upcoming),
+                        WebTab(text: AppLocalizations.of(context)!.past),
+                      ],
+                      selectedIndex: _eventsTabController.index,
+                      onTabSelected: (index) {
+                        setState(() {
+                          _eventsTabController.animateTo(index);
+                        });
+                      },
+                      selectedColor: const Color(0xFF7C3AED),
+                    )
+                  : TabBar(
+                      controller: _eventsTabController,
+                      tabs: [
+                        Tab(text: AppLocalizations.of(context)!.pending),
+                        Tab(text: AppLocalizations.of(context)!.upcoming),
+                        Tab(text: AppLocalizations.of(context)!.past),
+                      ],
+                      labelColor: const Color(0xFF7C3AED),
+                      unselectedLabelColor: Colors.grey,
+                      indicatorColor: const Color(0xFF7C3AED),
+                    ),
             ),
           ],
         ),
@@ -1619,17 +1685,32 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   bottomRight: Radius.circular(16),
                 ),
               ),
-              child: TabBar(
-                controller: _catalogTabController,
-                tabs: const [
-                  Tab(text: 'Clients'),
-                  Tab(text: 'Roles'),
-                  Tab(text: 'Tariffs'),
-                ],
-                labelColor: const Color(0xFF7C3AED),
-                unselectedLabelColor: Colors.grey,
-                indicatorColor: const Color(0xFF7C3AED),
-              ),
+              child: kIsWeb
+                  ? WebTabNavigation(
+                      tabs: const [
+                        WebTab(text: 'Clients'),
+                        WebTab(text: 'Roles'),
+                        WebTab(text: 'Tariffs'),
+                      ],
+                      selectedIndex: _catalogTabController.index,
+                      onTabSelected: (index) {
+                        setState(() {
+                          _catalogTabController.animateTo(index);
+                        });
+                      },
+                      selectedColor: const Color(0xFF7C3AED),
+                    )
+                  : TabBar(
+                      controller: _catalogTabController,
+                      tabs: const [
+                        Tab(text: 'Clients'),
+                        Tab(text: 'Roles'),
+                        Tab(text: 'Tariffs'),
+                      ],
+                      labelColor: const Color(0xFF7C3AED),
+                      unselectedLabelColor: Colors.grey,
+                      indicatorColor: const Color(0xFF7C3AED),
+                    ),
             ),
           ],
         ),
@@ -3319,16 +3400,30 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       if (selClient.isNotEmpty) {
                         payload['client_name'] = selClient;
                       }
-                      // Save to pending
-                      final id = await _pendingService.saveDraft(payload);
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Saved to Pending'),
-                          backgroundColor: Color(0xFF059669),
-                        ),
-                      );
-                      await _draftService.clearDraft();
+
+                      // Save to backend as draft
+                      try {
+                        payload['status'] = 'draft';
+                        final createdEvent = await _eventService.createEvent(payload);
+                        if (!mounted) return;
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Saved to Pending'),
+                            backgroundColor: Color(0xFF059669),
+                          ),
+                        );
+                        await _draftService.clearDraft();
+                        await _loadPendingDrafts();
+                      } catch (e) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Failed to save: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
                     },
                     icon: const Icon(Icons.save, size: 18),
                     label: Text(AppLocalizations.of(context)!.saveToPending),
@@ -4096,11 +4191,27 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     setState(() {
       _isPendingLoading = true;
     });
-    final items = await _pendingService.list();
-    setState(() {
-      _pendingDrafts = items;
-      _isPendingLoading = false;
-    });
+
+    try {
+      // Fetch draft events from backend (status == 'draft')
+      final allEvents = await _eventService.fetchEvents();
+
+      // Filter to only draft status events
+      final drafts = allEvents.where((event) {
+        final status = event['status']?.toString() ?? '';
+        return status == 'draft';
+      }).toList();
+
+      setState(() {
+        _pendingDrafts = drafts;
+        _isPendingLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isPendingLoading = false;
+      });
+      print('[_loadPendingDrafts] Error: $e');
+    }
   }
 
   Widget _pendingInner() {
@@ -4218,10 +4329,22 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     IconButton(
                       icon: const Icon(Icons.delete, color: Color(0xFFDC2626)),
                       onPressed: () async {
-                        final id = (d['id'] ?? '').toString();
+                        final id = (d['id'] ?? d['_id'] ?? '').toString();
                         if (id.isEmpty) return;
-                        await _pendingService.deleteDraft(id);
-                        await _loadPendingDrafts();
+
+                        // Delete from backend
+                        try {
+                          await _eventService.deleteEvent(id);
+                          await _loadPendingDrafts();
+                        } catch (e) {
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Failed to delete: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
                       },
                     ),
                   ],
@@ -6264,15 +6387,30 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                             if (selClient.isNotEmpty) {
                               payload['client_name'] = selClient;
                             }
-                            await _pendingService.saveDraft(payload);
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Saved to Pending'),
-                                backgroundColor: Color(0xFF059669),
-                              ),
-                            );
-                            await _draftService.clearDraft();
+
+                            // Save to backend as draft
+                            try {
+                              payload['status'] = 'draft';
+                              await _eventService.createEvent(payload);
+                              if (!mounted) return;
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Saved to Pending'),
+                                  backgroundColor: Color(0xFF059669),
+                                ),
+                              );
+                              await _draftService.clearDraft();
+                              await _loadPendingDrafts();
+                            } catch (e) {
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Failed to save: $e'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
                           },
                     icon: const Icon(Icons.save, size: 18),
                     label: Text(AppLocalizations.of(context)!.saveToPending),

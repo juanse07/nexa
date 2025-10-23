@@ -1,48 +1,48 @@
 /// Enumeration of possible event statuses in the application.
 ///
 /// The event lifecycle typically flows:
-/// draft -> pending -> confirmed -> completed (or cancelled)
+/// draft -> published -> confirmed -> inProgress -> completed (or cancelled)
 enum EventStatus {
   /// Event is being drafted and not yet published
   draft,
 
-  /// Event is published and awaiting confirmation
-  pending,
+  /// Event is published and visible to staff
+  published,
 
   /// Event is confirmed and scheduled
   confirmed,
+
+  /// Event is currently in progress
+  inProgress,
 
   /// Event has been completed
   completed,
 
   /// Event has been cancelled
-  cancelled,
-
-  /// Event is currently in progress
-  inProgress;
+  cancelled;
 
   /// Returns a human-readable display name for the status.
   String get displayName {
     switch (this) {
       case EventStatus.draft:
         return 'Draft';
-      case EventStatus.pending:
-        return 'Pending';
+      case EventStatus.published:
+        return 'Published';
       case EventStatus.confirmed:
         return 'Confirmed';
+      case EventStatus.inProgress:
+        return 'In Progress';
       case EventStatus.completed:
         return 'Completed';
       case EventStatus.cancelled:
         return 'Cancelled';
-      case EventStatus.inProgress:
-        return 'In Progress';
     }
   }
 
   /// Returns true if the event can still be edited.
   bool get isEditable =>
       this == EventStatus.draft ||
-      this == EventStatus.pending ||
+      this == EventStatus.published ||
       this == EventStatus.confirmed;
 
   /// Returns true if the event is active (not completed or cancelled).
