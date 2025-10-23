@@ -104,6 +104,62 @@ class EventService {
     }
   }
 
+  Future<void> deleteEvent(String eventId) async {
+    try {
+      final response = await _apiClient.delete('/events/$eventId');
+
+      if (response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300) {
+        return;
+      }
+      throw Exception(
+        'Failed to delete event (${response.statusCode}): ${response.data}',
+      );
+    } on DioException catch (e) {
+      throw Exception('Failed to delete event: ${e.message}');
+    }
+  }
+
+  /// Publishes a draft event, making it visible to staff
+  ///
+  /// [eventId] - The ID of the draft event to publish
+  /// [audienceUserKeys] - Optional list of specific user keys to target
+  /// [audienceTeamIds] - Optional list of team IDs to target
+  ///
+  /// Returns the updated event with availability warnings if any staff are unavailable
+  Future<Map<String, dynamic>> publishEvent(
+    String eventId, {
+    List<String>? audienceUserKeys,
+    List<String>? audienceTeamIds,
+  }) async {
+    try {
+      final data = <String, dynamic>{};
+      if (audienceUserKeys != null) {
+        data['audience_user_keys'] = audienceUserKeys;
+      }
+      if (audienceTeamIds != null) {
+        data['audience_team_ids'] = audienceTeamIds;
+      }
+
+      final response = await _apiClient.post(
+        '/events/$eventId/publish',
+        data: data,
+      );
+
+      if (response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300) {
+        return response.data as Map<String, dynamic>;
+      }
+      throw Exception(
+        'Failed to publish event (${response.statusCode}): ${response.data}',
+      );
+    } on DioException catch (e) {
+      throw Exception('Failed to publish event: ${e.message}');
+    }
+  }
+
   Future<Map<String, dynamic>> removeAcceptedStaff(String eventId, String userKey) async {
     try {
       final response = await _apiClient.delete('/events/$eventId/staff/$userKey');
