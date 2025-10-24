@@ -112,7 +112,7 @@ router.post('/ai/extract', requireAuth, async (req, res) => {
     }
 
     const visionModel = process.env.OPENAI_VISION_MODEL || 'gpt-4o-mini';
-    const textModel = process.env.OPENAI_TEXT_MODEL || 'gpt-4o-mini';
+    const textModel = process.env.OPENAI_TEXT_MODEL || 'gpt-4o';
     const openaiBaseUrl = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
 
     const systemPrompt =
@@ -263,7 +263,7 @@ async function handleOpenAIRequest(
     return res.status(500).json({ message: 'OpenAI API key not configured on server' });
   }
 
-  const textModel = process.env.OPENAI_TEXT_MODEL || 'gpt-4o-mini';
+  const textModel = process.env.OPENAI_TEXT_MODEL || 'gpt-4o';
   const openaiBaseUrl = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
 
   // Inject date/time context into system messages with user's timezone

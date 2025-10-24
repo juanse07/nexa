@@ -1051,7 +1051,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     }
   }
 
-  void _handleNavigationDropdown(String section) {
+  Future<void> _handleNavigationDropdown(String section) async {
     HapticFeedback.lightImpact();
 
     switch (section) {
@@ -1081,9 +1081,17 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         break;
       case 'AI Chat':
         // Navigate to AI Chat screen (separate screen, not a main tab)
-        Navigator.of(context).push(
+        final result = await Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const AIChatScreen()),
         );
+        // Handle "Check Pending" navigation
+        if (result != null && result is Map && result['action'] == 'show_pending') {
+          setState(() {
+            _selectedIndex = 1; // Switch to Events tab
+            _eventsTabController.animateTo(0); // Switch to Pending sub-tab
+          });
+          await _loadPendingDrafts(); // Refresh pending list
+        }
         break;
     }
   }
@@ -6644,13 +6652,22 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                       onTap: () async {
                                         // On mobile, launch full-screen AI chat
                                         if (!kIsWeb) {
-                                          await Navigator.of(context).push(
+                                          final result = await Navigator.of(context).push(
                                             MaterialPageRoute(
                                               builder: (_) => const AIChatScreen(startNewConversation: true),
                                             ),
                                           );
-                                          // Refresh state after returning
-                                          setState(() {});
+                                          // Handle "Check Pending" navigation
+                                          if (result != null && result is Map && result['action'] == 'show_pending') {
+                                            setState(() {
+                                              _selectedIndex = 1; // Switch to Events tab
+                                              _eventsTabController.animateTo(0); // Switch to Pending sub-tab
+                                            });
+                                            await _loadPendingDrafts(); // Refresh pending list
+                                          } else {
+                                            // Refresh state after returning
+                                            setState(() {});
+                                          }
                                         } else {
                                           // On web, show inline chat
                                           _aiChatService.startNewConversation();

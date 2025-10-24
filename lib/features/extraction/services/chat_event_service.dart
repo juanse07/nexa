@@ -507,6 +507,11 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
     _pendingUpdates.clear();
   }
 
+  /// Add a message to the conversation history
+  void addMessage(ChatMessage message) {
+    _conversationHistory.add(message);
+  }
+
   /// Load an existing event for editing
   void loadEventForEditing(Map<String, dynamic> eventData) {
     _conversationHistory.clear();
@@ -675,11 +680,41 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
       _extractFieldsFromConversation(userMessage, content);
     }
 
-    // Add assistant response to history
-    final assistantMsg = ChatMessage(role: 'assistant', content: content);
+    // Strip technical markers and JSON before showing to user
+    final userFacingContent = _extractUserFriendlyMessage(content);
+
+    // Add ONLY the friendly message to conversation history (not the JSON)
+    final assistantMsg = ChatMessage(role: 'assistant', content: userFacingContent);
     _conversationHistory.add(assistantMsg);
 
     return assistantMsg;
+  }
+
+  /// Extract user-friendly message by removing technical markers and JSON
+  /// This hides EVENT_COMPLETE, EVENT_UPDATE, CLIENT_CREATE, etc. from users
+  /// while still processing the JSON in the background
+  String _extractUserFriendlyMessage(String content) {
+    // List of technical markers to strip from user-facing messages
+    final markers = [
+      'EVENT_COMPLETE',
+      'EVENT_UPDATE',
+      'CLIENT_CREATE',
+      'TARIFF_CREATE',
+    ];
+
+    String cleaned = content;
+
+    // Check if any marker exists in the response
+    for (final marker in markers) {
+      if (cleaned.contains(marker)) {
+        // Extract everything BEFORE the marker (the friendly message)
+        final markerIndex = cleaned.indexOf(marker);
+        cleaned = cleaned.substring(0, markerIndex).trim();
+        break;
+      }
+    }
+
+    return cleaned;
   }
 
   /// Create clients, roles, and tariffs if they don't exist

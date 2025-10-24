@@ -7,10 +7,12 @@ import '../services/chat_event_service.dart';
 class ChatMessageWidget extends StatelessWidget {
   final ChatMessage message;
   final String? userProfilePicture;
+  final void Function(String)? onLinkTap;
 
   const ChatMessageWidget({
     super.key,
     required this.message,
+    this.onLinkTap,
     this.userProfilePicture,
   });
 
@@ -84,14 +86,7 @@ class ChatMessageWidget extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: Text(
-                    message.content,
-                    style: TextStyle(
-                      color: isUser ? Colors.white : const Color(0xFF0F172A),
-                      fontSize: 15,
-                      height: 1.4,
-                    ),
-                  ),
+                  child: _buildMessageContent(isUser),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -145,6 +140,70 @@ class ChatMessageWidget extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+
+  /// Build message content with support for clickable links
+  Widget _buildMessageContent(bool isUser) {
+    final content = message.content;
+    final linkPattern = RegExp(r'\[LINK:([^\]]+)\]');
+    final match = linkPattern.firstMatch(content);
+
+    // If no link found, return simple text
+    if (match == null) {
+      return Text(
+        content,
+        style: TextStyle(
+          color: isUser ? Colors.white : const Color(0xFF0F172A),
+          fontSize: 15,
+          height: 1.4,
+        ),
+      );
+    }
+
+    // Split content into parts: before link, link text, after link
+    final beforeLink = content.substring(0, match.start);
+    final linkText = match.group(1)!;
+    final afterLink = content.substring(match.end);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Text before link
+        if (beforeLink.isNotEmpty)
+          Text(
+            beforeLink,
+            style: TextStyle(
+              color: isUser ? Colors.white : const Color(0xFF0F172A),
+              fontSize: 15,
+              height: 1.4,
+            ),
+          ),
+        // Clickable link
+        GestureDetector(
+          onTap: () => onLinkTap?.call(linkText),
+          child: Text(
+            linkText,
+            style: TextStyle(
+              color: isUser ? Colors.white : const Color(0xFF3B82F6),
+              fontSize: 15,
+              height: 1.4,
+              decoration: TextDecoration.underline,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        // Text after link
+        if (afterLink.isNotEmpty)
+          Text(
+            afterLink,
+            style: TextStyle(
+              color: isUser ? Colors.white : const Color(0xFF0F172A),
+              fontSize: 15,
+              height: 1.4,
+            ),
+          ),
+      ],
     );
   }
 }

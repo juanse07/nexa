@@ -1,16 +1,25 @@
 import 'package:flutter/material.dart';
 import '../../services/draft_service.dart';
-import '../../services/pending_events_service.dart';
+import '../../services/event_service.dart';
 
 /// Mixin providing shared event data management functionality
 /// for extraction screen tabs
 mixin EventDataMixin<T extends StatefulWidget> on State<T> {
   final DraftService _draftService = DraftService();
-  final PendingEventsService _pendingService = PendingEventsService();
+  final EventService _eventService = EventService();
 
-  /// Save event data to pending drafts
+  /// Save event data to database as draft (pending events)
+  /// Returns the created event ID
   Future<String> saveToPending(Map<String, dynamic> eventData) async {
-    final id = await _pendingService.saveDraft(eventData);
+    // Save to database with status='draft' (new architecture)
+    final draftPayload = {
+      ...eventData,
+      'status': 'draft', // Mark as draft so it appears in Pending tab
+    };
+
+    final createdEvent = await _eventService.createEvent(draftPayload);
+    final id = (createdEvent['_id'] ?? createdEvent['id'] ?? '').toString();
+
     return id;
   }
 

@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../services/chat_event_service.dart';
-import '../services/pending_events_service.dart';
+import '../services/event_service.dart';
 import '../widgets/chat_message_widget.dart';
 import '../widgets/chat_input_widget.dart';
 
@@ -20,7 +20,7 @@ class AIChatScreen extends StatefulWidget {
 
 class _AIChatScreenState extends State<AIChatScreen> {
   final ChatEventService _aiChatService = ChatEventService();
-  final PendingEventsService _pendingService = PendingEventsService();
+  final EventService _eventService = EventService();
   final ScrollController _scrollController = ScrollController();
   bool _isLoading = false;
 
@@ -89,102 +89,13 @@ class _AIChatScreenState extends State<AIChatScreen> {
           ),
         ),
         iconTheme: const IconThemeData(color: Color(0xFF1F2937)),
-        actions: [
-          // AI Provider toggle - only on web
-          if (kIsWeb)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: _aiChatService.aiProvider == 'openai'
-                      ? Colors.black
-                      : Colors.orange,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(8),
-                    onTap: () {
-                      setState(() {
-                        final newProvider = _aiChatService.aiProvider == 'openai'
-                            ? 'claude'
-                            : 'openai';
-                        _aiChatService.setAiProvider(newProvider);
-                      });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Using ${_aiChatService.aiProvider == 'openai' ? 'OpenAI' : 'Claude'} AI',
-                          ),
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Icon(
-                        _aiChatService.aiProvider == 'openai'
-                            ? Icons.psychology
-                            : Icons.hub,
-                        color: Colors.white,
-                        size: 18,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          // Clear conversation button
-          if (messages.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              tooltip: 'Clear chat',
-              onPressed: () {
-                showDialog<void>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Clear Chat?'),
-                    content: const Text(
-                      'This will delete the current conversation and any unsaved event data.',
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('Cancel'),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          setState(() {
-                            _aiChatService.startNewConversation();
-                          });
-                          _loadGreeting();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Chat cleared'),
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
-                        },
-                        child: const Text(
-                          'Clear',
-                          style: TextStyle(color: Colors.red),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-        ],
       ),
       body: Column(
         children: [
-          // Info banner - conversations not saved (privacy feature)
+          // Info banner with AI provider toggle
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               color: const Color(0xFF10B981).withValues(alpha: 0.08),
               border: Border(
@@ -211,6 +122,127 @@ class _AIChatScreenState extends State<AIChatScreen> {
                     ),
                   ),
                 ),
+                // AI Provider toggle chip
+                PopupMenuButton<String>(
+                    onSelected: (value) {
+                      setState(() {
+                        _aiChatService.setAiProvider(value);
+                      });
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Switched to ${value == 'openai' ? 'OpenAI GPT-4o' : 'Claude Sonnet 4.5'}',
+                          ),
+                          duration: const Duration(seconds: 2),
+                          backgroundColor: value == 'openai' ? Colors.black : Colors.orange,
+                        ),
+                      );
+                    },
+                    itemBuilder: (context) => [
+                      PopupMenuItem(
+                        value: 'openai',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.psychology,
+                              size: 18,
+                              color: _aiChatService.aiProvider == 'openai'
+                                  ? Colors.black
+                                  : Colors.grey,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'OpenAI GPT-4o',
+                              style: TextStyle(
+                                fontWeight: _aiChatService.aiProvider == 'openai'
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                            if (_aiChatService.aiProvider == 'openai')
+                              const SizedBox(width: 8),
+                            if (_aiChatService.aiProvider == 'openai')
+                              const Icon(Icons.check, size: 16, color: Colors.black),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'claude',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.hub,
+                              size: 18,
+                              color: _aiChatService.aiProvider == 'claude'
+                                  ? Colors.orange
+                                  : Colors.grey,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Claude Sonnet 4.5',
+                              style: TextStyle(
+                                fontWeight: _aiChatService.aiProvider == 'claude'
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                            if (_aiChatService.aiProvider == 'claude')
+                              const SizedBox(width: 8),
+                            if (_aiChatService.aiProvider == 'claude')
+                              const Icon(Icons.check, size: 16, color: Colors.orange),
+                          ],
+                        ),
+                      ),
+                    ],
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _aiChatService.aiProvider == 'openai'
+                            ? Colors.black.withValues(alpha: 0.08)
+                            : Colors.orange.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _aiChatService.aiProvider == 'openai'
+                              ? Colors.black.withValues(alpha: 0.2)
+                              : Colors.orange.withValues(alpha: 0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _aiChatService.aiProvider == 'openai'
+                                ? Icons.psychology
+                                : Icons.hub,
+                            size: 14,
+                            color: _aiChatService.aiProvider == 'openai'
+                                ? Colors.black
+                                : Colors.orange.shade700,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _aiChatService.aiProvider == 'openai' ? 'GPT-4o' : 'Sonnet',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: _aiChatService.aiProvider == 'openai'
+                                  ? Colors.black
+                                  : Colors.orange.shade700,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.arrow_drop_down,
+                            size: 16,
+                            color: _aiChatService.aiProvider == 'openai'
+                                ? Colors.black
+                                : Colors.orange.shade700,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -275,6 +307,13 @@ class _AIChatScreenState extends State<AIChatScreen> {
                       return ChatMessageWidget(
                         key: ValueKey('msg-$index'),
                         message: message,
+                        onLinkTap: (linkText) {
+                          if (linkText == 'Check Pending') {
+                            // Clear conversation and navigate to Pending tab
+                            _aiChatService.startNewConversation();
+                            Navigator.pop(context, {'action': 'show_pending'});
+                          }
+                        },
                       );
                     },
                   ),
@@ -331,34 +370,45 @@ class _AIChatScreenState extends State<AIChatScreen> {
 
                     // Auto-save if event is complete
                     if (_aiChatService.eventComplete && _aiChatService.currentEventData.isNotEmpty) {
-                      print('[AIChatScreen] Event complete detected - auto-saving...');
+                      print('[AIChatScreen] Event complete detected - auto-saving to database...');
                       try {
                         final currentData = Map<String, dynamic>.from(_aiChatService.currentEventData);
-                        await _pendingService.saveDraft(currentData);
 
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Event saved to Pending!'),
-                              backgroundColor: Color(0xFF059669),
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
+                        // Save to database as draft event (new architecture)
+                        final eventData = {
+                          ...currentData,
+                          'status': 'draft', // Mark as draft so it appears in Pending tab
+                        };
 
-                          // Clear conversation after auto-save
-                          setState(() {
-                            _aiChatService.startNewConversation();
-                          });
-                          _loadGreeting();
-                        }
+                        final createdEvent = await _eventService.createEvent(eventData);
+                        final eventId = createdEvent['_id'] ?? createdEvent['id'] ?? '';
 
-                        print('[AIChatScreen] ✓ Event auto-saved successfully');
+                        print('[AIChatScreen] ✓ Event saved to database as draft (ID: $eventId)');
+
+                        // Build event summary message
+                        final summaryMessage = _buildEventSummary(currentData);
+
+                        // Add summary to chat history using the service method
+                        final summaryMsg = ChatMessage(
+                          role: 'assistant',
+                          content: summaryMessage,
+                        );
+
+                        setState(() {
+                          _aiChatService.addMessage(summaryMsg);
+                        });
+
+                        // Scroll to show summary
+                        _scrollToBottom(animated: true);
+
+                        // DON'T clear conversation automatically
+                        // Let user read the summary and decide when to leave
                       } catch (e) {
-                        print('[AIChatScreen] ✗ Failed to auto-save event: $e');
+                        print('[AIChatScreen] ✗ Failed to save event to database: $e');
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Failed to save: $e'),
+                              content: Text('Failed to save event: $e'),
                               backgroundColor: Colors.red,
                             ),
                           );
@@ -390,5 +440,121 @@ class _AIChatScreenState extends State<AIChatScreen> {
         ],
       ),
     );
+  }
+
+  /// Build a friendly summary of the created event for display in chat
+  String _buildEventSummary(Map<String, dynamic> eventData) {
+    final buffer = StringBuffer();
+
+    buffer.writeln('✅ Event Created!\n');
+
+    // Event name
+    final eventName = eventData['event_name'] ?? 'Unnamed Event';
+    buffer.writeln('📋 $eventName');
+
+    // Date
+    final date = eventData['date'];
+    if (date != null) {
+      final formattedDate = _formatDate(date.toString());
+      buffer.writeln('📅 $formattedDate');
+    }
+
+    // Client
+    final client = eventData['client_name'];
+    if (client != null) {
+      buffer.writeln('🏢 $client');
+    }
+
+    // Roles
+    final roles = eventData['roles'];
+    if (roles is List && roles.isNotEmpty) {
+      buffer.writeln('\n👥 Staff Needed:');
+      for (final role in roles) {
+        if (role is! Map) continue;
+        final roleName = role['role']?.toString() ?? 'Staff';
+        final count = role['count'] as int? ?? 0;
+        final callTime = role['call_time'];
+        final timeStr =
+            callTime != null ? ' (arrive at ${_formatTime(callTime.toString())})' : '';
+        buffer.writeln(
+            '  • $count ${_capitalize(roleName)}${count > 1 ? 's' : ''}$timeStr');
+      }
+    }
+
+    // Venue
+    final venueName = eventData['venue_name'];
+    final venueAddress = eventData['venue_address'];
+    if (venueName != null || venueAddress != null) {
+      buffer.writeln('\n📍 Venue:');
+      if (venueName != null) {
+        buffer.writeln('   $venueName');
+      }
+      if (venueAddress != null) {
+        buffer.writeln('   $venueAddress');
+      }
+    }
+
+    // Event times (if provided)
+    final startTime = eventData['start_time'];
+    final endTime = eventData['end_time'];
+    if (startTime != null || endTime != null) {
+      buffer.write('\n⏰ Event Time: ');
+      if (startTime != null) {
+        buffer.write(_formatTime(startTime.toString()));
+      }
+      if (endTime != null) {
+        buffer.write(' - ${_formatTime(endTime.toString())}');
+      }
+      buffer.writeln();
+    }
+
+    buffer.writeln('\nSaved to Pending - ready to publish!');
+    buffer.writeln('\n[LINK:Check Pending]');
+
+    return buffer.toString();
+  }
+
+  /// Format ISO date string to human-readable format
+  String _formatDate(String isoDate) {
+    try {
+      final date = DateTime.parse(isoDate);
+      final months = [
+        'January',
+        'February',
+        'March',
+        'April',
+        'May',
+        'June',
+        'July',
+        'August',
+        'September',
+        'October',
+        'November',
+        'December'
+      ];
+      return '${months[date.month - 1]} ${date.day}, ${date.year}';
+    } catch (_) {
+      return isoDate;
+    }
+  }
+
+  /// Format 24-hour time to 12-hour format with AM/PM
+  String _formatTime(String time24) {
+    try {
+      final parts = time24.split(':');
+      final hour = int.parse(parts[0]);
+      final minute = parts[1];
+      final period = hour >= 12 ? 'PM' : 'AM';
+      final hour12 = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+      return '$hour12:$minute $period';
+    } catch (_) {
+      return time24;
+    }
+  }
+
+  /// Capitalize first letter of a string
+  String _capitalize(String text) {
+    if (text.isEmpty) return text;
+    return text[0].toUpperCase() + text.substring(1);
   }
 }
