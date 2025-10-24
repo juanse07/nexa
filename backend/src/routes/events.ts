@@ -677,6 +677,58 @@ router.patch('/events/:id', requireAuth, async (req, res) => {
   }
 });
 
+// Delete an event
+router.delete('/events/:id', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const eventId = req.params.id ?? '';
+
+    if (!mongoose.Types.ObjectId.isValid(eventId)) {
+      return res.status(400).json({ message: 'Invalid event id' });
+    }
+
+    // Check if event exists and belongs to manager
+    const event = await EventModel.findOne({
+      _id: new mongoose.Types.ObjectId(eventId),
+      managerId,
+    }).lean();
+
+    if (!event) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    // Delete the event
+    const result = await EventModel.deleteOne({
+      _id: new mongoose.Types.ObjectId(eventId),
+      managerId,
+    });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    // Emit socket events to notify clients
+    emitToManager(String(managerId), 'event:deleted', { id: eventId });
+
+    const audienceTeamIds = (event.audience_team_ids || []).map((v: any) => v?.toString()).filter((v: string | undefined) => !!v);
+    if (audienceTeamIds.length > 0) {
+      emitToTeams(audienceTeamIds, 'event:deleted', { id: eventId });
+    }
+
+    const audienceUserKeys = (event.audience_user_keys || []) as string[];
+    for (const key of audienceUserKeys) {
+      emitToUser(key, 'event:deleted', { id: eventId });
+    }
+
+    return res.json({ message: 'Event deleted successfully', id: eventId });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[DELETE /events/:id] Error:', err);
+    return res.status(500).json({ message: 'Failed to delete event' });
+  }
+});
+
 router.get('/events', requireAuth, async (req, res) => {
   try {
     const authUser = (req as any).user as AuthenticatedUser | undefined;
