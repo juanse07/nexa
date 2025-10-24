@@ -5,7 +5,6 @@ import 'package:nexa/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/event_service.dart';
-import '../services/pending_events_service.dart';
 import '../services/roles_service.dart';
 import '../services/users_service.dart';
 import '../services/clients_service.dart';
@@ -31,7 +30,6 @@ class PendingPublishScreen extends StatefulWidget {
 
 class _PendingPublishScreenState extends State<PendingPublishScreen> {
   final UsersService _usersService = UsersService();
-  final PendingEventsService _pendingService = PendingEventsService();
   final EventService _eventService = EventService();
   final RolesService _rolesService = RolesService();
   final ClientsService _clientsService = ClientsService();
@@ -292,26 +290,35 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
         }
       }
 
+      // First, update the draft with the new data (client, roles, tariffs)
+      await _eventService.updateEvent(widget.draftId, payload);
+
+      // Then publish the draft using the dedicated publish endpoint
+      // This properly transitions status from 'draft' → 'published' with metadata
+      final List<String> audienceUserKeys;
+      final List<String> audienceTeamIds;
+
       if (_visibleToEntireTeam) {
         // When visible to entire team, send only the team ID in audience_team_ids
-        payload['audience_user_keys'] = const <String>[];
-        payload['audience_team_ids'] = [_selectedVisibilityTeamId];
+        audienceUserKeys = const <String>[];
+        audienceTeamIds = [_selectedVisibilityTeamId!];
       } else {
         // Specific user/team selection
-        payload['audience_user_keys'] = _selectedKeys.toList();
-        payload['audience_team_ids'] = _selectedTeamIds.toList();
+        audienceUserKeys = _selectedKeys.toList();
+        audienceTeamIds = _selectedTeamIds.toList();
       }
 
-      // Create the event and get the event data back
-      final createdEvent = await _eventService.createEvent(payload);
-      final eventId = (createdEvent['_id'] ?? createdEvent['id'] ?? '').toString();
+      final publishedEvent = await _eventService.publishEvent(
+        widget.draftId,
+        audienceUserKeys: audienceUserKeys,
+        audienceTeamIds: audienceTeamIds,
+      );
+      final eventId = (publishedEvent['_id'] ?? publishedEvent['id'] ?? '').toString();
 
       // Send individual invitations to selected users via chat
       if (_selectedKeys.isNotEmpty && eventId.isNotEmpty) {
-        await _sendJobInvitationsToUsers(eventId, createdEvent, roleDefs);
+        await _sendJobInvitationsToUsers(eventId, publishedEvent, roleDefs);
       }
-
-      await _pendingService.deleteDraft(widget.draftId);
       if (!mounted) return;
       Navigator.of(context).pop(true);
       ScaffoldMessenger.of(

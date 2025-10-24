@@ -23,6 +23,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/widgets/custom_sliver_app_bar.dart';
 import '../../../core/widgets/pinned_header_delegate.dart';
 import '../../../core/utils/responsive_layout.dart';
+import '../../../core/utils/formatters.dart';
 import '../services/clients_service.dart';
 import '../services/draft_service.dart';
 import '../services/event_service.dart';
@@ -4267,7 +4268,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             final name =
                 (d['event_name'] ?? d['venue_name'] ?? 'Untitled')
                     .toString();
-            final date = (d['date'] ?? '').toString();
+            final dateRaw = (d['date'] ?? '').toString();
+            final dateFormatted = dateRaw.isNotEmpty
+                ? Formatters.formatDateString(dateRaw)
+                : '';
             final id = (d['id'] ?? d['_id'] ?? '').toString();
 
             return Container(
@@ -4282,7 +4286,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 subtitle: Text(
                   [
                     name,
-                    date,
+                    dateFormatted,
                   ].where((s) => s.toString().isNotEmpty).join(' • '),
                 ),
                 trailing: Row(

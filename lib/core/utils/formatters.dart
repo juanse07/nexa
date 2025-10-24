@@ -49,6 +49,38 @@ class Formatters {
     }
   }
 
+  /// Safely formats a date string from backend to display format
+  /// Returns formatted date or original string if parsing fails
+  static String formatDateString(String? dateString) {
+    if (dateString == null || dateString.isEmpty) {
+      return '';
+    }
+
+    try {
+      final date = DateTime.parse(dateString);
+      return formatDisplayDate(date);
+    } catch (e) {
+      // If parsing fails, return original string
+      return dateString;
+    }
+  }
+
+  /// Safely formats a date-time string from backend to display format
+  /// Returns formatted date-time or original string if parsing fails
+  static String formatDateTimeString(String? dateTimeString) {
+    if (dateTimeString == null || dateTimeString.isEmpty) {
+      return '';
+    }
+
+    try {
+      final dateTime = DateTime.parse(dateTimeString);
+      return formatDisplayDateTime(dateTime);
+    } catch (e) {
+      // If parsing fails, return original string
+      return dateTimeString;
+    }
+  }
+
   /// Formats a DateTime to relative time (e.g., "2 hours ago")
   static String formatRelativeTime(DateTime date) {
     final now = DateTime.now();
