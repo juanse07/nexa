@@ -6,6 +6,7 @@ import 'package:nexa/app.dart';
 import 'package:nexa/core/config/environment.dart';
 import 'package:nexa/core/di/injection.dart';
 import 'package:nexa/core/utils/logger.dart';
+import 'package:nexa/services/notification_service.dart';
 
 /// Main entry point for the Nexa application.
 ///
@@ -52,6 +53,16 @@ Future<void> main() async {
       print('Dependencies configured successfully for web');
     } else {
       AppLogger.instance.i('Dependencies configured successfully');
+    }
+
+    // Initialize push notifications (mobile only)
+    if (!kIsWeb) {
+      try {
+        await NotificationService().initialize();
+        AppLogger.instance.i('NotificationService initialized successfully');
+      } catch (e) {
+        AppLogger.instance.e('Failed to initialize NotificationService', error: e);
+      }
     }
 
     // Set up global error handling
