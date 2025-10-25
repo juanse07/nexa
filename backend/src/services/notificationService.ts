@@ -151,6 +151,7 @@ class NotificationService {
       notification.ios_badge_type = 'Increase';
       notification.ios_badge_count = 1;
 
+      console.log(`[NOTIF DEBUG] Notification object before sending:`, JSON.stringify(notification, null, 2));
       console.log(`[NOTIF DEBUG] Sending notification to OneSignal...`);
       // Send via OneSignal
       const response = await client.createNotification(notification);
