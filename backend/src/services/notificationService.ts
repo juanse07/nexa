@@ -4,17 +4,25 @@ import { ManagerDocument, ManagerModel } from '../models/manager';
 import { NotificationDocument, NotificationModel } from '../models/notification';
 import mongoose from 'mongoose';
 
-// OneSignal configuration
-const ONESIGNAL_APP_ID = process.env.ONESIGNAL_APP_ID || '';
-const ONESIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY || '';
+// OneSignal configuration for Manager app
+const ONESIGNAL_APP_ID_MANAGER = process.env.ONESIGNAL_APP_ID || '';
+const ONESIGNAL_REST_API_KEY_MANAGER = process.env.ONESIGNAL_REST_API_KEY || '';
 
-// Initialize OneSignal client
-const configuration = OneSignal.createConfiguration({
-  restApiKey: ONESIGNAL_REST_API_KEY,
-  appId: ONESIGNAL_APP_ID,
+// OneSignal configuration for Staff app
+const ONESIGNAL_APP_ID_STAFF = process.env.ONESIGNAL_APP_ID2 || '';
+const ONESIGNAL_REST_API_KEY_STAFF = process.env.ONESIGNAL_REST_API_KEY2 || '';
+
+// Initialize OneSignal client for Manager app
+const managerConfiguration = OneSignal.createConfiguration({
+  restApiKey: ONESIGNAL_REST_API_KEY_MANAGER,
 });
+const managerClient = new OneSignal.DefaultApi(managerConfiguration);
 
-const client = new OneSignal.DefaultApi(configuration);
+// Initialize OneSignal client for Staff app
+const staffConfiguration = OneSignal.createConfiguration({
+  restApiKey: ONESIGNAL_REST_API_KEY_STAFF,
+});
+const staffClient = new OneSignal.DefaultApi(staffConfiguration);
 
 export type NotificationType = 'chat' | 'task' | 'event' | 'hours' | 'system' | 'marketing';
 
@@ -33,11 +41,20 @@ class NotificationService {
    * Initialize OneSignal configuration
    */
   async initialize(): Promise<void> {
-    if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
+    const managerConfigured = ONESIGNAL_APP_ID_MANAGER && ONESIGNAL_REST_API_KEY_MANAGER;
+    const staffConfigured = ONESIGNAL_APP_ID_STAFF && ONESIGNAL_REST_API_KEY_STAFF;
+
+    if (!managerConfigured && !staffConfigured) {
       console.warn('⚠️  OneSignal credentials not configured. Push notifications disabled.');
       return;
     }
-    console.log('✅ OneSignal initialized with App ID:', ONESIGNAL_APP_ID.substring(0, 8) + '...');
+
+    if (managerConfigured) {
+      console.log('✅ OneSignal Manager App initialized:', ONESIGNAL_APP_ID_MANAGER.substring(0, 8) + '...');
+    }
+    if (staffConfigured) {
+      console.log('✅ OneSignal Staff App initialized:', ONESIGNAL_APP_ID_STAFF.substring(0, 8) + '...');
+    }
   }
 
   /**
@@ -84,9 +101,13 @@ class NotificationService {
         return notificationDoc;
       }
 
+      // Select the correct OneSignal client and app ID based on user type
+      const client = userType === 'manager' ? managerClient : staffClient;
+      const appId = userType === 'manager' ? ONESIGNAL_APP_ID_MANAGER : ONESIGNAL_APP_ID_STAFF;
+
       // Prepare OneSignal notification
       const notification = new OneSignal.Notification();
-      notification.app_id = ONESIGNAL_APP_ID;
+      notification.app_id = appId;
 
       // Set content
       notification.contents = {
@@ -97,7 +118,7 @@ class NotificationService {
       };
 
       // Target specific devices
-      const playerIds = user.devices.map(d => d.oneSignalPlayerId);
+      const playerIds = user.devices.map((d: any) => d.oneSignalPlayerId);
       notification.include_player_ids = playerIds;
 
       // Add data payload
@@ -109,8 +130,8 @@ class NotificationService {
       // Platform specific settings
       notification.ios_sound = 'notification.wav';
       notification.android_sound = 'notification';
-      notification.ios_badgeType = 'Increase';
-      notification.ios_badgeCount = 1;
+      notification.ios_badge_type = 'Increase';
+      notification.ios_badge_count = 1;
 
       // Send via OneSignal
       const response = await client.createNotification(notification);
@@ -155,11 +176,15 @@ class NotificationService {
     segment: string,
     title: string,
     body: string,
-    data: NotificationData
+    data: NotificationData,
+    appType: 'manager' | 'staff' = 'manager'
   ): Promise<string | null> {
     try {
+      const client = appType === 'manager' ? managerClient : staffClient;
+      const appId = appType === 'manager' ? ONESIGNAL_APP_ID_MANAGER : ONESIGNAL_APP_ID_STAFF;
+
       const notification = new OneSignal.Notification();
-      notification.app_id = ONESIGNAL_APP_ID;
+      notification.app_id = appId;
 
       notification.contents = { en: body };
       notification.headings = { en: title };
@@ -167,7 +192,7 @@ class NotificationService {
       notification.data = data;
 
       const response = await client.createNotification(notification);
-      console.log(`✅ Segment notification sent to ${segment}: ${response.id}`);
+      console.log(`✅ Segment notification sent to ${segment} on ${appType} app: ${response.id}`);
       return response.id || null;
 
     } catch (error) {
