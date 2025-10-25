@@ -69,8 +69,13 @@ class NotificationService {
   ): Promise<NotificationDocument | null> {
     try {
       // Find user and check preferences
-      const Model = userType === 'manager' ? ManagerModel : UserModel;
-      const user = await Model.findById(userId) as any;
+      let user: UserDocument | ManagerDocument | null;
+
+      if (userType === 'manager') {
+        user = await ManagerModel.findById(userId);
+      } else {
+        user = await UserModel.findById(userId);
+      }
 
       if (!user) {
         console.error(`User not found: ${userId}`);
@@ -211,16 +216,28 @@ class NotificationService {
     userType: 'user' | 'manager' = 'user'
   ): Promise<boolean> {
     try {
-      const Model = userType === 'manager' ? ManagerModel : UserModel;
-
       // Remove this device from other users (user switched accounts)
-      await (Model as any).updateMany(
-        { 'devices.oneSignalPlayerId': oneSignalPlayerId },
-        { $pull: { devices: { oneSignalPlayerId } } }
-      );
+      if (userType === 'manager') {
+        await ManagerModel.updateMany(
+          { 'devices.oneSignalPlayerId': oneSignalPlayerId },
+          { $pull: { devices: { oneSignalPlayerId } } }
+        );
+      } else {
+        await UserModel.updateMany(
+          { 'devices.oneSignalPlayerId': oneSignalPlayerId },
+          { $pull: { devices: { oneSignalPlayerId } } }
+        );
+      }
 
       // Add/update device for this user
-      const user = await Model.findById(userId) as any;
+      let user: UserDocument | ManagerDocument | null;
+
+      if (userType === 'manager') {
+        user = await ManagerModel.findById(userId);
+      } else {
+        user = await UserModel.findById(userId);
+      }
+
       if (!user) return false;
 
       // Check if device already exists
@@ -228,10 +245,13 @@ class NotificationService {
         (d: any) => d.oneSignalPlayerId === oneSignalPlayerId
       ) ?? -1;
 
-      if (existingDeviceIndex >= 0) {
+      if (existingDeviceIndex >= 0 && user.devices) {
         // Update existing device
-        user.devices![existingDeviceIndex].lastActive = new Date();
-        user.devices![existingDeviceIndex].deviceType = deviceType;
+        const device = user.devices[existingDeviceIndex];
+        if (device) {
+          device.lastActive = new Date();
+          device.deviceType = deviceType;
+        }
       } else {
         // Add new device
         if (!user.devices) user.devices = [];
@@ -266,11 +286,15 @@ class NotificationService {
     userType: 'user' | 'manager' = 'user'
   ): Promise<boolean> {
     try {
-      const Model = userType === 'manager' ? ManagerModel : UserModel;
-
-      await (Model as any).findByIdAndUpdate(userId, {
-        $pull: { devices: { oneSignalPlayerId } }
-      });
+      if (userType === 'manager') {
+        await ManagerModel.findByIdAndUpdate(userId, {
+          $pull: { devices: { oneSignalPlayerId } }
+        });
+      } else {
+        await UserModel.findByIdAndUpdate(userId, {
+          $pull: { devices: { oneSignalPlayerId } }
+        });
+      }
 
       console.log(`✅ Device unregistered for ${userType} ${userId}`);
       return true;
@@ -290,14 +314,18 @@ class NotificationService {
     userType: 'user' | 'manager' = 'user'
   ): Promise<boolean> {
     try {
-      const Model = userType === 'manager' ? ManagerModel : UserModel;
-
-      await (Model as any).findByIdAndUpdate(userId, {
+      const updateData = {
         $set: Object.keys(preferences).reduce((acc, key) => {
           acc[`notificationPreferences.${key}`] = preferences[key as NotificationType] || false;
           return acc;
         }, {} as Record<string, boolean>)
-      });
+      };
+
+      if (userType === 'manager') {
+        await ManagerModel.findByIdAndUpdate(userId, updateData);
+      } else {
+        await UserModel.findByIdAndUpdate(userId, updateData);
+      }
 
       console.log(`✅ Preferences updated for ${userType} ${userId}`);
       return true;
