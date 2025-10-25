@@ -558,7 +558,7 @@ router.patch('/events/:id/roles', requireAuth, async (req, res) => {
     }, {} as Record<string, number>);
 
     // Validate that new counts are not below accepted counts
-    for (const [roleKey, taken] of Object.entries(acceptedCounts)) {
+    for (const [roleKey, taken] of Object.entries(acceptedCounts) as [string, number][]) {
       const newDef = roles.find((r) => r.role.trim().toLowerCase() === roleKey);
       if (!newDef) {
         return res.status(409).json({
