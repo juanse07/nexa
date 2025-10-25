@@ -1058,10 +1058,17 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
     switch (section) {
       case 'Jobs':
-        // Navigate to Jobs tab (MainScreen index 2)
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const MainScreen(initialIndex: 2)),
-        );
+        // If already on Jobs section (index 0 or 1), just switch to Events tab (index 1)
+        if (_selectedIndex == 0 || _selectedIndex == 1) {
+          setState(() {
+            _selectedIndex = 1; // Switch to Events/Jobs tab
+          });
+        } else {
+          // Navigate to Jobs tab from other sections
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const MainScreen(initialIndex: 2)),
+          );
+        }
         break;
       case 'Clients':
         // Navigate to Catalog tab (MainScreen index 4)
@@ -1734,8 +1741,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   Widget _buildDesktopLayout(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      body: Column(
+      body: Row(
         children: [
+          // Navigation Rail
+          _buildNavigationRail(context),
           // Content
           Expanded(
             child: ResponsiveContainer(
