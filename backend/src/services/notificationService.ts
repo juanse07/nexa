@@ -14,13 +14,13 @@ const ONESIGNAL_REST_API_KEY_STAFF = process.env.ONESIGNAL_REST_API_KEY2 || '';
 
 // Initialize OneSignal client for Manager app
 const managerConfiguration = OneSignal.createConfiguration({
-  restApiKey: ONESIGNAL_REST_API_KEY_MANAGER,
+  appKey: ONESIGNAL_REST_API_KEY_MANAGER,
 });
 const managerClient = new OneSignal.DefaultApi(managerConfiguration);
 
 // Initialize OneSignal client for Staff app
 const staffConfiguration = OneSignal.createConfiguration({
-  restApiKey: ONESIGNAL_REST_API_KEY_STAFF,
+  appKey: ONESIGNAL_REST_API_KEY_STAFF,
 });
 const staffClient = new OneSignal.DefaultApi(staffConfiguration);
 
