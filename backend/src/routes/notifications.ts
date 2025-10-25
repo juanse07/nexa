@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import { z } from 'zod';
-import { authenticateToken } from '../middleware/auth';
+import { requireAuth as authenticateToken } from '../middleware/requireAuth';
 import { notificationService, NotificationType } from '../services/notificationService';
 
 const router = express.Router();
@@ -215,7 +215,7 @@ router.post('/mark-all-read', authenticateToken, async (req: Request, res: Respo
     // Mark each as read
     await Promise.all(
       unreadNotifications.map(n =>
-        notificationService.markAsRead(n._id.toString(), authUser.id)
+        notificationService.markAsRead((n._id as any).toString(), authUser.id)
       )
     );
 
@@ -272,7 +272,7 @@ router.post('/test', authenticateToken, async (req: Request, res: Response) => {
       res.json({
         message: 'Test notification sent successfully',
         notification: {
-          id: notification._id,
+          id: (notification._id as any),
           title,
           body,
           type,

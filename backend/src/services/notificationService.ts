@@ -70,7 +70,7 @@ class NotificationService {
     try {
       // Find user and check preferences
       const Model = userType === 'manager' ? ManagerModel : UserModel;
-      const user = await Model.findById(userId);
+      const user = await Model.findById(userId) as any;
 
       if (!user) {
         console.error(`User not found: ${userId}`);
@@ -214,13 +214,13 @@ class NotificationService {
       const Model = userType === 'manager' ? ManagerModel : UserModel;
 
       // Remove this device from other users (user switched accounts)
-      await Model.updateMany(
+      await (Model as any).updateMany(
         { 'devices.oneSignalPlayerId': oneSignalPlayerId },
         { $pull: { devices: { oneSignalPlayerId } } }
       );
 
       // Add/update device for this user
-      const user = await Model.findById(userId);
+      const user = await Model.findById(userId) as any;
       if (!user) return false;
 
       // Check if device already exists
@@ -268,7 +268,7 @@ class NotificationService {
     try {
       const Model = userType === 'manager' ? ManagerModel : UserModel;
 
-      await Model.findByIdAndUpdate(userId, {
+      await (Model as any).findByIdAndUpdate(userId, {
         $pull: { devices: { oneSignalPlayerId } }
       });
 
@@ -292,9 +292,9 @@ class NotificationService {
     try {
       const Model = userType === 'manager' ? ManagerModel : UserModel;
 
-      await Model.findByIdAndUpdate(userId, {
+      await (Model as any).findByIdAndUpdate(userId, {
         $set: Object.keys(preferences).reduce((acc, key) => {
-          acc[`notificationPreferences.${key}`] = preferences[key as NotificationType];
+          acc[`notificationPreferences.${key}`] = preferences[key as NotificationType] || false;
           return acc;
         }, {} as Record<string, boolean>)
       });

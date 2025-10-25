@@ -399,15 +399,15 @@ router.post('/conversations/:targetId/messages', requireAuth, async (req, res) =
           : manager?.name || 'Your manager';
 
         await notificationService.sendToUser(
-          user._id.toString(),
+          (user._id as any).toString(),
           `New message from ${managerName}`,
           message.length > 100 ? message.substring(0, 100) + '...' : message,
           {
             type: 'chat',
-            conversationId: conversation._id.toString(),
-            messageId: chatMessage._id.toString(),
+            conversationId: (conversation._id as any).toString(),
+            messageId: (chatMessage._id as any).toString(),
             senderName: managerName,
-            managerId: senderManagerId.toString()
+            managerId: senderManagerId!.toString()
           },
           'user'
         );
@@ -438,8 +438,8 @@ router.post('/conversations/:targetId/messages', requireAuth, async (req, res) =
           message.length > 100 ? message.substring(0, 100) + '...' : message,
           {
             type: 'chat',
-            conversationId: conversation._id.toString(),
-            messageId: chatMessage._id.toString(),
+            conversationId: (conversation._id as any).toString(),
+            messageId: (chatMessage._id as any).toString(),
             senderName: userName,
             userKey: userKey
           },
