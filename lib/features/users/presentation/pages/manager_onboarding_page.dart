@@ -384,32 +384,56 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () => _refresh(showSpinner: false),
-        child: ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            const SizedBox(height: 12),
-            _buildIntroCard(snapshot),
-            const SizedBox(height: 20),
-            _buildProfileStep(snapshot),
-            const SizedBox(height: 16),
-            _buildTeamStep(snapshot),
-            const SizedBox(height: 16),
-            _buildClientStep(snapshot),
-            const SizedBox(height: 16),
-            _buildRoleStep(snapshot),
-            const SizedBox(height: 16),
-            _buildTariffStep(snapshot),
-            const SizedBox(height: 32),
-            if (snapshot.missingSteps.isNotEmpty)
-              Text(
-                'Complete all steps above to access the full dashboard.',
-                style: TextStyle(color: Colors.grey.shade600),
+      body: kIsWeb
+          ? ListView(
+              padding: const EdgeInsets.all(20),
+              children: [
+                const SizedBox(height: 12),
+                _buildIntroCard(snapshot),
+                const SizedBox(height: 20),
+                _buildProfileStep(snapshot),
+                const SizedBox(height: 16),
+                _buildTeamStep(snapshot),
+                const SizedBox(height: 16),
+                _buildClientStep(snapshot),
+                const SizedBox(height: 16),
+                _buildRoleStep(snapshot),
+                const SizedBox(height: 16),
+                _buildTariffStep(snapshot),
+                const SizedBox(height: 32),
+                if (snapshot.missingSteps.isNotEmpty)
+                  Text(
+                    'Complete all steps above to access the full dashboard.',
+                    style: TextStyle(color: Colors.grey.shade600),
+                  ),
+              ],
+            )
+          : RefreshIndicator(
+              onRefresh: () => _refresh(showSpinner: false),
+              child: ListView(
+                padding: const EdgeInsets.all(20),
+                children: [
+                  const SizedBox(height: 12),
+                  _buildIntroCard(snapshot),
+                  const SizedBox(height: 20),
+                  _buildProfileStep(snapshot),
+                  const SizedBox(height: 16),
+                  _buildTeamStep(snapshot),
+                  const SizedBox(height: 16),
+                  _buildClientStep(snapshot),
+                  const SizedBox(height: 16),
+                  _buildRoleStep(snapshot),
+                  const SizedBox(height: 16),
+                  _buildTariffStep(snapshot),
+                  const SizedBox(height: 32),
+                  if (snapshot.missingSteps.isNotEmpty)
+                    Text(
+                      'Complete all steps above to access the full dashboard.',
+                      style: TextStyle(color: Colors.grey.shade600),
+                    ),
+                ],
               ),
-          ],
-        ),
-      ),
+            ),
     );
   }
 

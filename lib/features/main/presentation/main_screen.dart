@@ -106,8 +106,12 @@ class _MainScreenState extends State<MainScreen> {
 
   Widget _buildNavButton(int index, IconData icon, String label) {
     return Expanded(
-      child: InkWell(
-        onTap: () => _onItemTapped(index),
+      child: Listener(
+        onPointerDown: (_) {
+          print('[DEBUG] Nav button pointer down: $label (index: $index)');
+          _onItemTapped(index);
+        },
+        behavior: HitTestBehavior.opaque,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -135,9 +139,12 @@ class _MainScreenState extends State<MainScreen> {
         children: [
           // Navigation Rail
           _buildNavigationRail(),
-          // Content
+          // Content - Using IndexedStack for web to avoid PageView issues
           Expanded(
-            child: _screens[_selectedIndex],
+            child: IndexedStack(
+              index: _selectedIndex,
+              children: _screens,
+            ),
           ),
         ],
       ),
@@ -218,15 +225,20 @@ class _MainScreenState extends State<MainScreen> {
   Widget _buildRailItem(int index, IconData icon, String label) {
     final bool isSelected = _selectedIndex == index;
 
-    return InkWell(
-      onTap: () {
+    // Use Listener for raw pointer events to bypass gesture issues
+    return Listener(
+      onPointerDown: (_) {
+        print('[DEBUG] Rail item pointer down: $label (index: $index)');
         if (index >= 0) {
           setState(() {
             _selectedIndex = index;
           });
         }
       },
-      child: Container(
+      behavior: HitTestBehavior.opaque,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
@@ -267,6 +279,7 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ],
           ],
+        ),
         ),
       ),
     );
