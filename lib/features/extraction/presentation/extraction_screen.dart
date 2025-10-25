@@ -186,19 +186,15 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     // Add listeners for web tab navigation updates
     if (kIsWeb) {
       _createTabController.addListener(() {
-        if (_createTabController.indexIsChanging) {
-          setState(() {});
-        }
+        // Removed indexIsChanging check - setState on any index change
+        // This ensures WebTabNavigation updates work properly
+        setState(() {});
       });
       _eventsTabController.addListener(() {
-        if (_eventsTabController.indexIsChanging) {
-          setState(() {});
-        }
+        setState(() {});
       });
       _catalogTabController.addListener(() {
-        if (_catalogTabController.indexIsChanging) {
-          setState(() {});
-        }
+        setState(() {});
       });
     }
 
