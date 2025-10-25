@@ -119,54 +119,57 @@ class NotificationService {
       const appId = userType === 'manager' ? ONESIGNAL_APP_ID_MANAGER : ONESIGNAL_APP_ID_STAFF;
       const apiKey = userType === 'manager' ? ONESIGNAL_REST_API_KEY_MANAGER : ONESIGNAL_REST_API_KEY_STAFF;
 
-      console.log(`[NOTIF DEBUG] Using ${userType} OneSignal client, appId: ${appId.substring(0, 8)}..., apiKey ending: ...${apiKey.slice(-4)}`);
+      console.log(`[NOTIF DEBUG] Using ${userType} OneSignal, appId: ${appId.substring(0, 8)}..., apiKey ending: ...${apiKey.slice(-4)}`);
 
-      // Prepare OneSignal notification
-      const notification = new OneSignal.Notification();
-      notification.app_id = appId;
-
-      // Set content
-      notification.contents = {
-        en: body,
-      };
-      notification.headings = {
-        en: title,
-      };
-
-      // Target specific devices (v5 SDK uses include_subscription_ids instead of include_player_ids)
+      // Target specific devices
       const playerIds = user.devices.map((d: any) => d.oneSignalPlayerId);
-      notification.include_subscription_ids = playerIds;
-
       console.log(`[NOTIF DEBUG] Targeting ${playerIds.length} devices: ${JSON.stringify(playerIds)}`);
 
-      // Add data payload
-      notification.data = {
-        ...data,
-        notificationId: (notificationDoc._id as any).toString(),
+      // Use direct REST API call because OneSignal Node SDK v5 removed include_player_ids support
+      // but the REST API still supports it
+      const notificationPayload = {
+        app_id: appId,
+        include_player_ids: playerIds,
+        contents: { en: body },
+        headings: { en: title },
+        data: {
+          ...data,
+          notificationId: (notificationDoc._id as any).toString(),
+        },
+        ios_sound: 'notification.wav',
+        android_sound: 'notification',
+        ios_badgeType: 'Increase',
+        ios_badgeCount: 1,
       };
 
-      // Platform specific settings
-      notification.ios_sound = 'notification.wav';
-      notification.android_sound = 'notification';
-      notification.ios_badge_type = 'Increase';
-      notification.ios_badge_count = 1;
+      console.log(`[NOTIF DEBUG] Sending notification to OneSignal REST API...`);
 
-      console.log(`[NOTIF DEBUG] Notification object before sending:`, JSON.stringify(notification, null, 2));
-      console.log(`[NOTIF DEBUG] Sending notification to OneSignal...`);
-      // Send via OneSignal
-      const response = await client.createNotification(notification);
+      // Make direct REST API call
+      const response = await fetch('https://onesignal.com/api/v1/notifications', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Basic ${apiKey}`,
+        },
+        body: JSON.stringify(notificationPayload),
+      });
 
-      console.log(`[NOTIF DEBUG] OneSignal response: ${JSON.stringify(response)}`);
+      const responseData = await response.json();
+      console.log(`[NOTIF DEBUG] OneSignal API response status: ${response.status}, body:`, JSON.stringify(responseData));
+
+      if (!response.ok) {
+        throw new Error(`OneSignal API error: ${response.status} - ${JSON.stringify(responseData)}`);
+      }
 
       // Update notification record
       await this.updateNotificationStatus(
         notificationDoc._id as string,
         'sent',
         undefined,
-        response.id
+        responseData.id
       );
 
-      console.log(`✅ Notification sent to ${userId}: ${response.id}`);
+      console.log(`✅ Notification sent to ${userId}: ${responseData.id}`);
       return notificationDoc;
 
     } catch (error) {
