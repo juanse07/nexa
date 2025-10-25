@@ -252,6 +252,9 @@ router.get('/unread-count', authenticateToken, async (req: Request, res: Respons
 router.post('/test', authenticateToken, async (req: Request, res: Response) => {
   try {
     const authUser = (req as any).authUser;
+    console.log('[TEST NOTIF] Received test notification request from user:', authUser.id, 'role:', authUser.role);
+    console.log('[TEST NOTIF] Request body:', JSON.stringify(req.body));
+
     const validation = TestNotificationSchema.safeParse(req.body);
 
     const data = validation.success ? validation.data : {};
@@ -260,6 +263,8 @@ router.post('/test', authenticateToken, async (req: Request, res: Response) => {
     const body = data.body || 'This is a test notification from Nexa!';
     const type = data.type || 'system';
 
+    console.log('[TEST NOTIF] Sending notification with:', { title, body, type, userId: authUser.id, role: authUser.role });
+
     const notification = await notificationService.sendToUser(
       authUser.id,
       title,
@@ -267,6 +272,8 @@ router.post('/test', authenticateToken, async (req: Request, res: Response) => {
       { type, test: true },
       authUser.role
     );
+
+    console.log('[TEST NOTIF] Notification service returned:', notification ? 'success' : 'null');
 
     if (notification) {
       res.json({
@@ -279,13 +286,14 @@ router.post('/test', authenticateToken, async (req: Request, res: Response) => {
         },
       });
     } else {
+      console.log('[TEST NOTIF] Returning 500 error - notification service returned null');
       res.status(500).json({
         error: 'Failed to send test notification',
         hint: 'Make sure you have registered a device and enabled notifications',
       });
     }
   } catch (error) {
-    console.error('Test notification error:', error);
+    console.error('[TEST NOTIF] Exception occurred:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

@@ -68,6 +68,8 @@ class NotificationService {
     userType: 'user' | 'manager' = 'user'
   ): Promise<NotificationDocument | null> {
     try {
+      console.log(`[NOTIF DEBUG] Starting sendToUser: userId=${userId}, userType=${userType}, title=${title}`);
+
       // Find user and check preferences
       let user: UserDocument | ManagerDocument | null;
 
@@ -78,15 +80,19 @@ class NotificationService {
       }
 
       if (!user) {
-        console.error(`User not found: ${userId}`);
+        console.error(`[NOTIF DEBUG] User not found: ${userId}`);
         return null;
       }
 
+      console.log(`[NOTIF DEBUG] User found: ${userId}, devices: ${user.devices?.length || 0}`);
+
       // Check notification preferences
       if (!this.shouldSendNotification(user, data.type)) {
-        console.log(`Notification blocked by user preferences: ${userId}, type: ${data.type}`);
+        console.log(`[NOTIF DEBUG] Notification blocked by user preferences: ${userId}, type: ${data.type}`);
         return null;
       }
+
+      console.log(`[NOTIF DEBUG] Notification preferences OK for type: ${data.type}`);
 
       // Create notification record
       const notificationDoc = await NotificationModel.create({
@@ -99,9 +105,11 @@ class NotificationService {
         status: 'pending',
       });
 
+      console.log(`[NOTIF DEBUG] Notification record created: ${notificationDoc._id}`);
+
       // Skip if no devices registered
       if (!user.devices || user.devices.length === 0) {
-        console.log(`No devices registered for user: ${userId}`);
+        console.log(`[NOTIF DEBUG] No devices registered for user: ${userId}`);
         await this.updateNotificationStatus(notificationDoc._id as string, 'failed', 'No devices registered');
         return notificationDoc;
       }
@@ -109,6 +117,8 @@ class NotificationService {
       // Select the correct OneSignal client and app ID based on user type
       const client = userType === 'manager' ? managerClient : staffClient;
       const appId = userType === 'manager' ? ONESIGNAL_APP_ID_MANAGER : ONESIGNAL_APP_ID_STAFF;
+
+      console.log(`[NOTIF DEBUG] Using ${userType} OneSignal client, appId: ${appId.substring(0, 8)}...`);
 
       // Prepare OneSignal notification
       const notification = new OneSignal.Notification();
@@ -126,6 +136,8 @@ class NotificationService {
       const playerIds = user.devices.map((d: any) => d.oneSignalPlayerId);
       (notification as any).include_player_ids = playerIds;
 
+      console.log(`[NOTIF DEBUG] Targeting ${playerIds.length} devices: ${JSON.stringify(playerIds)}`);
+
       // Add data payload
       notification.data = {
         ...data,
@@ -138,8 +150,11 @@ class NotificationService {
       notification.ios_badge_type = 'Increase';
       notification.ios_badge_count = 1;
 
+      console.log(`[NOTIF DEBUG] Sending notification to OneSignal...`);
       // Send via OneSignal
       const response = await client.createNotification(notification);
+
+      console.log(`[NOTIF DEBUG] OneSignal response: ${JSON.stringify(response)}`);
 
       // Update notification record
       await this.updateNotificationStatus(
@@ -153,7 +168,10 @@ class NotificationService {
       return notificationDoc;
 
     } catch (error) {
-      console.error('Failed to send notification:', error);
+      console.error('[NOTIF DEBUG] Failed to send notification - ERROR:', error);
+      if (error instanceof Error) {
+        console.error('[NOTIF DEBUG] Error stack:', error.stack);
+      }
       return null;
     }
   }
