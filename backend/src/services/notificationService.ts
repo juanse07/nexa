@@ -287,7 +287,14 @@ class NotificationService {
       }
 
       await user.save();
-      console.log(`✅ Device registered for ${userType} ${userId}`);
+      console.log(`✅ Device registered for ${userType} ${userId}, total devices now: ${user.devices?.length || 0}`);
+
+      // Verify the save worked by re-fetching
+      const verification = userType === 'manager'
+        ? await ManagerModel.findById(userId)
+        : await UserModel.findById(userId);
+      console.log(`[REG VERIFY] After save, devices in DB: ${verification?.devices?.length || 0}`);
+
       return true;
 
     } catch (error) {
