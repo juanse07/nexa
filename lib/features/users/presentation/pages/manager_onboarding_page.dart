@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get_it/get_it.dart';
@@ -255,15 +256,30 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
   }
 
   Future<void> _openProfile() async {
+    // Debug logging for web
+    if (kIsWeb) {
+      print('[WEB DEBUG] _openProfile called, _openingProfile: $_openingProfile');
+    }
+
+    if (_openingProfile) {
+      if (kIsWeb) print('[WEB DEBUG] Already opening profile, skipping');
+      return;
+    }
+
     setState(() {
       _openingProfile = true;
     });
+
+    if (kIsWeb) print('[WEB DEBUG] Navigating to ManagerProfilePage');
+
     try {
       await Navigator.of(
         context,
       ).push(MaterialPageRoute(builder: (_) => const ManagerProfilePage()));
+      if (kIsWeb) print('[WEB DEBUG] Returned from ManagerProfilePage');
       await _refresh();
     } catch (e) {
+      if (kIsWeb) print('[WEB DEBUG] Error opening profile: $e');
       if (mounted) {
         _showSnack('Failed to open profile: $e');
       }
@@ -272,6 +288,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
         setState(() {
           _openingProfile = false;
         });
+        if (kIsWeb) print('[WEB DEBUG] _openingProfile reset to false');
       }
     }
   }
@@ -467,21 +484,38 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
         ? 'Profile ready: ${snapshot.profile.firstName ?? ''} ${snapshot.profile.lastName ?? ''}'
               .trim()
         : 'Add your first and last name so staff know who you are.';
+
+    // Web-friendly button with explicit pointer handling
+    final button = ElevatedButton.icon(
+      onPressed: _openingProfile ? null : () {
+        if (kIsWeb) {
+          print('[WEB DEBUG] Button onPressed triggered');
+        }
+        _openProfile();
+      },
+      icon: _openingProfile
+          ? const SizedBox(
+              height: 18,
+              width: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Icon(completed ? Icons.person : Icons.person_outline),
+      label: Text(completed ? 'Review profile' : 'Update profile'),
+    );
+
+    // Wrap button in MouseRegion for web to ensure pointer events work
+    final webButton = kIsWeb && !_openingProfile
+        ? MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: button,
+          )
+        : button;
+
     return _buildStepCard(
       title: '1. Update your profile',
       completed: completed,
       subtitle: subtitle.isEmpty ? 'Profile details updated.' : subtitle,
-      action: ElevatedButton.icon(
-        onPressed: _openingProfile ? null : _openProfile,
-        icon: _openingProfile
-            ? const SizedBox(
-                height: 18,
-                width: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : Icon(completed ? Icons.person : Icons.person_outline),
-        label: Text(completed ? 'Review profile' : 'Update profile'),
-      ),
+      action: webButton,
     );
   }
 
