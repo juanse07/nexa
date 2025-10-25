@@ -121,15 +121,17 @@ class NotificationService {
 
       console.log(`[NOTIF DEBUG] Using ${userType} OneSignal, appId: ${appId.substring(0, 8)}..., apiKey ending: ...${apiKey.slice(-4)}`);
 
-      // Target specific devices
-      const playerIds = user.devices.map((d: any) => d.oneSignalPlayerId);
-      console.log(`[NOTIF DEBUG] Targeting ${playerIds.length} devices: ${JSON.stringify(playerIds)}`);
+      // Target using external user ID (OneSignal v5 recommended approach)
+      // We set the external user ID when registering: OneSignal.login(userId)
+      console.log(`[NOTIF DEBUG] Targeting user by external ID: ${userId}`);
 
-      // Use direct REST API call because OneSignal Node SDK v5 removed include_player_ids support
-      // but the REST API still supports it
+      // Use external_id to target the user (all their devices)
       const notificationPayload = {
         app_id: appId,
-        include_player_ids: playerIds,
+        include_aliases: {
+          external_id: [userId]
+        },
+        target_channel: 'push',
         contents: { en: body },
         headings: { en: title },
         data: {
