@@ -117,8 +117,9 @@ class NotificationService {
       // Select the correct OneSignal client and app ID based on user type
       const client = userType === 'manager' ? managerClient : staffClient;
       const appId = userType === 'manager' ? ONESIGNAL_APP_ID_MANAGER : ONESIGNAL_APP_ID_STAFF;
+      const apiKey = userType === 'manager' ? ONESIGNAL_REST_API_KEY_MANAGER : ONESIGNAL_REST_API_KEY_STAFF;
 
-      console.log(`[NOTIF DEBUG] Using ${userType} OneSignal client, appId: ${appId.substring(0, 8)}...`);
+      console.log(`[NOTIF DEBUG] Using ${userType} OneSignal client, appId: ${appId.substring(0, 8)}..., apiKey ending: ...${apiKey.slice(-4)}`);
 
       // Prepare OneSignal notification
       const notification = new OneSignal.Notification();
