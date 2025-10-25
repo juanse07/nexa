@@ -30,12 +30,12 @@ class ManagerProfile {
     return ManagerProfile(
       id: map['id']?.toString(),
       email: map['email']?.toString(),
-      firstName: map['firstName']?.toString(),      // FIXED: camelCase to match backend
-      lastName: map['lastName']?.toString(),        // FIXED: camelCase to match backend
+      firstName: map['first_name']?.toString(),     // Backend returns snake_case
+      lastName: map['last_name']?.toString(),       // Backend returns snake_case
       name: map['name']?.toString(),
       picture: map['picture']?.toString(),
-      appId: map['appId']?.toString(),              // FIXED: camelCase to match backend
-      phoneNumber: map['phoneNumber']?.toString(),  // ADDED: missing field
+      appId: map['app_id']?.toString(),             // Backend returns snake_case
+      phoneNumber: map['phone_number']?.toString(), // Backend returns snake_case
     );
   }
 }
@@ -60,11 +60,11 @@ class ManagerService {
     String? phoneNumber,
   }) async {
     final payload = <String, dynamic>{};
-    if (firstName != null) payload['firstName'] = firstName;        // FIXED: camelCase to match backend
-    if (lastName != null) payload['lastName'] = lastName;          // FIXED: camelCase to match backend
-    if (appId != null) payload['appId'] = appId;                   // FIXED: camelCase to match backend
+    if (firstName != null) payload['first_name'] = firstName;      // Backend expects snake_case
+    if (lastName != null) payload['last_name'] = lastName;        // Backend expects snake_case
+    if (appId != null) payload['app_id'] = appId;                 // Backend expects snake_case
     if (picture != null) payload['picture'] = picture;
-    if (phoneNumber != null) payload['phoneNumber'] = phoneNumber; // ADDED: missing field
+    if (phoneNumber != null) payload['phone_number'] = phoneNumber; // Backend expects snake_case
 
     final resp = await _apiClient.patch<Map<String, dynamic>>('/managers/me', data: payload);
     final data = resp.data ?? {};
