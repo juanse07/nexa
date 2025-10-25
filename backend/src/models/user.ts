@@ -10,6 +10,23 @@ export interface UserDocument extends Document {
   phone_number?: string;
   picture?: string; // optional override picture
   app_id?: string; // optional 9-digit app id
+
+  // OneSignal fields
+  oneSignalUserId?: string;
+  notificationPreferences?: {
+    chat: boolean;
+    tasks: boolean;
+    events: boolean;
+    hoursApproval: boolean;
+    system: boolean;
+    marketing: boolean;
+  };
+  devices?: Array<{
+    oneSignalPlayerId: string;
+    deviceType: 'ios' | 'android' | 'web';
+    lastActive: Date;
+  }>;
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -25,6 +42,22 @@ const UserSchema = new Schema<UserDocument>(
     phone_number: { type: String, trim: true },
     picture: { type: String, trim: true },
     app_id: { type: String, trim: true },
+
+    // OneSignal fields
+    oneSignalUserId: { type: String, sparse: true },
+    notificationPreferences: {
+      chat: { type: Boolean, default: true },
+      tasks: { type: Boolean, default: true },
+      events: { type: Boolean, default: true },
+      hoursApproval: { type: Boolean, default: true },
+      system: { type: Boolean, default: true },
+      marketing: { type: Boolean, default: false },
+    },
+    devices: [{
+      oneSignalPlayerId: { type: String, required: true },
+      deviceType: { type: String, enum: ['ios', 'android', 'web'], required: true },
+      lastActive: { type: Date, default: Date.now },
+    }],
   },
   { timestamps: true }
 );

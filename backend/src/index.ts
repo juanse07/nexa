@@ -24,6 +24,7 @@ import placesRouter from './routes/places';
 import { initSocket } from './socket/server';
 import teamsRouter from './routes/teams';
 import invitesRouter from './routes/invites';
+import notificationsRouter from './routes/notifications';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 
@@ -84,6 +85,7 @@ async function createServer() {
   app.use('/api', invitesRouter); // Invite endpoints (validate, redeem)
   app.use('/api/chat', chatRouter);
   app.use('/api/auth', authRouter);
+  app.use('/api/notifications', notificationsRouter);
   app.use('/api', syncRouter);
   app.use('/api', aiRouter);
   app.use('/api', placesRouter);

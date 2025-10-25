@@ -6,6 +6,7 @@ import { ManagerModel } from '../models/manager';
 import { UserModel } from '../models/user';
 import { TeamMemberModel } from '../models/teamMember';
 import { emitToManager, emitToUser } from '../socket/server';
+import { notificationService } from '../services/notificationService';
 import mongoose from 'mongoose';
 
 const router = Router();
@@ -379,8 +380,72 @@ router.post('/conversations/:targetId/messages', requireAuth, async (req, res) =
     // Emit to recipient via Socket.IO
     if (senderType === 'manager') {
       emitToUser(targetUserKey!, 'chat:message', messagePayload);
+
+      // Send push notification to user
+      const user = await UserModel.findOne({
+        $expr: {
+          $eq: [
+            { $concat: ['$provider', ':', '$subject'] },
+            targetUserKey
+          ]
+        }
+      });
+
+      if (user) {
+        // Get manager's display name
+        const manager = await ManagerModel.findById(senderManagerId);
+        const managerName = manager?.first_name && manager?.last_name
+          ? `${manager.first_name} ${manager.last_name}`
+          : manager?.name || 'Your manager';
+
+        await notificationService.sendToUser(
+          user._id.toString(),
+          `New message from ${managerName}`,
+          message.length > 100 ? message.substring(0, 100) + '...' : message,
+          {
+            type: 'chat',
+            conversationId: conversation._id.toString(),
+            messageId: chatMessage._id.toString(),
+            senderName: managerName,
+            managerId: senderManagerId.toString()
+          },
+          'user'
+        );
+      }
     } else {
       emitToManager(targetManagerId!.toString(), 'chat:message', messagePayload);
+
+      // Send push notification to manager
+      const manager = await ManagerModel.findById(targetManagerId);
+      if (manager) {
+        // Get user's display name
+        const user = await UserModel.findOne({
+          $expr: {
+            $eq: [
+              { $concat: ['$provider', ':', '$subject'] },
+              userKey
+            ]
+          }
+        });
+
+        const userName = user?.first_name && user?.last_name
+          ? `${user.first_name} ${user.last_name}`
+          : user?.name || 'Team member';
+
+        await notificationService.sendToUser(
+          targetManagerId.toString(),
+          `New message from ${userName}`,
+          message.length > 100 ? message.substring(0, 100) + '...' : message,
+          {
+            type: 'chat',
+            conversationId: conversation._id.toString(),
+            messageId: chatMessage._id.toString(),
+            senderName: userName,
+            userKey: userKey
+          },
+          'manager'
+        );
+      }
     }
 
     return res.status(201).json({ message: messagePayload });
