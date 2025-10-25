@@ -119,12 +119,12 @@ class NotificationService {
 
       // Target specific devices
       const playerIds = user.devices.map((d: any) => d.oneSignalPlayerId);
-      notification.include_player_ids = playerIds;
+      (notification as any).include_player_ids = playerIds;
 
       // Add data payload
       notification.data = {
         ...data,
-        notificationId: notificationDoc._id.toString(),
+        notificationId: (notificationDoc._id as any).toString(),
       };
 
       // Platform specific settings
@@ -225,7 +225,7 @@ class NotificationService {
 
       // Check if device already exists
       const existingDeviceIndex = user.devices?.findIndex(
-        d => d.oneSignalPlayerId === oneSignalPlayerId
+        (d: any) => d.oneSignalPlayerId === oneSignalPlayerId
       ) ?? -1;
 
       if (existingDeviceIndex >= 0) {
