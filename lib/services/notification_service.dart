@@ -134,7 +134,7 @@ class NotificationService {
 
       // Check if device is actually subscribed
       final pushSubscription = OneSignal.User.pushSubscription;
-      final isSubscribed = pushSubscription.optedIn;
+      final isSubscribed = pushSubscription.optedIn ?? false;
       print('[NOTIF REG] Player ID: $playerId, Subscribed: $isSubscribed');
 
       if (!isSubscribed) {
@@ -142,7 +142,7 @@ class NotificationService {
         print('[NOTIF REG] Attempting to opt-in...');
         await pushSubscription.optIn();
         await Future.delayed(const Duration(seconds: 1));
-        print('[NOTIF REG] Opt-in completed, new status: ${pushSubscription.optedIn}');
+        print('[NOTIF REG] Opt-in completed, new status: ${pushSubscription.optedIn ?? false}');
       }
 
       // Get user's MongoDB ID from auth token
