@@ -11,7 +11,10 @@ class NotificationApiService {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
   Future<String?> get _authToken async {
-    return await _storage.read(key: 'auth_token');
+    // Try both keys for compatibility (manager app uses 'auth_jwt', staff app uses 'access_token')
+    String? token = await _storage.read(key: 'auth_jwt');
+    token ??= await _storage.read(key: 'access_token');
+    return token;
   }
 
   Future<String?> getUserId() async {
@@ -29,7 +32,7 @@ class NotificationApiService {
       if (token == null) return false;
 
       final response = await _dio.post(
-        '${AppConfig.instance.baseUrl}/api/notifications/register-device',
+        '${AppConfig.instance.baseUrl}/notifications/register-device',
         data: {
           'oneSignalPlayerId': oneSignalPlayerId,
           'deviceType': deviceType,
@@ -53,7 +56,7 @@ class NotificationApiService {
       if (token == null) return false;
 
       final response = await _dio.delete(
-        '${AppConfig.instance.baseUrl}/api/notifications/unregister-device',
+        '${AppConfig.instance.baseUrl}/notifications/unregister-device',
         data: {'oneSignalPlayerId': oneSignalPlayerId},
         options: Options(
           headers: {'Authorization': 'Bearer $token'},
@@ -77,7 +80,7 @@ class NotificationApiService {
       if (token == null) return [];
 
       final response = await _dio.get(
-        '${AppConfig.instance.baseUrl}/api/notifications/history',
+        '${AppConfig.instance.baseUrl}/notifications/history',
         queryParameters: {
           'limit': limit,
           'offset': offset,
@@ -107,7 +110,7 @@ class NotificationApiService {
 
       // Get user profile to fetch preferences
       final response = await _dio.get(
-        '${AppConfig.instance.baseUrl}/api/managers/me',
+        '${AppConfig.instance.baseUrl}/managers/me',
         options: Options(
           headers: {'Authorization': 'Bearer $token'},
         ),
@@ -135,7 +138,7 @@ class NotificationApiService {
       if (token == null) return false;
 
       final response = await _dio.patch(
-        '${AppConfig.instance.baseUrl}/api/notifications/preferences',
+        '${AppConfig.instance.baseUrl}/notifications/preferences',
         data: preferences,
         options: Options(
           headers: {'Authorization': 'Bearer $token'},
@@ -156,7 +159,7 @@ class NotificationApiService {
       if (token == null) return false;
 
       final response = await _dio.post(
-        '${AppConfig.instance.baseUrl}/api/notifications/mark-read',
+        '${AppConfig.instance.baseUrl}/notifications/mark-read',
         data: {'notificationId': notificationId},
         options: Options(
           headers: {'Authorization': 'Bearer $token'},
@@ -177,7 +180,7 @@ class NotificationApiService {
       if (token == null) return false;
 
       final response = await _dio.post(
-        '${AppConfig.instance.baseUrl}/api/notifications/mark-all-read',
+        '${AppConfig.instance.baseUrl}/notifications/mark-all-read',
         options: Options(
           headers: {'Authorization': 'Bearer $token'},
         ),
@@ -197,7 +200,7 @@ class NotificationApiService {
       if (token == null) return 0;
 
       final response = await _dio.get(
-        '${AppConfig.instance.baseUrl}/api/notifications/unread-count',
+        '${AppConfig.instance.baseUrl}/notifications/unread-count',
         options: Options(
           headers: {'Authorization': 'Bearer $token'},
         ),
@@ -220,11 +223,17 @@ class NotificationApiService {
     String? type,
   }) async {
     try {
+      print('[NOTIF TEST] Starting test notification request...');
       final token = await _authToken;
-      if (token == null) return false;
+      if (token == null) {
+        print('[NOTIF TEST] ERROR: Auth token is null');
+        return false;
+      }
+
+      print('[NOTIF TEST] Auth token found, sending request to: ${AppConfig.instance.baseUrl}/notifications/test');
 
       final response = await _dio.post(
-        '${AppConfig.instance.baseUrl}/api/notifications/test',
+        '${AppConfig.instance.baseUrl}/notifications/test',
         data: {
           if (title != null) 'title': title,
           if (body != null) 'body': body,
@@ -235,9 +244,12 @@ class NotificationApiService {
         ),
       );
 
+      print('[NOTIF TEST] Response status: ${response.statusCode}');
+      print('[NOTIF TEST] Response body: ${response.data}');
       return response.statusCode == 200;
-    } catch (e) {
-      print('Error sending test notification: $e');
+    } catch (e, stackTrace) {
+      print('[NOTIF TEST] ERROR: $e');
+      print('[NOTIF TEST] Stack trace: $stackTrace');
       return false;
     }
   }
