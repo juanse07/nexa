@@ -88,15 +88,61 @@
 - **Frontend**: Widget tests, integration tests, null safety
 - **Both**: Type safety, comprehensive error handling, proper documentation
 
+## Agent Configuration
+
+**Agent Location**: `/Users/juansuarez/.claude/agents/`
+
+All agents are defined as user-level agents in the above directory. Claude Code will automatically load them from this location.
+
 ## Agent Availability
 
-Your specialized agents:
-- **task-router**: Request analysis and agent routing
-- **node-express-backend**: Backend API development
-- **nexa-flutter-ui**: Flutter UI components
-- **api-contract-validator**: API contract consistency
-- **flutter-backend-test-architect**: Test design
-- **flutter-express-cicd**: CI/CD pipelines
+Your specialized agents (located at `/Users/juansuarez/.claude/agents/`):
+- **task-router**: Request analysis and agent routing (`task-router.md`)
+- **node-express-backend**: Backend API development (`node-express-backend.md`)
+- **nexa-flutter-ui**: Flutter UI components (`nexa-flutter-ui.md`)
+- **api-contract-validator**: API contract consistency (`api-contract-validator.md`)
+- **flutter-backend-test-architect**: Test design (`flutter-backend-test-architect.md`)
+- **flutter-express-cicd**: CI/CD pipelines (`flutter-express-cicd.md`)
+- **orchestrator**: Multi-agent coordination (`orchestrator.md`) - Available but not auto-invoked
+
+## Production Deployment
+
+### Backend Server (Linode)
+- **Host**: `198.58.111.243`
+- **User**: `app`
+- **Connection**: `ssh app@198.58.111.243` (uses SSH key authentication)
+- **App Location**: `/srv/app/` (Docker containerized)
+- **Deployment Method**: Docker Compose with automated deploy.sh script
+
+### Backend Deployment Commands
+```bash
+# SSH into production server (requires SSH key in ~/.ssh/)
+ssh app@198.58.111.243
+
+# Check running containers
+docker ps
+
+# View backend logs
+cd /srv/app && docker compose logs --tail=100 api
+
+# Restart backend service
+cd /srv/app && docker compose restart api
+
+# Full redeployment (if deploy.sh exists)
+cd ~ && ./deploy.sh
+```
+
+### Flutter Deployment
+- **Android**: `flutter build apk --release` or `flutter build appbundle --release`
+- **iOS**: `flutter build ios --release` (then deploy via Xcode/TestFlight)
+- **Web**: `flutter build web --release` (then deploy to hosting)
+
+**Note**: CI/CD pipeline (`.github/workflows/deploy.yml`) only auto-deploys backend changes. Flutter changes require manual deployment.
+
+### Security Notes
+- SSH access uses key-based authentication (never store passwords in code)
+- `.claude/` directory is gitignored to prevent accidental credential exposure
+- Environment variables stored in `.env` files (also gitignored)
 
 ## Critical Rules
 

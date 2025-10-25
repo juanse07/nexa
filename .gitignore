@@ -49,3 +49,6 @@ app.*.map.json
 *.env
 .env.*
 !/.env.defaults
+
+# Claude Code configuration (may contain local paths and server info)
+.claude/
