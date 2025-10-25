@@ -112,30 +112,57 @@ class NotificationService {
   /// Register device with backend
   Future<void> _registerDevice() async {
     try {
+      // IMPORTANT: Wait for OneSignal to fully initialize
+      await Future.delayed(const Duration(seconds: 2));
+
       // Get OneSignal Player ID
       final deviceState = await OneSignal.User.getOnesignalId();
 
       if (deviceState == null) {
-        print('No OneSignal Player ID available yet');
-        return;
+        print('[NOTIF REG] No OneSignal Player ID available yet - retrying in 3s');
+        await Future.delayed(const Duration(seconds: 3));
+        final retryState = await OneSignal.User.getOnesignalId();
+        if (retryState == null) {
+          print('[NOTIF REG] Still no Player ID after retry - giving up');
+          return;
+        }
+        print('[NOTIF REG] Got Player ID on retry: $retryState');
+      }
+
+      final playerId = deviceState ?? await OneSignal.User.getOnesignalId();
+      if (playerId == null) return;
+
+      // Check if device is actually subscribed
+      final pushSubscription = OneSignal.User.pushSubscription;
+      final isSubscribed = pushSubscription.optedIn;
+      print('[NOTIF REG] Player ID: $playerId, Subscribed: $isSubscribed');
+
+      if (!isSubscribed) {
+        print('[NOTIF REG] ⚠️ Device is not opted-in to push notifications!');
+        print('[NOTIF REG] Attempting to opt-in...');
+        await pushSubscription.optIn();
+        await Future.delayed(const Duration(seconds: 1));
+        print('[NOTIF REG] Opt-in completed, new status: ${pushSubscription.optedIn}');
       }
 
       // Get user's MongoDB ID from auth token
       final userId = await _apiService.getUserId();
       if (userId != null) {
         // Set external user ID in OneSignal
+        print('[NOTIF REG] Setting OneSignal external user ID: $userId');
         OneSignal.login(userId);
 
         // Register device with backend
+        print('[NOTIF REG] Registering device with backend...');
         await _apiService.registerDevice(
-          oneSignalPlayerId: deviceState,
+          oneSignalPlayerId: playerId,
           deviceType: Platform.isIOS ? 'ios' : 'android',
         );
 
-        print('✅ Device registered with backend: $deviceState');
+        print('[NOTIF REG] ✅ Device registered with backend: $playerId');
       }
     } catch (e) {
-      print('❌ Failed to register device: $e');
+      print('[NOTIF REG] ❌ Failed to register device: $e');
     }
   }
 
