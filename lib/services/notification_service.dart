@@ -16,8 +16,8 @@ class NotificationService {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
 
-  // OneSignal App ID - Replace with your actual App ID
-  static const String _oneSignalAppId = 'YOUR_ONESIGNAL_APP_ID_HERE';
+  // OneSignal App ID
+  static const String _oneSignalAppId = '8a08b6ac-0275-4adf-9432-53712b1e0fc6';
 
   // Notification counts
   int _unreadChatCount = 0;
@@ -298,8 +298,8 @@ class NotificationService {
   }
 
   /// Send test notification
-  Future<void> sendTestNotification() async {
-    await _apiService.sendTestNotification();
+  Future<bool> sendTestNotification() async {
+    return await _apiService.sendTestNotification();
   }
 
   /// Unregister device on logout
