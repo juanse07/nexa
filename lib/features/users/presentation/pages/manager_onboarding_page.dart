@@ -14,6 +14,7 @@ import 'package:nexa/features/users/data/services/manager_service.dart';
 import 'package:nexa/features/users/presentation/pages/manager_profile_page.dart';
 import 'package:nexa/features/teams/data/services/teams_service.dart';
 import 'package:nexa/core/network/socket_manager.dart';
+import 'package:nexa/services/notification_service.dart';
 
 class ManagerOnboardingGate extends StatefulWidget {
   const ManagerOnboardingGate({super.key});
@@ -75,6 +76,10 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
     try {
       final profile = await _managerService.getMe();
       SocketManager.instance.registerManager(profile.id);
+
+      // Initialize notifications after successful authentication
+      await NotificationService().initialize();
+
       final teams = await _teamsService.fetchTeams();
       final clients = await _clientsService.fetchClients();
       final roles = await _rolesService.fetchRoles();
