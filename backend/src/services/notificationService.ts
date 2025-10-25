@@ -336,6 +336,33 @@ class NotificationService {
   }
 
   /**
+   * Clear all devices for a user (for troubleshooting)
+   */
+  async clearAllDevices(
+    userId: string,
+    userType: 'user' | 'manager' = 'user'
+  ): Promise<boolean> {
+    try {
+      if (userType === 'manager') {
+        await ManagerModel.findByIdAndUpdate(userId, {
+          $set: { devices: [] }
+        });
+      } else {
+        await UserModel.findByIdAndUpdate(userId, {
+          $set: { devices: [] }
+        });
+      }
+
+      console.log(`✅ All devices cleared for ${userType} ${userId}`);
+      return true;
+
+    } catch (error) {
+      console.error('Failed to clear devices:', error);
+      return false;
+    }
+  }
+
+  /**
    * Update notification preferences
    */
   async updatePreferences(

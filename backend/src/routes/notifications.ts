@@ -346,4 +346,31 @@ router.post('/webhook/onesignal', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * @route DELETE /api/notifications/clear-devices
+ * @desc Clear all registered devices for the authenticated user (for troubleshooting)
+ */
+router.delete('/clear-devices', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const authUser = (req as any).authUser;
+    const userId = authUser.managerId || authUser.userId || authUser.id;
+    const userType: 'user' | 'manager' = authUser.managerId ? 'manager' : 'user';
+
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID not found' });
+    }
+
+    const success = await notificationService.clearAllDevices(userId, userType);
+
+    if (success) {
+      res.json({ message: 'All devices cleared successfully' });
+    } else {
+      res.status(500).json({ error: 'Failed to clear devices' });
+    }
+  } catch (error) {
+    console.error('Clear devices error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;
