@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:nexa/core/config/app_config.dart';
@@ -19,7 +21,36 @@ class NotificationApiService {
 
   Future<String?> getUserId() async {
     // Get user ID from stored auth data
-    return await _storage.read(key: 'user_id');
+    // Try user_id first (staff app), then extract from JWT token (manager app)
+    String? userId = await _storage.read(key: 'user_id');
+
+    if (userId != null) {
+      return userId;
+    }
+
+    // For manager app, extract managerId from JWT token
+    final token = await _authToken;
+    if (token != null) {
+      try {
+        // JWT tokens are in format: header.payload.signature
+        final parts = token.split('.');
+        if (parts.length == 3) {
+          // Decode the payload (base64)
+          final payload = parts[1];
+          // Add padding if needed for base64 decoding
+          final normalized = base64.normalize(payload);
+          final decoded = utf8.decode(base64.decode(normalized));
+          final Map<String, dynamic> json = jsonDecode(decoded);
+
+          // Manager app has managerId, staff app has userId
+          return json['managerId'] as String?;
+        }
+      } catch (e) {
+        print('[NotificationApiService] Failed to decode JWT: $e');
+      }
+    }
+
+    return null;
   }
 
   /// Register device for push notifications

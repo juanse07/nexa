@@ -37,6 +37,18 @@ const TestNotificationSchema = z.object({
 router.post('/register-device', authenticateToken, async (req: Request, res: Response) => {
   try {
     const authUser = (req as any).authUser;
+
+    // Determine user ID and type based on JWT content
+    const userId = authUser.managerId || authUser.userId || authUser.id;
+    const userType: 'user' | 'manager' = authUser.managerId ? 'manager' : 'user';
+
+    if (!userId) {
+      return res.status(400).json({
+        error: 'User ID not found',
+        hint: 'JWT token must contain either managerId or userId',
+      });
+    }
+
     const validation = RegisterDeviceSchema.safeParse(req.body);
 
     if (!validation.success) {
@@ -49,16 +61,16 @@ router.post('/register-device', authenticateToken, async (req: Request, res: Res
     const { oneSignalPlayerId, deviceType } = validation.data;
 
     const success = await notificationService.registerDevice(
-      authUser.id,
+      userId,
       oneSignalPlayerId,
       deviceType,
-      authUser.role
+      userType
     );
 
     if (success) {
       res.json({
         message: 'Device registered successfully',
-        userId: authUser.id,
+        userId,
         deviceType,
       });
     } else {
