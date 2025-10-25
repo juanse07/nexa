@@ -133,9 +133,9 @@ class NotificationService {
         en: title,
       };
 
-      // Target specific devices
+      // Target specific devices (v5 SDK uses include_subscription_ids instead of include_player_ids)
       const playerIds = user.devices.map((d: any) => d.oneSignalPlayerId);
-      (notification as any).include_player_ids = playerIds;
+      notification.include_subscription_ids = playerIds;
 
       console.log(`[NOTIF DEBUG] Targeting ${playerIds.length} devices: ${JSON.stringify(playerIds)}`);
 
