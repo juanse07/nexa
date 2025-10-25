@@ -215,40 +215,79 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
     try {
       final payload = Map<String, dynamic>.from(widget.draft);
 
-      // First, pick client
-      final clientData = await _promptClientPicker();
-      if (clientData == null) {
-        setState(() => _publishing = false);
-        return;
-      }
-      final clientName = (clientData['name'] ?? '').toString();
-      final rawClientId = (clientData['id'] ?? '').toString();
-      final clientId = rawClientId.isNotEmpty ? rawClientId : null;
-      payload['client_name'] = clientName;
-      if (clientId != null) {
-        payload['clientId'] = clientId;
-        payload['client_id'] = clientId;
+      // Check if client already exists in draft
+      final existingClientName = (payload['client_name'] ?? '').toString().trim();
+      final existingClientId = (payload['clientId'] ?? payload['client_id'] ?? '').toString().trim();
+
+      String clientName = existingClientName;
+      String? clientId = existingClientId.isNotEmpty ? existingClientId : null;
+
+      // Only prompt for client if missing
+      if (existingClientName.isEmpty) {
+        final clientData = await _promptClientPicker();
+        if (clientData == null) {
+          setState(() => _publishing = false);
+          return;
+        }
+        clientName = (clientData['name'] ?? '').toString();
+        final rawClientId = (clientData['id'] ?? '').toString();
+        clientId = rawClientId.isNotEmpty ? rawClientId : null;
+        payload['client_name'] = clientName;
+        if (clientId != null) {
+          payload['clientId'] = clientId;
+          payload['client_id'] = clientId;
+        }
       }
 
-      // Then, ensure role counts are set at publish time
-      final counts = await _promptRoleCounts(payload);
-      if (counts == null) {
-        setState(() => _publishing = false);
-        return;
-      }
-      final roleDefs = _countsToRoles(counts);
-      if (roleDefs.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Add at least one role with a positive headcount'),
-            ),
-          );
+      // Check if roles already exist with positive counts
+      final existingRoles = (payload['roles'] as List?)?.whereType<Map<dynamic, dynamic>>().toList() ?? [];
+      final hasPositiveRoles = existingRoles.any((role) {
+        final count = role['count'];
+        if (count is int) return count > 0;
+        final parsed = int.tryParse(count?.toString() ?? '');
+        return parsed != null && parsed > 0;
+      });
+
+      Map<String, int> counts;
+      List<Map<String, dynamic>> roleDefs;
+
+      // Only prompt for roles if missing or all zero
+      if (!hasPositiveRoles) {
+        final promptedCounts = await _promptRoleCounts(payload);
+        if (promptedCounts == null) {
+          setState(() => _publishing = false);
+          return;
         }
-        setState(() => _publishing = false);
-        return;
+        counts = promptedCounts;
+        roleDefs = _countsToRoles(counts);
+        if (roleDefs.isEmpty) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Add at least one role with a positive headcount'),
+              ),
+            );
+          }
+          setState(() => _publishing = false);
+          return;
+        }
+        payload['roles'] = roleDefs;
+      } else {
+        // Use existing roles from draft
+        roleDefs = existingRoles.map((role) => Map<String, dynamic>.from(role)).toList();
+        counts = {};
+        for (final role in existingRoles) {
+          final roleName = (role['role'] ?? '').toString().toLowerCase();
+          final count = role['count'];
+          if (count is int) {
+            counts[roleName] = count;
+          } else {
+            final parsed = int.tryParse(count?.toString() ?? '');
+            if (parsed != null) counts[roleName] = parsed;
+          }
+        }
       }
-      payload['roles'] = roleDefs;
+
       final totalHeadcount = counts.values.fold<int>(
         0,
         (acc, value) => acc + value,

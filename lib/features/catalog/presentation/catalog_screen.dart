@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../../../core/widgets/section_navigation_dropdown.dart';
 import '../../teams/presentation/pages/teams_management_page.dart';
 import '../../extraction/presentation/ai_chat_screen.dart';
+import '../../extraction/presentation/extraction_screen.dart';
 import '../../users/presentation/pages/manager_profile_page.dart';
 import '../../users/presentation/pages/settings_page.dart';
 import '../../users/data/services/manager_service.dart';
@@ -41,7 +42,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
     }
   }
 
-  void _handleNavigationDropdown(String section) {
+  void _handleNavigationDropdown(String section) async {
     HapticFeedback.lightImpact();
 
     switch (section) {
@@ -65,9 +66,21 @@ class _CatalogScreenState extends State<CatalogScreen> {
         break;
       case 'AI Chat':
         // Navigate to AI Chat screen (separate screen, not a main tab)
-        Navigator.of(context).push(
+        final result = await Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const AIChatScreen()),
         );
+        // Handle "Check Pending" navigation
+        if (result != null && result is Map && result['action'] == 'show_pending') {
+          if (!mounted) return;
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => const ExtractionScreen(
+                initialScreenIndex: 1, // Jobs/Events tab
+                initialEventsTabIndex: 0, // Pending sub-tab
+              ),
+            ),
+          );
+        }
         break;
     }
   }

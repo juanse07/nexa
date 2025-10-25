@@ -147,9 +147,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   /// Navigate with smooth fade transition
-  void _navigateWithFade(Widget destination) {
-    Navigator.of(context).push<void>(
-      PageRouteBuilder<void>(
+  Future<void> _navigateWithFade(Widget destination) async {
+    final result = await Navigator.of(context).push<dynamic>(
+      PageRouteBuilder<dynamic>(
         pageBuilder: (context, animation, secondaryAnimation) => destination,
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           const begin = Offset(0.03, 0.03); // Subtle upward slide
@@ -170,9 +170,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         transitionDuration: const Duration(milliseconds: 400),
       ),
     );
+
+    // Handle "Check Pending" navigation from AI Chat
+    if (result != null && result is Map && result['action'] == 'show_pending') {
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => const ExtractionScreen(
+            initialScreenIndex: 1, // Jobs/Events tab
+            initialEventsTabIndex: 0, // Pending sub-tab
+          ),
+        ),
+      );
+    }
   }
 
-  void _handleFilterSelection(String filter) {
+  Future<void> _handleFilterSelection(String filter) async {
     HapticFeedback.lightImpact();
 
     switch (filter) {
@@ -202,9 +215,21 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         break;
       case 'AI Chat':
         // Navigate to AI Chat screen (separate screen, not a main tab)
-        Navigator.of(context).push(
+        final result = await Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const AIChatScreen(startNewConversation: true)),
         );
+        // Handle "Check Pending" navigation
+        if (result != null && result is Map && result['action'] == 'show_pending') {
+          if (!mounted) return;
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => const ExtractionScreen(
+                initialScreenIndex: 1, // Jobs/Events tab
+                initialEventsTabIndex: 0, // Pending sub-tab
+              ),
+            ),
+          );
+        }
         break;
     }
   }

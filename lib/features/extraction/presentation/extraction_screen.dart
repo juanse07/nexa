@@ -63,11 +63,13 @@ import '../../main/presentation/main_screen.dart';
 class ExtractionScreen extends StatefulWidget {
   final int initialIndex; // For Post a Job tab chips
   final int initialScreenIndex; // For main screen tabs (Post a Job=0, Events=1, etc.)
+  final int initialEventsTabIndex; // For Events sub-tabs (Pending=0, Upcoming=1, Past=2)
 
   const ExtractionScreen({
     super.key,
     this.initialIndex = 0,
     this.initialScreenIndex = 0,
+    this.initialEventsTabIndex = 0,
   });
 
   @override
@@ -178,7 +180,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     super.initState();
     _selectedIndex = widget.initialScreenIndex; // Set main screen tab
     _createTabController = TabController(length: 3, vsync: this, initialIndex: widget.initialIndex);
-    _eventsTabController = TabController(length: 3, vsync: this);
+    _eventsTabController = TabController(length: 3, vsync: this, initialIndex: widget.initialEventsTabIndex);
     _catalogTabController = TabController(length: 3, vsync: this);
 
     // Add listeners for web tab navigation updates
