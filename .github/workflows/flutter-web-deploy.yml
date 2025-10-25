@@ -1,0 +1,254 @@
+name: Flutter Web CI/CD
+
+# Trigger workflow on changes to Flutter code, configuration, or workflow itself
+on:
+  push:
+    branches: [main, android1]
+    paths:
+      - 'lib/**'
+      - 'web/**'
+      - 'assets/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - 'analysis_options.yaml'
+      - '.github/workflows/flutter-web-deploy.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/**'
+      - 'web/**'
+      - 'assets/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - 'analysis_options.yaml'
+  workflow_dispatch: # Allow manual triggering
+
+# Ensure only one deployment runs at a time per branch
+concurrency:
+  group: flutter-web-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Job 1: Analyze and test Flutter code
+  analyze-and-test:
+    name: Analyze & Test Flutter Code
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.9.0'
+          channel: 'stable'
+          cache: true # Cache Flutter SDK for faster builds
+
+      # Cache Flutter dependencies separately for faster subsequent runs
+      - name: Cache Flutter dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            .dart_tool
+          key: flutter-pub-${{ runner.os }}-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            flutter-pub-${{ runner.os }}-
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      # Run code generation if needed (for build_runner, freezed, etc.)
+      - name: Run code generation
+        run: flutter pub run build_runner build --delete-conflicting-outputs
+        continue-on-error: false
+
+      # CRITICAL: Run flutter analyze to catch errors before build
+      # This prevents build failures and ensures code quality
+      - name: Run Flutter analyzer
+        run: flutter analyze --no-fatal-infos
+        # --no-fatal-infos: Only fail on errors and warnings, not on info messages
+
+      # Run unit and widget tests
+      - name: Run Flutter tests
+        run: flutter test --coverage --reporter expanded
+        continue-on-error: false # Fail the workflow if tests fail
+
+      # Upload test coverage for visibility (optional but recommended)
+      - name: Upload coverage to artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7
+
+  # Job 2: Build Flutter web application
+  build-web:
+    name: Build Flutter Web
+    needs: analyze-and-test # Only run if analyze-and-test succeeds
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.9.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Cache Flutter dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            .dart_tool
+          key: flutter-pub-${{ runner.os }}-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            flutter-pub-${{ runner.os }}-
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Run code generation
+        run: flutter pub run build_runner build --delete-conflicting-outputs
+
+      # Build Flutter web with release optimizations
+      # Note: dart-define variables are NOT included here - they're set in Cloudflare Pages
+      - name: Build Flutter web (release)
+        run: |
+          flutter build web \
+            --release \
+            --web-renderer canvaskit \
+            --source-maps
+        # --release: Production optimizations (minification, tree-shaking)
+        # --web-renderer canvaskit: Better performance for complex UIs
+        # --source-maps: Enable debugging in production if needed
+
+      # Verify build output exists and is valid
+      - name: Verify build output
+        run: |
+          if [ ! -d "build/web" ]; then
+            echo "Error: build/web directory not found"
+            exit 1
+          fi
+          if [ ! -f "build/web/index.html" ]; then
+            echo "Error: build/web/index.html not found"
+            exit 1
+          fi
+          echo "Build output verified successfully"
+          ls -lah build/web
+
+      # Upload build artifacts for deployment job
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-web-build-${{ github.sha }}
+          path: build/web/
+          retention-days: 3
+          if-no-files-found: error
+
+      # Generate build metadata for traceability
+      - name: Generate build metadata
+        run: |
+          cat > build/web/build-info.json << EOF
+          {
+            "commit_sha": "${{ github.sha }}",
+            "commit_ref": "${{ github.ref }}",
+            "build_number": "${{ github.run_number }}",
+            "build_timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "triggered_by": "${{ github.actor }}",
+            "workflow": "${{ github.workflow }}"
+          }
+          EOF
+          cat build/web/build-info.json
+
+  # Job 3: Deploy to Cloudflare Pages
+  deploy-cloudflare:
+    name: Deploy to Cloudflare Pages
+    needs: build-web # Only run if build succeeds
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Only deploy on push to main or android1 branches (not on PRs)
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/android1')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Download the build artifacts from build-web job
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: flutter-web-build-${{ github.sha }}
+          path: build/web
+
+      # Deploy to Cloudflare Pages using Wrangler
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy build/web --project-name=nexa-web --commit-dirty=true
+          # --commit-dirty=true: Allow deployment even if git working directory is dirty
+
+      # Post-deployment verification (optional but recommended)
+      - name: Verify deployment
+        run: |
+          echo "Deployment completed successfully!"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Build number: ${{ github.run_number }}"
+
+      # Send deployment notification (optional - can integrate with Slack, Discord, etc.)
+      - name: Deployment summary
+        run: |
+          echo "### Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Project**: nexa-web" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build Number**: ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deployed By**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Timestamp**: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_STEP_SUMMARY
+
+  # Job 4: Preview deployments for PRs (optional but highly recommended)
+  deploy-preview:
+    name: Deploy Preview (PR)
+    needs: build-web
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Only run on pull requests
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: flutter-web-build-${{ github.sha }}
+          path: build/web
+
+      # Deploy preview to Cloudflare Pages
+      - name: Deploy preview to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy build/web --project-name=nexa-web --branch=${{ github.head_ref }} --commit-dirty=true
+
+      - name: Preview deployment summary
+        run: |
+          echo "### Preview Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Preview deployed for PR #${{ github.event.pull_request.number }}" >> $GITHUB_STEP_SUMMARY
+          echo "Branch: ${{ github.head_ref }}" >> $GITHUB_STEP_SUMMARY
+          echo "Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY

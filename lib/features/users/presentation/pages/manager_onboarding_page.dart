@@ -36,6 +36,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
 
   _OnboardingSnapshot? _snapshot;
   bool _loading = true;
+  bool _openingProfile = false;
   bool _creatingTeam = false;
   bool _creatingClient = false;
   bool _creatingRole = false;
@@ -254,10 +255,25 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
   }
 
   Future<void> _openProfile() async {
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const ManagerProfilePage()));
-    await _refresh();
+    setState(() {
+      _openingProfile = true;
+    });
+    try {
+      await Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => const ManagerProfilePage()));
+      await _refresh();
+    } catch (e) {
+      if (mounted) {
+        _showSnack('Failed to open profile: $e');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _openingProfile = false;
+        });
+      }
+    }
   }
 
   Future<void> _signOut() async {
@@ -455,11 +471,16 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
       title: '1. Update your profile',
       completed: completed,
       subtitle: subtitle.isEmpty ? 'Profile details updated.' : subtitle,
-      action: ElevatedButton(
-        onPressed: () async {
-          await _openProfile();
-        },
-        child: Text(completed ? 'Review profile' : 'Update profile'),
+      action: ElevatedButton.icon(
+        onPressed: _openingProfile ? null : _openProfile,
+        icon: _openingProfile
+            ? const SizedBox(
+                height: 18,
+                width: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Icon(completed ? Icons.person : Icons.person_outline),
+        label: Text(completed ? 'Review profile' : 'Update profile'),
       ),
     );
   }
