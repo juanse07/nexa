@@ -59,13 +59,15 @@ class NotificationService {
 
   /**
    * Send notification to a specific user
+   * @param accentColor - Optional hex color (without #) for Android notification accent (e.g., "A855F7" for purple)
    */
   async sendToUser(
     userId: string,
     title: string,
     body: string,
     data: NotificationData,
-    userType: 'user' | 'manager' = 'user'
+    userType: 'user' | 'manager' = 'user',
+    accentColor?: string
   ): Promise<NotificationDocument | null> {
     try {
       console.log(`[NOTIF DEBUG] Starting sendToUser: userId=${userId}, userType=${userType}, title=${title}`);
@@ -126,7 +128,7 @@ class NotificationService {
       console.log(`[NOTIF DEBUG] Targeting user by external ID: ${userId}`);
 
       // Use external_id to target the user (all their devices)
-      const notificationPayload = {
+      const notificationPayload: any = {
         app_id: appId,
         include_aliases: {
           external_id: [userId]
@@ -143,6 +145,11 @@ class NotificationService {
         ios_badgeType: 'Increase',
         ios_badgeCount: 1,
       };
+
+      // Add Android accent color if provided (for visual differentiation)
+      if (accentColor) {
+        notificationPayload.android_accent_color = accentColor;
+      }
 
       console.log(`[NOTIF DEBUG] Sending notification to OneSignal REST API...`);
 
@@ -191,10 +198,11 @@ class NotificationService {
     title: string,
     body: string,
     data: NotificationData,
-    userType: 'user' | 'manager' = 'user'
+    userType: 'user' | 'manager' = 'user',
+    accentColor?: string
   ): Promise<NotificationDocument[]> {
     const results = await Promise.all(
-      userIds.map(userId => this.sendToUser(userId, title, body, data, userType))
+      userIds.map(userId => this.sendToUser(userId, title, body, data, userType, accentColor))
     );
     return results.filter(r => r !== null) as NotificationDocument[];
   }

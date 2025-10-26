@@ -398,9 +398,14 @@ router.post('/conversations/:targetId/messages', requireAuth, async (req, res) =
           ? `${manager.first_name} ${manager.last_name}`
           : manager?.name || 'Your manager';
 
+        // Add purple dot for event invitations
+        const notificationTitle = messageType === 'eventInvitation'
+          ? `🟣 ${managerName}`
+          : managerName;
+
         await notificationService.sendToUser(
           (user._id as any).toString(),
-          `${managerName}`,
+          notificationTitle,
           message.length > 100 ? message.substring(0, 100) + '...' : message,
           {
             type: 'chat',
@@ -410,6 +415,7 @@ router.post('/conversations/:targetId/messages', requireAuth, async (req, res) =
             managerId: senderManagerId!.toString()
           },
           'user'
+          // No accent color - using emoji dot for differentiation
         );
       }
     } else {
@@ -879,6 +885,54 @@ router.post('/invitations/:messageId/respond', requireAuth, async (req, res) => 
     };
 
     emitToManager(message.managerId.toString(), 'invitation:responded', responsePayload);
+
+    // Send push notification to manager when invitation is accepted or declined
+    // For declines, we need to fetch the event since we don't update it
+    const { EventModel } = await import('../models/event');
+    const eventForNotification = updatedEvent || await EventModel.findById(eventId).lean();
+
+    if (eventForNotification) {
+      const eventName = (eventForNotification as any).event_name || 'Event';
+      const roleName = (eventForNotification as any).roles?.find((r: any) =>
+        (r._id?.toString() === roleId || r.role_id?.toString() === roleId || r.role === roleId)
+      )?.role_name || (eventForNotification as any).roles?.find((r: any) =>
+        (r._id?.toString() === roleId || r.role_id?.toString() === roleId || r.role === roleId)
+      )?.role || 'Role';
+
+      const staffName = name || 'Staff member';
+
+      if (accept) {
+        // Green dot for acceptance
+        await notificationService.sendToUser(
+          message.managerId.toString(),
+          '🟢 Job Accepted',
+          `${staffName} accepted ${eventName} as ${roleName}`,
+          {
+            type: 'event',
+            eventId: String(eventId),
+            userKey,
+            roleId,
+            action: 'accepted'
+          },
+          'manager'
+        );
+      } else {
+        // Red dot for decline
+        await notificationService.sendToUser(
+          message.managerId.toString(),
+          '🔴 Job Declined',
+          `${staffName} declined ${eventName} as ${roleName}`,
+          {
+            type: 'event',
+            eventId: String(eventId),
+            userKey,
+            roleId,
+            action: 'declined'
+          },
+          'manager'
+        );
+      }
+    }
 
     console.log('[INVITATION] Response successful - status:', accept ? 'accepted' : 'declined');
 

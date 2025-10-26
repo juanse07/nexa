@@ -405,36 +405,50 @@ router.post('/events/:id/publish', requireAuth, async (req, res) => {
     const { audience_user_keys, audience_team_ids } = parsed.data;
     const teamIds = await sanitizeTeamIds(managerId, audience_team_ids);
 
+    // Get all user keys we're publishing to (for notifications and availability checks)
+    const targetUserKeys: string[] = [];
+
+    console.log('[EVENT PUBLISH DEBUG] audience_user_keys:', audience_user_keys);
+    console.log('[EVENT PUBLISH DEBUG] teamIds:', teamIds);
+
+    if (audience_user_keys && audience_user_keys.length > 0) {
+      targetUserKeys.push(...audience_user_keys);
+      console.log('[EVENT PUBLISH DEBUG] Added audience_user_keys to targetUserKeys:', targetUserKeys);
+    }
+
+    // Get user keys from teams
+    if (teamIds.length > 0) {
+      const teamMembers = await TeamMemberModel.find({
+        teamId: { $in: teamIds },
+        status: 'active',
+      }).lean();
+
+      console.log('[EVENT PUBLISH DEBUG] Found team members:', teamMembers.length);
+
+      for (const member of teamMembers) {
+        console.log('[EVENT PUBLISH DEBUG] Team member:', {
+          provider: member.provider,
+          subject: member.subject,
+          status: member.status
+        });
+
+        if (member.provider && member.subject) {
+          const userKey = `${member.provider}:${member.subject}`;
+          if (!targetUserKeys.includes(userKey)) {
+            targetUserKeys.push(userKey);
+          }
+        }
+      }
+    }
+
+    console.log('[EVENT PUBLISH DEBUG] Final targetUserKeys:', targetUserKeys);
+
     // Check availability conflicts for staff in the audience
     const availabilityWarnings: any[] = [];
 
     if (event.date && event.start_time && event.end_time) {
       const eventDate = new Date(event.date);
       const eventDateStr = eventDate.toISOString().split('T')[0]; // YYYY-MM-DD
-
-      // Get all user keys we're publishing to
-      const targetUserKeys: string[] = [];
-
-      if (audience_user_keys && audience_user_keys.length > 0) {
-        targetUserKeys.push(...audience_user_keys);
-      }
-
-      // Get user keys from teams
-      if (teamIds.length > 0) {
-        const teamMembers = await TeamMemberModel.find({
-          teamId: { $in: teamIds },
-          status: 'active',
-        }).lean();
-
-        for (const member of teamMembers) {
-          if (member.provider && member.subject) {
-            const userKey = `${member.provider}:${member.subject}`;
-            if (!targetUserKeys.includes(userKey)) {
-              targetUserKeys.push(userKey);
-            }
-          }
-        }
-      }
 
       // Check availability for each user
       if (targetUserKeys.length > 0) {
@@ -495,6 +509,63 @@ router.post('/events/:id/publish', requireAuth, async (req, res) => {
     const audienceUsers = (responsePayload.audience_user_keys || []) as string[];
     for (const key of audienceUsers) {
       emitToUser(key, 'event:created', responsePayload);
+    }
+
+    // Send push notifications to ALL assigned staff members (including team members)
+    // Use targetUserKeys which includes both audience_user_keys AND team members
+    console.log('[EVENT PUBLISH DEBUG] About to send notifications, targetUserKeys length:', targetUserKeys.length);
+    console.log('[EVENT PUBLISH DEBUG] targetUserKeys array:', targetUserKeys);
+
+    if (targetUserKeys.length > 0) {
+      console.log(`[EVENT NOTIF] Event ${eventId} published, notifying ${targetUserKeys.length} staff members (teams + selected users)`);
+
+      // Compose notification message
+      const eventDate = (eventObj as any).date ? new Date((eventObj as any).date).toLocaleDateString() : '';
+      const roles = (eventObj as any).roles || [];
+
+      // Pluralize each role name (e.g., "Server" → "Servers")
+      const roleNames = roles
+        .map((r: any) => {
+          const roleName = r.role || r.role_name;
+          return roleName ? `${roleName}s` : null;
+        })
+        .filter(Boolean)
+        .join(', ');
+
+      // Build notification body: "date - roles" or just "date" or just "roles"
+      const bodyParts = [];
+      if (eventDate) bodyParts.push(eventDate);
+      if (roleNames) bodyParts.push(roleNames);
+      const notificationBody = bodyParts.length > 0 ? bodyParts.join(' - ') : 'Check the app for details';
+
+      for (const userKey of targetUserKeys) {
+        try {
+          const [provider, subject] = userKey.split(':');
+          if (!provider || !subject) continue;
+
+          const user = await UserModel.findOne({ provider, subject }).lean();
+          if (!user) {
+            console.log(`[EVENT NOTIF] User not found for key: ${userKey}`);
+            continue;
+          }
+
+          await notificationService.sendToUser(
+            String(user._id),
+            '🔵 New Job',
+            notificationBody,
+            {
+              type: 'event',
+              eventId: String(eventObj._id),
+            },
+            'user'
+            // No accent color - using emoji dot for differentiation
+          );
+        } catch (err) {
+          console.error(`[EVENT NOTIF] Failed to send notification to ${userKey}:`, err);
+        }
+      }
+    } else {
+      console.log('[EVENT PUBLISH DEBUG] ⚠️ No targetUserKeys found - skipping notifications');
     }
 
     return res.json(responsePayload);
@@ -681,38 +752,81 @@ router.patch('/events/:id', requireAuth, async (req, res) => {
     const statusChanged = eventBefore && eventBefore.status !== updated.status;
     const isNowPublished = updated.status === 'published' || updated.status === 'confirmed';
 
-    if (statusChanged && isNowPublished && updateUsers.length > 0) {
-      console.log(`[EVENT NOTIF] Event ${eventId} status changed to ${updated.status}, notifying ${updateUsers.length} staff members`);
+    if (statusChanged && isNowPublished) {
+      // Build list of ALL target users (including team members)
+      const allTargetUserKeys: string[] = [];
 
-      // Get event details for notification
-      const eventTitle = updated.title || 'New Event';
-      const eventDate = updated.date ? new Date(updated.date).toLocaleDateString() : '';
+      // Add users from audience_user_keys
+      if (updateUsers.length > 0) {
+        allTargetUserKeys.push(...updateUsers);
+      }
 
-      // Notify each assigned staff member
-      for (const userKey of updateUsers) {
-        try {
-          // Look up user by userKey (provider:subject)
-          const [provider, subject] = userKey.split(':');
-          if (!provider || !subject) continue;
+      // Add team members from audience_team_ids
+      if (updateTeams.length > 0) {
+        const teamMembers = await TeamMemberModel.find({
+          teamId: { $in: updateTeams },
+          status: 'active',
+        }).lean();
 
-          const user = await UserModel.findOne({ provider, subject }).lean();
-          if (!user) {
-            console.log(`[EVENT NOTIF] User not found for key: ${userKey}`);
-            continue;
+        for (const member of teamMembers) {
+          if (member.provider && member.subject) {
+            const userKey = `${member.provider}:${member.subject}`;
+            if (!allTargetUserKeys.includes(userKey)) {
+              allTargetUserKeys.push(userKey);
+            }
           }
+        }
+      }
 
-          await notificationService.sendToUser(
-            String(user._id),
-            `New Job: ${eventTitle}`,
-            eventDate ? `Scheduled for ${eventDate}` : 'Check the app for details',
-            {
-              type: 'event',
-              eventId: String(updated._id),
-            },
-            'user'
-          );
-        } catch (err) {
-          console.error(`[EVENT NOTIF] Failed to send notification to ${userKey}:`, err);
+      if (allTargetUserKeys.length > 0) {
+        console.log(`[EVENT NOTIF] Event ${eventId} status changed to ${updated.status}, notifying ${allTargetUserKeys.length} staff members (teams + selected users)`);
+
+        // Compose notification message
+        const eventDate = (updated as any).date ? new Date((updated as any).date).toLocaleDateString() : '';
+        const roles = (updated as any).roles || [];
+
+        // Pluralize each role name (e.g., "Server" → "Servers")
+        const roleNames = roles
+          .map((r: any) => {
+            const roleName = r.role || r.role_name;
+            return roleName ? `${roleName}s` : null;
+          })
+          .filter(Boolean)
+          .join(', ');
+
+        // Build notification body: "date - roles" or just "date" or just "roles"
+        const bodyParts = [];
+        if (eventDate) bodyParts.push(eventDate);
+        if (roleNames) bodyParts.push(roleNames);
+        const notificationBody = bodyParts.length > 0 ? bodyParts.join(' - ') : 'Check the app for details';
+
+        // Notify each assigned staff member
+        for (const userKey of allTargetUserKeys) {
+          try {
+            // Look up user by userKey (provider:subject)
+            const [provider, subject] = userKey.split(':');
+            if (!provider || !subject) continue;
+
+            const user = await UserModel.findOne({ provider, subject }).lean();
+            if (!user) {
+              console.log(`[EVENT NOTIF] User not found for key: ${userKey}`);
+              continue;
+            }
+
+            await notificationService.sendToUser(
+              String(user._id),
+              '🔵 New Job',
+              notificationBody,
+              {
+                type: 'event',
+                eventId: String(updated._id),
+              },
+              'user'
+              // No accent color - using emoji dot for differentiation
+            );
+          } catch (err) {
+            console.error(`[EVENT NOTIF] Failed to send notification to ${userKey}:`, err);
+          }
         }
       }
     }
