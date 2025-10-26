@@ -38,15 +38,36 @@ router.post('/register-device', authenticateToken, async (req: Request, res: Res
   try {
     const authUser = (req as any).authUser;
 
-    // Determine user ID and type based on JWT content
-    const userId = authUser.managerId || authUser.userId || authUser.id;
+    if (!authUser?.provider || !authUser?.sub) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Determine user type based on JWT content
     const userType: 'user' | 'manager' = authUser.managerId ? 'manager' : 'user';
 
+    // Look up MongoDB user ID
+    let userId: string;
+
+    if (userType === 'manager') {
+      // For managers, get ID directly from JWT
+      userId = authUser.managerId;
+    } else {
+      // For staff users, look up by provider:subject
+      const { UserModel } = await import('../models/user');
+      const user = await UserModel.findOne({
+        provider: authUser.provider,
+        subject: authUser.sub,
+      }).lean();
+
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      userId = String(user._id);
+    }
+
     if (!userId) {
-      return res.status(400).json({
-        error: 'User ID not found',
-        hint: 'JWT token must contain either managerId or userId',
-      });
+      return res.status(400).json({ error: 'User ID not found' });
     }
 
     const validation = RegisterDeviceSchema.safeParse(req.body);
