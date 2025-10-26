@@ -12,6 +12,8 @@ import { TeamModel } from '../models/team';
 import { TeamMemberModel } from '../models/teamMember';
 import { resolveManagerForRequest } from '../utils/manager';
 import { emitToManager, emitToTeams, emitToUser } from '../socket/server';
+import { notificationService } from '../services/notificationService';
+import { UserModel } from '../models/user';
 
 const router = Router();
 
@@ -630,6 +632,12 @@ router.patch('/events/:id', requireAuth, async (req, res) => {
       updateData.date = new Date(updateData.date);
     }
 
+    // Get the event before update to detect status changes
+    const eventBefore = await EventModel.findOne({
+      _id: new mongoose.Types.ObjectId(eventId),
+      managerId,
+    }).lean();
+
     // Update the event
     const result = await EventModel.updateOne(
       { _id: new mongoose.Types.ObjectId(eventId), managerId },
@@ -667,6 +675,46 @@ router.patch('/events/:id', requireAuth, async (req, res) => {
     const updateUsers = (responsePayload.audience_user_keys || []) as string[];
     for (const key of updateUsers) {
       emitToUser(key, 'event:updated', responsePayload);
+    }
+
+    // Send push notifications when event status changes to published/confirmed
+    const statusChanged = eventBefore && eventBefore.status !== updated.status;
+    const isNowPublished = updated.status === 'published' || updated.status === 'confirmed';
+
+    if (statusChanged && isNowPublished && updateUsers.length > 0) {
+      console.log(`[EVENT NOTIF] Event ${eventId} status changed to ${updated.status}, notifying ${updateUsers.length} staff members`);
+
+      // Get event details for notification
+      const eventTitle = updated.title || 'New Event';
+      const eventDate = updated.date ? new Date(updated.date).toLocaleDateString() : '';
+
+      // Notify each assigned staff member
+      for (const userKey of updateUsers) {
+        try {
+          // Look up user by userKey (provider:subject)
+          const [provider, subject] = userKey.split(':');
+          if (!provider || !subject) continue;
+
+          const user = await UserModel.findOne({ provider, subject }).lean();
+          if (!user) {
+            console.log(`[EVENT NOTIF] User not found for key: ${userKey}`);
+            continue;
+          }
+
+          await notificationService.sendToUser(
+            String(user._id),
+            `New Job: ${eventTitle}`,
+            eventDate ? `Scheduled for ${eventDate}` : 'Check the app for details',
+            {
+              type: 'event',
+              eventId: String(updated._id),
+            },
+            'user'
+          );
+        } catch (err) {
+          console.error(`[EVENT NOTIF] Failed to send notification to ${userKey}:`, err);
+        }
+      }
     }
 
     return res.json(responsePayload);
