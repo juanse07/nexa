@@ -1438,10 +1438,15 @@ router.post('/events/:id/clock-in', requireAuth, async (req, res) => {
     const attendance = (accepted[idx].attendance || []) as any[];
     const last = attendance.length > 0 ? attendance[attendance.length - 1] : undefined;
     if (last && !last.clockOutAt) {
-      return res.status(409).json({ message: 'Already clocked in' });
+      return res.status(409).json({
+        message: 'Already clocked in',
+        status: 'clocked_in',
+        clockInAt: last.clockInAt
+      });
     }
 
-    const newAttendance = [...attendance, { clockInAt: new Date() }];
+    const clockInTime = new Date();
+    const newAttendance = [...attendance, { clockInAt: clockInTime }];
     const result = await EventModel.updateOne(
       { _id: new mongoose.Types.ObjectId(eventId), 'accepted_staff.userKey': userKey },
       { $set: { 'accepted_staff.$.attendance': newAttendance, updatedAt: new Date() } }
@@ -1450,7 +1455,12 @@ router.post('/events/:id/clock-in', requireAuth, async (req, res) => {
       return res.status(404).json({ message: 'Event not found' });
     }
 
-    return res.status(200).json({ message: 'Clocked in', attendance: newAttendance });
+    return res.status(200).json({
+      message: 'Clocked in',
+      status: 'clocked_in',
+      clockInAt: clockInTime,
+      attendance: newAttendance
+    });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[clock-in] failed', err);
