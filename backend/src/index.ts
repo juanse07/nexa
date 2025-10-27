@@ -25,6 +25,7 @@ import { initSocket } from './socket/server';
 import teamsRouter from './routes/teams';
 import invitesRouter from './routes/invites';
 import notificationsRouter from './routes/notifications';
+import { notificationScheduler } from './services/notificationScheduler';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 
@@ -140,6 +141,10 @@ async function start() {
   try {
     await connectToDatabase();
     logger.info('DB initialized');
+
+    // Initialize notification scheduler
+    notificationScheduler.initialize();
+    logger.info('Notification scheduler initialized');
 
     const app = await createServer();
     const server = http.createServer(app);

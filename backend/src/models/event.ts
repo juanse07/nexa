@@ -59,6 +59,12 @@ export interface EventDocument extends Document {
   publishedBy?: string;
   fulfilledAt?: Date;
 
+  // Notification tracking
+  notificationsSent?: {
+    preShiftReminder?: boolean;
+    forgotClockOut?: boolean;
+  };
+
   event_name?: string;
   client_name?: string;
   third_party_company_name?: string;
@@ -226,6 +232,15 @@ const EventSchema = new Schema<EventDocument>(
     hoursSubmittedAt: { type: Date },
     hoursApprovedBy: { type: String, trim: true },
     hoursApprovedAt: { type: Date },
+
+    // Notification tracking
+    notificationsSent: {
+      type: {
+        preShiftReminder: { type: Boolean, default: false },
+        forgotClockOut: { type: Boolean, default: false },
+      },
+      default: {},
+    },
   },
   { timestamps: true }
 );
