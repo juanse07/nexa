@@ -440,7 +440,7 @@ router.post('/conversations/:targetId/messages', requireAuth, async (req, res) =
 
         await notificationService.sendToUser(
           targetManagerId.toString(),
-          `New message from ${userName}`,
+          userName,
           message.length > 100 ? message.substring(0, 100) + '...' : message,
           {
             type: 'chat',

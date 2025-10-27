@@ -24,11 +24,20 @@ class NotificationService {
   int _unreadTaskCount = 0;
   final _notificationCountController = StreamController<int>.broadcast();
 
+  // Track if already initialized to prevent duplicate listeners
+  bool _isInitialized = false;
+
   Stream<int> get notificationCountStream => _notificationCountController.stream;
   int get totalUnreadCount => _unreadChatCount + _unreadTaskCount;
 
   /// Initialize OneSignal and local notifications
   Future<void> initialize() async {
+    // Prevent duplicate initialization
+    if (_isInitialized) {
+      print('⚠️ NotificationService already initialized, skipping setup...');
+      return;
+    }
+
     try {
       // Initialize local notifications for foreground display
       await _initializeLocalNotifications();
@@ -44,7 +53,7 @@ class NotificationService {
         print('OneSignal permission granted: $permission');
       }
 
-      // Set up notification handlers
+      // Set up notification handlers (only once!)
       _setupNotificationHandlers();
 
       // Get and register device token
@@ -52,6 +61,9 @@ class NotificationService {
 
       // Load notification preferences
       await _loadNotificationPreferences();
+
+      // Mark as initialized to prevent duplicate listeners
+      _isInitialized = true;
 
       print('✅ NotificationService initialized successfully');
     } catch (e) {
