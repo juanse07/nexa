@@ -1,11 +1,44 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:nexa/core/network/api_client.dart';
+import 'package:nexa/core/network/socket_manager.dart';
 import 'package:nexa/core/di/injection.dart';
 
 class EventService {
-  EventService() : _apiClient = getIt<ApiClient>();
+  EventService() : _apiClient = getIt<ApiClient>() {
+    _setupSocketListeners();
+  }
 
   final ApiClient _apiClient;
+
+  // Stream controllers for event status changes
+  final StreamController<Map<String, dynamic>> _eventFulfilledController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _eventReopenedController =
+      StreamController<Map<String, dynamic>>.broadcast();
+
+  Stream<Map<String, dynamic>> get eventFulfilledStream =>
+      _eventFulfilledController.stream;
+  Stream<Map<String, dynamic>> get eventReopenedStream =>
+      _eventReopenedController.stream;
+
+  void _setupSocketListeners() {
+    SocketManager.instance.events.listen((event) {
+      if (event.event == 'event:fulfilled') {
+        print('[EventService] Event fulfilled: ${event.data}');
+        _eventFulfilledController.add(event.data as Map<String, dynamic>);
+      } else if (event.event == 'event:reopened') {
+        print('[EventService] Event reopened: ${event.data}');
+        _eventReopenedController.add(event.data as Map<String, dynamic>);
+      }
+    });
+  }
+
+  void dispose() {
+    _eventFulfilledController.close();
+    _eventReopenedController.close();
+  }
 
   Future<List<Map<String, dynamic>>> fetchEvents({String? userKey}) async {
     try {

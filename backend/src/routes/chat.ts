@@ -857,6 +857,94 @@ router.post('/invitations/:messageId/respond', requireAuth, async (req, res) => 
       }
 
       updatedEvent = await EventModel.findById(eventId).lean();
+
+      // Check if event should auto-transition to 'fulfilled' status
+      const { checkIfEventFulfilled } = await import('../utils/eventCapacity');
+      const eventDoc = await EventModel.findById(eventId);
+
+      if (eventDoc && eventDoc.status === 'draft') {
+        const isFulfilled = checkIfEventFulfilled(eventDoc);
+
+        if (isFulfilled) {
+          console.log('[INVITATION] Event is now fulfilled - all positions filled');
+          eventDoc.status = 'fulfilled';
+          eventDoc.fulfilledAt = new Date();
+          await eventDoc.save();
+
+          // Emit socket event for fulfilled status
+          const { emitToManager: emitManager } = await import('../socket/server');
+          emitManager(message.managerId.toString(), 'event:fulfilled', {
+            eventId: String(eventId),
+            fulfilledAt: eventDoc.fulfilledAt,
+          });
+
+          // Send notification to manager
+          await notificationService.sendToUser(
+            message.managerId.toString(),
+            '✅ Event Fulfilled',
+            `All positions filled for ${(eventDoc as any).event_name || 'your event'}`,
+            {
+              type: 'event',
+              eventId: String(eventId),
+              action: 'fulfilled',
+            },
+            'manager'
+          );
+
+          updatedEvent = eventDoc.toObject();
+        }
+      }
+    }
+
+    // Handle declination - check if event should revert from 'fulfilled' to 'draft'
+    if (!accept) {
+      const { EventModel: EventModelDecline } = await import('../models/event');
+      const eventDoc = await EventModelDecline.findById(eventId);
+
+      if (eventDoc && eventDoc.status === 'fulfilled') {
+        console.log('[INVITATION] Staff declined - checking if event should reopen');
+
+        // Remove user from accepted_staff if they were there
+        await EventModelDecline.updateOne(
+          { _id: eventId },
+          { $pull: { accepted_staff: { userKey } } as any }
+        );
+
+        // Reload event and check if still fulfilled
+        const reloadedEvent = await EventModelDecline.findById(eventId);
+        if (reloadedEvent) {
+          const { checkIfEventFulfilled: checkFulfilled } = await import('../utils/eventCapacity');
+          const stillFulfilled = checkFulfilled(reloadedEvent);
+
+          if (!stillFulfilled) {
+            console.log('[INVITATION] Event no longer fulfilled - reopening to draft');
+            reloadedEvent.status = 'draft';
+            reloadedEvent.fulfilledAt = undefined;
+            await reloadedEvent.save();
+
+            // Emit socket event for reopened status
+            const { emitToManager: emitManager } = await import('../socket/server');
+            emitManager(message.managerId.toString(), 'event:reopened', {
+              eventId: String(eventId),
+            });
+
+            // Send notification to manager
+            await notificationService.sendToUser(
+              message.managerId.toString(),
+              '🔓 Event Reopened',
+              `Position available in ${(reloadedEvent as any).event_name || 'your event'} - staff member declined`,
+              {
+                type: 'event',
+                eventId: String(eventId),
+                action: 'reopened',
+              },
+              'manager'
+            );
+
+            updatedEvent = reloadedEvent.toObject();
+          }
+        }
+      }
     }
 
     // Update the message metadata
@@ -1016,6 +1104,268 @@ router.get('/invitations/:messageId/event', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Error fetching invitation event:', error);
     return res.status(500).json({ error: 'Failed to fetch event details' });
+  }
+});
+
+/**
+ * POST /chat/invitations/send-bulk
+ * Send event invitations to multiple users WITHOUT publishing the event
+ * Event remains in 'draft' status - only invited users can see it via chat
+ */
+router.post('/invitations/send-bulk', requireAuth, async (req, res) => {
+  try {
+    const { managerId, provider, sub, name } = (req as AuthenticatedRequest).authUser;
+    const { eventId, userRoleAssignments } = req.body;
+
+    console.log('[BULK INVITATION] Request:', { eventId, assignmentsCount: userRoleAssignments?.length });
+
+    // Only managers can send bulk invitations
+    if (!managerId) {
+      return res.status(403).json({ error: 'Only managers can send event invitations' });
+    }
+
+    // Validate input
+    if (!eventId || !mongoose.Types.ObjectId.isValid(eventId)) {
+      return res.status(400).json({ error: 'Valid eventId is required' });
+    }
+
+    if (!Array.isArray(userRoleAssignments) || userRoleAssignments.length === 0) {
+      return res.status(400).json({ error: 'userRoleAssignments array is required' });
+    }
+
+    // Fetch the event
+    const { EventModel } = await import('../models/event');
+    const event = await EventModel.findOne({
+      _id: new mongoose.Types.ObjectId(eventId),
+      managerId: new mongoose.Types.ObjectId(managerId),
+    });
+
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found or not owned by you' });
+    }
+
+    // Event must be in draft status to send private invitations
+    if (event.status !== 'draft') {
+      return res.status(400).json({
+        error: `Cannot send private invitations for event with status '${event.status}'. Only draft events can have private invitations.`,
+      });
+    }
+
+    // Import capacity helper
+    const { checkRoleHasCapacity } = await import('../utils/eventCapacity');
+
+    const results: Array<{
+      userKey: string;
+      roleId: string;
+      success: boolean;
+      error?: string;
+      conversationId?: string;
+      messageId?: string;
+    }> = [];
+
+    // Send invitation to each user
+    for (const assignment of userRoleAssignments) {
+      const { userKey, roleId } = assignment;
+
+      if (!userKey || !roleId) {
+        results.push({
+          userKey: userKey || 'unknown',
+          roleId: roleId || 'unknown',
+          success: false,
+          error: 'Missing userKey or roleId',
+        });
+        continue;
+      }
+
+      try {
+        // Check if role has capacity
+        const hasCapacity = checkRoleHasCapacity(event, roleId);
+        if (!hasCapacity) {
+          results.push({
+            userKey,
+            roleId,
+            success: false,
+            error: 'Role is already full',
+          });
+          continue;
+        }
+
+        // Verify user exists and is active team member
+        const [userProvider, userSubject] = userKey.split(':');
+        if (!userProvider || !userSubject) {
+          results.push({
+            userKey,
+            roleId,
+            success: false,
+            error: 'Invalid userKey format',
+          });
+          continue;
+        }
+
+        const user = await UserModel.findOne({ provider: userProvider, subject: userSubject });
+        if (!user) {
+          results.push({
+            userKey,
+            roleId,
+            success: false,
+            error: 'User not found',
+          });
+          continue;
+        }
+
+        // Check if user is active team member
+        const isTeamMember = await TeamMemberModel.findOne({
+          managerId: new mongoose.Types.ObjectId(managerId),
+          provider: userProvider,
+          subject: userSubject,
+          status: 'active',
+        }).lean();
+
+        if (!isTeamMember) {
+          results.push({
+            userKey,
+            roleId,
+            success: false,
+            error: 'User is not an active team member',
+          });
+          continue;
+        }
+
+        // Find or create conversation
+        const conversation = await ConversationModel.findOneAndUpdate(
+          { managerId: new mongoose.Types.ObjectId(managerId), userKey },
+          {
+            $setOnInsert: {
+              managerId: new mongoose.Types.ObjectId(managerId),
+              userKey,
+            },
+          },
+          { upsert: true, new: true }
+        );
+
+        // Find role details
+        const role = event.roles.find(
+          (r: any) =>
+            r._id?.toString() === roleId ||
+            r.role_id?.toString() === roleId ||
+            r.role === roleId
+        );
+
+        const roleName = role?.role || 'Position';
+
+        // Compose invitation message
+        const eventName = event.event_name || 'Event';
+        const eventDate = event.date ? new Date(event.date).toLocaleDateString() : '';
+        const venueName = event.venue_name || '';
+
+        const messageParts = [
+          `You've been invited to work as ${roleName}`,
+          eventName,
+          eventDate,
+          venueName,
+        ].filter(Boolean);
+
+        const invitationMessage = messageParts.join(' • ');
+
+        // Create chat message with invitation metadata
+        const chatMessage = await ChatMessageModel.create({
+          conversationId: conversation._id,
+          managerId: new mongoose.Types.ObjectId(managerId),
+          userKey,
+          senderType: 'manager',
+          senderName: name,
+          message: invitationMessage,
+          messageType: 'eventInvitation',
+          metadata: {
+            eventId: String(event._id),
+            roleId: String(roleId),
+            status: 'pending',
+          },
+          readByManager: true,
+          readByUser: false,
+        });
+
+        // Update conversation
+        await ConversationModel.findByIdAndUpdate(conversation._id, {
+          lastMessageAt: chatMessage.createdAt,
+          lastMessagePreview: invitationMessage.substring(0, 200),
+          $inc: { unreadCountUser: 1 },
+        });
+
+        // Emit socket event to user
+        const messagePayload = {
+          id: String(chatMessage._id),
+          conversationId: String(conversation._id),
+          senderType: chatMessage.senderType,
+          senderName: chatMessage.senderName,
+          message: chatMessage.message,
+          messageType: chatMessage.messageType,
+          metadata: chatMessage.metadata,
+          readByManager: chatMessage.readByManager,
+          readByUser: chatMessage.readByUser,
+          createdAt: chatMessage.createdAt,
+        };
+
+        emitToUser(userKey, 'chat:message', messagePayload);
+
+        // Send push notification
+        const manager = await ManagerModel.findById(managerId);
+        const managerName = manager?.first_name && manager?.last_name
+          ? `${manager.first_name} ${manager.last_name}`
+          : manager?.name || 'Your manager';
+
+        await notificationService.sendToUser(
+          String(user._id),
+          `🟣 ${managerName}`,
+          invitationMessage.length > 100
+            ? invitationMessage.substring(0, 100) + '...'
+            : invitationMessage,
+          {
+            type: 'chat',
+            conversationId: String(conversation._id),
+            messageId: String(chatMessage._id),
+            senderName: managerName,
+            managerId: managerId,
+            eventId: String(event._id),
+          },
+          'user'
+        );
+
+        results.push({
+          userKey,
+          roleId,
+          success: true,
+          conversationId: String(conversation._id),
+          messageId: String(chatMessage._id),
+        });
+
+        console.log('[BULK INVITATION] Sent to', userKey, 'for role', roleId);
+      } catch (error) {
+        console.error('[BULK INVITATION] Error sending to', userKey, error);
+        results.push({
+          userKey,
+          roleId,
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+
+    const successCount = results.filter((r) => r.success).length;
+    const failureCount = results.filter((r) => !r.success).length;
+
+    console.log('[BULK INVITATION] Complete:', { successCount, failureCount });
+
+    return res.json({
+      message: `Invitations sent: ${successCount} successful, ${failureCount} failed`,
+      successCount,
+      failureCount,
+      results,
+      eventStatus: event.status, // Confirm event remains in draft
+    });
+  } catch (error) {
+    console.error('Error sending bulk invitations:', error);
+    return res.status(500).json({ error: 'Failed to send bulk invitations' });
   }
 });
 

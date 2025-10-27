@@ -324,6 +324,47 @@ class ChatService {
     }
   }
 
+  /// Send bulk invitations to multiple users without publishing the event
+  /// Event stays in 'draft' status - only invited users can see it
+  Future<Map<String, dynamic>> sendBulkInvitations({
+    required String eventId,
+    required List<Map<String, dynamic>> userRoleAssignments,
+  }) async {
+    print('[ChatService] sendBulkInvitations called for event: $eventId');
+    print('[ChatService] Sending to ${userRoleAssignments.length} users');
+
+    final token = await AuthService.getJwt();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+
+    final baseUrl = AppConfig.instance.baseUrl;
+    final url = Uri.parse('$baseUrl/chat/invitations/send-bulk');
+
+    final response = await http.post(
+      url,
+      headers: <String, String>{
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: json.encode(<String, dynamic>{
+        'eventId': eventId,
+        'userRoleAssignments': userRoleAssignments,
+      }),
+    );
+
+    print('[ChatService] sendBulkInvitations response status: ${response.statusCode}');
+    print('[ChatService] sendBulkInvitations response body: ${response.body}');
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body) as Map<String, dynamic>;
+      return data;
+    } else {
+      final error = json.decode(response.body);
+      throw Exception(error['error'] ?? 'Failed to send bulk invitations');
+    }
+  }
+
   /// Respond to an event invitation (accept or decline)
   Future<void> respondToInvitation({
     required String messageId,

@@ -198,6 +198,120 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
         .toList();
   }
 
+  Future<void> _sendDirectInvitations() async {
+    if (_selectedKeys.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Select at least one person to invite')),
+      );
+      return;
+    }
+
+    setState(() => _publishing = true);
+    try {
+      final payload = Map<String, dynamic>.from(widget.draft);
+
+      // Check if client already exists
+      final existingClientName = (payload['client_name'] ?? '').toString().trim();
+      String clientName = existingClientName;
+
+      if (existingClientName.isEmpty) {
+        final clientData = await _promptClientPicker();
+        if (clientData == null) {
+          setState(() => _publishing = false);
+          return;
+        }
+        clientName = (clientData['name'] ?? '').toString();
+        final rawClientId = (clientData['id'] ?? '').toString();
+        payload['client_name'] = clientName;
+        if (rawClientId.isNotEmpty) {
+          payload['clientId'] = rawClientId;
+          payload['client_id'] = rawClientId;
+        }
+      }
+
+      // Check if roles exist with positive counts
+      final existingRoles = (payload['roles'] as List?)?.whereType<Map<dynamic, dynamic>>().toList() ?? [];
+      final hasPositiveRoles = existingRoles.any((role) {
+        final count = role['count'];
+        if (count is int) return count > 0;
+        final parsed = int.tryParse(count?.toString() ?? '');
+        return parsed != null && parsed > 0;
+      });
+
+      Map<String, int> counts;
+      List<Map<String, dynamic>> roleDefs;
+
+      if (!hasPositiveRoles) {
+        final promptedCounts = await _promptRoleCounts(payload);
+        if (promptedCounts == null) {
+          setState(() => _publishing = false);
+          return;
+        }
+        counts = promptedCounts;
+        roleDefs = _countsToRoles(counts);
+        if (roleDefs.isEmpty) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Add at least one role with a positive headcount')),
+            );
+          }
+          setState(() => _publishing = false);
+          return;
+        }
+        payload['roles'] = roleDefs;
+      } else {
+        roleDefs = existingRoles.map((role) => Map<String, dynamic>.from(role)).toList();
+      }
+
+      // Update the draft with roles and client info (but DON'T publish)
+      await _eventService.updateEvent(widget.draftId, payload);
+
+      // Prompt for role assignments
+      final userRoleAssignments = await _promptRoleAssignmentsForUsers(roleDefs);
+      if (userRoleAssignments == null) {
+        print('[DIRECT INVITATIONS] User cancelled role assignment');
+        setState(() => _publishing = false);
+        return;
+      }
+
+      // Build array of {userKey, roleId} for bulk invitation endpoint
+      final assignments = userRoleAssignments.entries.map((entry) {
+        return {
+          'userKey': entry.key,
+          'roleId': entry.value,
+        };
+      }).toList();
+
+      // Call bulk invitation endpoint
+      final response = await _chatService.sendBulkInvitations(
+        eventId: widget.draftId,
+        userRoleAssignments: assignments,
+      );
+
+      if (!mounted) return;
+
+      final successCount = response['successCount'] ?? 0;
+      final failureCount = response['failureCount'] ?? 0;
+
+      Navigator.of(context).pop(true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Invitations sent: $successCount successful${failureCount > 0 ? ", $failureCount failed" : ""}. Event remains private.',
+          ),
+          backgroundColor: successCount > 0 ? Colors.green : Colors.orange,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to send invitations: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _publishing = false);
+    }
+  }
+
   Future<void> _publish() async {
     if (!_visibleToEntireTeam && _selectedKeys.isEmpty && _selectedTeamIds.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -636,7 +750,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
               ),
             ),
           ),
-          // Pinned publish button at bottom
+          // Pinned action buttons at bottom
           Container(
             decoration: BoxDecoration(
               color: Colors.white,
@@ -651,27 +765,70 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
             child: SafeArea(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _publishing ? null : _publish,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      backgroundColor: const Color(0xFF6366F1),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Send Direct Invitations button (keeps event private/draft)
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _publishing ? null : _sendDirectInvitations,
+                        icon: const Icon(Icons.mail_outline),
+                        label: const Text(
+                          'Send Direct Invitations (Private)',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          side: const BorderSide(color: Color(0xFF6366F1), width: 2),
+                          foregroundColor: const Color(0xFF6366F1),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
                       ),
-                      elevation: 0,
                     ),
-                    child: Text(
-                      _publishing ? 'Publishing...' : 'Publish',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Event stays private - only invited people can see it',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    // Publish to Team button (makes event public)
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _publishing ? null : _publish,
+                        icon: const Icon(Icons.campaign),
+                        label: Text(
+                          _publishing ? 'Publishing...' : 'Publish to Team/Public',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          backgroundColor: const Color(0xFF6366F1),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 0,
+                        ),
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Event becomes visible to selected teams/members',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 ),
               ),
             ),

@@ -40,7 +40,7 @@ const acceptedStaffSchema = z.object({
 });
 
 const eventSchema = z.object({
-  status: z.enum(['draft', 'published', 'confirmed', 'in_progress', 'completed', 'cancelled']).nullish(),
+  status: z.enum(['draft', 'published', 'confirmed', 'fulfilled', 'in_progress', 'completed', 'cancelled']).nullish(),
   event_name: z.string().nullish(),
   client_name: z.string().nullish(),
   third_party_company_name: z.string().nullish(),
@@ -390,6 +390,15 @@ router.post('/events/:id/publish', requireAuth, async (req, res) => {
     if (event.status !== 'draft') {
       return res.status(400).json({
         message: `Cannot publish event with status '${event.status}'. Only draft events can be published.`,
+      });
+    }
+
+    // Check if event is already fulfilled (all positions filled via private invitations)
+    const { checkIfEventFulfilled } = await import('../utils/eventCapacity');
+    if (checkIfEventFulfilled(event)) {
+      return res.status(400).json({
+        message: 'Cannot publish event - all positions are already filled via private invitations. Event is fulfilled.',
+        hint: 'This event was filled through direct invitations and does not need to be published.',
       });
     }
 

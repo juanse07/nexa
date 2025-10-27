@@ -54,9 +54,10 @@ export interface EventDocument extends Document {
   managerId: mongoose.Types.ObjectId;
 
   // Event lifecycle status
-  status: 'draft' | 'published' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
+  status: 'draft' | 'published' | 'confirmed' | 'fulfilled' | 'in_progress' | 'completed' | 'cancelled';
   publishedAt?: Date;
   publishedBy?: string;
+  fulfilledAt?: Date;
 
   event_name?: string;
   client_name?: string;
@@ -167,13 +168,14 @@ const EventSchema = new Schema<EventDocument>(
     // Event lifecycle status
     status: {
       type: String,
-      enum: ['draft', 'published', 'confirmed', 'in_progress', 'completed', 'cancelled'],
+      enum: ['draft', 'published', 'confirmed', 'fulfilled', 'in_progress', 'completed', 'cancelled'],
       default: 'draft',
       required: true,
       index: true,
     },
     publishedAt: { type: Date },
     publishedBy: { type: String, trim: true },
+    fulfilledAt: { type: Date },
 
     event_name: { type: String, trim: true },
     client_name: { type: String, trim: true },

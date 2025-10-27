@@ -4288,16 +4288,58 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 ? Formatters.formatDateString(dateRaw)
                 : '';
             final id = (d['id'] ?? d['_id'] ?? '').toString();
+            final status = (d['status'] ?? 'draft').toString();
 
             return Container(
               margin: const EdgeInsets.only(bottom: 12),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade200),
+                border: Border.all(
+                  color: status == 'fulfilled'
+                    ? const Color(0xFF059669)
+                    : Colors.grey.shade200,
+                  width: status == 'fulfilled' ? 2 : 1,
+                ),
               ),
               child: ListTile(
-                title: Text(client.isNotEmpty ? client : 'Client'),
+                leading: status == 'fulfilled'
+                    ? Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF059669).withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.check_circle,
+                          color: Color(0xFF059669),
+                          size: 24,
+                        ),
+                      )
+                    : null,
+                title: Row(
+                  children: [
+                    Expanded(
+                      child: Text(client.isNotEmpty ? client : 'Client'),
+                    ),
+                    if (status == 'fulfilled')
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF059669),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Text(
+                          'Fulfilled',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
                 subtitle: Text(
                   [
                     name,
