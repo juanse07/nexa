@@ -254,7 +254,7 @@ class NotificationScheduler {
   }
 
   /**
-   * Auto-enable team chat 1 hour before event starts
+   * Auto-enable team chat when event is FULL and within 1 hour of start
    */
   async autoEnableEventChat(): Promise<void> {
     try {
@@ -274,10 +274,44 @@ class NotificationScheduler {
         chatEnabled: { $ne: true }
       }).lean();
 
-      console.log(`[NotificationScheduler] Found ${events.length} events to enable chat`);
+      console.log(`[NotificationScheduler] Found ${events.length} candidate events for chat`);
 
       for (const event of events) {
         try {
+          // Check if event is full (all roles have enough accepted staff)
+          const roles = event.roles || [];
+          let isFull = true;
+          let totalNeeded = 0;
+          let totalAccepted = 0;
+
+          for (const role of roles) {
+            const needed = role.count || 0;
+            totalNeeded += needed;
+
+            // Count accepted staff for this role
+            const acceptedStaff = event.accepted_staff || [];
+            const acceptedForRole = acceptedStaff.filter((staff: any) => {
+              // Staff can be a string (userKey) or object with role
+              const staffRole = typeof staff === 'string' ? null : staff.role;
+              // Match by role name
+              return staffRole === role.role;
+            }).length;
+
+            totalAccepted += acceptedForRole;
+
+            if (acceptedForRole < needed) {
+              isFull = false;
+            }
+          }
+
+          console.log(`[NotificationScheduler] Event ${event._id} (${event.event_name}): ${totalAccepted}/${totalNeeded} filled, isFull=${isFull}`);
+
+          // Only enable chat if event is FULL and within 1 hour
+          if (!isFull) {
+            console.log(`[NotificationScheduler] ⏭️  Skipping ${event._id} - not full yet`);
+            continue;
+          }
+
           // Enable chat
           await EventModel.updateOne(
             { _id: event._id },
@@ -295,11 +329,11 @@ class NotificationScheduler {
             senderId: event.managerId,
             senderType: 'manager',
             senderName: 'System',
-            message: '👋 Team chat is now open! Use this to coordinate with your team for this event.',
+            message: '👋 Team chat is now open! Your event is fully staffed and starting soon. Use this to coordinate with your team.',
             messageType: 'system',
           });
 
-          console.log(`[NotificationScheduler] ✅ Enabled chat for event ${event._id} (${event.event_name})`);
+          console.log(`[NotificationScheduler] ✅ Enabled chat for FULL event ${event._id} (${event.event_name})`);
         } catch (err) {
           console.error(`[NotificationScheduler] Failed to enable chat for event ${event._id}:`, err);
         }
