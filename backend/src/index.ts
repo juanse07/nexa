@@ -25,6 +25,7 @@ import { initSocket } from './socket/server';
 import teamsRouter from './routes/teams';
 import invitesRouter from './routes/invites';
 import notificationsRouter from './routes/notifications';
+import eventChatRouter from './routes/eventChat';
 import { notificationScheduler } from './services/notificationScheduler';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
@@ -77,6 +78,7 @@ async function createServer() {
 
   app.use('/api', healthRouter);
   app.use('/api', eventsRouter);
+  app.use('/api', eventChatRouter); // Event team chat
   app.use('/api', clientsRouter);
   app.use('/api', rolesRouter);
   app.use('/api', tariffsRouter);

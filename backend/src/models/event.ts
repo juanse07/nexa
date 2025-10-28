@@ -65,6 +65,10 @@ export interface EventDocument extends Document {
     forgotClockOut?: boolean;
   };
 
+  // Team chat
+  chatEnabled?: boolean;
+  chatEnabledAt?: Date;
+
   event_name?: string;
   client_name?: string;
   third_party_company_name?: string;
@@ -241,6 +245,10 @@ const EventSchema = new Schema<EventDocument>(
       },
       default: {},
     },
+
+    // Team chat
+    chatEnabled: { type: Boolean, default: false },
+    chatEnabledAt: { type: Date },
   },
   { timestamps: true }
 );

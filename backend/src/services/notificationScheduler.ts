@@ -1,6 +1,7 @@
 import * as cron from 'node-cron';
 import { EventModel } from '../models/event';
 import { UserModel } from '../models/user';
+import { EventChatMessageModel } from '../models/eventChatMessage';
 import { notificationService } from './notificationService';
 
 class NotificationScheduler {
@@ -39,7 +40,16 @@ class NotificationScheduler {
       })
     );
 
-    console.log('[NotificationScheduler] ✅ Initialized 3 scheduled tasks');
+    // Run every 5 minutes to auto-enable chat 1 hour before events
+    this.tasks.push(
+      cron.schedule('*/5 * * * *', () => {
+        this.autoEnableEventChat().catch(err => {
+          console.error('[NotificationScheduler] Auto-enable chat failed:', err);
+        });
+      })
+    );
+
+    console.log('[NotificationScheduler] ✅ Initialized 4 scheduled tasks');
   }
 
   /**
@@ -240,6 +250,63 @@ class NotificationScheduler {
 
     } catch (error) {
       console.error('[NotificationScheduler] sendTimesheetReminders error:', error);
+    }
+  }
+
+  /**
+   * Auto-enable team chat 1 hour before event starts
+   */
+  async autoEnableEventChat(): Promise<void> {
+    try {
+      const now = new Date();
+      const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+      const fiveMinutesFromNow = new Date(now.getTime() + 5 * 60 * 1000);
+
+      console.log(`[NotificationScheduler] Checking for events to enable chat (${fiveMinutesFromNow.toISOString()} - ${oneHourFromNow.toISOString()})`);
+
+      // Find events starting within the next hour that don't have chat enabled yet
+      const events = await EventModel.find({
+        date: {
+          $gte: fiveMinutesFromNow,
+          $lte: oneHourFromNow
+        },
+        status: { $in: ['confirmed', 'published'] },
+        chatEnabled: { $ne: true }
+      }).lean();
+
+      console.log(`[NotificationScheduler] Found ${events.length} events to enable chat`);
+
+      for (const event of events) {
+        try {
+          // Enable chat
+          await EventModel.updateOne(
+            { _id: event._id },
+            {
+              $set: {
+                chatEnabled: true,
+                chatEnabledAt: new Date()
+              }
+            }
+          );
+
+          // Post system message
+          await EventChatMessageModel.create({
+            eventId: event._id,
+            senderId: event.managerId,
+            senderType: 'manager',
+            senderName: 'System',
+            message: '👋 Team chat is now open! Use this to coordinate with your team for this event.',
+            messageType: 'system',
+          });
+
+          console.log(`[NotificationScheduler] ✅ Enabled chat for event ${event._id} (${event.event_name})`);
+        } catch (err) {
+          console.error(`[NotificationScheduler] Failed to enable chat for event ${event._id}:`, err);
+        }
+      }
+
+    } catch (error) {
+      console.error('[NotificationScheduler] autoEnableEventChat error:', error);
     }
   }
 

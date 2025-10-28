@@ -15,6 +15,7 @@ let io: IOServer | null = null;
 const managerRoom = (managerId: string) => `manager:${managerId}`;
 const userRoom = (userKey: string) => `user:${userKey}`;
 const teamRoom = (teamId: string) => `team:${teamId}`;
+const eventChatRoom = (eventId: string) => `event_chat:${eventId}`;
 
 export function initSocket(server: http.Server): IOServer {
   io = new IOServer(server, {
@@ -56,6 +57,21 @@ export function initSocket(server: http.Server): IOServer {
       const { conversationId, isTyping, senderType } = payload;
       // Broadcast to the other party in the conversation
       socket.broadcast.emit('chat:typing', { conversationId, isTyping, senderType });
+    });
+
+    // Event team chat - join/leave rooms
+    socket.on('event_chat:join', (eventId: string) => {
+      if (eventId && typeof eventId === 'string') {
+        socket.join(eventChatRoom(eventId));
+        console.log(`[Socket] Client ${socket.id} joined event chat room: ${eventId}`);
+      }
+    });
+
+    socket.on('event_chat:leave', (eventId: string) => {
+      if (eventId && typeof eventId === 'string') {
+        socket.leave(eventChatRoom(eventId));
+        console.log(`[Socket] Client ${socket.id} left event chat room: ${eventId}`);
+      }
     });
   });
 
@@ -126,6 +142,12 @@ export function emitToTeams(
   const rooms = normalizeTeamIds(teamIds).map((id) => teamRoom(id));
   if (rooms.length === 0) return;
   io.to(rooms).emit(event, payload);
+}
+
+export function emitToEventChat(eventId: string, event: string, payload: unknown) {
+  if (!io) return;
+  io.to(eventChatRoom(eventId)).emit(event, payload);
+  console.log(`[Socket] Emitted ${event} to event chat room: ${eventId}`);
 }
 
 function normalizeTeamIds(input: Array<string | null | undefined> | string | null | undefined): string[] {
