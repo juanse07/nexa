@@ -56,6 +56,7 @@ class _ChatScreenState extends State<ChatScreen> {
   // Favorites functionality
   Set<String> _favoriteUsers = {};
   List<Map<String, dynamic>>? _roles;
+  String? _visibleDate; // Tracks the currently visible date section
 
   @override
   void initState() {
@@ -78,6 +79,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _listenToTypingIndicators();
     _listenToInvitationResponses();
     _markAsRead();
+    _scrollController.addListener(_updateVisibleDate);
 
     // Load favorites and roles for menu
     _loadFavorites();
@@ -269,6 +271,11 @@ class _ChatScreenState extends State<ChatScreen> {
           ..clear()
           ..addAll(messages);
         _loading = false;
+
+        // Set initial visible date to the latest message's date
+        if (_messages.isNotEmpty) {
+          _visibleDate = DateFormat('MMM d, yyyy').format(_messages.last.createdAt);
+        }
       });
 
       // Scroll to bottom - instant on initial load, animated on refresh
@@ -308,6 +315,26 @@ class _ChatScreenState extends State<ChatScreen> {
         }
       }
     });
+  }
+
+  void _updateVisibleDate() {
+    if (!_scrollController.hasClients || _messages.isEmpty) return;
+
+    final scrollOffset = _scrollController.offset;
+    final approximateIndex = (scrollOffset / 80).floor();
+    final targetIndex = approximateIndex.clamp(0, _messages.length - 1);
+
+    if (targetIndex < _messages.length) {
+      // Reverse the index since ListView has reverse: true
+      final message = _messages[_messages.length - 1 - targetIndex];
+      final newDate = DateFormat('MMM d, yyyy').format(message.createdAt);
+
+      if (_visibleDate != newDate) {
+        setState(() {
+          _visibleDate = newDate;
+        });
+      }
+    }
   }
 
   Future<void> _sendMessage() async {
@@ -859,38 +886,78 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     // Build message list in reverse (latest at bottom, like all chat apps)
-    return ListView.builder(
-      controller: _scrollController,
-      reverse: true, // This makes latest messages stay at bottom
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      itemCount: _messages.length,
-      itemBuilder: (context, index) {
-        // Reverse the index since we're using reverse: true
-        final reversedIndex = _messages.length - 1 - index;
-        final message = _messages[reversedIndex];
-        final isMe = _currentUserType == message.senderType;
+    return Stack(
+      children: [
+        ListView.builder(
+          controller: _scrollController,
+          reverse: true, // This makes latest messages stay at bottom
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          itemCount: _messages.length,
+          itemBuilder: (context, index) {
+            // Reverse the index since we're using reverse: true
+            final reversedIndex = _messages.length - 1 - index;
+            final message = _messages[reversedIndex];
+            final isMe = _currentUserType == message.senderType;
 
-        // Check if we should show date (compare with next message in original order)
-        final showDate = reversedIndex == 0 ||
-            !_isSameDay(_messages[reversedIndex - 1].createdAt, message.createdAt);
+            // Check if we should show date (compare with next message in original order)
+            final showDate = reversedIndex == 0 ||
+                !_isSameDay(_messages[reversedIndex - 1].createdAt, message.createdAt);
 
-        return Column(
-          key: ValueKey(message.id), // Prevent unnecessary rebuilds
-          children: <Widget>[
-            // Check if it's an invitation card or regular message
-            message.messageType == 'eventInvitation'
-                ? _buildInvitationCard(message)
-                : _MessageBubble(
-                    key: ValueKey('bubble_${message.id}'),
-                    message: message,
-                    isMe: isMe,
+            return Column(
+              key: ValueKey(message.id), // Prevent unnecessary rebuilds
+              children: <Widget>[
+                // Check if it's an invitation card or regular message
+                message.messageType == 'eventInvitation'
+                    ? _buildInvitationCard(message)
+                    : _MessageBubble(
+                        key: ValueKey('bubble_${message.id}'),
+                        message: message,
+                        isMe: isMe,
+                      ),
+                // Add small spacing between messages
+                const SizedBox(height: 4),
+                if (showDate) _buildDateDivider(message.createdAt),
+              ],
+            );
+          },
+        ),
+        // Floating date chip
+        if (_visibleDate != null)
+          Positioned(
+            top: 12,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: AnimatedOpacity(
+                opacity: _visibleDate != null ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 200),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF7C3AED).withOpacity(0.85),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.12),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
-            // Add small spacing between messages
-            const SizedBox(height: 4),
-            if (showDate) _buildDateDivider(message.createdAt),
-          ],
-        );
-      },
+                  child: Text(
+                    _visibleDate!,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
