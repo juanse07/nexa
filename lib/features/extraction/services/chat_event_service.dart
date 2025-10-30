@@ -365,7 +365,10 @@ Be conversational and friendly. If the user provides multiple pieces of informat
     }
 
     final buffer = StringBuffer();
-    buffer.writeln('Existing events (${_existingEvents.length} total):');
+    buffer.writeln('DATABASE SNAPSHOT - ${_existingEvents.length} events:');
+    buffer.writeln('(You have DIRECT ACCESS to this data - treat it as your database)');
+    buffer.writeln('(When users ask about addresses, events, or locations, the information is RIGHT HERE below)');
+    buffer.writeln('');
 
     for (final event in _existingEvents) {
       final id = event['_id'] ?? event['id'] ?? 'unknown';
@@ -374,6 +377,21 @@ Be conversational and friendly. If the user provides multiple pieces of informat
       final date = event['date'] ?? 'No Date';
 
       print('[ChatEventService._formatEventsForContext] Event: id=$id, _id=${event['_id']}, id_field=${event['id']}, name=$name');
+
+      // ENHANCED: Extract full address details explicitly
+      final venueName = event['venue_name'] ?? '';
+      final venueAddress = event['venue_address'] ?? '';
+      final city = event['city'] ?? '';
+      final state = event['state'] ?? '';
+      final country = event['country'] ?? '';
+
+      // Build full address string
+      final addressParts = <String>[];
+      if (venueAddress.isNotEmpty) addressParts.add(venueAddress);
+      if (city.isNotEmpty) addressParts.add(city);
+      if (state.isNotEmpty) addressParts.add(state);
+      if (country.isNotEmpty) addressParts.add(country);
+      final fullAddress = addressParts.join(', ');
 
       // Extract roles summary
       final roles = event['roles'];
@@ -386,7 +404,18 @@ Be conversational and friendly. If the user provides multiple pieces of informat
         }).join(', ');
       }
 
-      buffer.writeln('  - ID: $id | "$name" | Client: $client | Date: $date | Roles: $rolesText');
+      buffer.writeln('Event ID: $id');
+      buffer.writeln('  Name: "$name"');
+      buffer.writeln('  Client: $client');
+      buffer.writeln('  Date: $date');
+      if (venueName.isNotEmpty) {
+        buffer.writeln('  Venue: $venueName');
+      }
+      if (fullAddress.isNotEmpty) {
+        buffer.writeln('  Address: $fullAddress'); // EXPLICIT address field
+      }
+      buffer.writeln('  Roles: $rolesText');
+      buffer.writeln(''); // Blank line between events for readability
     }
 
     final contextText = buffer.toString();
