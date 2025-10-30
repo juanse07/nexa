@@ -2,14 +2,16 @@ import 'package:flutter/material.dart';
 
 import '../services/audio_transcription_service.dart';
 
-/// Widget for chat input with text field, microphone button, and send button
+/// Widget for chat input with text field, attachment, microphone, and send button
 class ChatInputWidget extends StatefulWidget {
   final Function(String) onSendMessage;
+  final VoidCallback? onAttachmentTap;
   final bool isLoading;
 
   const ChatInputWidget({
     super.key,
     required this.onSendMessage,
+    this.onAttachmentTap,
     this.isLoading = false,
   });
 
@@ -149,37 +151,57 @@ class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProv
     await _audioService.cancelRecording();
   }
 
+  /// Toggle recording on/off with a single tap
+  Future<void> _toggleRecording() async {
+    if (_isTranscribing || widget.isLoading) return;
+
+    if (_isRecording) {
+      // Stop recording and transcribe
+      await _stopRecordingAndTranscribe();
+    } else {
+      // Start recording
+      await _startRecording();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     String hintText = 'Type your message...';
     if (widget.isLoading) {
       hintText = 'AI is thinking...';
     } else if (_isRecording) {
-      hintText = 'Recording... Release to send';
+      hintText = 'Recording... Tap mic to stop';
     } else if (_isTranscribing) {
       hintText = 'Transcribing voice...';
     }
 
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+    return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4), // Balanced padding
         child: Row(
           children: [
             Expanded(
-              child: Container(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: _isRecording
+                      ? Color(0xFFFFF5F5) // Very light coral background when recording
+                      : Colors.white,
                   borderRadius: BorderRadius.circular(24),
                   border: _isRecording
                       ? Border.all(
-                          color: Colors.red,
+                          color: Color(0xFFFF6B6B),
                           width: 2,
                         )
-                      : null,
+                      : Border.all(
+                          color: Colors.grey.shade200,
+                          width: 1,
+                        ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.08),
-                      blurRadius: 8,
+                      color: _isRecording
+                          ? Color(0xFFFF6B6B).withOpacity(0.2)
+                          : Colors.black.withValues(alpha: 0.08),
+                      blurRadius: _isRecording ? 12 : 8,
                       offset: const Offset(0, 1),
                     ),
                   ],
@@ -204,53 +226,92 @@ class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProv
                     ),
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 16,
-                      vertical: 10,
+                      vertical: 6, // Reduced from 10 to 6
                     ),
+                    // Attachment icon on the left
+                    prefixIcon: widget.onAttachmentTap != null
+                        ? IconButton(
+                            icon: Icon(
+                              Icons.attach_file,
+                              color: Colors.grey.shade600,
+                              size: 18,
+                            ),
+                            onPressed: widget.isLoading || _isRecording || _isTranscribing
+                                ? null
+                                : widget.onAttachmentTap,
+                            tooltip: 'Attach image or document',
+                          )
+                        : null,
                   ),
                   onSubmitted: (_) => _sendMessage(),
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            // Microphone button
+            const SizedBox(width: 4),
+            // Microphone button - tap to toggle recording
             if (!_hasText)
               GestureDetector(
-                onLongPressStart: (_) => _startRecording(),
-                onLongPressEnd: (_) => _stopRecordingAndTranscribe(),
-                onLongPressCancel: () => _cancelRecording(),
+                onTap: _toggleRecording,
                 child: AnimatedBuilder(
                   animation: _pulseAnimation,
                   builder: (context, child) {
                     return Container(
                       decoration: BoxDecoration(
-                        color: _isRecording
-                            ? Colors.red
+                        gradient: _isRecording
+                            ? LinearGradient(
+                                colors: [
+                                  Color(0xFFFF6B6B),  // Bright coral red
+                                  Color(0xFFFF8787),  // Light coral
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              )
                             : _isTranscribing
-                                ? Colors.blue
-                                : Colors.grey.shade300,
+                                ? LinearGradient(
+                                    colors: [
+                                      Color(0xFF4ECDC4),  // Teal
+                                      Color(0xFF44A8A0),  // Darker teal
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  )
+                                : LinearGradient(
+                                    colors: [
+                                      Color(0xFFFF9A8B),  // Soft coral pink
+                                      Color(0xFFFECFB2),  // Peach
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
                         shape: BoxShape.circle,
                         boxShadow: _isRecording
                             ? [
                                 BoxShadow(
-                                  color: Colors.red.withOpacity(0.4 * _pulseAnimation.value),
-                                  blurRadius: 16 * _pulseAnimation.value,
-                                  spreadRadius: 4 * _pulseAnimation.value,
+                                  color: Color(0xFFFF6B6B).withOpacity(0.5 * _pulseAnimation.value),
+                                  blurRadius: 20 * _pulseAnimation.value,
+                                  spreadRadius: 6 * _pulseAnimation.value,
                                 ),
                               ]
-                            : [],
+                            : [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 8,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
                       ),
                       child: Material(
                         color: Colors.transparent,
                         child: InkWell(
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.circular(18),
                           child: Container(
-                            width: 40,
-                            height: 40,
+                            width: 36,
+                            height: 36,
                             alignment: Alignment.center,
                             child: _isTranscribing
                                 ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
+                                    width: 16,
+                                    height: 16,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
                                       valueColor: AlwaysStoppedAnimation<Color>(
@@ -260,10 +321,8 @@ class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProv
                                   )
                                 : Icon(
                                     _isRecording ? Icons.mic : Icons.mic_none,
-                                    color: _isRecording
-                                        ? Colors.white
-                                        : Colors.grey.shade500,
-                                    size: 20,
+                                    color: Colors.white,
+                                    size: 18,
                                   ),
                           ),
                         ),
@@ -272,7 +331,7 @@ class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProv
                   },
                 ),
               ),
-            if (!_hasText) const SizedBox(width: 8),
+            if (!_hasText) const SizedBox(width: 4),
             // Send button
             Container(
               decoration: BoxDecoration(
@@ -303,16 +362,16 @@ class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProv
               child: Material(
                 color: Colors.transparent,
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(18),
                   onTap: _hasText && !widget.isLoading ? _sendMessage : null,
                   child: Container(
-                    width: 40,
-                    height: 40,
+                    width: 36,
+                    height: 36,
                     alignment: Alignment.center,
                     child: widget.isLoading
                         ? const SizedBox(
-                            width: 18,
-                            height: 18,
+                            width: 16,
+                            height: 16,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
                               valueColor: AlwaysStoppedAnimation<Color>(
@@ -323,7 +382,7 @@ class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProv
                         : Icon(
                             Icons.send,
                             color: _hasText ? const Color(0xFFB8860B) : Colors.grey.shade500,
-                            size: 20,
+                            size: 18,
                           ),
                   ),
                 ),
@@ -331,7 +390,6 @@ class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProv
             ),
           ],
         ),
-      ),
-    );
+      );
   }
 }

@@ -35,12 +35,22 @@ class ChatScreen extends StatefulWidget {
 // Global cache to persist event data across widget rebuilds
 final Map<String, Map<String, dynamic>> _globalEventCache = {};
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   final ChatService _chatService = ChatService();
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<ChatMessage> _messages = <ChatMessage>[];
   final RolesService _rolesService = RolesService();
+
+  // Animation controllers for scroll-based animations
+  late AnimationController _inputAnimationController;
+  late Animation<Offset> _inputSlideAnimation;
+  bool _isInputVisible = true;
+  Timer? _autoShowTimer;
+  double _lastScrollPosition = 0;
+  DateTime _lastScrollTime = DateTime.now();
+  static const double _scrollVelocityThreshold = 300; // pixels per second
+  static const Duration _autoShowDelay = Duration(seconds: 15);
 
   bool _loading = true;
   String? _error;
@@ -66,6 +76,21 @@ class _ChatScreenState extends State<ChatScreen> {
     print('[CHAT SCREEN] widget.targetName: ${widget.targetName}');
     print('[CHAT SCREEN] widget.conversationId: ${widget.conversationId}');
 
+    // Initialize animation controllers
+    _inputAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 250),
+      vsync: this,
+    );
+
+    _inputSlideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.8), // 80% hidden
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _inputAnimationController,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    ));
+
     // In manager app, current user is always a manager
     _currentUserType = SenderType.manager;
     _conversationId = widget.conversationId; // Initialize from widget
@@ -80,6 +105,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _listenToInvitationResponses();
     _markAsRead();
     _scrollController.addListener(_updateVisibleDate);
+    _scrollController.addListener(_handleScroll); // Add scroll handler for animations
 
     // Load favorites and roles for menu
     _loadFavorites();
@@ -526,7 +552,71 @@ class _ChatScreenState extends State<ChatScreen> {
     _messageSubscription?.cancel();
     _typingSubscription?.cancel();
     _invitationResponseSubscription?.cancel();
+    _inputAnimationController.dispose();
+    _autoShowTimer?.cancel();
     super.dispose();
+  }
+
+  void _handleScroll() {
+    if (!_scrollController.hasClients) return;
+
+    final currentPosition = _scrollController.position.pixels;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final now = DateTime.now();
+    final timeDiff = now.difference(_lastScrollTime).inMilliseconds;
+
+    if (timeDiff > 0) {
+      final velocity = ((currentPosition - _lastScrollPosition).abs() / timeDiff) * 1000;
+
+      // Check if at bottom of list
+      final isAtBottom = currentPosition >= maxScroll - 100;
+
+      if (isAtBottom) {
+        // Always show input when at bottom
+        if (!_isInputVisible) {
+          _showInput();
+        }
+      } else if (velocity > _scrollVelocityThreshold) {
+        // Fast scroll detected
+        if (currentPosition > _lastScrollPosition) {
+          // Scrolling down - hide input
+          if (_isInputVisible) {
+            _hideInput();
+          }
+        } else {
+          // Scrolling up - show input
+          if (!_isInputVisible) {
+            _showInput();
+          }
+        }
+      }
+    }
+
+    _lastScrollPosition = currentPosition;
+    _lastScrollTime = now;
+  }
+
+  void _showInput() {
+    setState(() {
+      _isInputVisible = true;
+    });
+    _inputAnimationController.reverse();
+    _autoShowTimer?.cancel();
+  }
+
+  void _hideInput() {
+    setState(() {
+      _isInputVisible = false;
+    });
+    _inputAnimationController.forward();
+
+    // Start auto-show timer
+    _autoShowTimer?.cancel();
+    _autoShowTimer = Timer(_autoShowDelay, () {
+      if (!_isInputVisible && mounted) {
+        _showInput();
+      }
+    });
   }
 
   @override
@@ -823,12 +913,23 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ),
       ),
-      body: Column(
+      body: Stack(
         children: <Widget>[
-          Expanded(
+          // Message list with extra bottom padding for input
+          Padding(
+            padding: const EdgeInsets.only(bottom: 80), // Space for input
             child: _buildMessageList(),
           ),
-          _buildMessageInput(),
+          // Animated bottom input
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: SlideTransition(
+              position: _inputSlideAnimation,
+              child: _buildMessageInput(),
+            ),
+          ),
         ],
       ),
     );
@@ -1153,7 +1254,13 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget _buildMessageInput() {
     final screenWidth = MediaQuery.of(context).size.width;
 
-    return Container(
+    return GestureDetector(
+      onTap: () {
+        if (!_isInputVisible) {
+          _showInput();
+        }
+      },
+      child: Container(
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: <BoxShadow>[
@@ -1172,8 +1279,22 @@ class _ChatScreenState extends State<ChatScreen> {
               maxWidth: screenWidth > 900 ? 900 : screenWidth,
             ),
             child: Padding(
-              padding: const EdgeInsets.all(8),
-              child: Row(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),  // Compact padding
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Visual hint bar when partially hidden
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    width: _isInputVisible ? 0 : 30,
+                    height: _isInputVisible ? 0 : 3,
+                    margin: EdgeInsets.only(bottom: _isInputVisible ? 0 : 4),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade400,
+                      borderRadius: BorderRadius.circular(1.5),
+                    ),
+                  ),
+                  Row(
                 children: <Widget>[
                   Container(
                     decoration: BoxDecoration(
@@ -1199,8 +1320,8 @@ class _ChatScreenState extends State<ChatScreen> {
                           hintText: AppLocalizations.of(context)!.typeMessage,
                           border: InputBorder.none,
                           contentPadding: EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 12,
+                            horizontal: 16,
+                            vertical: 8,  // Reduced vertical padding
                           ),
                         ),
                         maxLines: null,
@@ -1251,10 +1372,13 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ],
               ),
+                ],
+              ),
             ),
           ),
         ),
       ),
+    ),
     );
   }
 

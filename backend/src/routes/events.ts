@@ -362,6 +362,113 @@ router.post('/events', requireAuth, async (req, res) => {
   }
 });
 
+// Batch create multiple events
+router.post('/batch', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    const managerId = manager._id as mongoose.Types.ObjectId;
+
+    const { events } = req.body;
+    if (!Array.isArray(events) || events.length === 0) {
+      return res.status(400).json({ message: 'events array is required and cannot be empty' });
+    }
+
+    if (events.length > 30) {
+      return res.status(400).json({ message: 'Maximum 30 events can be created at once' });
+    }
+
+    // Validate and prepare all events
+    const validatedEvents = [];
+    for (let i = 0; i < events.length; i++) {
+      const parsed = eventSchema.safeParse(events[i]);
+      if (!parsed.success) {
+        return res.status(400).json({
+          error: `Validation failed for event ${i + 1}`,
+          details: parsed.error.format(),
+        });
+      }
+
+      const raw = parsed.data as any;
+      const teamIds = await sanitizeTeamIds(managerId, raw.audience_team_ids);
+      raw.audience_team_ids = teamIds;
+
+      // Backwards compatibility
+      if ((raw as any).client_company_name && !(raw as any).third_party_company_name) {
+        (raw as any).third_party_company_name = (raw as any).client_company_name;
+        delete (raw as any).client_company_name;
+      }
+
+      // Normalize date to Date type if provided
+      if (raw.date && typeof raw.date === 'string') {
+        raw.date = new Date(raw.date);
+      }
+
+      // Prepare event data
+      const eventData = {
+        ...raw,
+        managerId,
+        status: raw.status || 'draft',
+        role_stats: computeRoleStats(raw.roles || [], raw.accepted_staff || []),
+      };
+
+      validatedEvents.push(eventData);
+    }
+
+    // Create all events in a transaction
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      const createdEvents = await EventModel.insertMany(validatedEvents, { session });
+
+      await session.commitTransaction();
+
+      // Convert to response format
+      const responseEvents = createdEvents.map(event => {
+        const obj = event.toObject();
+        return {
+          ...obj,
+          id: String(obj._id),
+        };
+      });
+
+      // Notify about created events (only published ones)
+      for (const event of responseEvents) {
+        // Always notify the manager
+        emitToManager(String(managerId), 'event:created', event);
+
+        // Only notify staff if the event is published (not a draft)
+        if (event.status !== 'draft') {
+          const audienceTeams = ((event.audience_team_ids || []) as unknown as any[]).map(id => String(id));
+          if (audienceTeams.length > 0) {
+            emitToTeams(audienceTeams, 'event:created', event);
+          }
+
+          const audienceUsers = (event.audience_user_keys || []) as string[];
+          for (const key of audienceUsers) {
+            emitToUser(key, 'event:created', event);
+          }
+        }
+      }
+
+      return res.status(201).json({
+        message: `Created ${createdEvents.length} events successfully`,
+        events: responseEvents,
+      });
+
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
+    }
+
+  } catch (err) {
+    console.error('[batch create events] failed', err);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 // Publish a draft event (transition from draft → published)
 const publishEventSchema = z.object({
   audience_user_keys: z.array(z.string()).nullish(),

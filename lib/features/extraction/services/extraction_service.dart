@@ -23,6 +23,7 @@ class ExtractionService {
     final Uri uri = _resolveEndpoint();
 
     // Request body for backend API
+    // Images use GPT-4 Vision, PDFs send extracted text to regular GPT-4
     final Map<String, dynamic> requestBody = {
       'input': actualInput,
       'isImage': isImage,

@@ -105,6 +105,47 @@ class EventService {
     }
   }
 
+  /// Create multiple events in batch
+  Future<List<Map<String, dynamic>>> createBatchEvents(
+    List<Map<String, dynamic>> events,
+  ) async {
+    try {
+      print('[EventService.createBatchEvents] Creating ${events.length} events...');
+
+      final response = await _apiClient.post(
+        '/events/batch',
+        data: {'events': events},
+      );
+
+      if (response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300) {
+        final data = response.data as Map<String, dynamic>;
+        final eventsField = data['events'] as List?;
+
+        if (eventsField == null) {
+          throw Exception('Invalid response: missing events field');
+        }
+
+        print('[EventService.createBatchEvents] Successfully created ${eventsField.length} events');
+        return eventsField.cast<Map<String, dynamic>>();
+      }
+
+      throw Exception(
+        'Failed to create batch events (${response.statusCode}): ${response.data}',
+      );
+    } on DioException catch (e) {
+      if (e.response != null) {
+        final error = e.response?.data;
+        if (error is Map<String, dynamic>) {
+          final message = error['message'] ?? error['error'] ?? 'Unknown error';
+          throw Exception('Batch creation failed: $message');
+        }
+      }
+      throw Exception('Failed to create batch events: ${e.message}');
+    }
+  }
+
   Future<Map<String, dynamic>> updateEvent(String eventId, Map<String, dynamic> updates) async {
     try {
       print('[EventService.updateEvent] Starting update...');

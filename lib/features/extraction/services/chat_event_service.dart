@@ -123,6 +123,12 @@ Be conversational and friendly. If the user provides multiple pieces of informat
       Map.unmodifiable(_currentEventData);
   bool get eventComplete => _eventComplete;
 
+  /// Clear current event data and reset completion flag
+  void clearCurrentEventData() {
+    _currentEventData.clear();
+    _eventComplete = false;
+  }
+
   /// Load AI instructions from markdown file
   Future<String> _loadInstructions() async {
     if (_cachedInstructions != null) return _cachedInstructions!;
@@ -151,7 +157,14 @@ Be conversational and friendly. If the user provides multiple pieces of informat
 
     try {
       print('Fetching fresh clients from database...');
-      final clients = await _clientsService.fetchClients();
+      // Add timeout to prevent blocking
+      final clients = await _clientsService.fetchClients().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          print('Client loading timed out - using empty list');
+          return [];
+        },
+      );
       _existingClientNames = clients
           .map((c) => (c['name'] as String?) ?? '')
           .where((name) => name.isNotEmpty)
@@ -159,8 +172,10 @@ Be conversational and friendly. If the user provides multiple pieces of informat
       _clientsCacheTime = DateTime.now();
       print('Loaded ${_existingClientNames.length} clients');
     } catch (e) {
-      print('Failed to load clients: $e');
+      print('Failed to load clients: $e - using empty list');
       _existingClientNames = [];
+      // Still mark cache time to prevent repeated failures
+      _clientsCacheTime = DateTime.now();
     }
   }
 
@@ -183,7 +198,13 @@ Be conversational and friendly. If the user provides multiple pieces of informat
 
     try {
       print('Fetching fresh events from database...');
-      final allEvents = await _eventService.fetchEvents();
+      final allEvents = await _eventService.fetchEvents().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          print('Event loading timed out - using empty list');
+          return [];
+        },
+      );
 
       // Apply filters if specified
       List<Map<String, dynamic>> filteredEvents = allEvents;
@@ -444,27 +465,33 @@ Be conversational and friendly. If the user provides multiple pieces of informat
   /// Build system prompt with current context (smart loading)
   Future<String> _buildSystemPrompt({
     String? userMessage,
+    bool skipHeavyLoading = false,
   }) async {
     final instructions = await _loadInstructions();
 
-    // Smart context detection
-    Map<String, String?>? contextFilters;
-    if (userMessage != null) {
-      contextFilters = _detectContextNeeds(userMessage);
+    // Skip heavy loading if we already have cached data
+    if (!skipHeavyLoading) {
+      // Smart context detection
+      Map<String, String?>? contextFilters;
+      if (userMessage != null) {
+        contextFilters = _detectContextNeeds(userMessage);
+      }
+
+      // Load with caching and smart filtering (with timeouts)
+      await _loadExistingClients();
+
+      // Only load filtered events if user mentioned specific client/month
+      await _loadExistingEvents(
+        filterByClient: contextFilters?['client'],
+        filterByMonth: contextFilters?['month'],
+      );
+
+      // Load team members and their availability for AI context
+      await _loadExistingTeamMembers();
+      await _loadMembersAvailability();
+    } else {
+      print('Using cached context data - skipping heavy loading');
     }
-
-    // Load with caching and smart filtering
-    await _loadExistingClients();
-
-    // Only load filtered events if user mentioned specific client/month
-    await _loadExistingEvents(
-      filterByClient: contextFilters?['client'],
-      filterByMonth: contextFilters?['month'],
-    );
-
-    // Load team members and their availability for AI context
-    await _loadExistingTeamMembers();
-    await _loadMembersAvailability();
 
     final clientsList = _existingClientNames.isEmpty
         ? 'No existing clients in system.'
@@ -494,6 +521,13 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
   }
 }
 ''';
+  }
+
+  /// Update current event data (e.g., from extraction)
+  void updateEventData(Map<String, dynamic> data) {
+    _currentEventData.clear();
+    _currentEventData.addAll(data);
+    print('[ChatEventService] Event data updated with ${data.keys.length} fields');
   }
 
   /// Start a new conversation
@@ -533,8 +567,17 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
     final userMsg = ChatMessage(role: 'user', content: userMessage);
     _conversationHistory.add(userMsg);
 
+    // Only load context on first message or if cache is old
+    final needsFullContext = _conversationHistory.length <= 2 ||
+        (_clientsCacheTime == null ||
+         DateTime.now().difference(_clientsCacheTime!) > const Duration(minutes: 10));
+
     // Build system prompt with smart context loading based on user message
-    final systemPrompt = await _buildSystemPrompt(userMessage: userMessage);
+    // Skip heavy loading if we already have context cached
+    final systemPrompt = await _buildSystemPrompt(
+      userMessage: userMessage,
+      skipHeavyLoading: !needsFullContext,
+    );
 
     // Build messages for API call
     final messages = [
