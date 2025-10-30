@@ -73,6 +73,8 @@
 	<string>Nexa needs permission to save processed event documents to your photo library.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Nexa uses your location to help find nearby venues and provide location-based event services.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Nexa needs access to your microphone to record voice input for AI chat conversations.</string>
 
 	<!-- Google Maps API Key -->
 	<key>GMSApiKey</key>

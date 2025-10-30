@@ -3,9 +3,32 @@ import { z } from 'zod';
 import { requireAuth } from '../middleware/requireAuth';
 import axios from 'axios';
 import geoip from 'geoip-lite';
+import multer from 'multer';
+import FormData from 'form-data';
+import fs from 'fs';
 import { getDateTimeContext, getWelcomeDateContext, getFullSystemContext } from '../utils/dateContext';
 
 const router = Router();
+
+// Configure multer for audio file uploads
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: '/tmp',
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      cb(null, `audio-${uniqueSuffix}-${file.originalname}`);
+    }
+  }),
+  limits: {
+    fileSize: 25 * 1024 * 1024, // 25MB max (Whisper API limit)
+  },
+  fileFilter: (req, file, cb) => {
+    // Accept all files - let Whisper API validate the format
+    // Whisper supports: mp3, mp4, mpeg, mpga, m4a, wav, webm, flac
+    // MIME type detection can be unreliable, especially on mobile platforms
+    cb(null, true);
+  }
+});
 
 /**
  * Get the user's timezone from their IP address
@@ -64,6 +87,114 @@ router.get('/ai/system-info', requireAuth, async (req, res) => {
   } catch (err: any) {
     console.error('[ai/system-info] Error:', err);
     return res.status(500).json({ message: 'Failed to get system info' });
+  }
+});
+
+/**
+ * POST /api/ai/transcribe
+ * Transcribe audio to text using OpenAI Whisper API
+ * Accepts audio file upload and returns transcribed text
+ */
+router.post('/ai/transcribe', requireAuth, upload.single('audio'), async (req, res) => {
+  let tempFilePath: string | null = null;
+
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No audio file provided' });
+    }
+
+    tempFilePath = req.file.path;
+
+    const openaiKey = process.env.OPENAI_API_KEY;
+    if (!openaiKey) {
+      console.error('[ai/transcribe] OPENAI_API_KEY not configured');
+      return res.status(500).json({ message: 'OpenAI API key not configured on server' });
+    }
+
+    const openaiBaseUrl = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
+
+    // Create form data for Whisper API
+    const formData = new FormData();
+    formData.append('file', fs.createReadStream(tempFilePath), {
+      filename: req.file.originalname,
+      contentType: req.file.mimetype,
+    });
+    formData.append('model', 'whisper-1');
+
+    // Auto-detect language (supports English, Spanish, and 96 other languages)
+    // By not specifying 'language', Whisper will detect it automatically
+    // This allows Spanish-speaking users to use voice input naturally
+
+    // Add domain-specific prompt to improve accuracy for event staffing terminology
+    const domainPrompt = `Event staffing and catering terminology including:
+venues, clients, roles like server bartender captain sous chef,
+dates, times, headcount, call time, setup time, uniform,
+common client names and venue names`;
+    formData.append('prompt', domainPrompt);
+
+    const headers: any = {
+      'Authorization': `Bearer ${openaiKey}`,
+      ...formData.getHeaders(),
+    };
+
+    const orgId = process.env.OPENAI_ORG_ID;
+    if (orgId) {
+      headers['OpenAI-Organization'] = orgId;
+    }
+
+    console.log('[ai/transcribe] Calling Whisper API...');
+
+    const response = await axios.post(
+      `${openaiBaseUrl}/audio/transcriptions`,
+      formData,
+      { headers, validateStatus: () => true }
+    );
+
+    // Clean up temp file
+    if (tempFilePath) {
+      fs.unlinkSync(tempFilePath);
+      tempFilePath = null;
+    }
+
+    if (response.status >= 300) {
+      console.error('[ai/transcribe] Whisper API error:', response.status, response.data);
+      if (response.status === 429) {
+        return res.status(429).json({
+          message: 'OpenAI API rate limit reached. Please try again later.',
+        });
+      }
+      return res.status(response.status).json({
+        message: `Whisper API error: ${response.statusText}`,
+        details: response.data,
+      });
+    }
+
+    const transcribedText = response.data.text;
+    if (!transcribedText) {
+      return res.status(500).json({ message: 'Failed to transcribe audio' });
+    }
+
+    console.log('[ai/transcribe] Transcription successful:', transcribedText.substring(0, 100));
+
+    return res.json({
+      text: transcribedText,
+      duration: response.data.duration || null,
+    });
+  } catch (err: any) {
+    // Clean up temp file on error
+    if (tempFilePath && fs.existsSync(tempFilePath)) {
+      try {
+        fs.unlinkSync(tempFilePath);
+      } catch (unlinkErr) {
+        console.error('[ai/transcribe] Failed to delete temp file:', unlinkErr);
+      }
+    }
+
+    console.error('[ai/transcribe] Error:', err);
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ message: 'Audio file too large. Maximum size is 25MB.' });
+    }
+    return res.status(500).json({ message: err.message || 'Failed to transcribe audio' });
   }
 });
 

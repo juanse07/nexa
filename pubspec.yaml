@@ -81,6 +81,7 @@ dependencies:
   socket_io_client: ^2.0.3
   timeago: ^3.7.0
   share_plus: ^7.2.2
+  record: 5.0.0
 
   # Logging
   logger: ^2.5.0
@@ -173,3 +174,7 @@ flutter_launcher_icons:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# Dependency overrides to fix version conflicts
+dependency_overrides:
+  record_platform_interface: 1.2.0  # Compatible version without startStream requirement

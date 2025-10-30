@@ -64,12 +64,14 @@ class ExtractionScreen extends StatefulWidget {
   final int initialIndex; // For Post a Job tab chips
   final int initialScreenIndex; // For main screen tabs (Post a Job=0, Events=1, etc.)
   final int initialEventsTabIndex; // For Events sub-tabs (Pending=0, Upcoming=1, Past=2)
+  final ScrollController? scrollController; // Optional scroll controller for syncing with main screen
 
   const ExtractionScreen({
     super.key,
     this.initialIndex = 0,
     this.initialScreenIndex = 0,
     this.initialEventsTabIndex = 0,
+    this.scrollController,
   });
 
   @override
@@ -92,9 +94,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   List<Map<String, dynamic>>? _events;
   bool _isEventsLoading = false;
   String? _eventsError;
-  List<Map<String, dynamic>>? _eventsUpcoming;
+  List<Map<String, dynamic>>? _eventsPending;
+  List<Map<String, dynamic>>? _eventsAvailable;
+  List<Map<String, dynamic>>? _eventsFull;
   List<Map<String, dynamic>>? _eventsPast;
-  // Pending drafts
+  // Pending drafts (for the old draft section - will be deprecated)
   List<Map<String, dynamic>> _pendingDrafts = const [];
   bool _isPendingLoading = false;
   String? _viewerUserKey; // provider:subject used to filter events
@@ -153,6 +157,21 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   Timer? _updateTimer;
   StreamSubscription<SocketEvent>? _socketSubscription;
 
+  // Animation controllers for header hide/show effect
+  late AnimationController _headerController;
+  late Animation<double> _headerAnimation;
+  bool _isHeaderVisible = true;
+  Timer? _autoShowTimer;
+  ScrollController? _mainScrollController;
+  double _lastMainScrollOffset = 0;
+  DateTime _lastScrollTime = DateTime.now();
+
+  // Performance optimization constants
+  static const Duration _animationDuration = Duration(milliseconds: 200);
+  static const double _scrollThreshold = 3.0;
+  static const double _velocityThreshold = 120.0;
+  static const Duration _autoShowDelay = Duration(milliseconds: 30000);
+
   Widget _maybeWebRefreshButton({
     required VoidCallback onPressed,
     String label = 'Refresh',
@@ -183,20 +202,51 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     _eventsTabController = TabController(length: 3, vsync: this, initialIndex: widget.initialEventsTabIndex);
     _catalogTabController = TabController(length: 3, vsync: this);
 
-    // Add listeners for web tab navigation updates
-    if (kIsWeb) {
-      _createTabController.addListener(() {
-        // Removed indexIsChanging check - setState on any index change
-        // This ensures WebTabNavigation updates work properly
+    // Initialize animation controllers for header hide/show
+    _headerController = AnimationController(
+      duration: _animationDuration,
+      vsync: this,
+    );
+
+    _headerAnimation = Tween<double>(
+      begin: 0,
+      end: 1,
+    ).animate(CurvedAnimation(
+      parent: _headerController,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    ));
+
+    // Start with header visible
+    _headerController.forward();
+    _mainScrollController = widget.scrollController;
+
+    // Add listeners for tab navigation updates
+    _createTabController.addListener(() {
+      // Show header when switching tabs
+      if (_createTabController.indexIsChanging) {
+        _showHeader();
+      }
+      // Trigger setState to rebuild slivers with new tab content
+      setState(() {});
+    });
+    _eventsTabController.addListener(() {
+      // Show header when switching tabs
+      if (_eventsTabController.indexIsChanging) {
+        _showHeader();
+      }
+      // Always update state when tab changes to refresh content
+      setState(() {});
+    });
+    _catalogTabController.addListener(() {
+      // Show header when switching tabs
+      if (_catalogTabController.indexIsChanging) {
+        _showHeader();
+      }
+      if (kIsWeb) {
         setState(() {});
-      });
-      _eventsTabController.addListener(() {
-        setState(() {});
-      });
-      _catalogTabController.addListener(() {
-        setState(() {});
-      });
-    }
+      }
+    });
 
     _extractionService = ExtractionService();
     _eventService = EventService();
@@ -286,6 +336,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     _eventsTabController.dispose();
     _catalogTabController.dispose();
     _aiChatScrollController.dispose();
+    _headerController.dispose();
+    _autoShowTimer?.cancel();
     _eventNameController.dispose();
     _clientNameController.dispose();
     _dateController.dispose();
@@ -303,6 +355,83 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     _updateTimer?.cancel();
     _socketSubscription?.cancel();
     super.dispose();
+  }
+
+  void _handleScroll(ScrollNotification notification) {
+    // Only handle scroll updates from the main scrollable
+    if (notification is! ScrollUpdateNotification) return;
+
+    // Ignore horizontal scroll events (like PageView swipes between tabs)
+    if (notification.metrics.axis != Axis.vertical) return;
+
+    // Check if we have enough content to warrant hiding header
+    final maxScroll = notification.metrics.maxScrollExtent;
+    if (maxScroll < 400) { // Less than 400px of scrollable content (about 5 cards)
+      _showHeader(); // Always show header when content is minimal
+      return;
+    }
+
+    final now = DateTime.now();
+    final timeDiff = now.difference(_lastScrollTime).inMilliseconds;
+
+    if (timeDiff == 0) return;
+
+    final scrollDelta = notification.scrollDelta ?? 0;
+    final metrics = notification.metrics;
+
+    // Calculate velocity (pixels per second)
+    final velocity = (scrollDelta / timeDiff) * 1000;
+
+    // Cancel any pending auto-show timer
+    _autoShowTimer?.cancel();
+
+    // Always show when at the top
+    if (metrics.pixels <= 0) {
+      _showHeader();
+      return;
+    }
+
+    // Velocity-based detection for more responsive feel
+    final shouldHide = velocity > _velocityThreshold ||
+                       (scrollDelta > _scrollThreshold && velocity > 0);
+    final shouldShow = velocity < -_velocityThreshold ||
+                       (scrollDelta < -_scrollThreshold && velocity < 0);
+
+    if (shouldHide && _isHeaderVisible) {
+      _hideHeader();
+    } else if (shouldShow && !_isHeaderVisible) {
+      _showHeader();
+    }
+
+    // Auto-show after scroll stops (like Facebook)
+    _autoShowTimer = Timer(_autoShowDelay, () {
+      if (!_isHeaderVisible && mounted) {
+        _showHeader();
+      }
+    });
+
+    _lastMainScrollOffset = metrics.pixels;
+    _lastScrollTime = now;
+  }
+
+  void _showHeader() {
+    if (!_isHeaderVisible) {
+      HapticFeedback.selectionClick();
+      setState(() {
+        _isHeaderVisible = true;
+      });
+      _headerController.forward();
+    }
+  }
+
+  void _hideHeader() {
+    if (_isHeaderVisible) {
+      HapticFeedback.selectionClick();
+      setState(() {
+        _isHeaderVisible = false;
+      });
+      _headerController.reverse();
+    }
   }
 
   Future<void> _openTeamsManagementPage() async {
@@ -947,8 +1076,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
                         _draftService.saveDraft(currentData);
 
-                        // Reload pending drafts to show the new one
-                        await _loadPendingDrafts();
+                        // Reload events to show the new one
+                        await _loadEvents();
                       } catch (e) {
                         if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -1343,9 +1472,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         return TabBarView(
           controller: _eventsTabController,
           children: [
-            _pendingInner(),
-            _eventsInner(_eventsUpcoming ?? const []),
-            _pastEventsInner(_eventsPast ?? const []),
+            _eventsInner(_eventsPending ?? const []), // Pending tab
+            _eventsInner(_eventsAvailable ?? const []), // Available tab
+            _eventsInner(_eventsFull ?? const []), // Full tab
           ],
         );
       case 2: // Chat tab
@@ -1376,41 +1505,114 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   Widget _buildMobileLayout(BuildContext context) {
-    // Show dropdown only for Create (0), Jobs (1), and Catalog (4) tabs
-    final bool shouldShowDropdown = _selectedIndex == 0 || _selectedIndex == 1 || _selectedIndex == 4;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF7C3AED),
-        elevation: 0,
-        title: shouldShowDropdown
-            ? SectionNavigationDropdown(
-                selectedSection: _getCurrentSectionName(),
-                onNavigate: _handleNavigationDropdown,
-                isFixed: true,
-              )
-            : Text(
-                _getAppBarTitle(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
+      body: NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          _handleScroll(notification);
+          return false;
+        },
+        child: Stack(
+          children: [
+            // Main scrollable content - Full screen
+            CustomScrollView(
+              controller: _mainScrollController,
+              slivers: [
+                // Top padding to show first card below header initially
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: MediaQuery.of(context).padding.top + 200, // Dynamic based on device + header height
+                  ),
+                ),
+                ..._buildSliverContent(),
+                // Add bottom padding for last card
+                const SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: 100, // Bottom padding for scrolling past bottom bar
+                  ),
+                ),
+              ],
+            ),
+
+            // Animated app bar (overlaid)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: RepaintBoundary(
+                child: AnimatedBuilder(
+                  animation: _headerAnimation,
+                  builder: (context, child) {
+                    // Slide up effect like the bottom bar
+                    final translateY = -(1 - _headerAnimation.value) * (MediaQuery.of(context).padding.top + kToolbarHeight);
+                    return Transform.translate(
+                      offset: Offset(0, translateY),
+                      child: child,
+                    );
+                  },
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF7C3AED),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black12,
+                          blurRadius: 4,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: SafeArea(
+                      bottom: false,
+                      child: SizedBox(
+                        height: kToolbarHeight,
+                        child: Row(
+                          children: [
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Text(
+                                _getAppBarTitle(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            _buildProfileMenu(context),
+                            const SizedBox(width: 8),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
-        actions: [
-          _buildProfileMenu(context),
-        ],
-      ),
-      body: Column(
-        children: [
-          _buildTabSelector(),
-          Expanded(
-            child: CustomScrollView(
-              slivers: _buildSliverContent(),
             ),
-          ),
-        ],
+
+            // Animated tab selector (overlaid)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + kToolbarHeight,
+              left: 0,
+              right: 0,
+              child: RepaintBoundary(
+                child: AnimatedBuilder(
+                  animation: _headerAnimation,
+                  builder: (context, child) {
+                    // Fade effect instead of slide
+                    return IgnorePointer(
+                      ignoring: _headerAnimation.value < 0.1, // Ignore when almost invisible
+                      child: Opacity(
+                        opacity: _headerAnimation.value,
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: _buildTabSelector(),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1510,10 +1712,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
     // Events/Jobs tab - floating header card
     if (_selectedIndex == 1) {
-      final pendingCount = _pendingDrafts.length;
-      final upcomingCount = _eventsUpcoming?.length ?? 0;
+      final pendingCount = _eventsPending?.length ?? 0;
+      final availableCount = _eventsAvailable?.length ?? 0;
+      final fullCount = _eventsFull?.length ?? 0;
       final pastCount = _eventsPast?.length ?? 0;
-      final totalEvents = (_events?.length ?? 0);
+      final totalEvents = pendingCount + availableCount + fullCount;
 
       return Container(
         margin: const EdgeInsets.all(16),
@@ -1568,7 +1771,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '$totalEvents total • $pendingCount pending • $upcomingCount upcoming • $pastCount past',
+                          '$totalEvents total • $pendingCount pending • $availableCount available • $fullCount full',
                           style: TextStyle(
                             color: Colors.white.withOpacity(0.9),
                             fontSize: 12,
@@ -1588,32 +1791,48 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   bottomRight: Radius.circular(16),
                 ),
               ),
-              child: kIsWeb
-                  ? WebTabNavigation(
-                      tabs: [
-                        WebTab(text: AppLocalizations.of(context)!.pending),
-                        WebTab(text: AppLocalizations.of(context)!.upcoming),
-                        WebTab(text: AppLocalizations.of(context)!.past),
-                      ],
-                      selectedIndex: _eventsTabController.index,
-                      onTabSelected: (index) {
-                        setState(() {
-                          _eventsTabController.animateTo(index);
-                        });
-                      },
-                      selectedColor: const Color(0xFF7C3AED),
-                    )
-                  : TabBar(
-                      controller: _eventsTabController,
-                      tabs: [
-                        Tab(text: AppLocalizations.of(context)!.pending),
-                        Tab(text: AppLocalizations.of(context)!.upcoming),
-                        Tab(text: AppLocalizations.of(context)!.past),
-                      ],
-                      labelColor: const Color(0xFF7C3AED),
-                      unselectedLabelColor: Colors.grey,
-                      indicatorColor: const Color(0xFF7C3AED),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: kIsWeb
+                        ? WebTabNavigation(
+                            tabs: const [
+                              WebTab(text: 'Pending'),
+                              WebTab(text: 'Available'),
+                              WebTab(text: 'Full'),
+                            ],
+                            selectedIndex: _eventsTabController.index,
+                            onTabSelected: (index) {
+                              setState(() {
+                                _eventsTabController.animateTo(index);
+                              });
+                            },
+                            selectedColor: const Color(0xFF7C3AED),
+                          )
+                        : TabBar(
+                            controller: _eventsTabController,
+                            tabs: const [
+                              Tab(text: 'Pending'),
+                              Tab(text: 'Available'),
+                              Tab(text: 'Full'),
+                            ],
+                            labelColor: const Color(0xFF7C3AED),
+                            unselectedLabelColor: Colors.grey,
+                            indicatorColor: const Color(0xFF7C3AED),
+                          ),
+                  ),
+                  // Past Events button
+                  TextButton.icon(
+                    onPressed: _showPastEvents,
+                    icon: const Icon(Icons.history, size: 18),
+                    label: const Text('Past'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF6B7280),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -2089,15 +2308,64 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   List<Widget> _buildCreateSlivers() {
+    // Return the current tab's content directly as slivers
+    switch (_createTabController.index) {
+      case 0: // Upload tab
+        return [
+          SliverToBoxAdapter(
+            child: _buildUploadTab(),
+          ),
+        ];
+      case 1: // AI Chat tab
+        return _buildAIChatSlivers();
+      case 2: // Manual Entry tab
+        // Return manual entry form as slivers for full-screen scrolling
+        return _buildManualEntrySlivers();
+      default:
+        return [
+          SliverToBoxAdapter(
+            child: Container(),
+          ),
+        ];
+    }
+  }
+
+  List<Widget> _buildAIChatSlivers() {
+    // Get the viewport height to create a fixed height container
+    final viewportHeight = MediaQuery.of(context).size.height -
+        MediaQuery.of(context).padding.top -
+        200 - // Header height
+        100; // Bottom padding
+
     return [
-      SliverFillRemaining(
-        child: TabBarView(
-          controller: _createTabController,
-          children: [
-            _buildUploadTab(),
-            _buildChatTab(),
-            _buildManualEntryTab(),
-          ],
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.only(top: 20, bottom: 20),
+          child: Center(
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 800),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              height: viewportHeight.clamp(400, double.infinity),
+              child: _buildChatTab(),
+            ),
+          ),
+        ),
+      ),
+    ];
+  }
+
+  List<Widget> _buildManualEntrySlivers() {
+    return [
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.only(top: 20, bottom: 20),
+          child: Center(
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 800),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: _buildManualEntryForm(),
+            ),
+          ),
         ),
       ),
     ];
@@ -3430,7 +3698,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           ),
                         );
                         await _draftService.clearDraft();
-                        await _loadPendingDrafts();
+                        await _loadEvents();
+                        // Navigate to Events tab to show the new event
+                        setState(() {
+                          _selectedIndex = 1; // Events tab
+                          _eventsTabController.animateTo(0); // Pending subtab
+                        });
                       } catch (e) {
                         if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -3597,14 +3870,209 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     );
   }
 
+  /// Show past events in a bottom sheet
+  void _showPastEvents() {
+    final pastEvents = _eventsPast ?? [];
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (context, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+            ),
+          ),
+          child: Column(
+            children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // Header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                child: Row(
+                  children: [
+                    const Icon(Icons.history, size: 24),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Past Events (${pastEvents.length})',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              // Past events list
+              Expanded(
+                child: pastEvents.isEmpty
+                    ? const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.event_busy, size: 64, color: Colors.grey),
+                            SizedBox(height: 16),
+                            Text(
+                              'No past events',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.grey,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: scrollController,
+                        padding: const EdgeInsets.all(20),
+                        itemCount: pastEvents.length,
+                        itemBuilder: (context, index) {
+                          return _buildEventCard(pastEvents[index], showMargin: true);
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Check if an event has open positions
+  bool _hasOpenPositions(Map<String, dynamic> event) {
+    final roles = (event['roles'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final acceptedStaff = (event['accepted_staff'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+
+    // Calculate total needed across all roles
+    int totalNeeded = 0;
+    for (final role in roles) {
+      totalNeeded += (role['count'] as int?) ?? 0;
+    }
+
+    // Calculate total accepted staff
+    final totalAccepted = acceptedStaff.where((s) => s['response'] == 'accept').length;
+
+    return totalAccepted < totalNeeded;
+  }
+
+  /// Calculate event capacity (filled vs total)
+  Map<String, int> _calculateCapacity(Map<String, dynamic> event) {
+    final roles = (event['roles'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final acceptedStaff = (event['accepted_staff'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+
+    int totalNeeded = 0;
+    for (final role in roles) {
+      totalNeeded += (role['count'] as int?) ?? 0;
+    }
+
+    final totalFilled = acceptedStaff.where((s) => s['response'] == 'accept').length;
+
+    return {'filled': totalFilled, 'total': totalNeeded};
+  }
+
+  /// Determine privacy status: 'private', 'public', or 'mix'
+  String _getPrivacyStatus(Map<String, dynamic> event) {
+    final status = (event['status'] ?? 'draft').toString();
+
+    // Draft events are always private
+    if (status == 'draft') {
+      return 'private';
+    }
+
+    // For published events, check if had invitations before publishing
+    if (status == 'published') {
+      final publishedAtRaw = event['publishedAt'];
+      final acceptedStaff = (event['accepted_staff'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+
+      if (publishedAtRaw != null && acceptedStaff.isNotEmpty) {
+        try {
+          final publishedAt = DateTime.parse(publishedAtRaw.toString());
+
+          // Check if any staff accepted before the event was published
+          for (final staff in acceptedStaff) {
+            final respondedAtRaw = staff['respondedAt'];
+            if (respondedAtRaw != null) {
+              try {
+                final respondedAt = DateTime.parse(respondedAtRaw.toString());
+                if (respondedAt.isBefore(publishedAt)) {
+                  return 'mix'; // Had private invitations before publishing
+                }
+              } catch (_) {}
+            }
+          }
+        } catch (_) {}
+      }
+
+      return 'public'; // Published without prior private invitations
+    }
+
+    // Fallback for other statuses
+    return 'private';
+  }
+
+  /// Get privacy indicator color
+  Color _getPrivacyColor(String privacyStatus) {
+    switch (privacyStatus) {
+      case 'private':
+        return const Color(0xFF6366F1); // Indigo
+      case 'public':
+        return const Color(0xFF059669); // Green
+      case 'mix':
+        return const Color(0xFFF59E0B); // Amber/Orange
+      default:
+        return Colors.grey;
+    }
+  }
+
+  /// Get capacity indicator color based on percentage filled
+  Color _getCapacityColor(int filled, int total) {
+    if (total == 0) return Colors.grey;
+
+    final percentage = (filled / total) * 100;
+
+    if (percentage >= 90) {
+      return const Color(0xFFDC2626); // Red
+    } else if (percentage >= 50) {
+      return const Color(0xFFF59E0B); // Orange
+    } else {
+      return const Color(0xFF059669); // Green
+    }
+  }
+
   Future<void> _loadEvents() async {
     setState(() {
       _isEventsLoading = true;
       _eventsError = null;
     });
     try {
+      print('[_loadEvents] Fetching events with userKey: $_viewerUserKey');
       final items = await _eventService.fetchEvents(userKey: _viewerUserKey);
-      // Sort: upcoming soonest -> oldest past -> no date
+      print('[_loadEvents] Received ${items.length} events from API');
+
+      // Helper: Parse date from event
       DateTime? parseDate(Map<String, dynamic> e) {
         final dynamic v = e['date'];
         if (v is String && v.isNotEmpty) {
@@ -3616,38 +4084,96 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       }
 
       final DateTime now = DateTime.now();
-      final List<Map<String, dynamic>> upcoming = [];
+
+      // Filter events into tabs (mutually exclusive)
+      final List<Map<String, dynamic>> pending = [];
+      final List<Map<String, dynamic>> available = [];
+      final List<Map<String, dynamic>> full = [];
       final List<Map<String, dynamic>> past = [];
-      final List<Map<String, dynamic>> noDate = [];
 
       for (final e in items) {
+        final status = (e['status'] ?? 'draft').toString();
         final d = parseDate(e);
-        if (d == null) {
-          noDate.add(e);
-        } else if (!d.isBefore(DateTime(now.year, now.month, now.day))) {
-          upcoming.add(e);
+        final eventName = (e['event_name'] ?? e['client_name'] ?? 'Unknown').toString();
+        final eventId = (e['_id'] ?? e['id'] ?? 'unknown').toString();
+
+        // Check if event is past (FIXED: normalize both dates to midnight to avoid timezone issues)
+        final bool isPast;
+        if (d != null) {
+          final eventDate = DateTime(d.year, d.month, d.day);
+          final todayDate = DateTime(now.year, now.month, now.day);
+          isPast = eventDate.isBefore(todayDate);
         } else {
+          isPast = false;
+        }
+
+        // Debug: Log each event's status and classification with date details
+        print('[EVENT] "$eventName" (ID: ${eventId.substring(0, 8)}...)');
+        print('  Raw date: ${e['date']}');
+        print('  Parsed date: $d');
+        if (d != null) {
+          print('  Event date normalized: ${DateTime(d.year, d.month, d.day)}');
+          print('  Today date normalized: ${DateTime(now.year, now.month, now.day)}');
+        }
+        print('  Status: "$status", isPast: $isPast, hasOpenPositions: ${_hasOpenPositions(e)}');
+
+        // Separate past events
+        if (isPast) {
           past.add(e);
+          print('  → Classified as: PAST');
+          continue;
+        }
+
+        // Tab logic (priority order):
+        // 1. Pending = all drafts
+        // 2. Full = fulfilled or no open positions
+        // 3. Available = published with open positions
+
+        if (status == 'draft') {
+          pending.add(e);
+          print('  → Classified as: PENDING (draft)');
+        } else if (status == 'fulfilled' || !_hasOpenPositions(e)) {
+          full.add(e);
+          print('  → Classified as: FULL (fulfilled or no open positions)');
+        } else if (status == 'published') {
+          available.add(e);
+          print('  → Classified as: AVAILABLE (published with open positions)');
+        } else {
+          // Fallback for other statuses (confirmed, in_progress, etc.)
+          pending.add(e);
+          print('  → Classified as: PENDING (fallback for status: $status)');
         }
       }
 
+      // Sort by date
       int ascByDate(Map<String, dynamic> a, Map<String, dynamic> b) {
-        final DateTime da = parseDate(a)!;
-        final DateTime db = parseDate(b)!;
+        final da = parseDate(a);
+        final db = parseDate(b);
+        if (da == null && db == null) return 0;
+        if (da == null) return 1;
+        if (db == null) return -1;
         return da.compareTo(db);
       }
 
-      upcoming.sort(ascByDate); // soonest first
-      past.sort((a, b) => ascByDate(b, a)); // most recent past first
+      pending.sort(ascByDate);
+      available.sort(ascByDate);
+      full.sort(ascByDate);
+      past.sort((a, b) => ascByDate(b, a)); // most recent first
 
       final List<Map<String, dynamic>> sorted = [
-        ...upcoming,
-        ...past,
-        ...noDate,
+        ...pending,
+        ...available,
+        ...full,
       ];
+
+      // Debug: Log the filtered counts
+      print('[EVENTS DEBUG] Filtered: ${pending.length} pending, ${available.length} available, ${full.length} full, ${past.length} past');
+
       setState(() {
         _events = sorted;
-        _eventsUpcoming = upcoming;
+        _eventsPending = pending;
+        _eventsAvailable = available;
+        _eventsFull = full;
         _eventsPast = past;
         _isEventsLoading = false;
       });
@@ -3660,19 +4186,54 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   List<Widget> _buildEventsSlivers() {
-    final List<Map<String, dynamic>> upcoming = _eventsUpcoming ?? const [];
-    final List<Map<String, dynamic>> past = _eventsPast ?? const [];
+    final List<Map<String, dynamic>> pending = _eventsPending ?? const [];
+    final List<Map<String, dynamic>> available = _eventsAvailable ?? const [];
+    final List<Map<String, dynamic>> full = _eventsFull ?? const [];
 
-    // Tabs are in the floating header, just return content
+    // Return the current tab's content directly as slivers
+    List<Map<String, dynamic>> currentTabEvents;
+    switch (_eventsTabController.index) {
+      case 0:
+        currentTabEvents = pending;
+        break;
+      case 1:
+        currentTabEvents = available;
+        break;
+      case 2:
+        currentTabEvents = full;
+        break;
+      default:
+        currentTabEvents = [];
+    }
+
+    // Build event cards as individual slivers for proper scrolling
+    if (currentTabEvents.isEmpty) {
+      return [
+        SliverToBoxAdapter(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Text(
+                'No events found',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ];
+    }
+
     return [
-      SliverFillRemaining(
-        child: TabBarView(
-          controller: _eventsTabController,
-          children: [
-            _pendingInner(),
-            _eventsInner(upcoming),
-            _pastEventsInner(past),
-          ],
+      SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            final event = currentTabEvents[index];
+            return _buildEventCard(event);
+          },
+          childCount: currentTabEvents.length,
         ),
       ),
     ];
@@ -3767,7 +4328,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
   Widget _buildEventsTab() {
     final List<Map<String, dynamic>> all = _events ?? const [];
-    final List<Map<String, dynamic>> upcoming = _eventsUpcoming ?? const [];
+    final List<Map<String, dynamic>> pending = _eventsPending ?? const [];
+    final List<Map<String, dynamic>> available = _eventsAvailable ?? const [];
+    final List<Map<String, dynamic>> full = _eventsFull ?? const [];
     final List<Map<String, dynamic>> past = _eventsPast ?? const [];
     return SafeArea(
       child: DefaultTabController(
@@ -3800,9 +4363,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             Expanded(
               child: TabBarView(
                 children: [
-                  _pendingInner(),
-                  _eventsInner(upcoming),
-                  _pastEventsInner(past),
+                  _eventsInner(pending), // Pending tab
+                  _eventsInner(available), // Available tab
+                  _eventsInner(full), // Full tab
                 ],
               ),
             ),
@@ -4036,6 +4599,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   Widget _eventsInner(List<Map<String, dynamic>> items) {
+    print('[EVENTS INNER] Received ${items.length} items');
     final sortedItems = [...items]..sort(_compareEventsAscending);
     return RefreshIndicator(
       onRefresh: _loadEvents,
@@ -5942,6 +6506,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final String venueName = (e['venue_name'] ?? AppLocalizations.of(context)!.locationTbd).toString();
     final String venueAddress = (e['venue_address'] ?? '').toString();
     final String googleMapsUrl = (e['google_maps_url'] ?? '').toString();
+    final String status = (e['status'] ?? 'draft').toString();
 
     String dateStr = '';
     String displayDate = '';
@@ -6000,7 +6565,6 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         margin: showMargin
             ? const EdgeInsets.only(bottom: 12)
             : EdgeInsets.zero,
-        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -6015,11 +6579,24 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         ),
         child: Row(
           children: [
-            // Event details
+            // Colored privacy indicator strip
+            Container(
+              width: 4,
+              decoration: BoxDecoration(
+                color: _getPrivacyColor(_getPrivacyStatus(e)),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(15),
+                  bottomLeft: Radius.circular(15),
+                ),
+              ),
+            ),
+            // Event content
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                   // Client name
                   Text(
                     clientName,
@@ -6055,8 +6632,102 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                   ],
+                  // Badges row (capacity + privacy)
+                  Builder(
+                    builder: (context) {
+                      final capacity = _calculateCapacity(e);
+                      final filled = capacity['filled'] ?? 0;
+                      final total = capacity['total'] ?? 0;
+                      final capacityColor = _getCapacityColor(filled, total);
+                      final isFull = filled >= total && total > 0;
+
+                      final privacyStatus = _getPrivacyStatus(e);
+                      final privacyColor = _getPrivacyColor(privacyStatus);
+                      final privacyLabel = privacyStatus == 'private'
+                          ? 'Private'
+                          : privacyStatus == 'public'
+                              ? 'Public'
+                              : 'Mix';
+
+                      return Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          // Capacity badge
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: capacityColor.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: capacityColor.withValues(alpha: 0.3),
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  isFull ? Icons.lock : Icons.people,
+                                  size: 12,
+                                  color: capacityColor,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  isFull ? 'Full' : '$filled/$total filled',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: capacityColor,
+                                    height: 1.2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          // Privacy badge
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: privacyColor.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: privacyColor.withValues(alpha: 0.3),
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  privacyStatus == 'private'
+                                      ? Icons.lock_outline
+                                      : privacyStatus == 'public'
+                                          ? Icons.public
+                                          : Icons.group,
+                                  size: 12,
+                                  color: privacyColor,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  privacyLabel,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: privacyColor,
+                                    height: 1.2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 8),
                   // Venue
                   Row(
                     children: [
@@ -6139,9 +6810,91 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       ],
                     ),
                   ],
+                  // Action buttons for pending/draft events
+                  if (status == 'draft') ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () async {
+                              final eventId = (e['_id'] ?? e['id'] ?? '').toString();
+                              if (eventId.isEmpty) return;
+                              if (!mounted) return;
+                              final changed = await Navigator.of(context).push<bool>(
+                                MaterialPageRoute(
+                                  builder: (_) => PendingPublishScreen(
+                                    draft: e,
+                                    draftId: eventId,
+                                  ),
+                                ),
+                              );
+                              if (changed == true) {
+                                await _loadEvents();
+                              }
+                            },
+                            icon: const Icon(Icons.campaign, size: 18),
+                            label: const Text('Publish'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF6366F1),
+                              side: const BorderSide(color: Color(0xFF6366F1)),
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Color(0xFFDC2626), size: 20),
+                          onPressed: () async {
+                            final eventId = (e['_id'] ?? e['id'] ?? '').toString();
+                            if (eventId.isEmpty) return;
+
+                            // Confirm deletion
+                            final confirm = await showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('Delete Event'),
+                                content: const Text('Are you sure you want to delete this draft event?'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context, false),
+                                    child: const Text('Cancel'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context, true),
+                                    child: const Text('Delete', style: TextStyle(color: Color(0xFFDC2626))),
+                                  ),
+                                ],
+                              ),
+                            );
+
+                            if (confirm != true) return;
+
+                            try {
+                              await _eventService.deleteEvent(eventId);
+                              await _loadEvents();
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Event deleted')),
+                              );
+                            } catch (e) {
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Failed to delete: $e'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
+          ),
           ],
         ),
       ),
@@ -6180,19 +6933,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     );
   }
 
-  Widget _buildManualEntryTab() {
-    return SingleChildScrollView(
-      child: Center(
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 800),
-          padding: const EdgeInsets.all(20),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                FormSection(
-                  title: AppLocalizations.of(context)!.jobInformation,
+  Widget _buildManualEntryForm() {
+    return Form(
+      key: _formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          FormSection(
+            title: AppLocalizations.of(context)!.jobInformation,
                   icon: Icons.event,
                   children: [
                     LabeledTextField(
@@ -6454,7 +7202,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                 ),
                               );
                               await _draftService.clearDraft();
-                              await _loadPendingDrafts();
+                              await _loadEvents();
+                              // Navigate to Events tab to show the new event
+                              setState(() {
+                                _selectedIndex = 1; // Events tab
+                                _eventsTabController.animateTo(0); // Pending subtab
+                              });
                             } catch (e) {
                               if (!mounted) return;
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -6483,7 +7236,16 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 ],
               ],
             ),
-          ),
+          );
+  }
+
+  Widget _buildManualEntryTab() {
+    return SingleChildScrollView(
+      child: Center(
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 800),
+          padding: const EdgeInsets.all(20),
+          child: _buildManualEntryForm(),
         ),
       ),
     );
