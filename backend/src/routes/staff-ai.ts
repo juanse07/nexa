@@ -213,57 +213,40 @@ router.get('/ai/staff/context', requireAuth, async (req, res) => {
 
     const userId = String(user._id);
 
-    // DEBUG: First, let's see what ANY event looks like in the database
-    const sampleEvent = await EventModel.findOne({ 'assignments.0': { $exists: true } })
-      .select('eventName assignments')
-      .lean();
-
-    if (sampleEvent) {
-      console.log('[ai/staff/context] Sample event from DB:', JSON.stringify({
-        eventName: (sampleEvent as any).eventName,
-        assignments: (sampleEvent as any).assignments?.slice(0, 2) // First 2 assignments
-      }, null, 2));
-    } else {
-      console.log('[ai/staff/context] No events with assignments found in DB');
-    }
-
-    // Load assigned events (events where this user is in assignments array)
-    // Search by both memberId AND userKey since events might use either format
+    // Load assigned events where user is in accepted_staff array
     const query = {
-      $or: [
-        { 'assignments.memberId': userId },
-        { 'assignments.userKey': userKey }
-      ],
+      'accepted_staff.userKey': userKey,
       status: { $ne: 'cancelled' }
     };
 
     console.log('[ai/staff/context] Query:', JSON.stringify(query, null, 2));
-    console.log('[ai/staff/context] Query params - userId:', userId, 'userKey:', userKey);
+    console.log('[ai/staff/context] Query params - userKey:', userKey);
 
     const assignedEvents = await EventModel.find(query)
     .sort({ date: 1 })
     .limit(100)
-    .select('eventName clientName date startTime endTime venueName venueAddress city state roles assignments status')
+    .select('eventName clientName date startTime endTime venueName venueAddress city state roles accepted_staff status')
     .lean();
 
-    // DEBUG: Log query results
     console.log('[ai/staff/context] Found', assignedEvents.length, 'events');
     if (assignedEvents.length > 0 && assignedEvents[0]) {
-      console.log('[ai/staff/context] Matched event assignments:', JSON.stringify((assignedEvents[0] as any).assignments));
+      console.log('[ai/staff/context] First event:', JSON.stringify({
+        eventName: (assignedEvents[0] as any).eventName,
+        accepted_staff: (assignedEvents[0] as any).accepted_staff
+      }, null, 2));
     }
 
-    // Extract user's role assignments and calculate hours/earnings
+    // Extract user's role and details from accepted_staff
     const eventsWithUserData = assignedEvents.map((event: any) => {
-      // Find assignment by either memberId or userKey
-      const userAssignment = event.assignments?.find((a: any) =>
-        a.memberId?.toString() === userId || a.userKey === userKey
+      const userInEvent = event.accepted_staff?.find((staff: any) =>
+        staff.userKey === userKey
       );
       return {
         ...event,
-        userRole: userAssignment?.role || 'Unknown',
-        userCallTime: userAssignment?.callTime || null,
-        userStatus: userAssignment?.status || 'pending',
-        userPayRate: userAssignment?.payRate || null,
+        userRole: userInEvent?.role || userInEvent?.position || 'Unknown',
+        userCallTime: null, // Call time is in the roles array, not per-staff
+        userStatus: userInEvent?.response || 'pending',
+        userPayRate: null, // Pay rate not stored per-accepted staff
       };
     });
 
@@ -316,6 +299,116 @@ router.get('/ai/staff/context', requireAuth, async (req, res) => {
   } catch (err: any) {
     console.error('[ai/staff/context] Error:', err);
     return res.status(500).json({ message: 'Failed to load staff context' });
+  }
+});
+
+/**
+ * GET /api/ai/staff/debug-events
+ * TEMPORARY: Debug endpoint to inspect event structure
+ * TODO: Remove after debugging
+ */
+router.get('/ai/staff/debug-events', requireAuth, async (req, res) => {
+  try {
+    const provider = (req as any).user?.provider;
+    const subject = (req as any).user?.sub;
+
+    if (!provider || !subject) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const userKey = `${provider}:${subject}`;
+    const user = await UserModel.findOne({ provider, subject }).select('_id').lean();
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    const userId = String(user._id);
+
+    // 1. Get a sample event with assignments
+    const sampleEvent = await EventModel.findOne({ 'assignments.0': { $exists: true } })
+      .select('eventName assignments')
+      .lean();
+
+    // 1b. Also get ANY event to see structure
+    const anyEvent = await EventModel.findOne()
+      .select('eventName assignments members roles userAssignments staffAssignments')
+      .lean();
+
+    // 2. Test the query with $or
+    const queryWithOr = {
+      $or: [
+        { 'assignments.memberId': userId },
+        { 'assignments.userKey': userKey }
+      ],
+      status: { $ne: 'cancelled' }
+    };
+
+    const eventsFoundWithOr = await EventModel.find(queryWithOr)
+      .select('eventName assignments')
+      .limit(5)
+      .lean();
+
+    // 3. Search by just userKey
+    const eventsWithUserKey = await EventModel.find({
+      'assignments.userKey': userKey,
+      status: { $ne: 'cancelled' }
+    })
+      .select('eventName assignments')
+      .limit(5)
+      .lean();
+
+    // 4. Search by just memberId
+    const eventsWithMemberId = await EventModel.find({
+      'assignments.memberId': userId,
+      status: { $ne: 'cancelled' }
+    })
+      .select('eventName assignments')
+      .limit(5)
+      .lean();
+
+    return res.json({
+      debug: {
+        userId,
+        userKey,
+        sampleEventFromDB: sampleEvent ? {
+          eventName: (sampleEvent as any).eventName,
+          assignmentsStructure: (sampleEvent as any).assignments?.slice(0, 2)
+        } : null,
+        anyEventStructure: anyEvent ? {
+          eventName: (anyEvent as any).eventName,
+          assignments: (anyEvent as any).assignments,
+          members: (anyEvent as any).members,
+          roles: (anyEvent as any).roles,
+          userAssignments: (anyEvent as any).userAssignments,
+          staffAssignments: (anyEvent as any).staffAssignments
+        } : null,
+        queryResults: {
+          usingOrOperator: {
+            count: eventsFoundWithOr.length,
+            events: eventsFoundWithOr.map((e: any) => ({
+              eventName: e.eventName,
+              assignments: e.assignments
+            }))
+          },
+          usingUserKeyOnly: {
+            count: eventsWithUserKey.length,
+            events: eventsWithUserKey.map((e: any) => ({
+              eventName: e.eventName,
+              assignments: e.assignments
+            }))
+          },
+          usingMemberIdOnly: {
+            count: eventsWithMemberId.length,
+            events: eventsWithMemberId.map((e: any) => ({
+              eventName: e.eventName,
+              assignments: e.assignments
+            }))
+          }
+        }
+      }
+    });
+  } catch (err: any) {
+    console.error('[ai/staff/debug-events] Error:', err);
+    return res.status(500).json({ message: 'Failed to debug events', error: err.message });
   }
 });
 
@@ -521,22 +614,19 @@ async function executeGetMySchedule(
     }
 
     const events = await EventModel.find({
-      $or: [
-        { 'assignments.memberId': userId },
-        { 'assignments.userKey': userKey }
-      ],
+      'accepted_staff.userKey': userKey,
       status: { $ne: 'cancelled' },
       ...dateFilter
     })
     .sort({ date: 1 })
     .limit(50)
-    .select('eventName clientName date startTime endTime venueName venueAddress city state assignments status')
+    .select('eventName clientName date startTime endTime venueName venueAddress city state accepted_staff status')
     .lean();
 
-    // Extract user's assignment data for each event
+    // Extract user's data from accepted_staff for each event
     const schedule = events.map((event: any) => {
-      const userAssignment = event.assignments?.find((a: any) =>
-        a.memberId?.toString() === userId || a.userKey === userKey
+      const userInEvent = event.accepted_staff?.find((staff: any) =>
+        staff.userKey === userKey
       );
       return {
         eventId: event._id,
@@ -547,10 +637,10 @@ async function executeGetMySchedule(
         endTime: event.endTime,
         venueName: event.venueName,
         venueAddress: event.venueAddress,
-        role: userAssignment?.role || 'Unknown',
-        callTime: userAssignment?.callTime,
-        status: userAssignment?.status || 'pending',
-        payRate: userAssignment?.payRate,
+        role: userInEvent?.role || userInEvent?.position || 'Unknown',
+        callTime: null, // Not stored per-staff
+        status: userInEvent?.response || 'accepted',
+        payRate: null, // Not stored per-staff
       };
     });
 
@@ -609,14 +699,11 @@ async function executeGetEarningsSummary(
     }
 
     const events = await EventModel.find({
-      $or: [
-        { 'assignments.memberId': userId },
-        { 'assignments.userKey': userKey }
-      ],
+      'accepted_staff.userKey': userKey,
       status: 'completed',
       ...dateFilter
     })
-    .select('date startTime endTime assignments')
+    .select('date startTime endTime accepted_staff')
     .lean();
 
     let totalEarnings = 0;
@@ -624,18 +711,18 @@ async function executeGetEarningsSummary(
     let eventCount = 0;
 
     events.forEach((event: any) => {
-      const userAssignment = event.assignments?.find((a: any) =>
-        a.memberId?.toString() === userId || a.userKey === userKey
+      const userInEvent = event.accepted_staff?.find((staff: any) =>
+        staff.userKey === userKey
       );
 
-      if (userAssignment?.payRate && event.startTime && event.endTime) {
-        // Calculate hours worked
+      if (userInEvent && event.startTime && event.endTime) {
+        // Calculate hours worked (payRate not available in accepted_staff)
         const start = new Date(`1970-01-01T${event.startTime}`);
         const end = new Date(`1970-01-01T${event.endTime}`);
         const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
 
         totalHoursWorked += hours;
-        totalEarnings += hours * userAssignment.payRate;
+        // Note: payRate not stored in accepted_staff, cannot calculate earnings
         eventCount++;
       }
     });
@@ -873,11 +960,38 @@ async function handleStaffOpenAIRequest(
 
   // Inject date/time context and staff-specific instructions
   const dateContext = getFullSystemContext(timezone);
+
+  // Add user-friendly formatting instructions for staff AI
+  const formattingInstructions = `
+IMPORTANT - User-Friendly Response Formatting:
+
+When presenting event information to users:
+1. NEVER show database IDs (like MongoDB ObjectIDs) - users don't need to see these
+2. Use natural, conversational language instead of database field names
+3. Format dates in a readable way: "October 28, 2025" or "Monday, October 28th" instead of raw ISO strings
+4. Present event details in a clear, organized format like:
+
+   **Event on [Date]:**
+   - Role: [Position name]
+   - Client: [Client name]
+   - Venue: [Venue name and address]
+   - Time: [Start time] to [End time]
+   - Status: [Accepted/Pending/etc.]
+
+5. For multiple events, use numbered lists (1., 2., 3.) to make them easy to read
+6. Don't show internal fields like "eventId", "userKey", or other technical identifiers
+7. If dates are in the past, mention that (e.g., "This event already happened")
+8. Keep responses concise and friendly - focus on what the user needs to know
+
+Remember: Users are staff members looking for their schedule information, not developers reading database dumps!`;
+
+  const contextWithFormatting = `${dateContext}\n\n${formattingInstructions}`;
+
   const enhancedMessages = messages.map((msg, index) => {
     if (msg.role === 'system' && index === 0) {
       return {
         ...msg,
-        content: `${dateContext}\n\n${msg.content}`
+        content: `${contextWithFormatting}\n\n${msg.content}`
       };
     }
     return msg;
@@ -886,7 +1000,7 @@ async function handleStaffOpenAIRequest(
   const hasSystemMessage = messages.some(msg => msg.role === 'system');
   const finalMessages = hasSystemMessage
     ? enhancedMessages
-    : [{ role: 'system', content: dateContext }, ...messages];
+    : [{ role: 'system', content: contextWithFormatting }, ...messages];
 
   const requestBody = {
     model: textModel,
@@ -1022,7 +1136,32 @@ async function handleStaffClaudeRequest(
   const userMessages: any[] = [];
 
   const dateContext = getFullSystemContext(timezone);
-  systemMessage = `${dateContext}\n\n`;
+
+  // Add user-friendly formatting instructions for staff AI
+  const formattingInstructions = `
+IMPORTANT - User-Friendly Response Formatting:
+
+When presenting event information to users:
+1. NEVER show database IDs (like MongoDB ObjectIDs) - users don't need to see these
+2. Use natural, conversational language instead of database field names
+3. Format dates in a readable way: "October 28, 2025" or "Monday, October 28th" instead of raw ISO strings
+4. Present event details in a clear, organized format like:
+
+   **Event on [Date]:**
+   - Role: [Position name]
+   - Client: [Client name]
+   - Venue: [Venue name and address]
+   - Time: [Start time] to [End time]
+   - Status: [Accepted/Pending/etc.]
+
+5. For multiple events, use numbered lists (1., 2., 3.) to make them easy to read
+6. Don't show internal fields like "eventId", "userKey", or other technical identifiers
+7. If dates are in the past, mention that (e.g., "This event already happened")
+8. Keep responses concise and friendly - focus on what the user needs to know
+
+Remember: Users are staff members looking for their schedule information, not developers reading database dumps!`;
+
+  systemMessage = `${dateContext}\n\n${formattingInstructions}\n\n`;
 
   for (const msg of messages) {
     if (msg.role === 'system') {
