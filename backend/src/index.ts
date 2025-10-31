@@ -20,6 +20,7 @@ import usersRouter from './routes/users';
 import syncRouter from './routes/sync';
 import chatRouter from './routes/chat';
 import aiRouter from './routes/ai';
+import staffAiRouter from './routes/staff-ai';
 import placesRouter from './routes/places';
 import { initSocket } from './socket/server';
 import teamsRouter from './routes/teams';
@@ -91,6 +92,7 @@ async function createServer() {
   app.use('/api/notifications', notificationsRouter);
   app.use('/api', syncRouter);
   app.use('/api', aiRouter);
+  app.use('/api', staffAiRouter);
   app.use('/api', placesRouter);
 
   // Admin maintenance: recompute role_stats for all events
