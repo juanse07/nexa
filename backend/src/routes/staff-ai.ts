@@ -441,13 +441,13 @@ const chatMessageSchema = z.object({
 const STAFF_AI_TOOLS = [
   {
     name: 'get_my_schedule',
-    description: 'Get my upcoming shifts and assigned events. Use this when I ask about my schedule, upcoming shifts, or "when do I work".',
+    description: 'Get my upcoming shifts and assigned events. Use this when I ask about my schedule, upcoming shifts, specific event dates, or "when do I work". IMPORTANT: When user asks about a SPECIFIC DATE (like "November 13" or "mi evento del 13"), pass that date in YYYY-MM-DD format instead of using week/month ranges.',
     parameters: {
       type: 'object',
       properties: {
         date_range: {
           type: 'string',
-          description: 'Optional date range filter: "this_week", "next_week", "this_month", or ISO date like "2025-12-01"'
+          description: 'Optional filter: Use ISO date "YYYY-MM-DD" for specific dates (e.g. "2025-11-13"), OR use "this_week", "next_week", "this_month" for ranges. Leave empty to get ALL upcoming events.'
         }
       }
     }
@@ -605,23 +605,44 @@ async function executeGetMySchedule(
         const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
         dateFilter = { date: { $gte: startOfMonth, $lte: endOfMonth } };
       } else {
-        // Assume ISO date
-        dateFilter = { date: new Date(dateRange) };
+        // Assume ISO date (YYYY-MM-DD) - match the entire day
+        const specificDate = new Date(dateRange);
+        const startOfDay = new Date(specificDate);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(specificDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        dateFilter = { date: { $gte: startOfDay, $lte: endOfDay } };
+        console.log(`[executeGetMySchedule] Specific date filter: ${dateRange} -> ${startOfDay.toISOString()} to ${endOfDay.toISOString()}`);
       }
     } else {
       // Default: upcoming events only
       dateFilter = { date: { $gte: now } };
     }
 
-    const events = await EventModel.find({
+    const query = {
       'accepted_staff.userKey': userKey,
       status: { $ne: 'cancelled' },
       ...dateFilter
-    })
+    };
+    console.log('[executeGetMySchedule] Query:', JSON.stringify(query, null, 2));
+
+    const events = await EventModel.find(query)
     .sort({ date: 1 })
     .limit(50)
     .select('event_name client_name date start_time end_time venue_name venue_address city state accepted_staff status')
     .lean();
+
+    console.log('[executeGetMySchedule] Found', events.length, 'events');
+    if (events.length > 0) {
+      console.log('[executeGetMySchedule] First event sample:', JSON.stringify({
+        event_name: (events[0] as any).event_name,
+        client_name: (events[0] as any).client_name,
+        venue_name: (events[0] as any).venue_name,
+        start_time: (events[0] as any).start_time,
+        end_time: (events[0] as any).end_time,
+        date: (events[0] as any).date,
+      }, null, 2));
+    }
 
     // Extract user's data from accepted_staff for each event
     const schedule = events.map((event: any) => {
