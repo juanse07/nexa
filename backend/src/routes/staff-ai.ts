@@ -225,13 +225,13 @@ router.get('/ai/staff/context', requireAuth, async (req, res) => {
     const assignedEvents = await EventModel.find(query)
     .sort({ date: 1 })
     .limit(100)
-    .select('eventName clientName date startTime endTime venueName venueAddress city state roles accepted_staff status')
+    .select('event_name client_name date start_time end_time venue_name venue_address city state roles accepted_staff status')
     .lean();
 
     console.log('[ai/staff/context] Found', assignedEvents.length, 'events');
     if (assignedEvents.length > 0 && assignedEvents[0]) {
       console.log('[ai/staff/context] First event:', JSON.stringify({
-        eventName: (assignedEvents[0] as any).eventName,
+        eventName: (assignedEvents[0] as any).event_name,
         accepted_staff: (assignedEvents[0] as any).accepted_staff
       }, null, 2));
     }
@@ -255,10 +255,10 @@ router.get('/ai/staff/context', requireAuth, async (req, res) => {
     let totalHoursWorked = 0;
 
     eventsWithUserData.forEach((event: any) => {
-      if (event.status === 'completed' && event.userPayRate && event.startTime && event.endTime) {
+      if (event.status === 'completed' && event.userPayRate && event.start_time && event.end_time) {
         // Calculate hours worked (simplified - would need actual clock-in/out in production)
-        const start = new Date(`1970-01-01T${event.startTime}`);
-        const end = new Date(`1970-01-01T${event.endTime}`);
+        const start = new Date(`1970-01-01T${event.start_time}`);
+        const end = new Date(`1970-01-01T${event.end_time}`);
         const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
         totalHoursWorked += hours;
         totalEarnings += hours * event.userPayRate;
@@ -620,7 +620,7 @@ async function executeGetMySchedule(
     })
     .sort({ date: 1 })
     .limit(50)
-    .select('eventName clientName date startTime endTime venueName venueAddress city state accepted_staff status')
+    .select('event_name client_name date start_time end_time venue_name venue_address city state accepted_staff status')
     .lean();
 
     // Extract user's data from accepted_staff for each event
@@ -630,13 +630,13 @@ async function executeGetMySchedule(
       );
       return {
         eventId: event._id,
-        eventName: event.eventName,
-        clientName: event.clientName,
+        eventName: event.event_name,
+        clientName: event.client_name,
         date: event.date,
-        startTime: event.startTime,
-        endTime: event.endTime,
-        venueName: event.venueName,
-        venueAddress: event.venueAddress,
+        startTime: event.start_time,
+        endTime: event.end_time,
+        venueName: event.venue_name,
+        venueAddress: event.venue_address,
         role: userInEvent?.role || userInEvent?.position || 'Unknown',
         callTime: null, // Not stored per-staff
         status: userInEvent?.response || 'accepted',
@@ -703,7 +703,7 @@ async function executeGetEarningsSummary(
       status: 'completed',
       ...dateFilter
     })
-    .select('date startTime endTime accepted_staff')
+    .select('date start_time end_time accepted_staff')
     .lean();
 
     let totalEarnings = 0;
@@ -715,10 +715,10 @@ async function executeGetEarningsSummary(
         staff.userKey === userKey
       );
 
-      if (userInEvent && event.startTime && event.endTime) {
+      if (userInEvent && event.start_time && event.end_time) {
         // Calculate hours worked (payRate not available in accepted_staff)
-        const start = new Date(`1970-01-01T${event.startTime}`);
-        const end = new Date(`1970-01-01T${event.endTime}`);
+        const start = new Date(`1970-01-01T${event.start_time}`);
+        const end = new Date(`1970-01-01T${event.end_time}`);
         const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
 
         totalHoursWorked += hours;
