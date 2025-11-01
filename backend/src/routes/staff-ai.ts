@@ -990,19 +990,27 @@ When presenting event information to users:
 1. NEVER show database IDs (like MongoDB ObjectIDs) - users don't need to see these
 2. Use natural, conversational language instead of database field names
 3. Format dates in a readable way: "October 28, 2025" or "Monday, October 28th" instead of raw ISO strings
-4. Present event details in a clear, organized format like:
+4. Present event details with these EXACT field labels (addresses are clickable in the app!):
 
-   **Event on [Date]:**
+   For Spanish responses:
+   - Rol: [Position name]
+   - Cliente: [Client name]
+   - Lugar: [Venue name, full street address, city, state ZIP]
+   - Horario: [Start time] to [End time]
+   - Estado: [Accepted/Pending/etc.]
+
+   For English responses:
    - Role: [Position name]
    - Client: [Client name]
-   - Venue: [Venue name and address]
+   - Venue: [Venue name, full street address, city, state ZIP]
    - Time: [Start time] to [End time]
    - Status: [Accepted/Pending/etc.]
 
-5. For multiple events, use numbered lists (1., 2., 3.) to make them easy to read
-6. Don't show internal fields like "eventId", "userKey", or other technical identifiers
-7. If dates are in the past, mention that (e.g., "This event already happened")
-8. Keep responses concise and friendly - focus on what the user needs to know
+5. CRITICAL: Always include the COMPLETE address on the "Lugar:" or "Venue:" line (e.g., "- Lugar: Mission Ballroom, 4242 Wynkoop St, Denver, CO 80216"). Users can tap it to open maps!
+6. For multiple events, use numbered lists (1., 2., 3.) to make them easy to read
+7. Don't show internal fields like "eventId", "userKey", or other technical identifiers
+8. If dates are in the past, mention that (e.g., "This event already happened")
+9. Keep responses concise and friendly - focus on what the user needs to know
 
 Remember: Users are staff members looking for their schedule information, not developers reading database dumps!`;
 
@@ -1166,19 +1174,27 @@ When presenting event information to users:
 1. NEVER show database IDs (like MongoDB ObjectIDs) - users don't need to see these
 2. Use natural, conversational language instead of database field names
 3. Format dates in a readable way: "October 28, 2025" or "Monday, October 28th" instead of raw ISO strings
-4. Present event details in a clear, organized format like:
+4. Present event details with these EXACT field labels (addresses are clickable in the app!):
 
-   **Event on [Date]:**
+   For Spanish responses:
+   - Rol: [Position name]
+   - Cliente: [Client name]
+   - Lugar: [Venue name, full street address, city, state ZIP]
+   - Horario: [Start time] to [End time]
+   - Estado: [Accepted/Pending/etc.]
+
+   For English responses:
    - Role: [Position name]
    - Client: [Client name]
-   - Venue: [Venue name and address]
+   - Venue: [Venue name, full street address, city, state ZIP]
    - Time: [Start time] to [End time]
    - Status: [Accepted/Pending/etc.]
 
-5. For multiple events, use numbered lists (1., 2., 3.) to make them easy to read
-6. Don't show internal fields like "eventId", "userKey", or other technical identifiers
-7. If dates are in the past, mention that (e.g., "This event already happened")
-8. Keep responses concise and friendly - focus on what the user needs to know
+5. CRITICAL: Always include the COMPLETE address on the "Lugar:" or "Venue:" line (e.g., "- Lugar: Mission Ballroom, 4242 Wynkoop St, Denver, CO 80216"). Users can tap it to open maps!
+6. For multiple events, use numbered lists (1., 2., 3.) to make them easy to read
+7. Don't show internal fields like "eventId", "userKey", or other technical identifiers
+8. If dates are in the past, mention that (e.g., "This event already happened")
+9. Keep responses concise and friendly - focus on what the user needs to know
 
 Remember: Users are staff members looking for their schedule information, not developers reading database dumps!`;
 
