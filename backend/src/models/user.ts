@@ -27,6 +27,16 @@ export interface UserDocument extends Document {
     lastActive: Date;
   }>;
 
+  // Subscription fields
+  subscription_tier?: 'free' | 'pro';
+  subscription_status?: 'active' | 'trial' | 'expired' | 'cancelled' | 'grace_period';
+  subscription_platform?: 'ios' | 'android' | 'web' | null;
+  qonversion_user_id?: string;
+  subscription_started_at?: Date;
+  subscription_expires_at?: Date;
+  ai_messages_used_this_month?: number;
+  ai_messages_reset_date?: Date;
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -58,12 +68,40 @@ const UserSchema = new Schema<UserDocument>(
       deviceType: { type: String, enum: ['ios', 'android', 'web'], required: true },
       lastActive: { type: Date, default: Date.now },
     }],
+
+    // Subscription fields
+    subscription_tier: { type: String, enum: ['free', 'pro'], default: 'free' },
+    subscription_status: {
+      type: String,
+      enum: ['active', 'trial', 'expired', 'cancelled', 'grace_period'],
+      default: 'active'
+    },
+    subscription_platform: {
+      type: String,
+      enum: ['ios', 'android', 'web', null],
+      default: null
+    },
+    qonversion_user_id: { type: String, sparse: true },
+    subscription_started_at: { type: Date, default: null },
+    subscription_expires_at: { type: Date, default: null },
+    ai_messages_used_this_month: { type: Number, default: 0 },
+    ai_messages_reset_date: {
+      type: Date,
+      default: function() {
+        const date = new Date();
+        date.setMonth(date.getMonth() + 1);
+        date.setDate(1);
+        date.setHours(0, 0, 0, 0);
+        return date;
+      }
+    },
   },
   { timestamps: true }
 );
 
 UserSchema.index({ provider: 1, subject: 1 }, { unique: true });
 UserSchema.index({ app_id: 1 }, { unique: false, sparse: true });
+UserSchema.index({ qonversion_user_id: 1 }, { unique: false, sparse: true });
 
 export const UserModel: Model<UserDocument> =
   mongoose.models.User || mongoose.model<UserDocument>('User', UserSchema);

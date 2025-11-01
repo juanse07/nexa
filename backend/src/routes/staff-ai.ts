@@ -205,13 +205,14 @@ router.get('/ai/staff/context', requireAuth, async (req, res) => {
 
     // Load staff user details by provider and subject
     const user = await UserModel.findOne({ provider, subject })
-      .select('_id first_name last_name email phone_number app_id')
+      .select('_id first_name last_name email phone_number app_id subscription_tier')
       .lean();
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
     const userId = String(user._id);
+    const subscriptionTier = (user as any).subscription_tier || 'free';
 
     // Load assigned events where user is in accepted_staff array
     const query = {
@@ -220,13 +221,15 @@ router.get('/ai/staff/context', requireAuth, async (req, res) => {
     };
 
     console.log('[ai/staff/context] Query:', JSON.stringify(query, null, 2));
-    console.log('[ai/staff/context] Query params - userKey:', userKey);
+    console.log('[ai/staff/context] Query params - userKey:', userKey, 'tier:', subscriptionTier);
 
-    // Cost optimization: Limit to 10 most relevant events (next upcoming)
-    // Reduces ~7,500 tokens to ~750 tokens per context load
+    // Dynamic context limit based on subscription tier
+    // Free: 10 events (~750 tokens) | Pro: 50 events (~3,750 tokens)
+    const eventLimit = subscriptionTier === 'pro' ? 50 : 10;
+
     const assignedEvents = await EventModel.find(query)
     .sort({ date: 1 })
-    .limit(10)
+    .limit(eventLimit)
     .select('event_name client_name date start_time end_time venue_name venue_address city state roles accepted_staff status')
     .lean();
 
@@ -581,10 +584,11 @@ async function executeMarkAvailability(
 async function executeGetMySchedule(
   userId: string,
   userKey: string,
-  dateRange?: string
+  dateRange?: string,
+  subscriptionTier: 'free' | 'pro' = 'free'
 ): Promise<{ success: boolean; message: string; data?: any }> {
   try {
-    console.log(`[executeGetMySchedule] Getting schedule for userId ${userId}, userKey ${userKey}, range: ${dateRange || 'all'}`);
+    console.log(`[executeGetMySchedule] Getting schedule for userId ${userId}, userKey ${userKey}, range: ${dateRange || 'all'}, tier: ${subscriptionTier}`);
 
     // Parse date range filter
     let dateFilter: any = {};
@@ -632,10 +636,13 @@ async function executeGetMySchedule(
     };
     console.log('[executeGetMySchedule] Query:', JSON.stringify(query, null, 2));
 
-    // Cost optimization: Limit to 10 most relevant events in function responses
+    // Dynamic limit based on subscription tier
+    // Free: 10 events | Pro: 50 events
+    const eventLimit = subscriptionTier === 'pro' ? 50 : 10;
+
     const events = await EventModel.find(query)
     .sort({ date: 1 })
-    .limit(10)
+    .limit(eventLimit)
     .select('event_name client_name date start_time end_time venue_name venue_address city state accepted_staff status')
     .lean();
 
@@ -871,9 +878,10 @@ async function executeStaffFunction(
   functionName: string,
   functionArgs: any,
   userId: string,
-  userKey: string
+  userKey: string,
+  subscriptionTier: 'free' | 'pro' = 'free'
 ): Promise<{ success: boolean; message: string; data?: any }> {
-  console.log(`[executeStaffFunction] Executing ${functionName} with args:`, functionArgs);
+  console.log(`[executeStaffFunction] Executing ${functionName} with args:`, functionArgs, 'tier:', subscriptionTier);
 
   switch (functionName) {
     case 'mark_availability':
@@ -885,7 +893,7 @@ async function executeStaffFunction(
       );
 
     case 'get_my_schedule':
-      return await executeGetMySchedule(userId, userKey, functionArgs.date_range);
+      return await executeGetMySchedule(userId, userKey, functionArgs.date_range, subscriptionTier);
 
     case 'get_earnings_summary':
       return await executeGetEarningsSummary(userId, userKey, functionArgs.date_range);
@@ -920,7 +928,7 @@ router.post('/ai/staff/chat/message', requireAuth, async (req, res) => {
 
     // Load staff user details by provider and subject
     const user = await UserModel.findOne({ provider: oauthProvider, subject })
-      .select('_id first_name last_name email phone_number app_id')
+      .select('_id first_name last_name email phone_number app_id subscription_tier')
       .lean();
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
@@ -928,18 +936,66 @@ router.post('/ai/staff/chat/message', requireAuth, async (req, res) => {
 
     const userId = String(user._id);
     const userKey = `${oauthProvider}:${subject}`;
+    const subscriptionTier = (user as any).subscription_tier || 'free';
+
+    // Free tier message limit enforcement (50 messages/month)
+    if (subscriptionTier === 'free') {
+      // Get mutable user document for updating counters
+      const mutableUser = await UserModel.findOne({ provider: oauthProvider, subject });
+      if (!mutableUser) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      // Check if we need to reset monthly counter
+      const now = new Date();
+      const resetDate = mutableUser.ai_messages_reset_date || new Date();
+
+      if (now > resetDate) {
+        // Reset counter for new month
+        mutableUser.ai_messages_used_this_month = 0;
+        const nextMonth = new Date(now);
+        nextMonth.setMonth(nextMonth.getMonth() + 1);
+        nextMonth.setDate(1);
+        nextMonth.setHours(0, 0, 0, 0);
+        mutableUser.ai_messages_reset_date = nextMonth;
+        console.log(`[ai/staff/chat/message] Reset message counter for user ${userId}, next reset: ${nextMonth.toISOString()}`);
+      }
+
+      // Check message limit (50 for free tier)
+      const messagesUsed = mutableUser.ai_messages_used_this_month || 0;
+      const messageLimit = 50;
+
+      if (messagesUsed >= messageLimit) {
+        console.log(`[ai/staff/chat/message] User ${userId} hit message limit (${messagesUsed}/${messageLimit})`);
+        return res.status(402).json({
+          message: `You've reached your monthly AI message limit (${messageLimit} messages). Upgrade to Pro for unlimited messages!`,
+          upgradeRequired: true,
+          usage: {
+            used: messagesUsed,
+            limit: messageLimit,
+            resetDate: mutableUser.ai_messages_reset_date,
+          },
+        });
+      }
+
+      // Increment counter
+      mutableUser.ai_messages_used_this_month = messagesUsed + 1;
+      await mutableUser.save();
+
+      console.log(`[ai/staff/chat/message] Message count for user ${userId}: ${messagesUsed + 1}/${messageLimit}`);
+    }
 
     const validated = chatMessageSchema.parse(req.body);
     const { messages, temperature, maxTokens, provider } = validated;
 
-    console.log(`[ai/staff/chat/message] Using provider: ${provider} for user ${userId}, userKey ${userKey}`);
+    console.log(`[ai/staff/chat/message] Using provider: ${provider} for user ${userId}, userKey ${userKey}, tier: ${subscriptionTier}`);
 
     const timezone = getTimezoneFromRequest(req);
 
     if (provider === 'claude') {
-      return await handleStaffClaudeRequest(messages, temperature, maxTokens, res, timezone, userId, userKey);
+      return await handleStaffClaudeRequest(messages, temperature, maxTokens, res, timezone, userId, userKey, subscriptionTier);
     } else {
-      return await handleStaffOpenAIRequest(messages, temperature, maxTokens, res, timezone, userId, userKey);
+      return await handleStaffOpenAIRequest(messages, temperature, maxTokens, res, timezone, userId, userKey, subscriptionTier);
     }
   } catch (err: any) {
     console.error('[ai/staff/chat/message] Error:', err);
@@ -965,7 +1021,8 @@ async function handleStaffOpenAIRequest(
   res: any,
   timezone?: string,
   userId?: string,
-  userKey?: string
+  userKey?: string,
+  subscriptionTier?: 'free' | 'pro'
 ) {
   const openaiKey = process.env.OPENAI_API_KEY;
   if (!openaiKey) {
@@ -1062,7 +1119,7 @@ Format events clearly & concisely:
     const functionArgs = JSON.parse(toolCall.function?.arguments || '{}');
 
     // Execute the function
-    const functionResult = await executeStaffFunction(functionName, functionArgs, userId!, userKey!);
+    const functionResult = await executeStaffFunction(functionName, functionArgs, userId!, userKey!, subscriptionTier || 'free');
     console.log('[OpenAI] Function result:', functionResult);
 
     // Make second API call with function result
@@ -1124,7 +1181,8 @@ async function handleStaffClaudeRequest(
   res: any,
   timezone?: string,
   userId?: string,
-  userKey?: string
+  userKey?: string,
+  subscriptionTier?: 'free' | 'pro'
 ) {
   const claudeKey = process.env.CLAUDE_API_KEY;
   if (!claudeKey) {
@@ -1238,7 +1296,7 @@ Format events clearly & concisely:
     const toolUseId = toolUseBlock.id;
 
     // Execute the function
-    const functionResult = await executeStaffFunction(toolName, toolInput, userId!, userKey!);
+    const functionResult = await executeStaffFunction(toolName, toolInput, userId!, userKey!, subscriptionTier || 'free');
     console.log('[Claude] Function result:', functionResult);
 
     // Make second API call with function result
