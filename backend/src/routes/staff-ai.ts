@@ -222,9 +222,11 @@ router.get('/ai/staff/context', requireAuth, async (req, res) => {
     console.log('[ai/staff/context] Query:', JSON.stringify(query, null, 2));
     console.log('[ai/staff/context] Query params - userKey:', userKey);
 
+    // Cost optimization: Limit to 10 most relevant events (next upcoming)
+    // Reduces ~7,500 tokens to ~750 tokens per context load
     const assignedEvents = await EventModel.find(query)
     .sort({ date: 1 })
-    .limit(100)
+    .limit(10)
     .select('event_name client_name date start_time end_time venue_name venue_address city state roles accepted_staff status')
     .lean();
 
@@ -557,10 +559,11 @@ async function executeMarkAvailability(
       results.push(result);
     }
 
+    // Cost optimization: Compressed response format
     return {
       success: true,
-      message: `Successfully marked ${status} for ${dates.length} date(s): ${dates.join(', ')}`,
-      data: { dates, status, count: results.length }
+      message: `Marked ${status} for ${dates.length} date(s)`,
+      data: { dates, status }
     };
   } catch (error: any) {
     console.error('[executeMarkAvailability] Error:', error);
@@ -615,8 +618,11 @@ async function executeGetMySchedule(
         console.log(`[executeGetMySchedule] Specific date filter: ${dateRange} -> ${startOfDay.toISOString()} to ${endOfDay.toISOString()}`);
       }
     } else {
-      // Default: upcoming events only
-      dateFilter = { date: { $gte: now } };
+      // Default: next 7 days (cost optimization - reduce context size)
+      const next7Days = new Date(now);
+      next7Days.setDate(now.getDate() + 7);
+      dateFilter = { date: { $gte: now, $lte: next7Days } };
+      console.log(`[executeGetMySchedule] Default 7-day filter: ${now.toISOString()} to ${next7Days.toISOString()}`);
     }
 
     const query = {
@@ -626,9 +632,10 @@ async function executeGetMySchedule(
     };
     console.log('[executeGetMySchedule] Query:', JSON.stringify(query, null, 2));
 
+    // Cost optimization: Limit to 10 most relevant events in function responses
     const events = await EventModel.find(query)
     .sort({ date: 1 })
-    .limit(50)
+    .limit(10)
     .select('event_name client_name date start_time end_time venue_name venue_address city state accepted_staff status')
     .lean();
 
@@ -645,30 +652,28 @@ async function executeGetMySchedule(
     }
 
     // Extract user's data from accepted_staff for each event
+    // Cost optimization: Use abbreviated keys and skip null fields
     const schedule = events.map((event: any) => {
       const userInEvent = event.accepted_staff?.find((staff: any) =>
         staff.userKey === userKey
       );
       return {
-        eventId: event._id,
-        eventName: event.event_name,
-        clientName: event.client_name,
+        id: event._id,
+        name: event.event_name,
+        client: event.client_name,
         date: event.date,
-        startTime: event.start_time,
-        endTime: event.end_time,
-        venueName: event.venue_name,
-        venueAddress: event.venue_address,
+        time: `${event.start_time}-${event.end_time}`,
+        venue: event.venue_name,
+        addr: event.venue_address,
         role: userInEvent?.role || userInEvent?.position || 'Unknown',
-        callTime: null, // Not stored per-staff
         status: userInEvent?.response || 'accepted',
-        payRate: null, // Not stored per-staff
       };
     });
 
     return {
       success: true,
-      message: `Found ${schedule.length} upcoming shift(s)`,
-      data: { schedule, count: schedule.length }
+      message: `${schedule.length} shift(s) found`,
+      data: schedule
     };
   } catch (error: any) {
     console.error('[executeGetMySchedule] Error:', error);
@@ -748,14 +753,14 @@ async function executeGetEarningsSummary(
       }
     });
 
+    // Cost optimization: Compressed response format
     return {
       success: true,
-      message: `Earnings calculated for ${eventCount} completed event(s)`,
+      message: `${eventCount} completed event(s)`,
       data: {
-        totalEarnings: Math.round(totalEarnings * 100) / 100,
-        totalHoursWorked: Math.round(totalHoursWorked * 10) / 10,
-        eventCount,
-        dateRange: dateRange || 'all_time'
+        earned: Math.round(totalEarnings * 100) / 100,
+        hours: Math.round(totalHoursWorked * 10) / 10,
+        events: eventCount
       }
     };
   } catch (error: any) {
@@ -796,15 +801,11 @@ async function executeAcceptShift(
 
     await event.save();
 
+    // Cost optimization: Compressed response format
     return {
       success: true,
-      message: `Successfully accepted shift for ${(event as any).eventName || 'event'} on ${(event as any).date}`,
-      data: {
-        eventId,
-        eventName: (event as any).eventName,
-        date: (event as any).date,
-        role: assignment.role
-      }
+      message: `Accepted ${(event as any).eventName || 'shift'}`,
+      data: { id: eventId, name: (event as any).eventName, date: (event as any).date }
     };
   } catch (error: any) {
     console.error('[executeAcceptShift] Error:', error);
@@ -848,15 +849,11 @@ async function executeDeclineShift(
 
     await event.save();
 
+    // Cost optimization: Compressed response format
     return {
       success: true,
-      message: `Successfully declined shift for ${(event as any).eventName || 'event'} on ${(event as any).date}`,
-      data: {
-        eventId,
-        eventName: (event as any).eventName,
-        date: (event as any).date,
-        reason: reason || 'Not specified'
-      }
+      message: `Declined ${(event as any).eventName || 'shift'}`,
+      data: { id: eventId, name: (event as any).eventName }
     };
   } catch (error: any) {
     console.error('[executeDeclineShift] Error:', error);
@@ -982,37 +979,14 @@ async function handleStaffOpenAIRequest(
   // Inject date/time context and staff-specific instructions
   const dateContext = getFullSystemContext(timezone);
 
-  // Add user-friendly formatting instructions for staff AI
+  // Add user-friendly formatting instructions for staff AI (optimized for token cost)
   const formattingInstructions = `
-IMPORTANT - User-Friendly Response Formatting:
-
-When presenting event information to users:
-1. NEVER show database IDs (like MongoDB ObjectIDs) - users don't need to see these
-2. Use natural, conversational language instead of database field names
-3. Format dates in a readable way: "October 28, 2025" or "Monday, October 28th" instead of raw ISO strings
-4. Present event details with these EXACT field labels (addresses are clickable in the app!):
-
-   For Spanish responses:
-   - Rol: [Position name]
-   - Cliente: [Client name]
-   - Lugar: [Venue name, full street address, city, state ZIP]
-   - Horario: [Start time] to [End time]
-   - Estado: [Accepted/Pending/etc.]
-
-   For English responses:
-   - Role: [Position name]
-   - Client: [Client name]
-   - Venue: [Venue name, full street address, city, state ZIP]
-   - Time: [Start time] to [End time]
-   - Status: [Accepted/Pending/etc.]
-
-5. CRITICAL: Always include the COMPLETE address on the "Lugar:" or "Venue:" line (e.g., "- Lugar: Mission Ballroom, 4242 Wynkoop St, Denver, CO 80216"). Users can tap it to open maps!
-6. For multiple events, use numbered lists (1., 2., 3.) to make them easy to read
-7. Don't show internal fields like "eventId", "userKey", or other technical identifiers
-8. If dates are in the past, mention that (e.g., "This event already happened")
-9. Keep responses concise and friendly - focus on what the user needs to know
-
-Remember: Users are staff members looking for their schedule information, not developers reading database dumps!`;
+Format events clearly & concisely:
+- Dates: "Monday, Nov 15th" (readable format)
+- Address format: "Lugar: [venue, full address]" or "Venue: [venue, full address]" (clickable!)
+- Fields: Rol/Role, Cliente/Client, Lugar/Venue, Horario/Time, Estado/Status
+- Hide: database IDs, null fields
+- Be brief & friendly`;
 
   const contextWithFormatting = `${dateContext}\n\n${formattingInstructions}`;
 
@@ -1166,37 +1140,14 @@ async function handleStaffClaudeRequest(
 
   const dateContext = getFullSystemContext(timezone);
 
-  // Add user-friendly formatting instructions for staff AI
+  // Add user-friendly formatting instructions for staff AI (optimized for token cost)
   const formattingInstructions = `
-IMPORTANT - User-Friendly Response Formatting:
-
-When presenting event information to users:
-1. NEVER show database IDs (like MongoDB ObjectIDs) - users don't need to see these
-2. Use natural, conversational language instead of database field names
-3. Format dates in a readable way: "October 28, 2025" or "Monday, October 28th" instead of raw ISO strings
-4. Present event details with these EXACT field labels (addresses are clickable in the app!):
-
-   For Spanish responses:
-   - Rol: [Position name]
-   - Cliente: [Client name]
-   - Lugar: [Venue name, full street address, city, state ZIP]
-   - Horario: [Start time] to [End time]
-   - Estado: [Accepted/Pending/etc.]
-
-   For English responses:
-   - Role: [Position name]
-   - Client: [Client name]
-   - Venue: [Venue name, full street address, city, state ZIP]
-   - Time: [Start time] to [End time]
-   - Status: [Accepted/Pending/etc.]
-
-5. CRITICAL: Always include the COMPLETE address on the "Lugar:" or "Venue:" line (e.g., "- Lugar: Mission Ballroom, 4242 Wynkoop St, Denver, CO 80216"). Users can tap it to open maps!
-6. For multiple events, use numbered lists (1., 2., 3.) to make them easy to read
-7. Don't show internal fields like "eventId", "userKey", or other technical identifiers
-8. If dates are in the past, mention that (e.g., "This event already happened")
-9. Keep responses concise and friendly - focus on what the user needs to know
-
-Remember: Users are staff members looking for their schedule information, not developers reading database dumps!`;
+Format events clearly & concisely:
+- Dates: "Monday, Nov 15th" (readable format)
+- Address format: "Lugar: [venue, full address]" or "Venue: [venue, full address]" (clickable!)
+- Fields: Rol/Role, Cliente/Client, Lugar/Venue, Horario/Time, Estado/Status
+- Hide: database IDs, null fields
+- Be brief & friendly`;
 
   systemMessage = `${dateContext}\n\n${formattingInstructions}\n\n`;
 
