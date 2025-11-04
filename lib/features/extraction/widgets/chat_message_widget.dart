@@ -89,12 +89,51 @@ class ChatMessageWidget extends StatelessWidget {
                   child: _buildMessageContent(isUser),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  timeFormat.format(message.timestamp),
-                  style: TextStyle(
-                    color: Colors.grey.shade500,
-                    fontSize: 11,
-                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      timeFormat.format(message.timestamp),
+                      style: TextStyle(
+                        color: Colors.grey.shade500,
+                        fontSize: 11,
+                      ),
+                    ),
+                    // Show AI provider badge for assistant messages
+                    if (!isUser && message.provider != null) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: message.provider == AIProvider.claude
+                              ? Colors.orange.shade100
+                              : message.provider == AIProvider.groq
+                                  ? Colors.yellow.shade100
+                                  : Colors.blue.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          message.provider == AIProvider.claude
+                              ? 'Claude'
+                              : message.provider == AIProvider.groq
+                                  ? 'Valerio'
+                                  : 'GPT-4',
+                          style: TextStyle(
+                            color: message.provider == AIProvider.claude
+                                ? Colors.orange.shade900
+                                : message.provider == AIProvider.groq
+                                    ? Colors.yellow.shade900
+                                    : Colors.blue.shade900,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),

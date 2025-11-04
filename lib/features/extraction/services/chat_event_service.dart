@@ -12,16 +12,21 @@ import 'event_service.dart';
 import 'roles_service.dart';
 import 'tariffs_service.dart';
 
+/// AI Provider enum
+enum AIProvider { openai, claude, groq }
+
 /// Message in a chat conversation
 class ChatMessage {
   final String role; // 'user' or 'assistant'
   final String content;
   final DateTime timestamp;
+  final AIProvider? provider;
 
   ChatMessage({
     required this.role,
     required this.content,
     DateTime? timestamp,
+    this.provider,
   }) : timestamp = timestamp ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
@@ -587,6 +592,7 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
       role: 'assistant',
       content:
           'I can help you edit this event. What would you like to change?',
+      provider: AIProvider.groq,
     ));
   }
 
@@ -756,7 +762,7 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
     final userFacingContent = _extractUserFriendlyMessage(content);
 
     // Add ONLY the friendly message to conversation history (not the JSON)
-    final assistantMsg = ChatMessage(role: 'assistant', content: userFacingContent);
+    final assistantMsg = ChatMessage(role: 'assistant', content: userFacingContent, provider: AIProvider.groq);
     _conversationHistory.add(assistantMsg);
 
     return assistantMsg;
@@ -1065,6 +1071,7 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
     final greeting = ChatMessage(
       role: 'assistant',
       content: greetingContent,
+      provider: AIProvider.groq,
     );
     _conversationHistory.add(greeting);
     return greeting;

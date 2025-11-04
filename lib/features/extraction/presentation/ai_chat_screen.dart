@@ -879,22 +879,19 @@ class _AIChatScreenState extends State<AIChatScreen>
         backgroundColor: const Color(0xFFF8FAFC),
         body: Stack(
           children: [
-            // Main content with floating app bar
+            // Main content with fixed app bar
             CustomScrollView(
               controller: _scrollController,
               slivers: [
-                // Floating SliverAppBar with pull effect
+                // Fixed SliverAppBar (no animations)
                 SliverAppBar(
                   backgroundColor: Colors.white,
                   elevation: 0.5,
-                  floating: true,    // Reappears on any upward scroll
-                  snap: true,        // Snaps to full height quickly
-                  pinned: false,     // Doesn't stay visible when collapsed
-                  forceElevated: true, // Force elevation to show
-                  automaticallyImplyLeading: false, // We'll add our own leading
-                  expandedHeight: 56.0 + MediaQuery.of(context).padding.top, // Include safe area
-                  collapsedHeight: 56.0,
+                  floating: false,
+                  snap: false,
+                  pinned: true,
                   toolbarHeight: 56.0,
+                  automaticallyImplyLeading: false,
                   leading: IconButton(
                     icon: const Icon(Icons.arrow_back, color: Color(0xFF1F2937)),
                     onPressed: () => Navigator.of(context).pop(),
@@ -903,9 +900,9 @@ class _AIChatScreenState extends State<AIChatScreen>
                     'AI Chat',
                     style: TextStyle(
                       color: Color(0xFF1F2937),
-                      fontSize: 24,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.5,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.3,
                     ),
                   ),
                   actions: [
