@@ -909,76 +909,76 @@ class _AIChatScreenState extends State<AIChatScreen>
                     ),
                   ),
                   actions: [
-                    // AI Provider toggle (moved from info banner)
+                    // AI Model toggle (LLAMA vs GPT-OSS)
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: PopupMenuButton<String>(
                         onSelected: (value) {
                       setState(() {
-                        _aiChatService.setAiProvider(value);
+                        _aiChatService.setModelPreference(value);
                       });
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
-                            'Switched to ${value == 'openai' ? 'OpenAI GPT-4o' : 'Claude Sonnet 4.5'}',
+                            'Switched to ${value == 'llama' ? 'Llama 3.1 8B' : 'GPT-OSS 20B'}',
                           ),
                           duration: const Duration(seconds: 2),
-                          backgroundColor: value == 'openai' ? Colors.black : Colors.orange,
+                          backgroundColor: value == 'llama' ? Colors.purple : Colors.black,
                         ),
                       );
                     },
                     itemBuilder: (context) => [
                       PopupMenuItem(
-                        value: 'openai',
+                        value: 'llama',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.bolt,
+                              size: 18,
+                              color: _aiChatService.modelPreference == 'llama'
+                                  ? Colors.purple
+                                  : Colors.grey,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'LLAMA (Fast)',
+                              style: TextStyle(
+                                fontWeight: _aiChatService.modelPreference == 'llama'
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                            if (_aiChatService.modelPreference == 'llama')
+                              const SizedBox(width: 8),
+                            if (_aiChatService.modelPreference == 'llama')
+                              const Icon(Icons.check, size: 16, color: Colors.purple),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'gpt-oss',
                         child: Row(
                           children: [
                             Icon(
                               Icons.psychology,
                               size: 18,
-                              color: _aiChatService.aiProvider == 'openai'
+                              color: _aiChatService.modelPreference == 'gpt-oss'
                                   ? Colors.black
                                   : Colors.grey,
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              'OpenAI GPT-4o',
+                              'GPT-5 (Powerful)',
                               style: TextStyle(
-                                fontWeight: _aiChatService.aiProvider == 'openai'
+                                fontWeight: _aiChatService.modelPreference == 'gpt-oss'
                                     ? FontWeight.w600
                                     : FontWeight.normal,
                               ),
                             ),
-                            if (_aiChatService.aiProvider == 'openai')
+                            if (_aiChatService.modelPreference == 'gpt-oss')
                               const SizedBox(width: 8),
-                            if (_aiChatService.aiProvider == 'openai')
+                            if (_aiChatService.modelPreference == 'gpt-oss')
                               const Icon(Icons.check, size: 16, color: Colors.black),
-                          ],
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: 'claude',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.hub,
-                              size: 18,
-                              color: _aiChatService.aiProvider == 'claude'
-                                  ? Colors.orange
-                                  : Colors.grey,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Claude Sonnet 4.5',
-                              style: TextStyle(
-                                fontWeight: _aiChatService.aiProvider == 'claude'
-                                    ? FontWeight.w600
-                                    : FontWeight.normal,
-                              ),
-                            ),
-                            if (_aiChatService.aiProvider == 'claude')
-                              const SizedBox(width: 8),
-                            if (_aiChatService.aiProvider == 'claude')
-                              const Icon(Icons.check, size: 16, color: Colors.orange),
                           ],
                         ),
                       ),
@@ -986,14 +986,14 @@ class _AIChatScreenState extends State<AIChatScreen>
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: _aiChatService.aiProvider == 'openai'
-                            ? Colors.black.withValues(alpha: 0.08)
-                            : Colors.orange.withValues(alpha: 0.12),
+                        color: _aiChatService.modelPreference == 'llama'
+                            ? Colors.purple.withValues(alpha: 0.12)
+                            : Colors.black.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: _aiChatService.aiProvider == 'openai'
-                              ? Colors.black.withValues(alpha: 0.2)
-                              : Colors.orange.withValues(alpha: 0.3),
+                          color: _aiChatService.modelPreference == 'llama'
+                              ? Colors.purple.withValues(alpha: 0.3)
+                              : Colors.black.withValues(alpha: 0.2),
                           width: 1,
                         ),
                       ),
@@ -1001,32 +1001,32 @@ class _AIChatScreenState extends State<AIChatScreen>
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            _aiChatService.aiProvider == 'openai'
-                                ? Icons.psychology
-                                : Icons.hub,
+                            _aiChatService.modelPreference == 'llama'
+                                ? Icons.bolt
+                                : Icons.psychology,
                             size: 14,
-                            color: _aiChatService.aiProvider == 'openai'
-                                ? Colors.black
-                                : Colors.orange.shade700,
+                            color: _aiChatService.modelPreference == 'llama'
+                                ? Colors.purple.shade700
+                                : Colors.black,
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            _aiChatService.aiProvider == 'openai' ? 'GPT-4o' : 'Sonnet',
+                            _aiChatService.modelPreference == 'llama' ? 'LLAMA' : 'GPT-5',
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
-                              color: _aiChatService.aiProvider == 'openai'
-                                  ? Colors.black
-                                  : Colors.orange.shade700,
+                              color: _aiChatService.modelPreference == 'llama'
+                                  ? Colors.purple.shade700
+                                  : Colors.black,
                             ),
                           ),
                           const SizedBox(width: 4),
                           Icon(
                             Icons.arrow_drop_down,
                             size: 16,
-                            color: _aiChatService.aiProvider == 'openai'
-                                ? Colors.black
-                                : Colors.orange.shade700,
+                            color: _aiChatService.modelPreference == 'llama'
+                                ? Colors.purple.shade700
+                                : Colors.black,
                           ),
                         ],
                       ),

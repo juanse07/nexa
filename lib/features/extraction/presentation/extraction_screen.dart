@@ -7621,9 +7621,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         if (kIsWeb) ...[
                           Container(
                             decoration: BoxDecoration(
-                              color: _aiChatService.aiProvider == 'openai'
-                                  ? Colors.black
-                                  : Colors.orange,
+                              color: _aiChatService.modelPreference == 'llama'
+                                  ? Colors.purple
+                                  : Colors.black,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Material(
@@ -7632,12 +7632,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                 borderRadius: BorderRadius.circular(8),
                                 onTap: () {
                                   setState(() {
-                                    final newProvider = _aiChatService.aiProvider == 'openai' ? 'claude' : 'openai';
-                                    _aiChatService.setAiProvider(newProvider);
+                                    final newModel = _aiChatService.modelPreference == 'llama' ? 'gpt-oss' : 'llama';
+                                    _aiChatService.setModelPreference(newModel);
                                   });
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('Using ${_aiChatService.aiProvider == 'openai' ? 'OpenAI' : 'Claude'} AI'),
+                                      content: Text('Using ${_aiChatService.modelPreference == 'llama' ? 'Llama 3.1 8B' : 'GPT-OSS 20B'} model'),
                                       duration: const Duration(seconds: 2),
                                     ),
                                   );
@@ -7645,7 +7645,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                 child: Padding(
                                   padding: const EdgeInsets.all(4),
                                   child: Icon(
-                                    _aiChatService.aiProvider == 'openai' ? Icons.psychology : Icons.hub,
+                                    _aiChatService.modelPreference == 'llama' ? Icons.bolt : Icons.psychology,
                                     color: Colors.white,
                                     size: 14,
                                   ),

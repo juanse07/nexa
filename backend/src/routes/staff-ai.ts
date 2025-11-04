@@ -436,7 +436,8 @@ const chatMessageSchema = z.object({
   ),
   temperature: z.number().optional().default(0.7),
   maxTokens: z.number().optional().default(500),
-  provider: z.enum(['openai', 'claude']).optional().default('claude'),
+  provider: z.enum(['openai', 'claude', 'groq']).optional().default('groq'),
+  model: z.string().optional(), // Optional model override for Groq
 });
 
 /**
@@ -986,14 +987,16 @@ router.post('/ai/staff/chat/message', requireAuth, async (req, res) => {
     }
 
     const validated = chatMessageSchema.parse(req.body);
-    const { messages, temperature, maxTokens, provider } = validated;
+    const { messages, temperature, maxTokens, provider, model } = validated;
 
-    console.log(`[ai/staff/chat/message] Using provider: ${provider} for user ${userId}, userKey ${userKey}, tier: ${subscriptionTier}`);
+    console.log(`[ai/staff/chat/message] Using provider: ${provider}, model: ${model || 'default'} for user ${userId}, userKey ${userKey}, tier: ${subscriptionTier}`);
 
     const timezone = getTimezoneFromRequest(req);
 
     if (provider === 'claude') {
       return await handleStaffClaudeRequest(messages, temperature, maxTokens, res, timezone, userId, userKey, subscriptionTier);
+    } else if (provider === 'groq') {
+      return await handleStaffGroqRequest(messages, temperature, maxTokens, res, timezone, userId, userKey, subscriptionTier, model);
     } else {
       return await handleStaffOpenAIRequest(messages, temperature, maxTokens, res, timezone, userId, userKey, subscriptionTier);
     }
@@ -1390,6 +1393,202 @@ Format events clearly & concisely:
     content,
     provider: 'claude',
     usage: usage,
+  });
+}
+
+/**
+ * Handle Groq chat request for staff with Responses API
+ * Uses the /v1/responses endpoint (NOT /chat/completions)
+ * Cost-optimized alternative using open-source models
+ */
+async function handleStaffGroqRequest(
+  messages: any[],
+  temperature: number,
+  maxTokens: number,
+  res: any,
+  timezone?: string,
+  userId?: string,
+  userKey?: string,
+  subscriptionTier?: 'free' | 'pro',
+  model?: string
+) {
+  const groqKey = process.env.GROQ_API_KEY;
+  if (!groqKey) {
+    console.error('[Groq] API key not configured');
+    return res.status(500).json({ message: 'Groq API key not configured on server' });
+  }
+
+  // Use provided model or fall back to env variable or default
+  const groqModel = model || process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
+  // Hardcode the base URL for Groq Responses API (don't use GROQ_BASE_URL which is for Whisper)
+  const groqBaseUrl = 'https://api.groq.com/openai';
+
+  console.log(`[Groq] Using model: ${groqModel}`);
+
+  const dateContext = getFullSystemContext(timezone);
+
+  // Add user-friendly formatting instructions for staff AI (optimized for token cost)
+  const formattingInstructions = `
+Format events clearly & concisely:
+- Dates: "Monday, Nov 15th" (readable format)
+- Address format: "Lugar: [venue, full address]" or "Venue: [venue, full address]" (clickable!)
+- Fields: Rol/Role, Cliente/Client, Lugar/Venue, Horario/Time, Estado/Status
+- Hide: database IDs, null fields
+- Be brief & friendly`;
+
+  const contextWithFormatting = `${dateContext}\n\n${formattingInstructions}`;
+
+  // Build input array for Groq (includes system message as first message)
+  const inputMessages: any[] = [];
+
+  // Find or create system message with date context
+  let hasSystemMessage = false;
+  for (const msg of messages) {
+    if (msg.role === 'system') {
+      inputMessages.push({
+        role: 'system',
+        content: `${contextWithFormatting}\n\n${msg.content}`
+      });
+      hasSystemMessage = true;
+    } else {
+      inputMessages.push({
+        role: msg.role,
+        content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)
+      });
+    }
+  }
+
+  // If no system message exists, prepend one with date context
+  if (!hasSystemMessage) {
+    inputMessages.unshift({
+      role: 'system',
+      content: contextWithFormatting
+    });
+  }
+
+  // Groq Responses API uses flat tool structure
+  const groqTools = STAFF_AI_TOOLS.map(tool => ({
+    type: 'function',
+    name: tool.name,
+    description: tool.description,
+    parameters: tool.parameters
+  }));
+
+  const requestBody = {
+    model: groqModel,
+    input: inputMessages, // Groq uses 'input' not 'messages'
+    temperature,
+    max_tokens: maxTokens,
+    tools: groqTools,
+  };
+
+  const headers = {
+    'Authorization': `Bearer ${groqKey}`,
+    'Content-Type': 'application/json',
+  };
+
+  console.log('[Groq] Calling Staff Responses API...');
+
+  const response = await axios.post(
+    `${groqBaseUrl}/v1/responses`,
+    requestBody,
+    { headers, validateStatus: () => true }
+  );
+
+  if (response.status >= 300) {
+    console.error('[Groq] API error:', response.status, response.data);
+    if (response.status === 429) {
+      return res.status(429).json({
+        message: 'Groq API rate limit reached. Please try again later.',
+      });
+    }
+    return res.status(response.status).json({
+      message: `Groq API error: ${response.statusText}`,
+      details: response.data,
+    });
+  }
+
+  // Groq Responses API returns output blocks
+  const outputBlocks = response.data.output;
+  if (!outputBlocks || outputBlocks.length === 0) {
+    return res.status(500).json({ message: 'Failed to get response from Groq' });
+  }
+
+  // Check for function calls
+  const functionCallBlock = outputBlocks.find((block: any) => block.type === 'function_call');
+  if (functionCallBlock) {
+    console.log('[Groq] Function call requested:', JSON.stringify(functionCallBlock, null, 2));
+
+    const functionName = functionCallBlock.name;
+    const functionArgs = functionCallBlock.arguments;
+
+    // Execute the function
+    const functionResult = await executeStaffFunction(functionName, functionArgs, userId!, userKey!, subscriptionTier || 'free');
+    console.log('[Groq] Function result:', functionResult);
+
+    // For function results, Groq Responses API does NOT support role: 'function'
+    // Instead, format as a user message
+    const messagesWithFunctionResult = [
+      ...inputMessages,
+      {
+        role: 'assistant',
+        content: functionCallBlock.text || ''
+      },
+      {
+        role: 'user',
+        content: `Function ${functionName} returned: ${JSON.stringify(functionResult)}\n\nPlease present this naturally.`
+      }
+    ];
+
+    // Second request - NO tools array, NO previous_response_id
+    const secondResponse = await axios.post(
+      `${groqBaseUrl}/v1/responses`,
+      {
+        model: groqModel,
+        input: messagesWithFunctionResult,
+        temperature,
+        max_tokens: maxTokens,
+      },
+      { headers, validateStatus: () => true }
+    );
+
+    if (secondResponse.status >= 300) {
+      console.error('[Groq] Second API call error:', secondResponse.status, secondResponse.data);
+      return res.status(secondResponse.status).json({
+        message: `Groq API error: ${secondResponse.statusText}`,
+        details: secondResponse.data,
+      });
+    }
+
+    const secondOutput = secondResponse.data.output;
+    const textBlock = secondOutput?.find((block: any) => block.type === 'text');
+    const finalContent = textBlock?.text;
+
+    if (!finalContent) {
+      return res.status(500).json({ message: 'Failed to get final response from Groq' });
+    }
+
+    return res.json({
+      content: finalContent,
+      provider: 'groq',
+      functionExecuted: {
+        name: functionName,
+        success: functionResult.success
+      }
+    });
+  }
+
+  // Extract text content
+  const textBlock = outputBlocks.find((block: any) => block.type === 'text');
+  const content = textBlock?.text;
+
+  if (!content) {
+    return res.status(500).json({ message: 'Failed to get text response from Groq' });
+  }
+
+  return res.json({
+    content,
+    provider: 'groq',
   });
 }
 

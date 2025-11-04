@@ -379,11 +379,11 @@ Be conversational and friendly. If the user provides multiple pieces of informat
       print('[ChatEventService._formatEventsForContext] Event: id=$id, _id=${event['_id']}, id_field=${event['id']}, name=$name');
 
       // ENHANCED: Extract full address details explicitly
-      final venueName = event['venue_name'] ?? '';
-      final venueAddress = event['venue_address'] ?? '';
-      final city = event['city'] ?? '';
-      final state = event['state'] ?? '';
-      final country = event['country'] ?? '';
+      final venueName = (event['venue_name'] as String?) ?? '';
+      final venueAddress = (event['venue_address'] as String?) ?? '';
+      final city = (event['city'] as String?) ?? '';
+      final state = (event['state'] as String?) ?? '';
+      final country = (event['country'] as String?) ?? '';
 
       // Build full address string
       final addressParts = <String>[];
@@ -898,17 +898,23 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
     _pendingUpdates.remove(update);
   }
 
-  // AI provider preference ('openai' or 'claude')
-  String _aiProvider = 'claude'; // Default to Claude for chat
+  // AI provider preference (always 'groq' for manager app)
+  String _aiProvider = 'groq'; // Use Groq for cost efficiency
+
+  // Model preference for Groq ('llama' or 'gpt-oss')
+  String _modelPreference = 'llama'; // Default to Llama 3.1 8B (faster, cheaper)
 
   /// Get current AI provider
   String get aiProvider => _aiProvider;
 
-  /// Set AI provider
-  void setAiProvider(String provider) {
-    if (provider == 'openai' || provider == 'claude') {
-      _aiProvider = provider;
-      print('AI provider set to: $_aiProvider');
+  /// Get current model preference
+  String get modelPreference => _modelPreference;
+
+  /// Set model preference (llama or gpt-oss)
+  void setModelPreference(String model) {
+    if (model == 'llama' || model == 'gpt-oss') {
+      _modelPreference = model;
+      print('Model preference set to: $_modelPreference');
     }
   }
 
@@ -925,11 +931,18 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
     final String baseUrl = AppConfig.instance.baseUrl;
     final Uri uri = Uri.parse('$baseUrl/ai/chat/message');
 
+    // Map model preference to actual Groq model names
+    final modelMap = {
+      'llama': 'llama-3.1-8b-instant',
+      'gpt-oss': 'openai/gpt-oss-20b',
+    };
+
     final requestBody = {
       'messages': messages,
       'temperature': 0.7,
       'maxTokens': 500,
-      'provider': _aiProvider, // Include provider selection
+      'provider': _aiProvider,
+      'model': modelMap[_modelPreference] ?? 'llama-3.1-8b-instant',
     };
 
     final headers = {
