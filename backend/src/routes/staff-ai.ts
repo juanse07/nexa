@@ -1523,11 +1523,13 @@ Clickable venue for "next shift":
     // Build request body based on API type
     let requestBody: any;
     if (useResponsesAPI) {
+      // GPT-OSS uses reasoning mode which needs more tokens
+      const adjustedMaxTokens = maxTokens * 3; // Triple for reasoning overhead
       requestBody = {
         model: groqModel,
         input: processedMessages,
         temperature,
-        max_output_tokens: maxTokens,
+        max_output_tokens: adjustedMaxTokens,
         tools: groqTools,
       };
     } else {
@@ -1599,7 +1601,7 @@ Clickable venue for "next shift":
             model: groqModel,
             input: messagesWithFunctionResult,
             temperature,
-            max_output_tokens: maxTokens,
+            max_output_tokens: maxTokens * 3, // GPT-OSS reasoning mode needs more tokens
           },
           { headers, validateStatus: () => true }
         );
@@ -1632,12 +1634,16 @@ Clickable venue for "next shift":
       }
 
       // Extract text content
+      console.log('[Groq] Output blocks structure:', JSON.stringify(outputBlocks, null, 2));
+
       const messageBlock = outputBlocks.find((block: any) => block.type === 'message');
+      console.log('[Groq] Message block:', JSON.stringify(messageBlock, null, 2));
+
       const textContent = messageBlock?.content?.find((item: any) => item.type === 'output_text');
       const content = textContent?.text;
 
       if (!content) {
-        console.error('[Groq] No text content found in output blocks');
+        console.error('[Groq] No text content found. messageBlock:', messageBlock, 'textContent:', textContent);
         return res.status(500).json({ message: 'Failed to get text response from Groq' });
       }
 
