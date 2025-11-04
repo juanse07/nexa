@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import mongoose from 'mongoose';
 import { requireAuth } from '../middleware/requireAuth';
 import axios from 'axios';
 import geoip from 'geoip-lite';
@@ -7,6 +8,13 @@ import multer from 'multer';
 import FormData from 'form-data';
 import fs from 'fs';
 import { getDateTimeContext, getWelcomeDateContext, getFullSystemContext } from '../utils/dateContext';
+import { EventModel } from '../models/event';
+import { ClientModel } from '../models/client';
+import { TeamMemberModel } from '../models/teamMember';
+import { AvailabilityModel } from '../models/availability';
+import { ManagerModel } from '../models/manager';
+import { RoleModel } from '../models/role';
+import { TariffModel } from '../models/tariff';
 
 const router = Router();
 
@@ -91,8 +99,155 @@ router.get('/ai/system-info', requireAuth, async (req, res) => {
 });
 
 /**
+ * GET /api/ai/manager/context
+ * Returns manager's context for AI chat including clients, events, and team members
+ * Used to populate AI chat with relevant data
+ */
+router.get('/ai/manager/context', requireAuth, async (req, res) => {
+  try {
+    const managerId = (req as any).user?._id || (req as any).user?.managerId;
+
+    if (!managerId) {
+      return res.status(401).json({ message: 'Manager not found' });
+    }
+
+    console.log(`[ai/manager/context] Loading context for managerId ${managerId}`);
+
+    // Load manager details
+    const manager = await ManagerModel.findById(managerId)
+      .select('email first_name last_name name')
+      .lean();
+
+    if (!manager) {
+      return res.status(404).json({ message: 'Manager not found' });
+    }
+
+    // Load manager's clients (limit to 50)
+    const clients = await ClientModel.find({ managerId })
+      .sort({ created_at: -1 })
+      .limit(50)
+      .select('_id name contact_name contact_email contact_phone notes tariffs')
+      .lean();
+
+    console.log(`[ai/manager/context] Found ${clients.length} clients`);
+
+    // Load recent events (limit to 100 most recent)
+    const events = await EventModel.find({ managerId })
+      .sort({ date: -1 })
+      .limit(100)
+      .select('_id event_name client_name date start_time end_time venue_name venue_address status roles accepted_staff')
+      .lean();
+
+    console.log(`[ai/manager/context] Found ${events.length} events`);
+
+    // Load team members
+    const teamMembers = await TeamMemberModel.find({ managerId })
+      .sort({ created_at: -1 })
+      .limit(100)
+      .select('_id first_name last_name email phone roles preferred_roles availability_status')
+      .lean();
+
+    console.log(`[ai/manager/context] Found ${teamMembers.length} team members`);
+
+    // Load recent availability records for team members (last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const availabilityRecords = await AvailabilityModel.find({
+      managerId,
+      date: { $gte: thirtyDaysAgo }
+    })
+      .sort({ date: -1 })
+      .limit(500)
+      .select('teamMemberId date status notes')
+      .lean();
+
+    console.log(`[ai/manager/context] Found ${availabilityRecords.length} availability records`);
+
+    // Group availability by team member
+    const availabilityByMember = availabilityRecords.reduce((acc: any, record: any) => {
+      const memberId = String(record.teamMemberId);
+      if (!acc[memberId]) {
+        acc[memberId] = [];
+      }
+      acc[memberId].push({
+        date: record.date,
+        status: record.status,
+        notes: record.notes
+      });
+      return acc;
+    }, {});
+
+    // Enhance team members with their availability
+    const teamMembersWithAvailability = teamMembers.map((member: any) => {
+      const memberId = String(member._id);
+      return {
+        ...member,
+        recentAvailability: availabilityByMember[memberId] || []
+      };
+    });
+
+    // Build context response
+    const context = {
+      manager: {
+        id: manager._id,
+        email: manager.email,
+        firstName: manager.first_name || 'Manager',
+        lastName: manager.last_name || '',
+        name: manager.name || 'Manager'
+      },
+      clients: clients.map((client: any) => ({
+        id: client._id,
+        name: client.name,
+        contactName: client.contact_name,
+        contactEmail: client.contact_email,
+        contactPhone: client.contact_phone,
+        notes: client.notes,
+        tariffCount: client.tariffs?.length || 0
+      })),
+      events: events.map((event: any) => ({
+        id: event._id,
+        eventName: event.event_name,
+        clientName: event.client_name,
+        date: event.date,
+        startTime: event.start_time,
+        endTime: event.end_time,
+        venueName: event.venue_name,
+        venueAddress: event.venue_address,
+        status: event.status,
+        roles: event.roles,
+        staffCount: event.accepted_staff?.length || 0
+      })),
+      teamMembers: teamMembersWithAvailability.map((member: any) => ({
+        id: member._id,
+        firstName: member.first_name,
+        lastName: member.last_name,
+        email: member.email,
+        phone: member.phone,
+        roles: member.roles,
+        preferredRoles: member.preferred_roles,
+        availabilityStatus: member.availability_status,
+        recentAvailability: member.recentAvailability.slice(0, 10) // Limit to 10 most recent
+      })),
+      summary: {
+        totalClients: clients.length,
+        totalEvents: events.length,
+        totalTeamMembers: teamMembers.length,
+        upcomingEvents: events.filter((e: any) => new Date(e.date) >= new Date()).length,
+        pastEvents: events.filter((e: any) => new Date(e.date) < new Date()).length
+      }
+    };
+
+    return res.json(context);
+  } catch (err: any) {
+    console.error('[ai/manager/context] Error:', err);
+    return res.status(500).json({ message: 'Failed to load manager context' });
+  }
+});
+
+/**
  * POST /api/ai/transcribe
- * Transcribe audio to text using OpenAI Whisper API
+ * Transcribe audio to text using Groq Whisper API (fast & cheap!)
  * Accepts audio file upload and returns transcribed text
  */
 router.post('/ai/transcribe', requireAuth, upload.single('audio'), async (req, res) => {
@@ -105,13 +260,14 @@ router.post('/ai/transcribe', requireAuth, upload.single('audio'), async (req, r
 
     tempFilePath = req.file.path;
 
-    const openaiKey = process.env.OPENAI_API_KEY;
-    if (!openaiKey) {
-      console.error('[ai/transcribe] OPENAI_API_KEY not configured');
-      return res.status(500).json({ message: 'OpenAI API key not configured on server' });
+    const groqKey = process.env.GROQ_API_KEY;
+    if (!groqKey) {
+      console.error('[ai/transcribe] GROQ_API_KEY not configured');
+      return res.status(500).json({ message: 'Groq API key not configured on server' });
     }
 
-    const openaiBaseUrl = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
+    // Groq Whisper endpoint (NOT the Responses API endpoint)
+    const groqWhisperUrl = 'https://api.groq.com/openai/v1';
 
     // Create form data for Whisper API
     const formData = new FormData();
@@ -119,33 +275,25 @@ router.post('/ai/transcribe', requireAuth, upload.single('audio'), async (req, r
       filename: req.file.originalname,
       contentType: req.file.mimetype,
     });
-    formData.append('model', 'whisper-1');
+    formData.append('model', 'whisper-large-v3');
 
     // Auto-detect language (supports English, Spanish, and 96 other languages)
     // By not specifying 'language', Whisper will detect it automatically
     // This allows Spanish-speaking users to use voice input naturally
 
-    // Add domain-specific prompt to improve accuracy for event staffing terminology
-    const domainPrompt = `Event staffing and catering terminology including:
-venues, clients, roles like server bartender captain sous chef,
-dates, times, headcount, call time, setup time, uniform,
-common client names and venue names`;
+    // Minimal domain prompt for faster transcription
+    const domainPrompt = 'event staffing: server bartender captain chef venue client';
     formData.append('prompt', domainPrompt);
 
     const headers: any = {
-      'Authorization': `Bearer ${openaiKey}`,
+      'Authorization': `Bearer ${groqKey}`,
       ...formData.getHeaders(),
     };
 
-    const orgId = process.env.OPENAI_ORG_ID;
-    if (orgId) {
-      headers['OpenAI-Organization'] = orgId;
-    }
-
-    console.log('[ai/transcribe] Calling Whisper API...');
+    console.log('[ai/transcribe] Calling Groq Whisper API...');
 
     const response = await axios.post(
-      `${openaiBaseUrl}/audio/transcriptions`,
+      `${groqWhisperUrl}/audio/transcriptions`,
       formData,
       { headers, validateStatus: () => true }
     );
@@ -157,14 +305,14 @@ common client names and venue names`;
     }
 
     if (response.status >= 300) {
-      console.error('[ai/transcribe] Whisper API error:', response.status, response.data);
+      console.error('[ai/transcribe] Groq Whisper API error:', response.status, response.data);
       if (response.status === 429) {
         return res.status(429).json({
-          message: 'OpenAI API rate limit reached. Please try again later.',
+          message: 'Groq API rate limit reached. Please try again later.',
         });
       }
       return res.status(response.status).json({
-        message: `Whisper API error: ${response.statusText}`,
+        message: `Groq Whisper API error: ${response.statusText}`,
         details: response.data,
       });
     }
@@ -310,8 +458,442 @@ const AI_TOOLS = [
       },
       required: ['client_name']
     }
+  },
+  {
+    name: 'create_client',
+    description: 'Create a new client for the manager. Use this when the manager wants to add a new client to their account.',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'The name of the client/company to create'
+        }
+      },
+      required: ['name']
+    }
+  },
+  {
+    name: 'create_role',
+    description: 'Create a new role/position type for events (e.g., Server, Bartender, Chef). Use this when the manager wants to add a new role type.',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'The name of the role to create (e.g., "Server", "Bartender", "Chef")'
+        }
+      },
+      required: ['name']
+    }
+  },
+  {
+    name: 'create_tariff',
+    description: 'Create or update a pricing rate (tariff) for a specific client-role combination. Use this when the manager wants to set hourly rates for different roles at specific clients.',
+    parameters: {
+      type: 'object',
+      properties: {
+        client_name: {
+          type: 'string',
+          description: 'The name of the client this tariff is for'
+        },
+        role_name: {
+          type: 'string',
+          description: 'The name of the role this tariff is for'
+        },
+        rate: {
+          type: 'number',
+          description: 'The hourly rate in dollars (e.g., 25.50)'
+        },
+        currency: {
+          type: 'string',
+          description: 'Optional currency code (defaults to USD)'
+        }
+      },
+      required: ['client_name', 'role_name', 'rate']
+    }
+  },
+  {
+    name: 'create_event',
+    description: 'Create a new staffing event. IMPORTANT: Managers only care about CALL TIME (when staff should arrive), NOT guest arrival time. Call time is the staff arrival time.',
+    parameters: {
+      type: 'object',
+      properties: {
+        client_name: {
+          type: 'string',
+          description: 'Name of the client/company'
+        },
+        date: {
+          type: 'string',
+          description: 'Event date in ISO format (YYYY-MM-DD)'
+        },
+        call_time: {
+          type: 'string',
+          description: 'CALL TIME - when staff should ARRIVE (e.g., "17:00" or "5:00 PM"). This is what managers care about.'
+        },
+        end_time: {
+          type: 'string',
+          description: 'When staff shift ENDS (e.g., "23:00" or "11:00 PM")'
+        },
+        venue_name: {
+          type: 'string',
+          description: 'Name of the venue/location'
+        },
+        venue_address: {
+          type: 'string',
+          description: 'Full street address of the venue'
+        },
+        roles: {
+          type: 'array',
+          description: 'Staff roles needed with counts',
+          items: {
+            type: 'object',
+            properties: {
+              role: { type: 'string', description: 'Role name (e.g., Server, Bartender)' },
+              count: { type: 'number', description: 'How many needed' }
+            }
+          }
+        },
+        uniform: {
+          type: 'string',
+          description: 'Dress code/uniform requirements (optional)'
+        },
+        notes: {
+          type: 'string',
+          description: 'Additional details, instructions, event name if needed, special requirements'
+        },
+        contact_name: {
+          type: 'string',
+          description: 'On-site contact person name'
+        },
+        contact_phone: {
+          type: 'string',
+          description: 'On-site contact phone number'
+        },
+        headcount_total: {
+          type: 'number',
+          description: 'Expected guest headcount/attendance'
+        }
+      },
+      required: ['date', 'call_time', 'end_time', 'client_name']
+    }
   }
 ];
+
+/**
+ * Execute a function call from the AI model
+ * Handles all function types: queries and creates
+ */
+async function executeFunctionCall(
+  functionName: string,
+  functionArgs: any,
+  managerId: mongoose.Types.ObjectId
+): Promise<string> {
+  console.log(`[executeFunctionCall] Executing ${functionName} with args:`, functionArgs);
+
+  try {
+    switch (functionName) {
+      case 'search_addresses': {
+        const { query, client_name } = functionArgs;
+        const filter: any = { managerId };
+
+        if (client_name) {
+          filter.client_name = new RegExp(client_name, 'i');
+        }
+
+        if (query) {
+          filter.$or = [
+            { venue_name: new RegExp(query, 'i') },
+            { venue_address: new RegExp(query, 'i') },
+            { city: new RegExp(query, 'i') }
+          ];
+        }
+
+        const events = await EventModel.find(filter)
+          .select('venue_name venue_address city state event_name client_name date')
+          .sort({ date: -1 })
+          .limit(20)
+          .lean();
+
+        if (events.length === 0) {
+          return `No addresses found matching "${query}"${client_name ? ` for client ${client_name}` : ''}`;
+        }
+
+        const results = events.map(e =>
+          `${e.venue_name || 'Unknown'} - ${e.venue_address || 'No address'}, ${e.city || 'Unknown city'} (Event: ${e.event_name}, Client: ${e.client_name}, Date: ${e.date})`
+        ).join('\n');
+
+        return `Found ${events.length} address(es):\n${results}`;
+      }
+
+      case 'search_events': {
+        const { client_name, date, venue_name, event_name } = functionArgs;
+        const filter: any = { managerId };
+
+        if (client_name) filter.client_name = new RegExp(client_name, 'i');
+        if (venue_name) filter.venue_name = new RegExp(venue_name, 'i');
+        if (event_name) filter.event_name = new RegExp(event_name, 'i');
+
+        if (date) {
+          if (date.length === 7) {
+            // Month filter: YYYY-MM
+            const startDate = new Date(`${date}-01`);
+            const endDate = new Date(startDate);
+            endDate.setMonth(endDate.getMonth() + 1);
+            filter.date = { $gte: startDate, $lt: endDate };
+          } else {
+            // Exact date: YYYY-MM-DD
+            filter.date = new Date(date);
+          }
+        }
+
+        const events = await EventModel.find(filter)
+          .sort({ date: -1 })
+          .limit(50)
+          .lean();
+
+        if (events.length === 0) {
+          return 'No events found matching the criteria';
+        }
+
+        const results = events.map(e =>
+          `${e.event_name} - Client: ${e.client_name}, Date: ${e.date}, Venue: ${e.venue_name || 'TBD'}, Status: ${e.status || 'pending'}`
+        ).join('\n');
+
+        return `Found ${events.length} event(s):\n${results}`;
+      }
+
+      case 'check_availability': {
+        const { date } = functionArgs;
+        // Note: Availability system needs refactoring - returning context data for now
+        return `Availability checking is being updated. Please check the Team Members section in your context for team availability information.`;
+      }
+
+      case 'get_client_info': {
+        const { client_name } = functionArgs;
+
+        const client = await ClientModel.findOne({
+          managerId,
+          normalizedName: client_name.toLowerCase()
+        }).lean();
+
+        if (!client) {
+          return `Client "${client_name}" not found`;
+        }
+
+        // Get events for this client
+        const events = await EventModel.find({
+          managerId,
+          client_name: new RegExp(client_name, 'i')
+        })
+          .sort({ date: -1 })
+          .limit(20)
+          .lean();
+
+        // Get tariffs for this client
+        const tariffs = await TariffModel.find({
+          managerId,
+          clientId: client._id
+        })
+          .populate('roleId', 'name')
+          .lean();
+
+        let result = `Client: ${client.name}\n`;
+        result += `Events (${events.length}):\n`;
+        if (events.length > 0) {
+          result += events.map(e => `  - ${e.event_name} on ${e.date}`).join('\n');
+        } else {
+          result += '  No events found';
+        }
+
+        result += `\n\nTariffs (${tariffs.length}):\n`;
+        if (tariffs.length > 0) {
+          result += tariffs.map(t => {
+            const roleName = (t.roleId as any)?.name || 'Unknown';
+            return `  - ${roleName}: $${t.rate} ${t.currency}`;
+          }).join('\n');
+        } else {
+          result += '  No tariffs set';
+        }
+
+        return result;
+      }
+
+      case 'create_client': {
+        const { name } = functionArgs;
+        const trimmedName = name.trim();
+
+        // Check if client already exists
+        const existing = await ClientModel.findOne({
+          managerId,
+          normalizedName: trimmedName.toLowerCase()
+        }).lean();
+
+        if (existing) {
+          return `Client "${trimmedName}" already exists`;
+        }
+
+        // Create new client
+        const created = await ClientModel.create({
+          managerId,
+          name: trimmedName
+        });
+
+        return `✅ Successfully created client "${created.name}" (ID: ${created._id})`;
+      }
+
+      case 'create_role': {
+        const { name } = functionArgs;
+        const trimmedName = name.trim();
+
+        // Check if role already exists
+        const existing = await RoleModel.findOne({
+          managerId,
+          normalizedName: trimmedName.toLowerCase()
+        }).lean();
+
+        if (existing) {
+          return `Role "${trimmedName}" already exists`;
+        }
+
+        // Create new role
+        const created = await RoleModel.create({
+          managerId,
+          name: trimmedName
+        });
+
+        return `✅ Successfully created role "${created.name}" (ID: ${created._id})`;
+      }
+
+      case 'create_tariff': {
+        const { client_name, role_name, rate, currency = 'USD' } = functionArgs;
+
+        // Find client
+        const client = await ClientModel.findOne({
+          managerId,
+          normalizedName: client_name.toLowerCase()
+        }).lean();
+
+        if (!client) {
+          return `❌ Client "${client_name}" not found. Please create the client first using create_client.`;
+        }
+
+        // Find role
+        const role = await RoleModel.findOne({
+          managerId,
+          normalizedName: role_name.toLowerCase()
+        }).lean();
+
+        if (!role) {
+          return `❌ Role "${role_name}" not found. Please create the role first using create_role.`;
+        }
+
+        // Create or update tariff
+        const result = await TariffModel.updateOne(
+          {
+            managerId,
+            clientId: client._id,
+            roleId: role._id
+          },
+          {
+            $set: {
+              managerId,
+              rate,
+              currency,
+              updatedAt: new Date()
+            },
+            $setOnInsert: { createdAt: new Date() }
+          },
+          { upsert: true }
+        );
+
+        if (result.upsertedId) {
+          return `✅ Successfully created tariff for ${client_name} - ${role_name}: $${rate} ${currency}/hour`;
+        } else {
+          return `✅ Successfully updated tariff for ${client_name} - ${role_name}: $${rate} ${currency}/hour`;
+        }
+      }
+
+      case 'create_event': {
+        const {
+          client_name,
+          date,
+          call_time,
+          end_time,
+          venue_name,
+          venue_address,
+          roles = [],
+          uniform,
+          notes,
+          contact_name,
+          contact_phone,
+          headcount_total
+        } = functionArgs;
+
+        // Validate required fields
+        if (!client_name || !date || !call_time || !end_time) {
+          return `❌ Missing required fields. Need: client_name, date, call_time (staff arrival), end_time`;
+        }
+
+        // Auto-generate event name from client and date
+        const eventDate = new Date(date);
+        const eventName = `${client_name} - ${eventDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+
+        // Create event document
+        const eventData: any = {
+          managerId,
+          status: 'draft',
+          event_name: eventName,
+          client_name,
+          date: eventDate,
+          start_time: call_time,  // Call time = start time (when staff arrives)
+          end_time,
+          city: 'Denver Metro',  // Default city
+          state: 'CO',           // Default state
+          roles: roles || [],
+          accepted_staff: [],
+          declined_staff: []
+        };
+
+        // Add optional fields
+        if (venue_name) eventData.venue_name = venue_name;
+        if (venue_address) eventData.venue_address = venue_address;
+        if (uniform) eventData.uniform = uniform;
+        if (notes) eventData.notes = notes;
+        if (contact_name) eventData.contact_name = contact_name;
+        if (contact_phone) eventData.contact_phone = contact_phone;
+        if (headcount_total) eventData.headcount_total = headcount_total;
+
+        const created = await EventModel.create(eventData);
+
+        let summary = `✅ Successfully created event (ID: ${created._id})\n`;
+        summary += `👥 Client: ${client_name}\n`;
+        summary += `📅 Date: ${date}\n`;
+        summary += `⏰ Call Time: ${call_time} (staff arrival)\n`;
+        summary += `⏱️  End Time: ${end_time}\n`;
+        if (venue_name) summary += `📍 Venue: ${venue_name}\n`;
+        if (venue_address) summary += `   Address: ${venue_address}\n`;
+        if (roles.length > 0) {
+          summary += `👔 Staff needed:\n`;
+          roles.forEach((r: any) => {
+            summary += `   - ${r.count}x ${r.role}\n`;
+          });
+        }
+        if (uniform) summary += `👕 Uniform: ${uniform}\n`;
+        if (headcount_total) summary += `👥 Guest count: ${headcount_total}\n`;
+        summary += `\n📝 Status: DRAFT (ready to publish to staff)`;
+
+        return summary;
+      }
+
+      default:
+        return `Unknown function: ${functionName}`;
+    }
+  } catch (error: any) {
+    console.error(`[executeFunctionCall] Error executing ${functionName}:`, error);
+    return `Error executing ${functionName}: ${error.message}`;
+  }
+}
 
 /**
  * POST /api/ai/extract
@@ -443,15 +1025,21 @@ router.post('/ai/chat/message', requireAuth, async (req, res) => {
 
     console.log(`[ai/chat/message] Using provider: ${provider}, model: ${model || 'default'}`);
 
+    // Get managerId from authenticated user
+    const managerId = (req as any).user?._id || (req as any).user?.managerId;
+    if (!managerId) {
+      return res.status(401).json({ message: 'Manager not found' });
+    }
+
     // Detect user's timezone from IP
     const timezone = getTimezoneFromRequest(req);
 
     if (provider === 'claude') {
-      return await handleClaudeRequest(messages, temperature, maxTokens, res, timezone);
+      return await handleClaudeRequest(messages, temperature, maxTokens, res, timezone, managerId);
     } else if (provider === 'groq') {
-      return await handleGroqRequest(messages, temperature, maxTokens, res, timezone, model);
+      return await handleGroqRequest(messages, temperature, maxTokens, res, timezone, model, managerId);
     } else {
-      return await handleOpenAIRequest(messages, temperature, maxTokens, res, timezone);
+      return await handleOpenAIRequest(messages, temperature, maxTokens, res, timezone, managerId);
     }
   } catch (err: any) {
     console.error('[ai/chat/message] Error:', err);
@@ -475,7 +1063,8 @@ async function handleOpenAIRequest(
   temperature: number,
   maxTokens: number,
   res: any,
-  timezone?: string
+  timezone?: string,
+  managerId?: mongoose.Types.ObjectId
 ) {
   const openaiKey = process.env.OPENAI_API_KEY;
   if (!openaiKey) {
@@ -558,15 +1147,19 @@ async function handleOpenAIRequest(
   if (toolCalls && toolCalls.length > 0) {
     console.log('[OpenAI] Tool calls requested:', JSON.stringify(toolCalls, null, 2));
 
-    // For now, return a message indicating the tool call
-    // The frontend context already contains the data, so we'll format a response
+    // Execute the function call
     const toolCall = toolCalls[0];
     const functionName = toolCall.function?.name;
     const functionArgs = JSON.parse(toolCall.function?.arguments || '{}');
 
-    // Note: The data is already in the system context, so we tell the model
-    // This is a simplified approach - in production you'd execute the function
-    const toolResponse = `The information you requested is already in the context provided above. Please review the "Existing Events" and "Team Members" sections in your system context to answer the user's query about ${functionName}.`;
+    console.log('[OpenAI] Executing function:', functionName, functionArgs);
+
+    // Execute the function call
+    if (!managerId) {
+      return res.status(401).json({ message: 'Manager ID required for function calls' });
+    }
+
+    const toolResponse = await executeFunctionCall(functionName, functionArgs, managerId);
 
     return res.json({
       content: toolResponse,
@@ -590,7 +1183,8 @@ async function handleClaudeRequest(
   temperature: number,
   maxTokens: number,
   res: any,
-  timezone?: string
+  timezone?: string,
+  managerId?: mongoose.Types.ObjectId
 ) {
   const claudeKey = process.env.CLAUDE_API_KEY;
   if (!claudeKey) {
@@ -700,9 +1294,14 @@ async function handleClaudeRequest(
     const toolName = toolUseBlock.name;
     const toolInput = toolUseBlock.input;
 
-    // Note: The data is already in the system context, so we tell the model
-    // This is a simplified approach - in production you'd execute the function
-    const toolResponse = `The information you requested is already in the context provided above. Please review the "Existing Events" and "Team Members" sections in your system context to answer the user's query about ${toolName}.`;
+    console.log('[Claude] Executing function:', toolName, toolInput);
+
+    // Execute the function call
+    if (!managerId) {
+      return res.status(401).json({ message: 'Manager ID required for function calls' });
+    }
+
+    const toolResponse = await executeFunctionCall(toolName, toolInput, managerId);
 
     return res.json({
       content: toolResponse,
@@ -738,7 +1337,8 @@ async function handleGroqRequest(
   maxTokens: number,
   res: any,
   timezone?: string,
-  model?: string
+  model?: string,
+  managerId?: mongoose.Types.ObjectId
 ) {
   try {
     const groqKey = process.env.GROQ_API_KEY;
@@ -749,168 +1349,262 @@ async function handleGroqRequest(
 
     // Use provided model or fall back to env variable or default
     const groqModel = model || process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
-    // Hardcode the base URL for Groq Responses API (don't use GROQ_BASE_URL which is for Whisper)
     const groqBaseUrl = 'https://api.groq.com/openai';
 
-    console.log(`[Groq] Using model: ${groqModel}`);
+    // Determine which API to use based on model
+    const useResponsesAPI = groqModel.includes('gpt-oss') || groqModel.includes('openai/');
+    const apiEndpoint = useResponsesAPI ? '/v1/responses' : '/v1/chat/completions';
 
-  // Convert messages to Groq Responses API format
-  // System message is included in input array with role 'system'
-  const dateContext = getFullSystemContext(timezone);
+    console.log(`[Groq] Using model: ${groqModel} with ${useResponsesAPI ? 'Responses' : 'Chat Completions'} API`);
 
-  // Build input array for Groq (includes system message as first message)
-  const inputMessages: any[] = [];
+    // Build messages with date context
+    const dateContext = getFullSystemContext(timezone);
+    const processedMessages: any[] = [];
 
-  // Find or create system message with date context
-  let hasSystemMessage = false;
-  for (const msg of messages) {
-    if (msg.role === 'system') {
-      inputMessages.push({
-        role: 'system',
-        content: `${dateContext}\n\n${msg.content}`
-      });
-      hasSystemMessage = true;
-    } else {
-      inputMessages.push({
-        role: msg.role,
-        content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)
-      });
-    }
-  }
-
-  // If no system message exists, prepend one with date context
-  if (!hasSystemMessage) {
-    inputMessages.unshift({
-      role: 'system',
-      content: dateContext
-    });
-  }
-
-  // Groq uses OpenAI-compatible tool structure (nested format)
-  const groqTools = AI_TOOLS.map(tool => ({
-    type: 'function',
-    function: {
-      name: tool.name,
-      description: tool.description,
-      parameters: tool.parameters
-    }
-  }));
-
-  const requestBody = {
-    model: groqModel,
-    input: inputMessages, // Groq uses 'input' not 'messages'
-    temperature,
-    max_output_tokens: maxTokens, // Responses API uses max_output_tokens
-    tools: groqTools,
-  };
-
-  const headers = {
-    'Authorization': `Bearer ${groqKey}`,
-    'Content-Type': 'application/json',
-  };
-
-  console.log('[Groq] Calling Responses API...');
-
-  const response = await axios.post(
-    `${groqBaseUrl}/v1/responses`,
-    requestBody,
-    { headers, validateStatus: () => true }
-  );
-
-  if (response.status >= 300) {
-    console.error('[Groq] API error:', response.status, response.data);
-    if (response.status === 429) {
-      return res.status(429).json({
-        message: 'Groq API rate limit reached. Please try again later.',
-      });
-    }
-    return res.status(response.status).json({
-      message: `Groq API error: ${response.statusText}`,
-      details: response.data,
-    });
-  }
-
-  // Groq Responses API returns output blocks
-  const outputBlocks = response.data.output;
-  if (!outputBlocks || outputBlocks.length === 0) {
-    return res.status(500).json({ message: 'Failed to get response from Groq' });
-  }
-
-  // Check for function calls
-  const functionCallBlock = outputBlocks.find((block: any) => block.type === 'function_call');
-  if (functionCallBlock) {
-    console.log('[Groq] Function call requested:', JSON.stringify(functionCallBlock, null, 2));
-
-    const functionName = functionCallBlock.name;
-    const functionArgs = functionCallBlock.arguments;
-
-    // Note: The data is already in the system context, so we tell the model
-    // This is a simplified approach - in production you'd execute the function
-    const toolResponse = `The information you requested is already in the context provided above. Please review the "Existing Events" and "Team Members" sections in your system context to answer the user's query about ${functionName}.`;
-
-    // For function results, Groq Responses API does NOT support role: 'function'
-    // Instead, format as a user message
-    const messagesWithFunctionResult = [
-      ...inputMessages,
-      {
-        role: 'assistant',
-        content: functionCallBlock.text || ''
-      },
-      {
-        role: 'user',
-        content: `Function ${functionName} returned: ${toolResponse}\n\nPlease present this naturally.`
+    let hasSystemMessage = false;
+    for (const msg of messages) {
+      if (msg.role === 'system') {
+        processedMessages.push({
+          role: 'system',
+          content: `${dateContext}\n\n${msg.content}`
+        });
+        hasSystemMessage = true;
+      } else {
+        processedMessages.push({
+          role: msg.role,
+          content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)
+        });
       }
-    ];
+    }
 
-    // Second request - NO tools array, NO previous_response_id
-    const secondResponse = await axios.post(
-      `${groqBaseUrl}/v1/responses`,
-      {
+    if (!hasSystemMessage) {
+      processedMessages.unshift({
+        role: 'system',
+        content: dateContext
+      });
+    }
+
+    // Build tools array based on API type
+    let groqTools: any[];
+    if (useResponsesAPI) {
+      // Responses API: flat structure
+      groqTools = AI_TOOLS.map(tool => ({
+        type: 'function',
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.parameters
+      }));
+    } else {
+      // Chat Completions API: nested structure
+      groqTools = AI_TOOLS.map(tool => ({
+        type: 'function',
+        function: {
+          name: tool.name,
+          description: tool.description,
+          parameters: tool.parameters
+        }
+      }));
+    }
+
+    // Build request body based on API type
+    let requestBody: any;
+    if (useResponsesAPI) {
+      requestBody = {
         model: groqModel,
-        input: messagesWithFunctionResult,
+        input: processedMessages,
         temperature,
-        max_output_tokens: maxTokens, // Responses API uses max_output_tokens
-      },
+        max_output_tokens: maxTokens,
+        tools: groqTools,
+      };
+    } else {
+      requestBody = {
+        model: groqModel,
+        messages: processedMessages,
+        temperature,
+        max_tokens: maxTokens,
+        tools: groqTools,
+      };
+    }
+
+    const headers = {
+      'Authorization': `Bearer ${groqKey}`,
+      'Content-Type': 'application/json',
+    };
+
+    console.log(`[Groq] Calling ${apiEndpoint}...`);
+
+    const response = await axios.post(
+      `${groqBaseUrl}${apiEndpoint}`,
+      requestBody,
       { headers, validateStatus: () => true }
     );
 
-    if (secondResponse.status >= 300) {
-      console.error('[Groq] Second API call error:', secondResponse.status, secondResponse.data);
-      return res.status(secondResponse.status).json({
-        message: `Groq API error: ${secondResponse.statusText}`,
-        details: secondResponse.data,
+    console.log('[Groq] Response status:', response.status);
+
+    if (response.status >= 300) {
+      console.error('[Groq] API error:', response.status, JSON.stringify(response.data));
+      if (response.status === 429) {
+        return res.status(429).json({
+          message: 'Groq API rate limit reached. Please try again later.',
+        });
+      }
+      return res.status(response.status).json({
+        message: `Groq API error: ${response.statusText}`,
+        details: response.data,
       });
     }
 
-    const secondOutput = secondResponse.data.output;
-    const textBlock = secondOutput?.find((block: any) => block.type === 'text');
-    const finalContent = textBlock?.text;
+    // Parse response based on API type
+    if (useResponsesAPI) {
+      // Responses API: output blocks format
+      const outputBlocks = response.data.output;
+      if (!outputBlocks || outputBlocks.length === 0) {
+        return res.status(500).json({ message: 'Failed to get response from Groq' });
+      }
 
-    if (!finalContent) {
-      return res.status(500).json({ message: 'Failed to get final response from Groq' });
+      // Check for function calls
+      const functionCallBlock = outputBlocks.find((block: any) => block.type === 'function_call');
+      if (functionCallBlock) {
+        console.log('[Groq] Function call requested:', functionCallBlock.name);
+
+        const functionName = functionCallBlock.name;
+        const functionArgs = functionCallBlock.arguments;
+
+        if (!managerId) {
+          return res.status(401).json({ message: 'Manager ID required for function calls' });
+        }
+
+        const toolResponse = await executeFunctionCall(functionName, functionArgs, managerId);
+
+        // Second request for Responses API
+        const messagesWithFunctionResult = [
+          ...processedMessages,
+          { role: 'assistant', content: functionCallBlock.text || '' },
+          { role: 'user', content: `Function ${functionName} returned: ${toolResponse}\n\nPlease present this naturally.` }
+        ];
+
+        const secondResponse = await axios.post(
+          `${groqBaseUrl}${apiEndpoint}`,
+          {
+            model: groqModel,
+            input: messagesWithFunctionResult,
+            temperature,
+            max_output_tokens: maxTokens,
+          },
+          { headers, validateStatus: () => true }
+        );
+
+        if (secondResponse.status >= 300) {
+          console.error('[Groq] Second API call error:', secondResponse.status);
+          return res.status(secondResponse.status).json({
+            message: `Groq API error: ${secondResponse.statusText}`,
+            details: secondResponse.data,
+          });
+        }
+
+        const secondOutput = secondResponse.data.output;
+        const textBlock = secondOutput?.find((block: any) => block.type === 'text');
+        const finalContent = textBlock?.text;
+
+        if (!finalContent) {
+          return res.status(500).json({ message: 'Failed to get final response from Groq' });
+        }
+
+        return res.json({
+          content: finalContent,
+          provider: 'groq',
+          toolCall: { name: functionName, arguments: functionArgs }
+        });
+      }
+
+      // Extract text content
+      const messageBlock = outputBlocks.find((block: any) => block.type === 'message');
+      const textContent = messageBlock?.content?.find((item: any) => item.type === 'output_text');
+      const content = textContent?.text;
+
+      if (!content) {
+        console.error('[Groq] No text content found in output blocks');
+        return res.status(500).json({ message: 'Failed to get text response from Groq' });
+      }
+
+      return res.json({ content, provider: 'groq' });
+
+    } else {
+      // Chat Completions API: choices format
+      const choice = response.data.choices?.[0];
+      if (!choice) {
+        return res.status(500).json({ message: 'Failed to get response from Groq' });
+      }
+
+      const assistantMessage = choice.message;
+
+      // Check for tool calls
+      if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+        const toolCall = assistantMessage.tool_calls[0];
+        console.log('[Groq] Tool call requested:', toolCall.function.name);
+
+        const functionName = toolCall.function.name;
+        const functionArgs = JSON.parse(toolCall.function.arguments);
+
+        if (!managerId) {
+          return res.status(401).json({ message: 'Manager ID required for function calls' });
+        }
+
+        const toolResponse = await executeFunctionCall(functionName, functionArgs, managerId);
+
+        // Second request for Chat Completions API
+        const messagesWithToolResult = [
+          ...processedMessages,
+          assistantMessage,
+          {
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: toolResponse
+          }
+        ];
+
+        const secondResponse = await axios.post(
+          `${groqBaseUrl}${apiEndpoint}`,
+          {
+            model: groqModel,
+            messages: messagesWithToolResult,
+            temperature,
+            max_tokens: maxTokens,
+          },
+          { headers, validateStatus: () => true }
+        );
+
+        if (secondResponse.status >= 300) {
+          console.error('[Groq] Second API call error:', secondResponse.status);
+          return res.status(secondResponse.status).json({
+            message: `Groq API error: ${secondResponse.statusText}`,
+            details: secondResponse.data,
+          });
+        }
+
+        const finalContent = secondResponse.data.choices?.[0]?.message?.content;
+
+        if (!finalContent) {
+          return res.status(500).json({ message: 'Failed to get final response from Groq' });
+        }
+
+        return res.json({
+          content: finalContent,
+          provider: 'groq',
+          toolCall: { name: functionName, arguments: functionArgs }
+        });
+      }
+
+      // No tool calls, return content directly
+      const content = assistantMessage.content;
+      if (!content) {
+        return res.status(500).json({ message: 'Failed to get text response from Groq' });
+      }
+
+      return res.json({ content, provider: 'groq' });
     }
 
-    return res.json({
-      content: finalContent,
-      provider: 'groq',
-      toolCall: { name: functionName, arguments: functionArgs }
-    });
-  }
-
-  // Extract text content
-  const textBlock = outputBlocks.find((block: any) => block.type === 'text');
-  const content = textBlock?.text;
-
-  if (!content) {
-    return res.status(500).json({ message: 'Failed to get text response from Groq' });
-  }
-
-    return res.json({
-      content,
-      provider: 'groq',
-    });
   } catch (error: any) {
-    // Enhanced error logging for Groq API failures
     console.error('[Groq] Request failed with error:', {
       message: error.message,
       status: error.response?.status,
