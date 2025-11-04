@@ -740,18 +740,19 @@ async function handleGroqRequest(
   timezone?: string,
   model?: string
 ) {
-  const groqKey = process.env.GROQ_API_KEY;
-  if (!groqKey) {
-    console.error('[Groq] API key not configured');
-    return res.status(500).json({ message: 'Groq API key not configured on server' });
-  }
+  try {
+    const groqKey = process.env.GROQ_API_KEY;
+    if (!groqKey) {
+      console.error('[Groq] API key not configured');
+      return res.status(500).json({ message: 'Groq API key not configured on server' });
+    }
 
-  // Use provided model or fall back to env variable or default
-  const groqModel = model || process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
-  // Hardcode the base URL for Groq Responses API (don't use GROQ_BASE_URL which is for Whisper)
-  const groqBaseUrl = 'https://api.groq.com/openai';
+    // Use provided model or fall back to env variable or default
+    const groqModel = model || process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
+    // Hardcode the base URL for Groq Responses API (don't use GROQ_BASE_URL which is for Whisper)
+    const groqBaseUrl = 'https://api.groq.com/openai';
 
-  console.log(`[Groq] Using model: ${groqModel}`);
+    console.log(`[Groq] Using model: ${groqModel}`);
 
   // Convert messages to Groq Responses API format
   // System message is included in input array with role 'system'
@@ -785,12 +786,14 @@ async function handleGroqRequest(
     });
   }
 
-  // Groq Responses API uses flat tool structure
+  // Groq uses OpenAI-compatible tool structure (nested format)
   const groqTools = AI_TOOLS.map(tool => ({
     type: 'function',
-    name: tool.name,
-    description: tool.description,
-    parameters: tool.parameters
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parameters
+    }
   }));
 
   const requestBody = {
@@ -902,10 +905,26 @@ async function handleGroqRequest(
     return res.status(500).json({ message: 'Failed to get text response from Groq' });
   }
 
-  return res.json({
-    content,
-    provider: 'groq',
-  });
+    return res.json({
+      content,
+      provider: 'groq',
+    });
+  } catch (error: any) {
+    // Enhanced error logging for Groq API failures
+    console.error('[Groq] Request failed with error:', {
+      message: error.message,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      stack: error.stack
+    });
+
+    return res.status(500).json({
+      message: 'Groq API request failed',
+      error: error.message,
+      details: error.response?.data || error.message
+    });
+  }
 }
 
 /**
