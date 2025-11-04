@@ -193,24 +193,127 @@ class _CatalogScreenState extends State<CatalogScreen> {
   Widget build(BuildContext context) {
     final isDesktop = MediaQuery.of(context).size.width >= 1200;
 
+    if (isDesktop) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF8FAFC),
+        appBar: AppBar(
+          title: SectionNavigationDropdown(
+            selectedSection: 'Catalog',
+            onNavigate: _handleNavigationDropdown,
+            isFixed: true,
+          ),
+          backgroundColor: const Color(0xFF7C3AED),
+          elevation: 0,
+          actions: [
+            _buildProfileMenu(context),
+          ],
+        ),
+        body: const Center(
+          child: Text(
+            'Catalog Screen',
+            style: TextStyle(fontSize: 20, color: Colors.grey),
+          ),
+        ),
+      );
+    }
+
+    // Mobile layout with Facebook-style scrolling AppBar
+    final statusBarHeight = MediaQuery.of(context).padding.top;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      appBar: isDesktop ? null : AppBar(
-        title: SectionNavigationDropdown(
-          selectedSection: 'Catalog',
-          onNavigate: _handleNavigationDropdown,
-          isFixed: true,
+      body: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.light,
+          statusBarBrightness: Brightness.dark,
         ),
-        backgroundColor: const Color(0xFF7C3AED),
-        elevation: 0,
-        actions: [
-          _buildProfileMenu(context),
-        ],
-      ),
-      body: const Center(
-        child: Text(
-          'Catalog Screen',
-          style: TextStyle(fontSize: 20, color: Colors.grey),
+        child: CustomScrollView(
+          physics: const BouncingScrollPhysics(),
+          slivers: [
+            // Facebook-style floating app bar - collapses to just status bar
+            SliverAppBar(
+              floating: true,
+              snap: true,
+              pinned: false,
+              toolbarHeight: 56,
+              // When collapsed, only show status bar height
+              collapsedHeight: 0,
+              // When expanded, show status bar + toolbar
+              expandedHeight: statusBarHeight + 56,
+              backgroundColor: const Color(0xFF7C3AED),
+              elevation: 2,
+              shadowColor: Colors.black.withOpacity(0.2),
+              // This is critical - always draw the safe area background
+              flexibleSpace: LayoutBuilder(
+                builder: (context, constraints) {
+                  // Calculate how collapsed we are (0 = fully collapsed, 1 = fully expanded)
+                  final collapseFactor = ((constraints.maxHeight - statusBarHeight) / 56).clamp(0.0, 1.0);
+
+                  return Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFF7C3AED), Color(0xFF6D28D9)],
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Status bar space - always visible
+                        SizedBox(height: statusBarHeight),
+                        // Toolbar content - fades out and slides up when collapsing
+                        if (collapseFactor > 0.01)
+                          Opacity(
+                            opacity: collapseFactor,
+                            child: SizedBox(
+                              height: 56 * collapseFactor,
+                              child: Row(
+                                children: [
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: SectionNavigationDropdown(
+                                      selectedSection: 'Catalog',
+                                      onNavigate: _handleNavigationDropdown,
+                                      isFixed: true,
+                                    ),
+                                  ),
+                                  _buildProfileMenu(context),
+                                  const SizedBox(width: 8),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            // Content area
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
+                    // Sample content to demonstrate scrolling
+                    for (int i = 0; i < 20; i++)
+                      Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        child: ListTile(
+                          leading: const Icon(Icons.inventory_2),
+                          title: Text('Catalog Item ${i + 1}'),
+                          subtitle: const Text('Sample catalog item'),
+                          trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

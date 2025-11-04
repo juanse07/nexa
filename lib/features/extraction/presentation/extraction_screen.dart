@@ -1505,6 +1505,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   Widget _buildMobileLayout(BuildContext context) {
+    final statusBarHeight = MediaQuery.of(context).padding.top;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       body: NotificationListener<ScrollNotification>(
@@ -1521,7 +1523,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 // Top padding to show first card below header initially
                 SliverToBoxAdapter(
                   child: SizedBox(
-                    height: MediaQuery.of(context).padding.top + 200, // Dynamic based on device + header height
+                    height: statusBarHeight + 200, // Dynamic based on device + header height
                   ),
                 ),
                 ..._buildSliverContent(),
@@ -1534,82 +1536,107 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               ],
             ),
 
-            // Animated app bar (overlaid)
+            // Animated app bar (overlaid) - Facebook style with persistent safe area
             Positioned(
               top: 0,
               left: 0,
               right: 0,
-              child: RepaintBoundary(
-                child: AnimatedBuilder(
-                  animation: _headerAnimation,
-                  builder: (context, child) {
-                    // Slide up effect like the bottom bar
-                    final translateY = -(1 - _headerAnimation.value) * (MediaQuery.of(context).padding.top + kToolbarHeight);
-                    return Transform.translate(
-                      offset: Offset(0, translateY),
-                      child: child,
-                    );
-                  },
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF7C3AED),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black12,
-                          blurRadius: 4,
-                          offset: Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: SafeArea(
-                      bottom: false,
-                      child: SizedBox(
-                        height: kToolbarHeight,
-                        child: Row(
-                          children: [
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Text(
-                                _getAppBarTitle(),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
+              child: AnnotatedRegion<SystemUiOverlayStyle>(
+                value: const SystemUiOverlayStyle(
+                  statusBarColor: Colors.transparent,
+                  statusBarIconBrightness: Brightness.light,
+                  statusBarBrightness: Brightness.dark,
+                ),
+                child: RepaintBoundary(
+                  child: AnimatedBuilder(
+                    animation: _headerAnimation,
+                    builder: (context, child) {
+                      return Container(
+                        // Keep background color extended into safe area (Facebook style)
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [Color(0xFF7C3AED), Color(0xFF6D28D9)],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black12,
+                              blurRadius: 4,
+                              offset: Offset(0, 2),
                             ),
-                            _buildProfileMenu(context),
-                            const SizedBox(width: 8),
                           ],
                         ),
-                      ),
-                    ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Safe area background - always visible, extends to absolute top
+                            SizedBox(
+                              height: statusBarHeight,
+                            ),
+                            // Animated toolbar content - shrinks and fades
+                            if (_headerAnimation.value > 0.01)
+                              ClipRect(
+                                child: Align(
+                                  alignment: Alignment.topCenter,
+                                  heightFactor: _headerAnimation.value,
+                                  child: Opacity(
+                                    opacity: _headerAnimation.value,
+                                    child: SizedBox(
+                                      height: kToolbarHeight,
+                                      child: Row(
+                                        children: [
+                                          const SizedBox(width: 16),
+                                          Expanded(
+                                            child: Text(
+                                              _getAppBarTitle(),
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                          _buildProfileMenu(context),
+                                          const SizedBox(width: 8),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
             ),
 
             // Animated tab selector (overlaid)
-            Positioned(
-              top: MediaQuery.of(context).padding.top + kToolbarHeight,
-              left: 0,
-              right: 0,
-              child: RepaintBoundary(
-                child: AnimatedBuilder(
-                  animation: _headerAnimation,
-                  builder: (context, child) {
-                    // Fade effect instead of slide
-                    return IgnorePointer(
+            AnimatedBuilder(
+              animation: _headerAnimation,
+              builder: (context, child) {
+                // Position dynamically based on toolbar height
+                final toolbarHeight = kToolbarHeight * _headerAnimation.value;
+
+                return Positioned(
+                  top: statusBarHeight + toolbarHeight,
+                  left: 0,
+                  right: 0,
+                  child: RepaintBoundary(
+                    child: IgnorePointer(
                       ignoring: _headerAnimation.value < 0.1, // Ignore when almost invisible
                       child: Opacity(
                         opacity: _headerAnimation.value,
                         child: child,
                       ),
-                    );
-                  },
-                  child: _buildTabSelector(),
-                ),
-              ),
+                    ),
+                  ),
+                );
+              },
+              child: _buildTabSelector(),
             ),
           ],
         ),
