@@ -1050,10 +1050,11 @@ IMPORTANT - How many events to show:
 - "upcoming" / "all upcoming" → Show all events
 - "last month" / "shifts from last month" → Show all events from previous month
 
-Clickable venue for "next shift":
-- When showing a single next shift, format venue name as: [LINK:Venue Name]
+CRITICAL - Clickable venues:
+- ALWAYS format ALL venue names as: [LINK:Venue Name]
 - Example: "Venue: [LINK:Seawell Ballroom]"
-- This makes it clickable in the app`;
+- This makes venues clickable to open Google Maps
+- Apply to ALL events, whether showing 1 or multiple`;
 
   const contextWithFormatting = `${dateContext}\n\n${formattingInstructions}`;
 
@@ -1225,10 +1226,11 @@ IMPORTANT - How many events to show:
 - "upcoming" / "all upcoming" → Show all events
 - "last month" / "shifts from last month" → Show all events from previous month
 
-Clickable venue for "next shift":
-- When showing a single next shift, format venue name as: [LINK:Venue Name]
+CRITICAL - Clickable venues:
+- ALWAYS format ALL venue names as: [LINK:Venue Name]
 - Example: "Venue: [LINK:Seawell Ballroom]"
-- This makes it clickable in the app`;
+- This makes venues clickable to open Google Maps
+- Apply to ALL events, whether showing 1 or multiple`;
 
   systemMessage = `${dateContext}\n\n${formattingInstructions}\n\n`;
 
@@ -1467,10 +1469,11 @@ IMPORTANT - How many events to show:
 - "upcoming" / "all upcoming" → Show all events
 - "last month" / "shifts from last month" → Show all events from previous month
 
-Clickable venue for "next shift":
-- When showing a single next shift, format venue name as: [LINK:Venue Name]
+CRITICAL - Clickable venues:
+- ALWAYS format ALL venue names as: [LINK:Venue Name]
 - Example: "Venue: [LINK:Seawell Ballroom]"
-- This makes it clickable in the app`;
+- This makes venues clickable to open Google Maps
+- Apply to ALL events, whether showing 1 or multiple`;
 
     const contextWithFormatting = `${dateContext}\n\n${formattingInstructions}`;
 
