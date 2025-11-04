@@ -797,7 +797,7 @@ async function handleGroqRequest(
     model: groqModel,
     input: inputMessages, // Groq uses 'input' not 'messages'
     temperature,
-    max_tokens: maxTokens,
+    max_output_tokens: maxTokens, // Responses API uses max_output_tokens
     tools: groqTools,
   };
 
@@ -866,7 +866,7 @@ async function handleGroqRequest(
         model: groqModel,
         input: messagesWithFunctionResult,
         temperature,
-        max_tokens: maxTokens,
+        max_output_tokens: maxTokens, // Responses API uses max_output_tokens
       },
       { headers, validateStatus: () => true }
     );
