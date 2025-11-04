@@ -968,7 +968,7 @@ class _AIChatScreenState extends State<AIChatScreen>
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              'GPT-5 (Powerful)',
+                              'GPT-OSS 20B (Powerful)',
                               style: TextStyle(
                                 fontWeight: _aiChatService.modelPreference == 'gpt-oss'
                                     ? FontWeight.w600
@@ -1011,7 +1011,7 @@ class _AIChatScreenState extends State<AIChatScreen>
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            _aiChatService.modelPreference == 'llama' ? 'LLAMA' : 'GPT-5',
+                            _aiChatService.modelPreference == 'llama' ? 'LLAMA' : 'GPT-OSS',
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
