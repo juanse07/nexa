@@ -1453,27 +1453,28 @@ async function handleStaffGroqRequest(
 
     // Build messages with date context and formatting instructions
     const dateContext = getFullSystemContext(timezone);
+
+    // CRITICAL: Venue link formatting MUST be first for all models to follow
     const formattingInstructions = `
+🔴 CRITICAL FORMATTING RULE - MUST FOLLOW:
+Every venue name MUST use this exact format: [LINK:Venue Name]
+Example: "Venue: [LINK:Seawell Ballroom]"
+NO EXCEPTIONS - This makes venues clickable in the app.
+
 Format events in summarized list:
 - Date: "Monday, Nov 15th" (readable format)
 - Time: Call time or event time (e.g., "8:00 AM - 5:00 PM")
 - Role: Your role for the event
-- Venue: Venue name only (NO address)
+- Venue: [LINK:Venue Name] ← MUST use this format
 - Client: Client name
 - Hide: addresses, database IDs, null fields
 - Be brief, concise & friendly
 
-IMPORTANT - How many events to show:
+How many events to show:
 - "next shift" / "when is my next shift" → Show ONLY 1 event (the earliest)
 - "next 7 jobs" → Show up to 7 events
 - "upcoming" / "all upcoming" → Show all events
-- "last month" / "shifts from last month" → Show all events from previous month
-
-CRITICAL - Clickable venues:
-- ALWAYS format ALL venue names as: [LINK:Venue Name]
-- Example: "Venue: [LINK:Seawell Ballroom]"
-- This makes venues clickable to open Google Maps
-- Apply to ALL events, whether showing 1 or multiple`;
+- "last month" / "shifts from last month" → Show all events from previous month`;
 
     const contextWithFormatting = `${dateContext}\n\n${formattingInstructions}`;
 
