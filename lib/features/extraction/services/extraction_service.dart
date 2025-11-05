@@ -23,7 +23,7 @@ class ExtractionService {
     final Uri uri = _resolveEndpoint();
 
     // Request body for backend API
-    // Images use GPT-4 Vision, PDFs send extracted text to regular GPT-4
+    // Images use Groq Llama 4 Scout vision, PDFs use Groq Llama 3.1 for text
     final Map<String, dynamic> requestBody = {
       'input': actualInput,
       'isImage': isImage,

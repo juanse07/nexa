@@ -19,6 +19,7 @@ import '../widgets/image_preview_card.dart';
 import '../widgets/document_preview_card.dart';
 import '../widgets/event_confirmation_card.dart';
 import '../widgets/batch_event_dialog.dart';
+import 'extraction_screen.dart';
 import 'dart:async';
 
 class AIChatScreen extends StatefulWidget {
@@ -234,12 +235,17 @@ class _AIChatScreenState extends State<AIChatScreen>
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf'],
-        allowMultiple: false,
+        allowMultiple: true, // Allow selecting multiple files at once
       );
 
-      if (result != null && result.files.single.path != null) {
-        final file = File(result.files.single.path!);
-        await _processDocument(file);
+      if (result != null && result.files.isNotEmpty) {
+        // Process each selected file
+        for (final platformFile in result.files) {
+          if (platformFile.path != null) {
+            final file = File(platformFile.path!);
+            await _processDocument(file);
+          }
+        }
       }
     } catch (e) {
       print('[AIChatScreen] Error picking document: $e');
@@ -273,7 +279,7 @@ class _AIChatScreenState extends State<AIChatScreen>
       final base64String = base64Encode(bytes);
       final processedInput = '[[IMAGE_BASE64]]:$base64String';
 
-      // Call extraction API (uses GPT-4 Vision for images)
+      // Call extraction API (uses Groq: Llama 4 Scout for images, Llama 3.1 for text)
       final structuredData = await _extractionService.extractStructuredData(
         input: processedInput,
       );
@@ -906,6 +912,25 @@ class _AIChatScreenState extends State<AIChatScreen>
                     ),
                   ),
                   actions: [
+                    // Manual Entry button (structured form)
+                    IconButton(
+                      icon: const Icon(Icons.edit_note, color: Color(0xFF10B981), size: 24),
+                      tooltip: 'Manual Entry',
+                      onPressed: () {
+                        // Navigate to ExtractionScreen with uncommented dashboard
+                        // Since dashboard is at index 0 but commented, we use initialScreenIndex: 0
+                        // and uncomment it temporarily, OR we navigate to the form directly
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (context) => const ExtractionScreen(
+                              initialScreenIndex: 0, // Dashboard with tabs
+                              initialIndex: 2, // Manual Entry tab (0=Upload, 1=AI Chat, 2=Manual)
+                            ),
+                          ),
+                        );
+                      },
+                      padding: const EdgeInsets.all(8),
+                    ),
                     // AI Model toggle (LLAMA vs GPT-OSS)
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
@@ -1265,6 +1290,39 @@ class _AIChatScreenState extends State<AIChatScreen>
                         onRemove: () => _removeDocument(documentFile),
                       );
                     }).toList(),
+
+                  // Quick action suggestion chips (for common manager tasks)
+                  if (!_isLoading && _selectedImages.isEmpty && _selectedDocuments.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _buildSuggestionChip(
+                              '📋 New Event',
+                              'Create new event. Tell me: how many staff roles needed, start time, end time, and venue.',
+                            ),
+                            const SizedBox(width: 8),
+                            _buildSuggestionChip(
+                              '🏢 New Client',
+                              'Add new client',
+                            ),
+                            const SizedBox(width: 8),
+                            _buildSuggestionChip(
+                              '👤 New Role',
+                              'Create new staff role',
+                            ),
+                            const SizedBox(width: 8),
+                            _buildSuggestionChip(
+                              '💵 New Tariff',
+                              'Set up new tariff. Tell me: rate, role, and client.',
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
                   // Chat input
                   ChatInputWidget(
                     key: const ValueKey('chat-input'),
@@ -1445,5 +1503,71 @@ class _AIChatScreenState extends State<AIChatScreen>
   String _capitalize(String text) {
     if (text.isEmpty) return text;
     return text[0].toUpperCase() + text.substring(1);
+  }
+
+  /// Build a suggestion chip for quick actions
+  Widget _buildSuggestionChip(String label, String query) {
+    return ActionChip(
+      label: Text(label),
+      onPressed: () async {
+        setState(() {
+          _isLoading = true;
+        });
+
+        try {
+          await _aiChatService.sendMessage(query);
+
+          // Show confirmation card if event is complete
+          if (_aiChatService.eventComplete && _aiChatService.currentEventData.isNotEmpty) {
+            print('[AIChatScreen] Event complete detected - showing confirmation card...');
+
+            // Add special marker message for confirmation card
+            final confirmationMsg = ChatMessage(
+              role: 'system',
+              content: '[CONFIRMATION_CARD]',
+            );
+
+            setState(() {
+              _aiChatService.addMessage(confirmationMsg);
+              _showingConfirmation = true;
+              _confirmationSeconds = 90; // Reset to 90 seconds
+            });
+
+            // Start confirmation timer with countdown
+            _startConfirmationTimer();
+
+            // Reset inactivity timer
+            _resetInactivityTimer();
+          }
+
+          // Scroll to bottom after message
+          _scrollToBottom(animated: true);
+        } catch (e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: ${e.toString()}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        } finally {
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+            });
+          }
+        }
+      },
+      backgroundColor: Colors.white,
+      side: BorderSide(color: Colors.grey.shade300, width: 1),
+      labelStyle: const TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w500,
+        color: Color(0xFF475569),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      elevation: 0,
+      pressElevation: 2,
+    );
   }
 }

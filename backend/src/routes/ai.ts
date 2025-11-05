@@ -897,7 +897,9 @@ async function executeFunctionCall(
 
 /**
  * POST /api/ai/extract
- * Proxy endpoint for OpenAI-based document extraction
+ * Groq-powered extraction endpoint:
+ * - Images: Llama 4 Scout 17B vision model
+ * - Text/PDFs: Llama 3.1 8B Instant text model
  * Accepts text or base64 image input and returns structured event data
  */
 router.post('/ai/extract', requireAuth, async (req, res) => {
@@ -905,15 +907,18 @@ router.post('/ai/extract', requireAuth, async (req, res) => {
     const validated = extractionSchema.parse(req.body);
     const { input, isImage } = validated;
 
-    const openaiKey = process.env.OPENAI_API_KEY;
-    if (!openaiKey) {
-      console.error('[ai/extract] OPENAI_API_KEY not configured');
-      return res.status(500).json({ message: 'OpenAI API key not configured on server' });
+    // Use Groq for both vision and text extraction
+    const groqKey = process.env.GROQ_API_KEY;
+
+    if (!groqKey) {
+      console.error('[ai/extract] GROQ_API_KEY not configured');
+      return res.status(500).json({ message: 'Groq API key not configured on server' });
     }
 
-    const visionModel = process.env.OPENAI_VISION_MODEL || 'gpt-4o-mini';
-    const textModel = process.env.OPENAI_TEXT_MODEL || 'gpt-4o';
-    const openaiBaseUrl = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
+    // Groq models: Llama 4 Scout for vision, Llama 3.1 for text
+    const visionModel = 'meta-llama/llama-4-scout-17b-16e-instruct';
+    const textModel = 'llama-3.1-8b-instant'; // Fast Groq text model
+    const groqBaseUrl = 'https://api.groq.com/openai/v1';
 
     const systemPrompt =
       'You are a structured information extractor for catering event staffing. Extract fields: event_name, client_name, date (ISO 8601), start_time, end_time, venue_name, venue_address, city, state, country, contact_name, contact_phone, contact_email, setup_time, uniform, notes, headcount_total, roles (list of {role, count, call_time}), pay_rate_info. Return strict JSON.';
@@ -958,32 +963,31 @@ router.post('/ai/extract', requireAuth, async (req, res) => {
       };
     }
 
+    // Always use Groq API for both vision and text
     const headers: any = {
-      'Authorization': `Bearer ${openaiKey}`,
+      'Authorization': `Bearer ${groqKey}`,
       'Content-Type': 'application/json',
     };
 
-    const orgId = process.env.OPENAI_ORG_ID;
-    if (orgId) {
-      headers['OpenAI-Organization'] = orgId;
-    }
-
-    // Call OpenAI with retries
+    // Call Groq API with retries
     const response = await callOpenAIWithRetries(
-      `${openaiBaseUrl}/chat/completions`,
+      `${groqBaseUrl}/chat/completions`,
       headers,
       requestBody
     );
 
     if (response.status >= 300) {
-      console.error('[ai/extract] OpenAI API error:', response.status, response.data);
+      console.error(`[ai/extract] Groq API error:`, response.status);
+      console.error(`[ai/extract] Error details:`, JSON.stringify(response.data, null, 2));
+      console.error(`[ai/extract] Request body:`, JSON.stringify(requestBody, null, 2));
       if (response.status === 429) {
         return res.status(429).json({
-          message: 'OpenAI API rate limit or quota exceeded. Please try again later.',
+          message: 'Groq API rate limit or quota exceeded. Please try again later.',
         });
       }
       return res.status(response.status).json({
-        message: `OpenAI API error: ${response.statusText}`,
+        message: `Groq API error: ${response.statusText}`,
+        details: response.data,
       });
     }
 
@@ -999,11 +1003,11 @@ router.post('/ai/extract', requireAuth, async (req, res) => {
         return res.json(parsed);
       } catch (parseErr) {
         console.error('[ai/extract] Failed to parse JSON:', parseErr);
-        return res.status(500).json({ message: 'Failed to parse response from OpenAI' });
+        return res.status(500).json({ message: 'Failed to parse response from AI' });
       }
     }
 
-    return res.status(500).json({ message: 'No valid JSON found in OpenAI response' });
+    return res.status(500).json({ message: 'No valid JSON found in AI response' });
   } catch (err: any) {
     console.error('[ai/extract] Error:', err);
     if (err instanceof z.ZodError) {

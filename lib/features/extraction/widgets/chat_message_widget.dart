@@ -33,18 +33,71 @@ class ChatMessageWidget extends StatelessWidget {
               width: 32,
               height: 32,
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: const Color(0xFF6366F1).withValues(alpha: 0.2),
-                  width: 1,
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF7A3AFB), Color(0xFF5B27D8)],
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF7A3AFB).withOpacity(0.3),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Image.asset(
-                  'assets/logo_padded_small.png',
-                  fit: BoxFit.cover,
+              child: Center(
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Outer circle shape
+                    Container(
+                      width: 14,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.4),
+                          width: 1,
+                        ),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    // Inner diamond shape
+                    Transform.rotate(
+                      angle: 0.785398, // 45 degrees
+                      child: Container(
+                        width: 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 1,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // Connecting lines
+                    Positioned(
+                      top: 6,
+                      child: Container(
+                        width: 0.8,
+                        height: 3.5,
+                        color: Colors.white.withOpacity(0.6),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 6,
+                      child: Container(
+                        width: 0.8,
+                        height: 3.5,
+                        color: Colors.white.withOpacity(0.6),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

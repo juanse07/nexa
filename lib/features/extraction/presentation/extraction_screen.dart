@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -85,7 +86,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   bool isLoading = false;
   String? errorMessage;
 
-  int _selectedIndex = 0;
+  int _selectedIndex = 1; // Start with Jobs section (dashboard commented out)
   late TabController _createTabController; // Back to TabController for Post a Job tabs
   late TabController _eventsTabController;
   late TabController _catalogTabController;
@@ -165,6 +166,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   ScrollController? _mainScrollController;
   double _lastMainScrollOffset = 0;
   DateTime _lastScrollTime = DateTime.now();
+
+  // Floating "New Job" chip state
+  bool _isJobChipExpanded = true;
 
   // Performance optimization constants
   static const Duration _animationDuration = Duration(milliseconds: 200);
@@ -403,10 +407,30 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       _showHeader();
     }
 
+    // Handle "New Job" chip expansion/collapse (Gmail-style)
+    // Only on Jobs/Events tab (_selectedIndex == 1)
+    if (_selectedIndex == 1) {
+      if (shouldHide && _isJobChipExpanded) {
+        setState(() {
+          _isJobChipExpanded = false; // Collapse to icon only
+        });
+      } else if ((shouldShow || metrics.pixels <= 50) && !_isJobChipExpanded) {
+        setState(() {
+          _isJobChipExpanded = true; // Expand to show text
+        });
+      }
+    }
+
     // Auto-show after scroll stops (like Facebook)
     _autoShowTimer = Timer(_autoShowDelay, () {
       if (!_isHeaderVisible && mounted) {
         _showHeader();
+      }
+      // Auto-expand chip after scroll stops
+      if (!_isJobChipExpanded && _selectedIndex == 1 && mounted) {
+        setState(() {
+          _isJobChipExpanded = true;
+        });
       }
     });
 
@@ -1287,7 +1311,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
   List<Widget> _buildSliverContent() {
     switch (_selectedIndex) {
-      case 0: // Post a Job tab
+      case 0: // Post a Job tab (uncommented for Manual Entry access)
         return _buildCreateSlivers();
       case 1: // Events tab
         return _buildEventsSlivers();
@@ -1306,7 +1330,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final topPadding = MediaQuery.of(context).padding.top;
 
     switch (_selectedIndex) {
-      case 0: // Post a Job tab - pin the chip selector
+      case 0: // Post a Job tab - pin the chip selector (uncommented for Manual Entry)
         return [
           SliverPersistentHeader(
             pinned: true,
@@ -1638,6 +1662,106 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               },
               child: _buildTabSelector(),
             ),
+
+            // Floating "New Job" chip for Events/Jobs tab (like email apps)
+            if (_selectedIndex == 1)
+              Positioned(
+                bottom: 100, // Above bottom nav
+                right: 16,
+                child: GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const AIChatScreen(),
+                      ),
+                    );
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeInOut,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: _isJobChipExpanded ? 18 : 14,
+                      vertical: _isJobChipExpanded ? 10 : 14,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.75),
+                      borderRadius: BorderRadius.circular(_isJobChipExpanded ? 28 : 28),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.4),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.08),
+                          blurRadius: 16,
+                          offset: const Offset(0, 4),
+                        ),
+                        BoxShadow(
+                          color: const Color(0xFF7C3AED).withOpacity(0.1),
+                          blurRadius: 20,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: ClipRect(
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 28,
+                              height: 28,
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFF7C3AED), Color(0xFF6D28D9)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF7C3AED).withOpacity(0.3),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.add_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                            ),
+                            AnimatedSize(
+                              duration: const Duration(milliseconds: 200),
+                              curve: Curves.easeInOut,
+                              child: _isJobChipExpanded
+                                  ? Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: const [
+                                        SizedBox(width: 8),
+                                        Text(
+                                          'New Job',
+                                          style: TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF374151),
+                                            letterSpacing: -0.2,
+                                          ),
+                                        ),
+                                      ],
+                                    )
+                                  : const SizedBox.shrink(),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -1645,97 +1769,99 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   Widget _buildTabSelector() {
-    // Post a Job tab - floating header card
-    if (_selectedIndex == 0) {
-      return Container(
-        margin: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFFD4AF37), Color(0xFFFFD700)], // Golden gradient
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(16),
-                  topRight: Radius.circular(16),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(Icons.add_circle_outline, color: Colors.white, size: 24),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Post a New Job',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Upload, create with AI, or enter manually',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.9),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(16),
-                  bottomRight: Radius.circular(16),
-                ),
-              ),
-              child: TabBar(
-                controller: _createTabController,
-                tabs: [
-                  Tab(icon: Icon(Icons.upload_file), text: AppLocalizations.of(context)!.uploadData),
-                  Tab(icon: Icon(Icons.auto_awesome), text: AppLocalizations.of(context)!.aiChat),
-                  Tab(icon: Icon(Icons.edit), text: AppLocalizations.of(context)!.manualEntry),
-                ],
-                labelColor: const Color(0xFF7C3AED),
-                unselectedLabelColor: Colors.grey,
-                indicatorColor: const Color(0xFF7C3AED),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
+    // ===== DASHBOARD (POST A JOB) TAB SELECTOR COMMENTED OUT - SAVED FOR FUTURE USE =====
+    // // Post a Job tab - floating header card
+    // if (_selectedIndex == 0) {
+    //   return Container(
+    //     margin: const EdgeInsets.all(16),
+    //     decoration: BoxDecoration(
+    //       borderRadius: BorderRadius.circular(16),
+    //       boxShadow: [
+    //         BoxShadow(
+    //           color: Colors.black.withOpacity(0.1),
+    //           blurRadius: 10,
+    //           offset: const Offset(0, 4),
+    //         ),
+    //       ],
+    //     ),
+    //     child: Column(
+    //       mainAxisSize: MainAxisSize.min,
+    //       children: [
+    //         Container(
+    //           padding: const EdgeInsets.all(16),
+    //           decoration: const BoxDecoration(
+    //             gradient: LinearGradient(
+    //               colors: [Color(0xFFD4AF37), Color(0xFFFFD700)], // Golden gradient
+    //               begin: Alignment.topLeft,
+    //               end: Alignment.bottomRight,
+    //             ),
+    //             borderRadius: BorderRadius.only(
+    //               topLeft: Radius.circular(16),
+    //               topRight: Radius.circular(16),
+    //             ),
+    //           ),
+    //           child: Row(
+    //             children: [
+    //               Container(
+    //                 padding: const EdgeInsets.all(12),
+    //                 decoration: BoxDecoration(
+    //                   color: Colors.white.withOpacity(0.2),
+    //                   borderRadius: BorderRadius.circular(12),
+    //                 ),
+    //                 child: const Icon(Icons.add_circle_outline, color: Colors.white, size: 24),
+    //               ),
+    //               const SizedBox(width: 12),
+    //               Expanded(
+    //                 child: Column(
+    //                   crossAxisAlignment: CrossAxisAlignment.start,
+    //                   children: [
+    //                     const Text(
+    //                       'Post a New Job',
+    //                       style: TextStyle(
+    //                         color: Colors.white,
+    //                         fontSize: 18,
+    //                         fontWeight: FontWeight.w600,
+    //                       ),
+    //                     ),
+    //                     const SizedBox(height: 4),
+    //                     Text(
+    //                       'Upload, create with AI, or enter manually',
+    //                       style: TextStyle(
+    //                         color: Colors.white.withOpacity(0.9),
+    //                         fontSize: 12,
+    //                       ),
+    //                     ),
+    //                   ],
+    //                 ),
+    //               ),
+    //             ],
+    //           ),
+    //         ),
+    //         Container(
+    //           decoration: const BoxDecoration(
+    //             color: Colors.white,
+    //             borderRadius: BorderRadius.only(
+    //               bottomLeft: Radius.circular(16),
+    //               bottomRight: Radius.circular(16),
+    //             ),
+    //           ),
+    //           child: TabBar(
+    //             controller: _createTabController,
+    //             tabs: [
+    //               Tab(icon: Icon(Icons.upload_file), text: AppLocalizations.of(context)!.uploadData),
+    //               Tab(icon: Icon(Icons.auto_awesome), text: AppLocalizations.of(context)!.aiChat),
+    //               Tab(icon: Icon(Icons.edit), text: AppLocalizations.of(context)!.manualEntry),
+    //             ],
+    //             labelColor: const Color(0xFF7C3AED),
+    //             unselectedLabelColor: Colors.grey,
+    //             indicatorColor: const Color(0xFF7C3AED),
+    //           ),
+    //         ),
+    //       ],
+    //     ),
+    //   );
+    // }
+    // ===== END DASHBOARD TAB SELECTOR =====
 
     // Events/Jobs tab - floating header card
     if (_selectedIndex == 1) {
@@ -2061,11 +2187,13 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Column(
                 children: [
-                  _buildNavRailItem(
-                    0,
-                    Icons.add_circle_outline,
-                    AppLocalizations.of(context)!.navCreate,
-                  ),
+                  // ===== DASHBOARD (POST A JOB) COMMENTED OUT - SAVED FOR FUTURE USE =====
+                  // _buildNavRailItem(
+                  //   0,
+                  //   Icons.add_circle_outline,
+                  //   AppLocalizations.of(context)!.navCreate,
+                  // ),
+                  // ===== END DASHBOARD NAVIGATION =====
                   _buildNavRailItem(1, Icons.view_module, AppLocalizations.of(context)!.navJobs),
                   _buildNavRailItem(2, Icons.chat_bubble_outline, AppLocalizations.of(context)!.navChat),
                   _buildNavRailItem(3, Icons.schedule, AppLocalizations.of(context)!.navHours),
@@ -2089,6 +2217,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           onTap: () {
             setState(() {
               _selectedIndex = index;
+              // Reset chip to expanded when switching to Jobs tab
+              if (index == 1) {
+                _isJobChipExpanded = true;
+              }
             });
           },
           borderRadius: BorderRadius.circular(12),
@@ -2197,6 +2329,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         onTap: () {
           setState(() {
             _selectedIndex = index;
+            // Reset chip to expanded when switching to Jobs tab
+            if (index == 1) {
+              _isJobChipExpanded = true;
+            }
           });
         },
         child: Column(

@@ -87,10 +87,13 @@ class ChatEventService {
   static const String _fallbackPrompt = '''You are a friendly AI assistant helping create catering event staffing records. Your job is to collect event details through conversation.
 
 Ask for information ONE field at a time in a natural, conversational way. Required fields:
-- event_name
 - client_name
 - date (ISO 8601 format)
-- start_time (HH:MM format)
+- start_time (HH:MM format - when staff arrives)
+- at least ONE role (with count)
+
+Optional fields (include if mentioned, don't ask):
+- event_name (will be auto-generated if not provided)
 - end_time (HH:MM format)
 
 Optional fields:
@@ -997,13 +1000,6 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
     // Simple heuristic extraction - could be enhanced with more sophisticated parsing
     final lowerUser = userMsg.toLowerCase();
     final lowerAi = aiResponse.toLowerCase();
-
-    // If AI asks about event name and user hasn't been asked yet
-    if (lowerAi.contains('event name') || lowerAi.contains('name of the event')) {
-      if (!_currentEventData.containsKey('event_name')) {
-        _currentEventData['event_name'] = userMsg;
-      }
-    }
 
     // If AI asks about client
     if (lowerAi.contains('client') && lowerAi.contains('name')) {

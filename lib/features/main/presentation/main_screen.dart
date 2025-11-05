@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../home/presentation/home_screen.dart';
+// ===== HOME DASHBOARD COMMENTED OUT - SAVED FOR FUTURE USE =====
+// import '../../home/presentation/home_screen.dart';
+// ===== END HOME DASHBOARD IMPORT =====
 import '../../extraction/presentation/extraction_screen.dart';
 import '../../chat/presentation/conversations_screen.dart';
 
@@ -38,17 +40,19 @@ class _MainScreenState extends State<MainScreen>
 
   // Define screens - late final for single initialization
   late final List<Widget> _screens = [
-    const HomeScreen(), // Home
-    const ExtractionScreen(
-      initialScreenIndex: 0,
-    ), // Create tab
+    // ===== HOME & CREATE DASHBOARDS COMMENTED OUT - SAVED FOR FUTURE USE =====
+    // const HomeScreen(), // Home (index 0)
+    // const ExtractionScreen(
+    //   initialScreenIndex: 0,
+    // ), // Create tab (index 1)
+    // ===== END DASHBOARDS =====
     const ExtractionScreen(
       initialScreenIndex: 1,
-    ), // Jobs/Events tab
-    const ConversationsScreen(), // Chat screen - real conversations
+    ), // Jobs/Events tab (now index 0)
+    const ConversationsScreen(), // Chat screen (now index 1)
     const ExtractionScreen(
       initialScreenIndex: 4,
-    ), // Catalog screen
+    ), // Catalog screen (now index 2)
   ];
 
   @override
@@ -254,11 +258,13 @@ class _MainScreenState extends State<MainScreen>
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildNavButton(0, Icons.home_rounded, 'Home'),
-              _buildNavButton(1, Icons.add_circle_outline, 'Create'),
-              _buildNavButton(2, Icons.view_module, 'Jobs'),
-              _buildNavButton(3, Icons.chat_bubble_outline, 'Chat'),
-              _buildNavButton(4, Icons.inventory_2, 'Catalog'),
+              // ===== HOME & CREATE BUTTONS REMOVED =====
+              // _buildNavButton(0, Icons.home_rounded, 'Home'),
+              // _buildNavButton(1, Icons.add_circle_outline, 'Create'),
+              // ===== END REMOVED BUTTONS =====
+              _buildNavButton(0, Icons.view_module, 'Jobs'), // Was index 2, now 0
+              _buildNavButton(1, Icons.chat_bubble_outline, 'Chat'), // Was index 3, now 1
+              _buildNavButton(2, Icons.inventory_2, 'Catalog'), // Was index 4, now 2
             ],
           ),
         ),
@@ -375,11 +381,13 @@ class _MainScreenState extends State<MainScreen>
           ),
           const SizedBox(height: 20),
           // Navigation items
-          _buildRailItem(0, Icons.home_rounded, 'Home'),
-          _buildRailItem(1, Icons.add_circle_outline, 'Create'),
-          _buildRailItem(2, Icons.view_module, 'Jobs'),
-          _buildRailItem(3, Icons.chat_bubble_outline, 'Chat'),
-          _buildRailItem(4, Icons.inventory_2, 'Catalog'),
+          // ===== HOME & CREATE BUTTONS REMOVED =====
+          // _buildRailItem(0, Icons.home_rounded, 'Home'),
+          // _buildRailItem(1, Icons.add_circle_outline, 'Create'),
+          // ===== END REMOVED BUTTONS =====
+          _buildRailItem(0, Icons.view_module, 'Jobs'), // Was index 2, now 0
+          _buildRailItem(1, Icons.chat_bubble_outline, 'Chat'), // Was index 3, now 1
+          _buildRailItem(2, Icons.inventory_2, 'Catalog'), // Was index 4, now 2
           const Spacer(),
           // Settings at bottom
           _buildRailItem(-1, Icons.settings, 'Settings'),
