@@ -444,7 +444,7 @@ router.post('/conversations/:targetId/messages', requireAuth, async (req, res) =
                     r.role_id?.toString() === metadata.roleId ||
                     r.role === metadata.roleId
                 );
-                const roleName = role?.role || role?.role_name;
+                const roleName = (role as any)?.role || (role as any)?.role_name;
                 if (roleName) {
                   bodyParts.push(roleName);
                 }
