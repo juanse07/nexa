@@ -635,24 +635,37 @@ router.post('/events/:id/publish', requireAuth, async (req, res) => {
     if (targetUserKeys.length > 0) {
       console.log(`[EVENT NOTIF] Event ${eventId} published, notifying ${targetUserKeys.length} staff members (teams + selected users)`);
 
-      // Compose notification message
-      const eventDate = (eventObj as any).date ? new Date((eventObj as any).date).toLocaleDateString() : '';
-      const roles = (eventObj as any).roles || [];
+      // Compose notification message with date, time, and client
+      const eventDate = (eventObj as any).date;
+      const startTime = (eventObj as any).start_time;
+      const endTime = (eventObj as any).end_time;
+      const clientName = (eventObj as any).client_name;
 
-      // Pluralize each role name (e.g., "Server" → "Servers")
-      const roleNames = roles
-        .map((r: any) => {
-          const roleName = r.role || r.role_name;
-          return roleName ? `${roleName}s` : null;
-        })
-        .filter(Boolean)
-        .join(', ');
+      // Format date as "15 Jan"
+      let formattedDate = '';
+      if (eventDate) {
+        const d = new Date(eventDate);
+        const day = d.getDate();
+        const month = d.toLocaleDateString('en-US', { month: 'short' });
+        formattedDate = `${day} ${month}`;
+      }
 
-      // Build notification body: "date - roles" or just "date" or just "roles"
+      // Build notification body: "15 Jan, 2:00 PM - 10:00 PM • ClientName"
       const bodyParts = [];
-      if (eventDate) bodyParts.push(eventDate);
-      if (roleNames) bodyParts.push(roleNames);
-      const notificationBody = bodyParts.length > 0 ? bodyParts.join(' - ') : 'Check the app for details';
+
+      if (formattedDate) {
+        let datePart = formattedDate;
+        if (startTime && endTime) {
+          datePart += `, ${startTime} - ${endTime}`;
+        }
+        bodyParts.push(datePart);
+      }
+
+      if (clientName) {
+        bodyParts.push(clientName);
+      }
+
+      const notificationBody = bodyParts.length > 0 ? bodyParts.join(' • ') : 'Check the app for details';
 
       for (const userKey of targetUserKeys) {
         try {
@@ -897,24 +910,37 @@ router.patch('/events/:id', requireAuth, async (req, res) => {
       if (allTargetUserKeys.length > 0) {
         console.log(`[EVENT NOTIF] Event ${eventId} status changed to ${updated.status}, notifying ${allTargetUserKeys.length} staff members (teams + selected users)`);
 
-        // Compose notification message
-        const eventDate = (updated as any).date ? new Date((updated as any).date).toLocaleDateString() : '';
-        const roles = (updated as any).roles || [];
+        // Compose notification message with date, time, and client
+        const eventDate = (updated as any).date;
+        const startTime = (updated as any).start_time;
+        const endTime = (updated as any).end_time;
+        const clientName = (updated as any).client_name;
 
-        // Pluralize each role name (e.g., "Server" → "Servers")
-        const roleNames = roles
-          .map((r: any) => {
-            const roleName = r.role || r.role_name;
-            return roleName ? `${roleName}s` : null;
-          })
-          .filter(Boolean)
-          .join(', ');
+        // Format date as "15 Jan"
+        let formattedDate = '';
+        if (eventDate) {
+          const d = new Date(eventDate);
+          const day = d.getDate();
+          const month = d.toLocaleDateString('en-US', { month: 'short' });
+          formattedDate = `${day} ${month}`;
+        }
 
-        // Build notification body: "date - roles" or just "date" or just "roles"
+        // Build notification body: "15 Jan, 2:00 PM - 10:00 PM • ClientName"
         const bodyParts = [];
-        if (eventDate) bodyParts.push(eventDate);
-        if (roleNames) bodyParts.push(roleNames);
-        const notificationBody = bodyParts.length > 0 ? bodyParts.join(' - ') : 'Check the app for details';
+
+        if (formattedDate) {
+          let datePart = formattedDate;
+          if (startTime && endTime) {
+            datePart += `, ${startTime} - ${endTime}`;
+          }
+          bodyParts.push(datePart);
+        }
+
+        if (clientName) {
+          bodyParts.push(clientName);
+        }
+
+        const notificationBody = bodyParts.length > 0 ? bodyParts.join(' • ') : 'Check the app for details';
 
         // Notify each assigned staff member
         for (const userKey of allTargetUserKeys) {
