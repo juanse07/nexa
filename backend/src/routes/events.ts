@@ -635,11 +635,12 @@ router.post('/events/:id/publish', requireAuth, async (req, res) => {
     if (targetUserKeys.length > 0) {
       console.log(`[EVENT NOTIF] Event ${eventId} published, notifying ${targetUserKeys.length} staff members (teams + selected users)`);
 
-      // Compose notification message with date, time, and client
+      // Compose notification message with date, time, client, and roles
       const eventDate = (eventObj as any).date;
       const startTime = (eventObj as any).start_time;
       const endTime = (eventObj as any).end_time;
       const clientName = (eventObj as any).client_name;
+      const roles = (eventObj as any).roles || [];
 
       // Format date as "15 Jan"
       let formattedDate = '';
@@ -650,7 +651,16 @@ router.post('/events/:id/publish', requireAuth, async (req, res) => {
         formattedDate = `${day} ${month}`;
       }
 
-      // Build notification body: "15 Jan, 2:00 PM - 10:00 PM • ClientName"
+      // Get pluralized role names (e.g., "Servers, Bartenders")
+      const roleNames = roles
+        .map((r: any) => {
+          const roleName = r.role || r.role_name;
+          return roleName ? `${roleName}s` : null;
+        })
+        .filter(Boolean)
+        .join(', ');
+
+      // Build notification body: "15 Jan, 2:00 PM - 10:00 PM • ClientName • Servers, Bartenders"
       const bodyParts = [];
 
       if (formattedDate) {
@@ -663,6 +673,10 @@ router.post('/events/:id/publish', requireAuth, async (req, res) => {
 
       if (clientName) {
         bodyParts.push(clientName);
+      }
+
+      if (roleNames) {
+        bodyParts.push(roleNames);
       }
 
       const notificationBody = bodyParts.length > 0 ? bodyParts.join(' • ') : 'Check the app for details';
@@ -910,11 +924,12 @@ router.patch('/events/:id', requireAuth, async (req, res) => {
       if (allTargetUserKeys.length > 0) {
         console.log(`[EVENT NOTIF] Event ${eventId} status changed to ${updated.status}, notifying ${allTargetUserKeys.length} staff members (teams + selected users)`);
 
-        // Compose notification message with date, time, and client
+        // Compose notification message with date, time, client, and roles
         const eventDate = (updated as any).date;
         const startTime = (updated as any).start_time;
         const endTime = (updated as any).end_time;
         const clientName = (updated as any).client_name;
+        const roles = (updated as any).roles || [];
 
         // Format date as "15 Jan"
         let formattedDate = '';
@@ -925,7 +940,16 @@ router.patch('/events/:id', requireAuth, async (req, res) => {
           formattedDate = `${day} ${month}`;
         }
 
-        // Build notification body: "15 Jan, 2:00 PM - 10:00 PM • ClientName"
+        // Get pluralized role names (e.g., "Servers, Bartenders")
+        const roleNames = roles
+          .map((r: any) => {
+            const roleName = r.role || r.role_name;
+            return roleName ? `${roleName}s` : null;
+          })
+          .filter(Boolean)
+          .join(', ');
+
+        // Build notification body: "15 Jan, 2:00 PM - 10:00 PM • ClientName • Servers, Bartenders"
         const bodyParts = [];
 
         if (formattedDate) {
@@ -938,6 +962,10 @@ router.patch('/events/:id', requireAuth, async (req, res) => {
 
         if (clientName) {
           bodyParts.push(clientName);
+        }
+
+        if (roleNames) {
+          bodyParts.push(roleNames);
         }
 
         const notificationBody = bodyParts.length > 0 ? bodyParts.join(' • ') : 'Check the app for details';

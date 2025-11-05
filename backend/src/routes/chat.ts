@@ -403,10 +403,66 @@ router.post('/conversations/:targetId/messages', requireAuth, async (req, res) =
           ? `🟣 ${managerName}`
           : managerName;
 
+        // Format invitation notification body with event details
+        let notificationBody = message.length > 100 ? message.substring(0, 100) + '...' : message;
+
+        if (messageType === 'eventInvitation' && metadata?.eventId) {
+          try {
+            const EventModel = (await import('../models/event')).EventModel;
+            const event = await EventModel.findById(metadata.eventId).lean();
+
+            if (event) {
+              // Format date as "15 Jan"
+              let formattedDate = '';
+              if (event.date) {
+                const d = new Date(event.date);
+                const day = d.getDate();
+                const month = d.toLocaleDateString('en-US', { month: 'short' });
+                formattedDate = `${day} ${month}`;
+              }
+
+              // Build notification body: "15 Jan, 2:00 PM - 10:00 PM • ClientName • Server"
+              const bodyParts = [];
+
+              if (formattedDate) {
+                let datePart = formattedDate;
+                if (event.start_time && event.end_time) {
+                  datePart += `, ${event.start_time} - ${event.end_time}`;
+                }
+                bodyParts.push(datePart);
+              }
+
+              if (event.client_name) {
+                bodyParts.push(event.client_name);
+              }
+
+              // Add the specific role they were invited for
+              if (metadata.roleId && event.roles) {
+                const role = event.roles.find(
+                  (r: any) =>
+                    r._id?.toString() === metadata.roleId ||
+                    r.role_id?.toString() === metadata.roleId ||
+                    r.role === metadata.roleId
+                );
+                const roleName = role?.role || role?.role_name;
+                if (roleName) {
+                  bodyParts.push(roleName);
+                }
+              }
+
+              if (bodyParts.length > 0) {
+                notificationBody = bodyParts.join(' • ');
+              }
+            }
+          } catch (err) {
+            console.error('[CHAT NOTIF] Failed to format event invitation:', err);
+          }
+        }
+
         await notificationService.sendToUser(
           (user._id as any).toString(),
           notificationTitle,
-          message.length > 100 ? message.substring(0, 100) + '...' : message,
+          notificationBody,
           {
             type: 'chat',
             conversationId: (conversation._id as any).toString(),
@@ -1253,19 +1309,44 @@ router.post('/invitations/send-bulk', requireAuth, async (req, res) => {
 
         const roleName = role?.role || 'Position';
 
-        // Compose invitation message
-        const eventName = event.event_name || 'Event';
-        const eventDate = event.date ? new Date(event.date).toLocaleDateString() : '';
-        const venueName = event.venue_name || '';
+        // Compose invitation message with date, time, and client
+        const eventDate = event.date;
+        const startTime = event.start_time;
+        const endTime = event.end_time;
+        const clientName = event.client_name;
 
-        const messageParts = [
-          `You've been invited to work as ${roleName}`,
-          eventName,
-          eventDate,
-          venueName,
-        ].filter(Boolean);
+        // Format date as "15 Jan"
+        let formattedDate = '';
+        if (eventDate) {
+          const d = new Date(eventDate);
+          const day = d.getDate();
+          const month = d.toLocaleDateString('en-US', { month: 'short' });
+          formattedDate = `${day} ${month}`;
+        }
 
-        const invitationMessage = messageParts.join(' • ');
+        // Build message: "15 Jan, 2:00 PM - 10:00 PM • ClientName • Server"
+        const bodyParts = [];
+
+        if (formattedDate) {
+          let datePart = formattedDate;
+          if (startTime && endTime) {
+            datePart += `, ${startTime} - ${endTime}`;
+          }
+          bodyParts.push(datePart);
+        }
+
+        if (clientName) {
+          bodyParts.push(clientName);
+        }
+
+        // Add the specific role they were invited for
+        if (roleName) {
+          bodyParts.push(roleName);
+        }
+
+        const invitationMessage = bodyParts.length > 0
+          ? bodyParts.join(' • ')
+          : `You've been invited to work as ${roleName}`;
 
         // Create chat message with invitation metadata
         const chatMessage = await ChatMessageModel.create({
