@@ -59,6 +59,12 @@ export interface EventDocument extends Document {
   publishedBy?: string;
   fulfilledAt?: Date;
 
+  // Event visibility type
+  // - private: Only invited staff (has audience_user_keys/audience_team_ids)
+  // - public: All staff can see (no invitations)
+  // - private_public: Has invitations AND publicly visible to all staff
+  visibilityType?: 'private' | 'public' | 'private_public';
+
   // Notification tracking
   notificationsSent?: {
     preShiftReminder?: boolean;
@@ -105,6 +111,9 @@ export interface EventDocument extends Document {
   hoursSubmittedAt?: Date;
   hoursApprovedBy?: string;
   hoursApprovedAt?: Date;
+
+  // Optimistic locking for concurrent updates
+  version?: number;
 
   createdAt: Date;
   updatedAt: Date;
@@ -187,6 +196,13 @@ const EventSchema = new Schema<EventDocument>(
     publishedBy: { type: String, trim: true },
     fulfilledAt: { type: Date },
 
+    // Event visibility type
+    visibilityType: {
+      type: String,
+      enum: ['private', 'public', 'private_public'],
+      default: 'private',
+    },
+
     event_name: { type: String, trim: true },
     client_name: { type: String, trim: true },
     third_party_company_name: { type: String, trim: true },
@@ -249,12 +265,22 @@ const EventSchema = new Schema<EventDocument>(
     // Team chat
     chatEnabled: { type: Boolean, default: false },
     chatEnabledAt: { type: Date },
+
+    // Optimistic locking for concurrent updates
+    version: { type: Number, default: 0, min: 0 },
   },
   { timestamps: true }
 );
 
 // Compound index for efficient filtering by manager and status
 EventSchema.index({ managerId: 1, status: 1 });
+
+// Index for efficient lookups when checking user acceptance
+// Sparse index because not all events have accepted_staff
+EventSchema.index({ 'accepted_staff.userKey': 1 }, { sparse: true });
+
+// Index for efficient date-based queries (published events)
+EventSchema.index({ status: 1, date: 1 });
 
 export const EventModel: Model<EventDocument> =
   mongoose.models.Event || mongoose.model<EventDocument>('Event', EventSchema);

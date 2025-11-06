@@ -9,6 +9,9 @@ async function connectToMemoryServer(): Promise<void> {
   const uri = memoryServer.getUri();
   await mongoose.connect(uri, {
     serverSelectionTimeoutMS: 15000,
+    maxPoolSize: 50,
+    minPoolSize: 10,
+    socketTimeoutMS: 45000,
   });
 }
 
@@ -23,6 +26,9 @@ export async function connectToDatabase(): Promise<void> {
   try {
     await mongoose.connect(ENV.mongoUri, {
       serverSelectionTimeoutMS: 15000,
+      maxPoolSize: 50,
+      minPoolSize: 10,
+      socketTimeoutMS: 45000,
     });
   } catch (err) {
     if (ENV.dbFallback === 'memory') {

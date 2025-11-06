@@ -473,6 +473,7 @@ router.post('/batch', requireAuth, async (req, res) => {
 const publishEventSchema = z.object({
   audience_user_keys: z.array(z.string()).nullish(),
   audience_team_ids: z.array(z.string()).nullish(),
+  visibilityType: z.enum(['private', 'public', 'private_public']).optional(),
 });
 
 router.post('/events/:id/publish', requireAuth, async (req, res) => {
@@ -518,7 +519,7 @@ router.post('/events/:id/publish', requireAuth, async (req, res) => {
       });
     }
 
-    const { audience_user_keys, audience_team_ids } = parsed.data;
+    const { audience_user_keys, audience_team_ids, visibilityType } = parsed.data;
     const teamIds = await sanitizeTeamIds(managerId, audience_team_ids);
 
     // Get all user keys we're publishing to (for notifications and availability checks)
@@ -601,6 +602,11 @@ router.post('/events/:id/publish', requireAuth, async (req, res) => {
     event.publishedBy = manager.email || manager.name || String(managerId);
     event.audience_user_keys = audience_user_keys || [];
     event.audience_team_ids = teamIds;
+
+    // Set visibility type (defaults to 'private' if not specified)
+    if (visibilityType) {
+      event.visibilityType = visibilityType;
+    }
 
     await event.save();
 
@@ -715,6 +721,292 @@ router.post('/events/:id/publish', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[publish event] failed', err);
     return res.status(500).json({ message: 'Failed to publish event' });
+  }
+});
+
+// Unpublish a published event (transition from published → draft)
+router.post('/events/:id/unpublish', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const eventId = req.params.id;
+
+    if (!eventId || !mongoose.Types.ObjectId.isValid(eventId)) {
+      return res.status(400).json({ message: 'Invalid event ID' });
+    }
+
+    const event = await EventModel.findOne({
+      _id: new mongoose.Types.ObjectId(eventId),
+      managerId,
+    });
+
+    if (!event) {
+      return res.status(404).json({ message: 'Event not found or not owned by you' });
+    }
+
+    // Can unpublish published events OR drafts that have been sent to staff
+    const hasSentToStaff = event.accepted_staff && event.accepted_staff.length > 0;
+    const canUnpublish = event.status === 'published' || (event.status === 'draft' && hasSentToStaff);
+
+    if (!canUnpublish) {
+      return res.status(400).json({
+        message: `Cannot unpublish event with status '${event.status}'. Only published events or drafts sent to staff can be moved back to drafts.`,
+      });
+    }
+
+    // Store accepted staff for notifications before removing them
+    const acceptedStaff = event.accepted_staff || [];
+    const targetUserKeys: string[] = [];
+
+    for (const staff of acceptedStaff) {
+      if (staff.userKey) {
+        targetUserKeys.push(staff.userKey);
+      } else if (staff.provider && staff.subject) {
+        targetUserKeys.push(`${staff.provider}:${staff.subject}`);
+      }
+    }
+
+    // Update event back to draft status
+    event.status = 'draft';
+    event.publishedAt = undefined;
+    event.publishedBy = undefined;
+    event.audience_user_keys = [];
+    event.audience_team_ids = [];
+    event.accepted_staff = [];
+    event.visibilityType = undefined;
+
+    await event.save();
+
+    const eventObj = event.toObject();
+    const responsePayload = {
+      ...eventObj,
+      id: String(eventObj._id),
+      managerId: String(eventObj.managerId),
+    };
+
+    // Emit socket events to notify manager
+    emitToManager(String(managerId), 'event:unpublished', responsePayload);
+
+    // Send notifications to removed staff members
+    if (targetUserKeys.length > 0) {
+      const eventDate = (eventObj as any).date;
+      const clientName = (eventObj as any).client_name || 'A job';
+
+      // Format date as "15 Jan"
+      let formattedDate = '';
+      if (eventDate) {
+        const d = new Date(eventDate);
+        const day = d.getDate();
+        const month = d.toLocaleDateString('en-US', { month: 'short' });
+        formattedDate = `${day} ${month}`;
+      }
+
+      const notificationBody = formattedDate
+        ? `${clientName} on ${formattedDate} has been moved back to drafts`
+        : `${clientName} has been moved back to drafts`;
+
+      for (const userKey of targetUserKeys) {
+        try {
+          const [provider, subject] = userKey.split(':');
+          if (!provider || !subject) continue;
+
+          const user = await UserModel.findOne({ provider, subject }).lean();
+          if (!user) {
+            console.log(`[EVENT UNPUBLISH] User not found for key: ${userKey}`);
+            continue;
+          }
+
+          await notificationService.sendToUser(
+            String(user._id),
+            '⚪ Job Unpublished',
+            notificationBody,
+            {
+              type: 'event',
+              eventId: String(eventObj._id),
+            },
+            'user'
+          );
+
+          // Emit socket event to user
+          emitToUser(userKey, 'event:unpublished', responsePayload);
+        } catch (err) {
+          console.error(`[EVENT UNPUBLISH] Failed to send notification to ${userKey}:`, err);
+        }
+      }
+
+      console.log(`[EVENT UNPUBLISH] Event ${eventId} unpublished, notified ${targetUserKeys.length} staff members`);
+    }
+
+    return res.json(responsePayload);
+  } catch (err) {
+    console.error('[unpublish event] failed', err);
+    return res.status(500).json({ message: 'Failed to unpublish event' });
+  }
+});
+
+// Change visibility type of a published event
+const changeVisibilitySchema = z.object({
+  visibilityType: z.enum(['private', 'public', 'private_public']),
+  audience_team_ids: z.array(z.string()).nullish(),
+});
+
+router.patch('/events/:id/visibility', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const eventId = req.params.id;
+
+    if (!eventId || !mongoose.Types.ObjectId.isValid(eventId)) {
+      return res.status(400).json({ message: 'Invalid event ID' });
+    }
+
+    const event = await EventModel.findOne({
+      _id: new mongoose.Types.ObjectId(eventId),
+      managerId,
+    });
+
+    if (!event) {
+      return res.status(404).json({ message: 'Event not found or not owned by you' });
+    }
+
+    if (event.status !== 'published') {
+      return res.status(400).json({
+        message: `Cannot change visibility for event with status '${event.status}'. Only published events can have their visibility changed.`,
+      });
+    }
+
+    // Validate and sanitize data
+    const parsed = changeVisibilitySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: parsed.error.format(),
+      });
+    }
+
+    const { visibilityType, audience_team_ids } = parsed.data;
+    const oldVisibilityType = event.visibilityType;
+
+    // Update visibility type
+    event.visibilityType = visibilityType;
+
+    // If changing to public or private_public, update audience teams
+    if ((visibilityType === 'public' || visibilityType === 'private_public') && audience_team_ids) {
+      const teamIds = await sanitizeTeamIds(managerId, audience_team_ids);
+      event.audience_team_ids = teamIds;
+    }
+
+    await event.save();
+
+    const eventObj = event.toObject();
+    const responsePayload = {
+      ...eventObj,
+      id: String(eventObj._id),
+      managerId: String(eventObj.managerId),
+      audience_team_ids: (eventObj.audience_team_ids || []).map(String),
+    };
+
+    // Emit socket events to notify manager
+    emitToManager(String(managerId), 'event:visibility_changed', responsePayload);
+
+    // If changed to public or private_public, notify teams
+    if ((visibilityType === 'public' || visibilityType === 'private_public') && oldVisibilityType === 'private') {
+      const audienceTeams = (responsePayload.audience_team_ids || []) as string[];
+      if (audienceTeams.length > 0) {
+        emitToTeams(audienceTeams, 'event:visibility_changed', responsePayload);
+
+        // Get team members to send notifications
+        const teamMembers = await TeamMemberModel.find({
+          teamId: { $in: audienceTeams },
+          status: 'active',
+        }).lean();
+
+        const targetUserKeys: string[] = [];
+        for (const member of teamMembers) {
+          if (member.provider && member.subject) {
+            const userKey = `${member.provider}:${member.subject}`;
+            if (!targetUserKeys.includes(userKey)) {
+              targetUserKeys.push(userKey);
+            }
+          }
+        }
+
+        // Send push notifications
+        if (targetUserKeys.length > 0) {
+          const eventDate = (eventObj as any).date;
+          const startTime = (eventObj as any).start_time;
+          const endTime = (eventObj as any).end_time;
+          const clientName = (eventObj as any).client_name;
+          const roles = (eventObj as any).roles || [];
+
+          // Format date as "15 Jan"
+          let formattedDate = '';
+          if (eventDate) {
+            const d = new Date(eventDate);
+            const day = d.getDate();
+            const month = d.toLocaleDateString('en-US', { month: 'short' });
+            formattedDate = `${day} ${month}`;
+          }
+
+          // Get pluralized role names
+          const roleNames = roles
+            .map((r: any) => {
+              const roleName = r.role || r.role_name;
+              return roleName ? `${roleName}s` : null;
+            })
+            .filter(Boolean)
+            .join(', ');
+
+          // Build notification body
+          const bodyParts = [];
+          if (formattedDate) {
+            let datePart = formattedDate;
+            if (startTime && endTime) {
+              datePart += `, ${startTime} - ${endTime}`;
+            }
+            bodyParts.push(datePart);
+          }
+          if (clientName) {
+            bodyParts.push(clientName);
+          }
+          if (roleNames) {
+            bodyParts.push(roleNames);
+          }
+
+          const notificationBody = bodyParts.length > 0 ? bodyParts.join(' • ') : 'Check the app for details';
+
+          for (const userKey of targetUserKeys) {
+            try {
+              const [provider, subject] = userKey.split(':');
+              if (!provider || !subject) continue;
+
+              const user = await UserModel.findOne({ provider, subject }).lean();
+              if (!user) continue;
+
+              await notificationService.sendToUser(
+                String(user._id),
+                '🟢 Job Now Public',
+                notificationBody,
+                {
+                  type: 'event',
+                  eventId: String(eventObj._id),
+                },
+                'user'
+              );
+            } catch (err) {
+              console.error(`[EVENT VISIBILITY] Failed to send notification to ${userKey}:`, err);
+            }
+          }
+
+          console.log(`[EVENT VISIBILITY] Event ${eventId} visibility changed to ${visibilityType}, notified ${targetUserKeys.length} team members`);
+        }
+      }
+    }
+
+    return res.json(responsePayload);
+  } catch (err) {
+    console.error('[change visibility] failed', err);
+    return res.status(500).json({ message: 'Failed to change event visibility' });
   }
 });
 
@@ -1166,6 +1458,7 @@ router.get('/events', requireAuth, async (req, res) => {
       console.log('[EVENTS DEBUG] Processed team IDs:', membershipTeamIds);
 
       const visibilityFilters: any[] = [
+        // Public/Private+Public events visible to all (no targeting required)
         {
           $and: [
             {
@@ -1180,9 +1473,18 @@ router.get('/events', requireAuth, async (req, res) => {
                 { audience_user_keys: { $eq: [] } },
               ],
             },
+            // Only if visibilityType is public or private_public (not private-only)
+            {
+              $or: [
+                { visibilityType: 'public' },
+                { visibilityType: 'private_public' },
+              ]
+            },
           ],
         },
+        // Directly invited staff (any visibilityType)
         { audience_user_keys: audienceKey },
+        // Staff who already accepted (any visibilityType)
         { 'accepted_staff.userKey': audienceKey },
       ];
 
@@ -1192,8 +1494,16 @@ router.get('/events', requireAuth, async (req, res) => {
 
       filter.$or = visibilityFilters;
 
-      // Staff NEVER see draft events - only published and beyond
-      filter.status = { $ne: 'draft' };
+      // Staff see non-draft events, OR events with at least one accepted staff
+      // Once any staff accepts, the event is no longer considered a draft
+      filter.$and = [
+        {
+          $or: [
+            { status: { $ne: 'draft' } },  // Non-draft events always visible
+            { accepted_staff: { $exists: true, $ne: [], $not: { $size: 0 } } }  // Events with accepted staff
+          ]
+        }
+      ];
 
       console.log('[EVENTS DEBUG] Staff filter:', JSON.stringify(filter, null, 2));
     }
@@ -1390,58 +1700,223 @@ router.post('/events/:id/respond', requireAuth, async (req, res) => {
       respondedAt: new Date(),
     };
 
-    // Clear prior responses
-    await EventModel.updateOne(
-      { _id: new mongoose.Types.ObjectId(eventId) },
-      { $pull: { accepted_staff: userKey, declined_staff: userKey } as any }
-    );
-    await EventModel.updateOne(
-      { _id: new mongoose.Types.ObjectId(eventId) },
-      { $pull: { accepted_staff: { userKey }, declined_staff: { userKey } } as any }
-    );
+    // Atomic operations (no transaction wrapper needed)
+    let updatedEvent: any = null;
 
-    // Enforce capacity per role on accept
-    if (responseVal === 'accept') {
-      const event = await EventModel.findById(eventId).lean();
-      if (!event) return res.status(404).json({ message: 'Event not found' });
+    try {
+      if (responseVal === 'decline') {
+        // DECLINE: Simple atomic operation (no capacity check needed)
+        updatedEvent = await EventModel.findOneAndUpdate(
+          { _id: new mongoose.Types.ObjectId(eventId) },
+          {
+            // Remove from accepted_staff (in case user previously accepted)
+            $pull: {
+              accepted_staff: { userKey }
+            } as any,
+            // Add to declined_staff
+            $push: { declined_staff: staffDoc } as any,
+            $inc: { version: 1 },
+            $set: { updatedAt: new Date() }
+          },
+          { new: true }
+        );
 
-      const roleReq = (event.roles || []).find((r: any) => (r?.role || '').toLowerCase() === roleVal.toLowerCase());
-      if (!roleReq) {
-        return res.status(400).json({ message: `role '${roleVal}' not found for this event` });
+        if (!updatedEvent) {
+          throw new Error('EVENT_NOT_FOUND');
+        }
+
+      } else {
+        // ACCEPT: Atomic operation with embedded capacity check
+
+        // First, validate that the role exists on this event
+        const event = await EventModel.findById(eventId, { roles: 1 }).lean();
+        if (!event) {
+          throw new Error('EVENT_NOT_FOUND');
+        }
+
+        const roleReq = (event.roles || []).find((r: any) =>
+          (r?.role || '').toLowerCase() === roleVal.toLowerCase()
+        );
+
+        if (!roleReq) {
+          throw new Error(`ROLE_NOT_FOUND:${roleVal}`);
+        }
+
+        const roleCapacity = roleReq.count || 0;
+
+        // ATOMIC OPERATION: Update only if capacity available AND user not already accepted
+        // This query ensures:
+        // 1. User isn't already in accepted_staff (prevents duplicates)
+        // 2. Current accepted count for role < capacity (prevents overflow)
+        // 3. All in a single atomic database operation (no race conditions)
+        updatedEvent = await EventModel.findOneAndUpdate(
+          {
+            _id: new mongoose.Types.ObjectId(eventId),
+            // Ensure user not already accepted for this event
+            'accepted_staff.userKey': { $ne: userKey },
+            // Embedded capacity check using MongoDB aggregation expressions
+            $expr: {
+              $lt: [
+                // Count accepted staff with matching role (case-insensitive)
+                {
+                  $size: {
+                    $filter: {
+                      input: { $ifNull: ['$accepted_staff', []] },
+                      as: 'staff',
+                      cond: {
+                        $eq: [
+                          { $toLower: { $ifNull: ['$$staff.role', ''] } },
+                          roleVal.toLowerCase()
+                        ]
+                      }
+                    }
+                  }
+                },
+                roleCapacity
+              ]
+            }
+          },
+          {
+            // Remove from declined_staff (in case user previously declined)
+            // NOTE: We don't pull from accepted_staff because the query filter already ensures userKey not in it
+            $pull: {
+              declined_staff: { userKey }
+            } as any,
+            // Add to accepted_staff
+            $push: { accepted_staff: staffDoc } as any,
+            $inc: { version: 1 },
+            $set: { updatedAt: new Date() }
+          },
+          { new: true }
+        );
+
+        if (!updatedEvent) {
+          // Query didn't match - either event not found, user already accepted, or capacity full
+          // Check which scenario to provide better error message
+          const checkEvent = await EventModel.findById(eventId).lean();
+
+          if (!checkEvent) {
+            throw new Error('EVENT_NOT_FOUND');
+          }
+
+          // Check if user already accepted
+          const alreadyAccepted = (checkEvent.accepted_staff || []).some(
+            (s: any) => s.userKey === userKey
+          );
+          if (alreadyAccepted) {
+            throw new Error('ALREADY_ACCEPTED');
+          }
+
+          // Must be capacity full
+          throw new Error(`CAPACITY_FULL:${roleVal}`);
+        }
       }
 
-      const acceptedForRole = (event.accepted_staff || []).filter((m: any) => (m?.role || '').toLowerCase() === roleVal.toLowerCase());
-      if (acceptedForRole.length >= (roleReq.count || 0)) {
-        return res.status(409).json({ message: `No spots left for role '${roleVal}'` });
+      // Recompute role_stats (separate operation, not critical for atomicity)
+      const role_stats = computeRoleStats(
+        (updatedEvent.roles as any[]) || [],
+        (updatedEvent.accepted_staff as any[]) || []
+      );
+
+      await EventModel.updateOne(
+        { _id: updatedEvent._id },
+        { $set: { role_stats, updatedAt: new Date() }, $inc: { version: 1 } }
+      );
+
+      updatedEvent.role_stats = role_stats as any;
+
+      // Success - return updated event
+      if (!updatedEvent) {
+        throw new Error('Update completed but event not found');
       }
-    }
 
-    const targetField = responseVal === 'accept' ? 'accepted_staff' : 'declined_staff';
-    const result = await EventModel.updateOne(
-      { _id: new mongoose.Types.ObjectId(eventId) },
-      { $push: { [targetField]: staffDoc } as any, $set: { updatedAt: new Date() } }
-    );
+      const mapped = { id: String(updatedEvent._id), ...updatedEvent.toObject() } as any;
+      delete mapped._id;
 
-    if (result.matchedCount === 0) {
       // eslint-disable-next-line no-console
-      console.warn('[respond] event not found', { eventId });
-      return res.status(404).json({ message: 'Event not found' });
+      console.log('[respond] success', { eventId, userKey, response: responseVal, role: roleVal });
+
+      // Broadcast real-time update to all connected clients viewing this event
+      try {
+        const eventUpdate = {
+          eventId,
+          userId: userKey,
+          response: responseVal,
+          role: roleVal,
+          acceptedStaff: mapped.accepted_staff || [],
+          declinedStaff: mapped.declined_staff || [],
+          roleStats: mapped.role_stats || [],
+          timestamp: new Date().toISOString(),
+        };
+
+        // Emit to manager
+        if (updatedEvent.managerId) {
+          emitToManager(String(updatedEvent.managerId), 'event:response', eventUpdate);
+        }
+
+        // Emit to team members if event is associated with teams
+        const audienceTeamIds = updatedEvent.audience_team_ids || [];
+        if (audienceTeamIds.length > 0) {
+          emitToTeams(
+            audienceTeamIds.map((id: any) => String(id)),
+            'event:response',
+            eventUpdate
+          );
+        }
+
+        // Emit to all staff who have already accepted (for real-time capacity updates)
+        const acceptedStaff = updatedEvent.accepted_staff || [];
+        acceptedStaff.forEach((staff: any) => {
+          if (staff.userKey && staff.userKey !== userKey) {
+            emitToUser(staff.userKey, 'event:response', eventUpdate);
+          }
+        });
+
+        // eslint-disable-next-line no-console
+        console.log('[respond] broadcasted real-time update', { eventId, response: responseVal });
+      } catch (socketError) {
+        // Don't fail the request if socket broadcast fails
+        // eslint-disable-next-line no-console
+        console.error('[respond] socket broadcast failed', socketError);
+      }
+
+      return res.json(mapped);
+
+    } catch (transactionError: any) {
+      // Handle specific error cases
+      const errorMsg = transactionError.message || String(transactionError);
+
+      if (errorMsg === 'EVENT_NOT_FOUND') {
+        // eslint-disable-next-line no-console
+        console.warn('[respond] event not found', { eventId });
+        return res.status(404).json({ message: 'Event not found' });
+      }
+
+      if (errorMsg === 'ALREADY_ACCEPTED') {
+        // eslint-disable-next-line no-console
+        console.warn('[respond] user already accepted', { eventId, userKey });
+        return res.status(409).json({ message: 'You have already accepted this event' });
+      }
+
+      if (errorMsg.startsWith('ROLE_NOT_FOUND:')) {
+        const role = errorMsg.split(':')[1];
+        // eslint-disable-next-line no-console
+        console.warn('[respond] role not found', { eventId, role });
+        return res.status(400).json({ message: `Role '${role}' not found for this event` });
+      }
+
+      if (errorMsg.startsWith('CAPACITY_FULL:')) {
+        const role = errorMsg.split(':')[1];
+        // eslint-disable-next-line no-console
+        console.warn('[respond] capacity full', { eventId, role, userKey });
+        return res.status(409).json({ message: `No spots left for role '${role}'` });
+      }
+
+      // Unknown error
+      // eslint-disable-next-line no-console
+      console.error('[respond] operation failed', { eventId, error: transactionError });
+      throw transactionError;
     }
-
-    // Recompute and persist role_stats
-    const updatedAfter = await EventModel.findById(eventId).lean();
-    if (!updatedAfter) return res.status(404).json({ message: 'Event not found' });
-    const role_stats = computeRoleStats((updatedAfter.roles as any[]) || [], (updatedAfter.accepted_staff as any[]) || []);
-    await EventModel.updateOne(
-      { _id: new mongoose.Types.ObjectId(eventId) },
-      { $set: { role_stats, updatedAt: new Date() } }
-    );
-
-    const finalDoc = await EventModel.findById(eventId).lean();
-    if (!finalDoc) return res.status(404).json({ message: 'Event not found' });
-    const mapped = { id: String(finalDoc._id), ...finalDoc } as any;
-    delete mapped._id;
-    return res.json(mapped);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[respond] failed', err);
