@@ -818,7 +818,7 @@ router.post('/events/:id/unpublish', requireAuth, async (req, res) => {
 
           await notificationService.sendToUser(
             String(user._id),
-            '⚪ Job Unpublished',
+            '⚪ Job Canceled',
             notificationBody,
             {
               type: 'event',
@@ -828,7 +828,7 @@ router.post('/events/:id/unpublish', requireAuth, async (req, res) => {
           );
 
           // Emit socket event to user
-          emitToUser(userKey, 'event:unpublished', responsePayload);
+          emitToUser(userKey, 'event:canceled', responsePayload);
         } catch (err) {
           console.error(`[EVENT UNPUBLISH] Failed to send notification to ${userKey}:`, err);
         }
