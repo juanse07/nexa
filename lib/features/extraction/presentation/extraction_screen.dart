@@ -1497,7 +1497,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           controller: _eventsTabController,
           children: [
             _eventsInner(_eventsPending ?? const []), // Pending tab
-            _eventsInner(_eventsAvailable ?? const []), // Available tab
+            _eventsInner(_eventsAvailable ?? const []), // Posted tab
             _eventsInner(_eventsFull ?? const []), // Full tab
           ],
         );
@@ -1951,7 +1951,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         ? WebTabNavigation(
                             tabs: const [
                               WebTab(text: 'Pending'),
-                              WebTab(text: 'Available'),
+                              WebTab(text: 'Posted'),
                               WebTab(text: 'Full'),
                             ],
                             selectedIndex: _eventsTabController.index,
@@ -1966,7 +1966,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                             controller: _eventsTabController,
                             tabs: const [
                               Tab(text: 'Pending'),
-                              Tab(text: 'Available'),
+                              Tab(text: 'Posted'),
                               Tab(text: 'Full'),
                             ],
                             labelColor: const Color(0xFF7C3AED),
@@ -4158,6 +4158,17 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
   /// Determine privacy status: 'private', 'public', or 'mix'
   String _getPrivacyStatus(Map<String, dynamic> event) {
+    // Read from database field if available
+    final visibilityType = event['visibilityType']?.toString();
+    if (visibilityType != null) {
+      // Map database values to display values
+      if (visibilityType == 'private_public') {
+        return 'private_public';
+      }
+      return visibilityType; // 'private' or 'public'
+    }
+
+    // Fallback to calculated logic for events without visibilityType field
     final status = (event['status'] ?? 'draft').toString();
 
     // Draft events are always private
@@ -4181,7 +4192,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               try {
                 final respondedAt = DateTime.parse(respondedAtRaw.toString());
                 if (respondedAt.isBefore(publishedAt)) {
-                  return 'mix'; // Had private invitations before publishing
+                  return 'private_public'; // Had private invitations before publishing
                 }
               } catch (_) {}
             }
@@ -4203,7 +4214,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         return const Color(0xFF6366F1); // Indigo
       case 'public':
         return const Color(0xFF059669); // Green
-      case 'mix':
+      case 'private_public':
+      case 'mix': // Legacy fallback
         return const Color(0xFFF59E0B); // Amber/Orange
       default:
         return Colors.grey;
@@ -4288,19 +4300,28 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         }
 
         // Tab logic (priority order):
-        // 1. Pending = all drafts
+        // 1. Pending = drafts not sent to anyone yet
         // 2. Full = fulfilled or no open positions
-        // 3. Available = published with open positions
+        // 3. Posted = sent to people (public or private) with open positions
 
-        if (status == 'draft') {
+        final acceptedStaff = (e['accepted_staff'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+        final hasSentToStaff = acceptedStaff.isNotEmpty;
+
+        if (status == 'draft' && !hasSentToStaff) {
+          // True draft - not sent to anyone yet
           pending.add(e);
-          print('  → Classified as: PENDING (draft)');
+          print('  → Classified as: PENDING (draft, not sent)');
         } else if (status == 'fulfilled' || !_hasOpenPositions(e)) {
           full.add(e);
           print('  → Classified as: FULL (fulfilled or no open positions)');
-        } else if (status == 'published') {
+        } else if (status == 'published' || (status == 'draft' && hasSentToStaff)) {
+          // Posted publicly OR sent privately through chat
           available.add(e);
-          print('  → Classified as: AVAILABLE (published with open positions)');
+          if (status == 'published') {
+            print('  → Classified as: POSTED (published with open positions)');
+          } else {
+            print('  → Classified as: POSTED (private - sent through chat)');
+          }
         } else {
           // Fallback for other statuses (confirmed, in_progress, etc.)
           pending.add(e);
@@ -4330,7 +4351,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       ];
 
       // Debug: Log the filtered counts
-      print('[EVENTS DEBUG] Filtered: ${pending.length} pending, ${available.length} available, ${full.length} full, ${past.length} past');
+      print('[EVENTS DEBUG] Filtered: ${pending.length} pending, ${available.length} posted, ${full.length} full, ${past.length} past');
 
       setState(() {
         _events = sorted;
@@ -6663,6 +6684,86 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     }
   }
 
+  Future<void> _makeJobPublic(Map<String, dynamic> event) async {
+    final eventId = (event['_id'] ?? event['id']).toString();
+    final clientName = (event['client_name'] ?? 'this job').toString();
+
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Make Job Public'),
+        content: Text(
+          'Make "$clientName" visible to the entire team?\n\n'
+          'This will publish the job publicly so all team members can see and accept it.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF059669),
+            ),
+            child: const Text('Make Public'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      // Show loading indicator
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              ),
+              SizedBox(width: 12),
+              Text('Publishing job...'),
+            ],
+          ),
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      // Publish event to whole team (no specific audience)
+      await _eventService.publishEvent(eventId);
+
+      if (!mounted) return;
+
+      // Show success message
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$clientName is now public!'),
+          backgroundColor: const Color(0xFF059669),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+      // Reload events to reflect the change
+      await _loadEvents();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to publish job: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   Widget _buildEventCard(Map<String, dynamic> e, {bool showMargin = false}) {
     // Extract essential data
     final String clientName = (e['client_name'] ?? 'Client').toString();
@@ -6812,7 +6913,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           ? 'Private'
                           : privacyStatus == 'public'
                               ? 'Public'
-                              : 'Mix';
+                              : 'Private+Public';
 
                       return Wrap(
                         spacing: 8,
@@ -6850,42 +6951,79 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               ],
                             ),
                           ),
-                          // Privacy badge
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: privacyColor.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: privacyColor.withValues(alpha: 0.3),
-                                width: 1,
+                          // Privacy badge (for published events OR drafts sent to staff)
+                          if (status == 'published' || ((e['accepted_staff'] as List?)?.isNotEmpty ?? false))
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: privacyColor.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: privacyColor.withValues(alpha: 0.3),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    privacyStatus == 'private'
+                                        ? Icons.lock_outline
+                                        : privacyStatus == 'public'
+                                            ? Icons.public
+                                            : Icons.group,
+                                    size: 12,
+                                    color: privacyColor,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    privacyLabel,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: privacyColor,
+                                      height: 1.2,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  privacyStatus == 'private'
-                                      ? Icons.lock_outline
-                                      : privacyStatus == 'public'
-                                          ? Icons.public
-                                          : Icons.group,
-                                  size: 12,
-                                  color: privacyColor,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  privacyLabel,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: privacyColor,
-                                    height: 1.2,
+                          // Make Public button removed - only available from event detail screen
+                          if (false)
+                            GestureDetector(
+                              onTap: () => _makeJobPublic(e),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF059669).withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: const Color(0xFF059669).withValues(alpha: 0.3),
+                                    width: 1,
                                   ),
                                 ),
-                              ],
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.public,
+                                      size: 12,
+                                      color: Color(0xFF059669),
+                                    ),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Make Public',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF059669),
+                                        height: 1.2,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                          ),
                         ],
                       );
                     },
@@ -6973,8 +7111,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       ],
                     ),
                   ],
-                  // Action buttons for pending/draft events
-                  if (status == 'draft') ...[
+                  // Action buttons for pending/draft events (only true drafts, not sent to staff yet)
+                  if (status == 'draft' && ((e['accepted_staff'] as List?)?.isEmpty ?? true)) ...[
                     const SizedBox(height: 12),
                     Row(
                       children: [

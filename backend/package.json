@@ -8,7 +8,10 @@
     "start": "node dist/index.js",
     "lint": "tsc --noEmit",
     "test": "echo 'No tests yet' && exit 0",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "create-test-users": "node scripts/create-test-users.js",
+    "test:concurrent": "node scripts/simulate-concurrent-acceptance.js",
+    "test:duplicate": "node scripts/quick-duplicate-test.js"
   },
   "keywords": [],
   "author": "",

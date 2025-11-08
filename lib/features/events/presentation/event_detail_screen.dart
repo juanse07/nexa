@@ -125,32 +125,51 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     ),
                   ],
                   const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: statusColor.withOpacity(0.2),
-                        width: 1,
+                  // Status and Visibility Badges Row
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      // Status Badge (Upcoming/Past)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: statusColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: statusColor.withOpacity(0.2),
+                            width: 1,
+                          ),
+                        ),
+                        child: Text(
+                          isUpcoming ? 'Upcoming' : 'Past',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: statusColor,
+                          ),
+                        ),
                       ),
-                    ),
-                    child: Text(
-                      isUpcoming ? 'Upcoming' : 'Past',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: statusColor,
-                      ),
-                    ),
+                      // Visibility Badge (for published events or drafts sent to staff)
+                      if (event['status'] == 'published' ||
+                          (event['status'] == 'draft' && (event['accepted_staff'] as List?)?.isNotEmpty == true))
+                        _buildVisibilityBadge(),
+                    ],
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 24),
+
+            // Action Buttons for Published Events (or drafts sent to staff)
+            if (event['status'] == 'published' ||
+                (event['status'] == 'draft' && (event['accepted_staff'] as List?)?.isNotEmpty == true)) ...[
+              _buildActionButtons(),
+              const SizedBox(height: 24),
+            ],
 
             // Event Details
             if (dateStr.isNotEmpty) _buildInfoRow(Icons.calendar_today, AppLocalizations.of(context)!.date, dateStr),
@@ -534,5 +553,302 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildVisibilityBadge() {
+    final privacyStatus = _getPrivacyStatus();
+    final privacyColor = _getPrivacyColor(privacyStatus);
+    final privacyLabel = privacyStatus == 'private'
+        ? 'Private'
+        : privacyStatus == 'public'
+            ? 'Public'
+            : 'Private+Public';
+    final privacyIcon = privacyStatus == 'private'
+        ? Icons.lock_outline
+        : privacyStatus == 'public'
+            ? Icons.public
+            : Icons.group;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: privacyColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: privacyColor.withOpacity(0.2),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(privacyIcon, size: 14, color: privacyColor),
+          const SizedBox(width: 6),
+          Text(
+            privacyLabel,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: privacyColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButtons() {
+    final privacyStatus = _getPrivacyStatus();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Move to Drafts button (always shown for published events)
+        ElevatedButton.icon(
+          onPressed: _isRemoving ? null : _moveToDrafts,
+          icon: const Icon(Icons.undo, size: 18),
+          label: const Text('Move to Drafts'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFF59E0B),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        ),
+        // Open to All Staff button (only for private events)
+        if (privacyStatus == 'private') ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _isRemoving ? null : _makePublic,
+            icon: const Icon(Icons.groups, size: 20),
+            label: const Text('Open to All Staff'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF0EA5E9),
+              side: const BorderSide(color: Color(0xFF0EA5E9), width: 2),
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  String _getPrivacyStatus() {
+    // Read from database field if available
+    final visibilityType = event['visibilityType']?.toString();
+    if (visibilityType != null) {
+      // Map database values to display values
+      if (visibilityType == 'private_public') {
+        return 'private_public';
+      }
+      return visibilityType; // 'private' or 'public'
+    }
+
+    // Fallback to calculated logic for events without visibilityType field
+    final status = (event['status'] ?? 'draft').toString();
+
+    // Draft events are always private
+    if (status == 'draft') {
+      return 'private';
+    }
+
+    // For published events, check if had invitations before publishing
+    if (status == 'published') {
+      final publishedAtRaw = event['publishedAt'];
+      final acceptedStaff = (event['accepted_staff'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+
+      if (publishedAtRaw != null && acceptedStaff.isNotEmpty) {
+        try {
+          final publishedAt = DateTime.parse(publishedAtRaw.toString());
+
+          // Check if any staff accepted before the event was published
+          for (final staff in acceptedStaff) {
+            final respondedAtRaw = staff['respondedAt'];
+            if (respondedAtRaw != null) {
+              try {
+                final respondedAt = DateTime.parse(respondedAtRaw.toString());
+                if (respondedAt.isBefore(publishedAt)) {
+                  return 'private_public'; // Had private invitations before publishing
+                }
+              } catch (_) {}
+            }
+          }
+        } catch (_) {}
+      }
+
+      return 'public'; // Published without prior private invitations
+    }
+
+    // Fallback for other statuses
+    return 'private';
+  }
+
+  Color _getPrivacyColor(String privacyStatus) {
+    switch (privacyStatus) {
+      case 'private':
+        return const Color(0xFF6366F1); // Indigo
+      case 'public':
+        return const Color(0xFF059669); // Green
+      case 'private_public':
+      case 'mix': // Legacy fallback
+        return const Color(0xFFF59E0B); // Amber/Orange
+      default:
+        return Colors.grey;
+    }
+  }
+
+  Future<void> _moveToDrafts() async {
+    final clientName = (event['client_name'] ?? 'this job').toString();
+    final acceptedStaff = (event['accepted_staff'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final hasAcceptedStaff = acceptedStaff.isNotEmpty;
+
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Move to Drafts'),
+        content: Text(
+          hasAcceptedStaff
+              ? 'Move "$clientName" back to drafts?\n\n'
+                  'This will:\n'
+                  '• Remove all ${acceptedStaff.length} accepted staff members\n'
+                  '• Send them a notification\n'
+                  '• Hide the job from staff view\n\n'
+                  'You can republish it later.'
+              : 'Move "$clientName" back to drafts?\n\n'
+                  'This will hide the job from staff view. You can republish it later.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFF59E0B),
+            ),
+            child: const Text('Move to Drafts'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isRemoving = true);
+
+    try {
+      final eventId = (event['_id'] ?? event['id'] ?? '').toString();
+
+      // Call the unpublish endpoint
+      await _eventService.unpublishEvent(eventId);
+
+      if (!mounted) return;
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$clientName moved to drafts!'),
+          backgroundColor: const Color(0xFF059669),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+      // Notify parent to refresh and pop this screen
+      widget.onEventUpdated?.call();
+      Navigator.of(context).pop();
+    } catch (e) {
+      setState(() => _isRemoving = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to move to drafts: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _makePublic() async {
+    final clientName = (event['client_name'] ?? 'this job').toString();
+
+    // TODO: Show team selector dialog
+    // For now, show a simple confirmation that will make it fully public
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Open to All Staff'),
+        content: Text(
+          'Make "$clientName" visible to all staff members?\n\n'
+          'This will change the job from private (invited only) to public, allowing all team members to see and accept it.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          OutlinedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF0EA5E9),
+              side: const BorderSide(color: Color(0xFF0EA5E9), width: 2),
+            ),
+            child: const Text('Open to All'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isRemoving = true);
+
+    try {
+      final eventId = (event['_id'] ?? event['id'] ?? '').toString();
+
+      // Call the change visibility endpoint
+      await _eventService.changeVisibility(
+        eventId,
+        visibilityType: 'public',
+      );
+
+      if (!mounted) return;
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$clientName is now open to all staff!'),
+          backgroundColor: const Color(0xFF0EA5E9),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+      // Reload event data
+      final updatedEvent = await _eventService.getEvent(eventId);
+      setState(() {
+        event = updatedEvent;
+        _isRemoving = false;
+      });
+
+      // Notify parent to refresh
+      widget.onEventUpdated?.call();
+    } catch (e) {
+      setState(() => _isRemoving = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to make public: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 }

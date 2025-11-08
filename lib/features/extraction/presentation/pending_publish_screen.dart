@@ -57,6 +57,9 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
   bool _loadingTeams = false;
   Set<String> _favoriteUsers = {};
   String? _selectedRoleFilter; // For filtering favorites by role
+  // Visibility type is now automatically determined:
+  // - 'private' when sending direct invitations through chat
+  // - 'public' when publishing to teams
 
   @override
   void initState() {
@@ -290,8 +293,8 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
 
       if (!mounted) return;
 
-      final successCount = response['successCount'] ?? 0;
-      final failureCount = response['failureCount'] ?? 0;
+      final successCount = (response['successCount'] as num?)?.toInt() ?? 0;
+      final failureCount = (response['failureCount'] as num?)?.toInt() ?? 0;
 
       Navigator.of(context).pop(true);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -461,10 +464,12 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
         audienceTeamIds = _selectedTeamIds.toList();
       }
 
+      // Automatically set visibility to 'public' when publishing to teams
       final publishedEvent = await _eventService.publishEvent(
         widget.draftId,
         audienceUserKeys: audienceUserKeys,
         audienceTeamIds: audienceTeamIds,
+        visibilityType: 'public',
       );
       final eventId = (publishedEvent['_id'] ?? publishedEvent['id'] ?? '').toString();
 
@@ -651,6 +656,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                   ),
                 ],
                 const SizedBox(height: 16),
+                // No explicit visibility selector - determined by button pressed
                 if (!_visibleToEntireTeam) ...[
                   _buildTeamSelector(),
                   _buildFavoritesSection(),

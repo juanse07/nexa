@@ -42,6 +42,9 @@ class Event with _$Event implements Entity {
     /// Current status of the event
     @Default(EventStatus.draft) EventStatus status,
 
+    /// Visibility type: 'private' (invited only), 'public' (all staff), or 'private_public' (both)
+    String? visibilityType,
+
     /// List of roles needed for this event
     @Default([]) List<EventRole> roles,
 

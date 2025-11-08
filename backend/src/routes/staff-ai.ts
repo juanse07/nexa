@@ -111,7 +111,7 @@ router.post('/ai/staff/transcribe', requireAuth, upload.single('audio'), async (
       filename: req.file.originalname,
       contentType: req.file.mimetype,
     });
-    formData.append('model', 'whisper-large-v3');
+    formData.append('model', 'whisper-large-v3-turbo');
 
     // Minimal bilingual prompt for faster transcription
     const domainPrompt = 'shifts turnos server mesero bartender cantinero venue';
@@ -173,6 +173,241 @@ router.post('/ai/staff/transcribe', requireAuth, upload.single('audio'), async (
       return res.status(413).json({ message: 'Audio file too large. Maximum size is 25MB.' });
     }
     return res.status(500).json({ message: err.message || 'Failed to transcribe audio' });
+  }
+});
+
+/**
+ * Clean AI response by removing common fluff phrases and quotes
+ */
+function cleanAIResponse(text: string): string {
+  let cleaned = text;
+
+  // Remove common AI preambles (case insensitive)
+  const fluffPhrases = [
+    /^Here's your message:?\s*/i,
+    /^Here's the translation:?\s*/i,
+    /^I'm happy to assist you with the translation\.?\s*/i,
+    /^I'd be happy to help\.?\s*/i,
+    /^Sure!?\s*/i,
+    /^Of course!?\s*/i,
+    /^Here is the translated text:?\s*/i,
+    /^Translation:?\s*/i,
+    /^Translated message:?\s*/i,
+  ];
+
+  for (const phrase of fluffPhrases) {
+    cleaned = cleaned.replace(phrase, '');
+  }
+
+  // Remove surrounding quotes (single or double)
+  cleaned = cleaned.replace(/^["'](.*)["']$/s, '$1');
+
+  // Remove any trailing/leading whitespace again
+  cleaned = cleaned.trim();
+
+  return cleaned;
+}
+
+/**
+ * POST /api/ai/staff/compose-message
+ * AI-powered message composition for staff to communicate with managers
+ * Supports: Running late, time off requests, questions, custom messages, translation, polishing, professionalizing
+ */
+router.post('/ai/staff/compose-message', requireAuth, async (req, res) => {
+  try {
+    const groqKey = process.env.GROQ_API_KEY;
+    if (!groqKey) {
+      return res.status(500).json({ message: 'AI service not configured' });
+    }
+
+    const schema = z.object({
+      scenario: z.enum(['late', 'timeoff', 'question', 'custom', 'translate', 'polish', 'professionalize']),
+      context: z.object({
+        message: z.string().optional(),
+        details: z.string().optional(),
+        language: z.enum(['en', 'es', 'auto']).default('auto')
+      }).optional()
+    });
+
+    const validated = schema.parse(req.body);
+    const { scenario, context } = validated;
+
+    console.log(`[ai/staff/compose-message] Scenario: ${scenario}, Context:`, context);
+
+    // Build scenario-specific prompt
+    let userPrompt = '';
+
+    switch (scenario) {
+      case 'late':
+        userPrompt = `Compose a professional message to my manager explaining that I'll be running late to my shift. ${context?.details || 'I will be approximately 10 minutes late.'}`;
+        break;
+
+      case 'timeoff':
+        userPrompt = `Compose a professional message to my manager requesting time off. ${context?.details || 'I would like to request time off for personal reasons.'}`;
+        break;
+
+      case 'question':
+        userPrompt = `Compose a professional message to my manager asking a question. ${context?.details || 'I have a question about my upcoming shift.'}`;
+        break;
+
+      case 'custom':
+        userPrompt = context?.message || context?.details || 'Help me write a professional message to my manager.';
+        break;
+
+      case 'translate':
+        userPrompt = `Translate this message to professional English: ${context?.message || ''}`;
+        break;
+
+      case 'polish':
+        userPrompt = `Make this message more professional and polite: ${context?.message || ''}`;
+        break;
+
+      case 'professionalize':
+        userPrompt = `Rewrite this message to be professional, friendly, and concise (2-3 sentences max): ${context?.message || ''}`;
+        break;
+    }
+
+    // Professional message composition system prompt
+    const systemPrompt = `You are a professional communication assistant for hospitality and events industry staff.
+
+TONE & STYLE:
+- Professional yet warm and friendly
+- Respectful toward managers
+- Concise (2-3 sentences maximum)
+- Empathetic and understanding
+- Natural conversational tone
+
+SCENARIO GUIDELINES:
+
+RUNNING LATE:
+- Apologize sincerely and briefly
+- Give specific ETA if possible
+- Show commitment to arriving ASAP
+- Example: "Hi, I sincerely apologize for running late. I'll be there in 10 minutes. I'm on my way now."
+
+TIME OFF REQUEST:
+- Be respectful and grateful
+- State dates/duration clearly
+- Offer to help with coverage if possible
+- Example: "Hello, I would like to request time off from [date] to [date]. I understand if this causes any inconvenience and am happy to help find coverage. Thank you for considering my request."
+
+ASKING QUESTIONS:
+- Be direct but polite
+- Show you checked available info first
+- Thank them for their time
+- Example: "Hi, I have a quick question about tomorrow's shift. I checked the details but wanted to confirm the dress code. Thank you!"
+
+CUSTOM/POLISH:
+- Maintain professional tone
+- Keep it clear and concise
+- Ensure respectful language
+- Remove overly casual or unprofessional elements
+
+TRANSLATION:
+- Detect input language automatically
+- If Spanish → translate to natural, professional English
+- If English → return as-is or polish if needed
+- Maintain equivalent tone in translation
+- Use hospitality industry appropriate terms
+
+HOSPITALITY INDUSTRY TRANSLATION CONTEXT:
+Spanish phrases commonly used by staff should be translated with industry context:
+- "dieras turnos" / "me dieras turnos" → "Could you please send me shifts?" or "Could I get my shifts?"
+- "turnos" → "shifts" (NOT "schedule" when referring to work assignments)
+- "horario" → "schedule" (for time/hours)
+- "evento" → "event" (for gigs/jobs)
+- "cliente" → "client" (NOT "customer")
+- "llegar tarde" → "running late" (NOT "arrive late")
+- "pedir permiso" → "request time off" (NOT "ask permission")
+
+OUTPUT RULES - CRITICAL:
+- Return ONLY the message text itself
+- NO explanations, meta-commentary, or preambles
+- NO quotes (single or double) around the message
+- NO "Here's your message", "I'm happy to assist", "Here's the translation", or ANY similar phrases
+- NO courtesies like "I'd be happy to help", "Sure!", "Of course"
+- JUST the actual message content, nothing else
+- The output should be ready to send as-is without any editing`;
+
+    // Call Groq with llama-3.1-8b-instant (fast & cheap)
+    const response = await axios.post(
+      'https://api.groq.com/openai/v1/chat/completions',
+      {
+        model: 'llama-3.1-8b-instant',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.7, // Slightly creative but professional
+        max_tokens: 200, // Short messages only
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${groqKey}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000
+      }
+    );
+
+    let composedMessage = response.data.choices?.[0]?.message?.content?.trim();
+
+    if (!composedMessage) {
+      return res.status(500).json({ message: 'Failed to compose message' });
+    }
+
+    // Clean up AI fluff and quotes
+    composedMessage = cleanAIResponse(composedMessage);
+
+    // Detect language and provide translation if needed
+    const isSpanish = /[áéíóúñ¿¡]/i.test(composedMessage) || scenario === 'translate';
+
+    let translation = null;
+    if (isSpanish && scenario !== 'translate') {
+      // Generate English translation
+      const translationResponse = await axios.post(
+        'https://api.groq.com/openai/v1/chat/completions',
+        {
+          model: 'llama-3.1-8b-instant',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a professional translator. Translate the following message to natural, professional English. Return ONLY the translated text, nothing else.'
+            },
+            { role: 'user', content: composedMessage }
+          ],
+          temperature: 0.3,
+          max_tokens: 200,
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${groqKey}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 10000
+        }
+      );
+
+      translation = translationResponse.data.choices?.[0]?.message?.content?.trim();
+      if (translation) {
+        translation = cleanAIResponse(translation);
+      }
+    }
+
+    console.log(`[ai/staff/compose-message] Success. Original length: ${composedMessage.length}, Has translation: ${!!translation}`);
+
+    return res.json({
+      original: composedMessage,
+      translation: translation,
+      language: isSpanish ? 'es' : 'en'
+    });
+
+  } catch (err: any) {
+    console.error('[ai/staff/compose-message] Error:', err);
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ message: 'Invalid request data', errors: err.issues });
+    }
+    return res.status(500).json({ message: err.message || 'Failed to compose message' });
   }
 });
 
@@ -442,7 +677,7 @@ const STAFF_AI_TOOLS = [
       type: 'object',
       properties: {
         date_range: {
-          type: 'string',
+          type: ['string', 'null'],
           description: 'Optional date filter. IMPORTANT: For "next shift", "upcoming shifts", or "do I work" questions, LEAVE EMPTY to find the earliest upcoming event. Use specific ranges when explicitly asked: "this_week" for this week only, "next_week" for next week, "this_month" for this month, "last_month" for previous month, or "YYYY-MM-DD" for a specific date (e.g. "2025-11-13").'
         }
       }
@@ -465,7 +700,7 @@ const STAFF_AI_TOOLS = [
           description: 'Availability status'
         },
         notes: {
-          type: 'string',
+          type: ['string', 'null'],
           description: 'Optional notes about availability'
         }
       },
@@ -497,7 +732,7 @@ const STAFF_AI_TOOLS = [
           description: 'The event ID to decline'
         },
         reason: {
-          type: 'string',
+          type: ['string', 'null'],
           description: 'Optional reason for declining'
         }
       },
@@ -511,10 +746,26 @@ const STAFF_AI_TOOLS = [
       type: 'object',
       properties: {
         date_range: {
-          type: 'string',
+          type: ['string', 'null'],
           description: 'Optional: "this_week", "last_week", "this_month", "last_month", or ISO date'
         }
       }
+    }
+  },
+  {
+    name: 'get_all_my_events',
+    description: 'Get ALL my upcoming events/shifts (not limited to a date range). Use when I ask "show me all my events", "what are all my upcoming shifts", "list everything I\'m scheduled for". Shows first 10 in detail, summarizes the rest if more than 10.',
+    parameters: {
+      type: 'object',
+      properties: {}
+    }
+  },
+  {
+    name: 'get_my_unavailable_dates',
+    description: 'Get dates I\'ve marked as unavailable. Use when I ask "when am I unavailable", "what days did I block off", "show my unavailable dates". Returns first 10 dates if more than 10.',
+    parameters: {
+      type: 'object',
+      properties: {}
     }
   },
 ];
@@ -775,6 +1026,131 @@ async function executeGetEarningsSummary(
 }
 
 /**
+ * Execute get_all_my_events function
+ * Returns ALL upcoming events, shows first 10 in detail and summarizes the rest
+ */
+async function executeGetAllMyEvents(
+  userId: string,
+  userKey: string
+): Promise<{ success: boolean; message: string; data?: any }> {
+  try {
+    console.log(`[executeGetAllMyEvents] Getting all upcoming events for userKey ${userKey}`);
+
+    const now = new Date();
+    const query = {
+      'accepted_staff.userKey': userKey,
+      status: { $ne: 'cancelled' },
+      date: { $gte: now }
+    };
+
+    // Get total count first
+    const totalCount = await EventModel.countDocuments(query);
+    console.log(`[executeGetAllMyEvents] Total upcoming events: ${totalCount}`);
+
+    // Get first 10 events in detail
+    const events = await EventModel.find(query)
+      .sort({ date: 1 })
+      .limit(10)
+      .select('event_name client_name date start_time end_time venue_name venue_address city state accepted_staff status')
+      .lean();
+
+    // Extract user's data from accepted_staff for each event
+    const detailedEvents = events.map((event: any) => {
+      const userInEvent = event.accepted_staff?.find((staff: any) =>
+        staff.userKey === userKey
+      );
+      return {
+        id: event._id,
+        name: event.event_name,
+        client: event.client_name,
+        date: event.date,
+        time: `${event.start_time}-${event.end_time}`,
+        venue: event.venue_name,
+        addr: event.venue_address,
+        role: userInEvent?.role || userInEvent?.position || 'Unknown',
+        status: userInEvent?.response || 'accepted',
+      };
+    });
+
+    const remainingCount = totalCount - detailedEvents.length;
+
+    return {
+      success: true,
+      message: totalCount === 0
+        ? 'No upcoming events found'
+        : `${totalCount} total event(s)`,
+      data: {
+        events: detailedEvents,
+        total: totalCount,
+        showing: detailedEvents.length,
+        remaining: remainingCount > 0 ? remainingCount : 0
+      }
+    };
+  } catch (error: any) {
+    console.error('[executeGetAllMyEvents] Error:', error);
+    return {
+      success: false,
+      message: `Failed to get events: ${error.message}`
+    };
+  }
+}
+
+/**
+ * Execute get_my_unavailable_dates function
+ * Returns dates marked as unavailable, first 10 if more than 10 exist
+ */
+async function executeGetMyUnavailableDates(
+  userKey: string
+): Promise<{ success: boolean; message: string; data?: any }> {
+  try {
+    console.log(`[executeGetMyUnavailableDates] Getting unavailable dates for userKey ${userKey}`);
+
+    // Get all unavailable dates, sorted by date
+    const totalCount = await AvailabilityModel.countDocuments({
+      userKey,
+      status: 'unavailable'
+    });
+
+    console.log(`[executeGetMyUnavailableDates] Total unavailable dates: ${totalCount}`);
+
+    const unavailableDates = await AvailabilityModel.find({
+      userKey,
+      status: 'unavailable'
+    })
+      .sort({ date: 1 })
+      .limit(10)
+      .select('date notes')
+      .lean();
+
+    const dates = unavailableDates.map((record: any) => ({
+      date: record.date,
+      notes: record.notes || null
+    }));
+
+    const remainingCount = totalCount - dates.length;
+
+    return {
+      success: true,
+      message: totalCount === 0
+        ? 'No unavailable dates found'
+        : `${totalCount} unavailable date(s)`,
+      data: {
+        dates,
+        total: totalCount,
+        showing: dates.length,
+        remaining: remainingCount > 0 ? remainingCount : 0
+      }
+    };
+  } catch (error: any) {
+    console.error('[executeGetMyUnavailableDates] Error:', error);
+    return {
+      success: false,
+      message: `Failed to get unavailable dates: ${error.message}`
+    };
+  }
+}
+
+/**
  * Execute accept_shift function
  * Moves user from pending to accepted in event assignments
  */
@@ -893,6 +1269,12 @@ async function executeStaffFunction(
     case 'get_earnings_summary':
       return await executeGetEarningsSummary(userId, userKey, functionArgs.date_range);
 
+    case 'get_all_my_events':
+      return await executeGetAllMyEvents(userId, userKey);
+
+    case 'get_my_unavailable_dates':
+      return await executeGetMyUnavailableDates(userKey);
+
     case 'accept_shift':
       return await executeAcceptShift(userId, userKey, functionArgs.event_id);
 
@@ -981,19 +1363,14 @@ router.post('/ai/staff/chat/message', requireAuth, async (req, res) => {
     }
 
     const validated = chatMessageSchema.parse(req.body);
-    const { messages, temperature, maxTokens, provider, model } = validated;
+    const { messages, temperature, maxTokens, model } = validated;
 
-    console.log(`[ai/staff/chat/message] Using provider: ${provider}, model: ${model || 'default'} for user ${userId}, userKey ${userKey}, tier: ${subscriptionTier}`);
+    console.log(`[ai/staff/chat/message] Using Groq, model: ${model || 'llama-3.1-8b-instant'} for user ${userId}, userKey ${userKey}, tier: ${subscriptionTier}`);
 
     const timezone = getTimezoneFromRequest(req);
 
-    if (provider === 'claude') {
-      return await handleStaffClaudeRequest(messages, temperature, maxTokens, res, timezone, userId, userKey, subscriptionTier);
-    } else if (provider === 'groq') {
-      return await handleStaffGroqRequest(messages, temperature, maxTokens, res, timezone, userId, userKey, subscriptionTier, model);
-    } else {
-      return await handleStaffOpenAIRequest(messages, temperature, maxTokens, res, timezone, userId, userKey, subscriptionTier);
-    }
+    // Always use Groq (optimized for cost and performance)
+    return await handleStaffGroqRequest(messages, temperature, maxTokens, res, timezone, userId, userKey, subscriptionTier, model);
   } catch (err: any) {
     console.error('[ai/staff/chat/message] Error:', err);
     if (err instanceof z.ZodError) {
@@ -1009,419 +1386,9 @@ router.post('/ai/staff/chat/message', requireAuth, async (req, res) => {
 });
 
 /**
- * Handle OpenAI chat request for staff
- */
-async function handleStaffOpenAIRequest(
-  messages: any[],
-  temperature: number,
-  maxTokens: number,
-  res: any,
-  timezone?: string,
-  userId?: string,
-  userKey?: string,
-  subscriptionTier?: 'free' | 'pro'
-) {
-  const openaiKey = process.env.OPENAI_API_KEY;
-  if (!openaiKey) {
-    console.error('[OpenAI] API key not configured');
-    return res.status(500).json({ message: 'OpenAI API key not configured on server' });
-  }
-
-  const textModel = process.env.OPENAI_TEXT_MODEL || 'gpt-4o';
-  const openaiBaseUrl = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
-
-  // Inject date/time context and staff-specific instructions
-  const dateContext = getFullSystemContext(timezone);
-
-  // Add user-friendly formatting instructions for staff AI (optimized for token cost)
-  const formattingInstructions = `
-Format events in summarized list:
-- Date: "Monday, Nov 15th" (readable format)
-- Time: Call time or event time (e.g., "8:00 AM - 5:00 PM")
-- Role: Your role for the event
-- Venue: Venue name only (NO address)
-- Client: Client name
-- Hide: addresses, database IDs, null fields
-- Be brief, concise & friendly
-
-IMPORTANT - How many events to show:
-- "next shift" / "when is my next shift" → Show ONLY 1 event (the earliest)
-- "next 7 jobs" → Show up to 7 events
-- "upcoming" / "all upcoming" → Show all events
-- "last month" / "shifts from last month" → Show all events from previous month
-
-CRITICAL - Clickable venues:
-- ALWAYS format ALL venue names as: [LINK:Venue Name]
-- Example: "Venue: [LINK:Seawell Ballroom]"
-- This makes venues clickable to open Google Maps
-- Apply to ALL events, whether showing 1 or multiple`;
-
-  const contextWithFormatting = `${dateContext}\n\n${formattingInstructions}`;
-
-  const enhancedMessages = messages.map((msg, index) => {
-    if (msg.role === 'system' && index === 0) {
-      return {
-        ...msg,
-        content: `${contextWithFormatting}\n\n${msg.content}`
-      };
-    }
-    return msg;
-  });
-
-  const hasSystemMessage = messages.some(msg => msg.role === 'system');
-  const finalMessages = hasSystemMessage
-    ? enhancedMessages
-    : [{ role: 'system', content: contextWithFormatting }, ...messages];
-
-  const requestBody = {
-    model: textModel,
-    messages: finalMessages,
-    temperature,
-    max_tokens: maxTokens,
-    tools: STAFF_AI_TOOLS.map(tool => ({
-      type: 'function',
-      function: {
-        name: tool.name,
-        description: tool.description,
-        parameters: tool.parameters,
-      }
-    })),
-    tool_choice: 'auto',
-  };
-
-  const headers: any = {
-    'Authorization': `Bearer ${openaiKey}`,
-    'Content-Type': 'application/json',
-  };
-
-  const orgId = process.env.OPENAI_ORG_ID;
-  if (orgId) {
-    headers['OpenAI-Organization'] = orgId;
-  }
-
-  const response = await axios.post(
-    `${openaiBaseUrl}/chat/completions`,
-    requestBody,
-    { headers }
-  );
-
-  if (response.status >= 300) {
-    console.error('[OpenAI] API error:', response.status, response.data);
-    if (response.status === 429) {
-      return res.status(429).json({
-        message: 'OpenAI API rate limit reached. Please try again later.',
-      });
-    }
-    return res.status(response.status).json({
-      message: `OpenAI API error: ${response.statusText}`,
-    });
-  }
-
-  const message = response.data.choices?.[0]?.message;
-  const content = message?.content;
-  const toolCalls = message?.tool_calls;
-
-  // If model wants to call a function/tool
-  if (toolCalls && toolCalls.length > 0) {
-    console.log('[OpenAI] Tool calls requested:', JSON.stringify(toolCalls, null, 2));
-
-    const toolCall = toolCalls[0];
-    const functionName = toolCall.function?.name;
-    const functionArgs = JSON.parse(toolCall.function?.arguments || '{}');
-
-    // Execute the function
-    const functionResult = await executeStaffFunction(functionName, functionArgs, userId!, userKey!, subscriptionTier || 'free');
-    console.log('[OpenAI] Function result:', functionResult);
-
-    // Make second API call with function result
-    const messagesWithFunctionResult = [
-      ...finalMessages,
-      {
-        role: 'assistant',
-        content: null,
-        tool_calls: toolCalls
-      },
-      {
-        role: 'tool',
-        tool_call_id: toolCall.id,
-        content: JSON.stringify(functionResult)
-      }
-    ];
-
-    const secondResponse = await axios.post(
-      `${openaiBaseUrl}/chat/completions`,
-      {
-        model: textModel,
-        messages: messagesWithFunctionResult,
-        temperature,
-        max_tokens: maxTokens,
-      },
-      { headers }
-    );
-
-    const finalContent = secondResponse.data.choices?.[0]?.message?.content;
-
-    if (!finalContent) {
-      return res.status(500).json({ message: 'Failed to get final response from OpenAI' });
-    }
-
-    return res.json({
-      content: finalContent,
-      provider: 'openai',
-      functionExecuted: {
-        name: functionName,
-        success: functionResult.success
-      }
-    });
-  }
-
-  if (!content) {
-    return res.status(500).json({ message: 'Failed to get response from OpenAI' });
-  }
-
-  return res.json({ content, provider: 'openai' });
-}
-
-/**
- * Handle Claude chat request for staff with prompt caching
- */
-async function handleStaffClaudeRequest(
-  messages: any[],
-  temperature: number,
-  maxTokens: number,
-  res: any,
-  timezone?: string,
-  userId?: string,
-  userKey?: string,
-  subscriptionTier?: 'free' | 'pro'
-) {
-  const claudeKey = process.env.CLAUDE_API_KEY;
-  if (!claudeKey) {
-    console.error('[Claude] API key not configured');
-    return res.status(500).json({ message: 'Claude API key not configured on server' });
-  }
-
-  const claudeModel = process.env.CLAUDE_MODEL || 'claude-sonnet-4-5-20250929';
-  const claudeBaseUrl = process.env.CLAUDE_BASE_URL || 'https://api.anthropic.com/v1';
-
-  let systemMessage = '';
-  const userMessages: any[] = [];
-
-  const dateContext = getFullSystemContext(timezone);
-
-  // Add user-friendly formatting instructions for staff AI (optimized for token cost)
-  const formattingInstructions = `
-Format events in summarized list:
-- Date: "Monday, Nov 15th" (readable format)
-- Time: Call time or event time (e.g., "8:00 AM - 5:00 PM")
-- Role: Your role for the event
-- Venue: Venue name only (NO address)
-- Client: Client name
-- Hide: addresses, database IDs, null fields
-- Be brief, concise & friendly
-
-IMPORTANT - How many events to show:
-- "next shift" / "when is my next shift" → Show ONLY 1 event (the earliest)
-- "next 7 jobs" → Show up to 7 events
-- "upcoming" / "all upcoming" → Show all events
-- "last month" / "shifts from last month" → Show all events from previous month
-
-CRITICAL - Clickable venues:
-- ALWAYS format ALL venue names as: [LINK:Venue Name]
-- Example: "Venue: [LINK:Seawell Ballroom]"
-- This makes venues clickable to open Google Maps
-- Apply to ALL events, whether showing 1 or multiple`;
-
-  systemMessage = `${dateContext}\n\n${formattingInstructions}\n\n`;
-
-  for (const msg of messages) {
-    if (msg.role === 'system') {
-      systemMessage += (systemMessage ? '\n\n' : '') + msg.content;
-    } else {
-      userMessages.push({
-        role: msg.role === 'assistant' ? 'assistant' : 'user',
-        content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
-      });
-    }
-  }
-
-  const requestBody = {
-    model: claudeModel,
-    max_tokens: maxTokens,
-    temperature,
-    system: systemMessage ? [
-      {
-        type: 'text',
-        text: systemMessage,
-        cache_control: { type: 'ephemeral' },
-      },
-    ] : 'You are a helpful AI assistant for event staffing.',
-    messages: userMessages,
-    tools: STAFF_AI_TOOLS.map(tool => ({
-      name: tool.name,
-      description: tool.description,
-      input_schema: tool.parameters,
-    })),
-  };
-
-  const headers = {
-    'x-api-key': claudeKey,
-    'anthropic-version': '2023-06-01',
-    'anthropic-beta': 'prompt-caching-2024-07-31',
-    'Content-Type': 'application/json',
-  };
-
-  console.log('[Claude] Calling API with prompt caching enabled...');
-
-  const response = await axios.post(
-    `${claudeBaseUrl}/messages`,
-    requestBody,
-    { headers, validateStatus: () => true }
-  );
-
-  if (response.status >= 300) {
-    console.error('[Claude] API error:', response.status, response.data);
-    if (response.status === 429) {
-      return res.status(429).json({
-        message: 'Claude API rate limit reached. Please try again later.',
-      });
-    }
-    return res.status(response.status).json({
-      message: `Claude API error: ${response.statusText}`,
-      details: response.data,
-    });
-  }
-
-  const usage = response.data.usage;
-  if (usage) {
-    console.log('[Claude] Token usage:', {
-      input: usage.input_tokens,
-      output: usage.output_tokens,
-      cache_creation: usage.cache_creation_input_tokens || 0,
-      cache_read: usage.cache_read_input_tokens || 0,
-    });
-
-    if (usage.cache_read_input_tokens > 0) {
-      const savings = ((usage.cache_read_input_tokens / (usage.input_tokens + usage.cache_read_input_tokens)) * 100).toFixed(1);
-      console.log(`[Claude] Prompt caching saved ${savings}% on input tokens`);
-    }
-  }
-
-  const contentBlocks = response.data.content;
-  if (!contentBlocks || contentBlocks.length === 0) {
-    return res.status(500).json({ message: 'Failed to get response from Claude' });
-  }
-
-  const toolUseBlock = contentBlocks.find((block: any) => block.type === 'tool_use');
-  if (toolUseBlock) {
-    console.log('[Claude] Tool use requested:', JSON.stringify(toolUseBlock, null, 2));
-
-    const toolName = toolUseBlock.name;
-    const toolInput = toolUseBlock.input;
-    const toolUseId = toolUseBlock.id;
-
-    // Execute the function
-    const functionResult = await executeStaffFunction(toolName, toolInput, userId!, userKey!, subscriptionTier || 'free');
-    console.log('[Claude] Function result:', functionResult);
-
-    // Make second API call with function result
-    const messagesWithFunctionResult = [
-      ...userMessages,
-      {
-        role: 'assistant',
-        content: contentBlocks
-      },
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'tool_result',
-            tool_use_id: toolUseId,
-            content: JSON.stringify(functionResult)
-          }
-        ]
-      }
-    ];
-
-    console.log('[Claude] Calling API with function result...');
-
-    const secondResponse = await axios.post(
-      `${claudeBaseUrl}/messages`,
-      {
-        model: claudeModel,
-        max_tokens: maxTokens,
-        temperature,
-        system: systemMessage ? [
-          {
-            type: 'text',
-            text: systemMessage,
-            cache_control: { type: 'ephemeral' },
-          },
-        ] : 'You are a helpful AI assistant for event staffing.',
-        messages: messagesWithFunctionResult,
-        tools: STAFF_AI_TOOLS.map(tool => ({
-          name: tool.name,
-          description: tool.description,
-          input_schema: tool.parameters,
-        })),
-      },
-      { headers, validateStatus: () => true }
-    );
-
-    if (secondResponse.status >= 300) {
-      console.error('[Claude] Second API call error:', secondResponse.status, secondResponse.data);
-      return res.status(secondResponse.status).json({
-        message: `Claude API error: ${secondResponse.statusText}`,
-        details: secondResponse.data,
-      });
-    }
-
-    const secondUsage = secondResponse.data.usage;
-    if (secondUsage) {
-      console.log('[Claude] Second call token usage:', {
-        input: secondUsage.input_tokens,
-        output: secondUsage.output_tokens,
-        cache_read: secondUsage.cache_read_input_tokens || 0,
-      });
-    }
-
-    const secondContentBlocks = secondResponse.data.content;
-    const finalTextBlock = secondContentBlocks?.find((block: any) => block.type === 'text');
-    const finalContent = finalTextBlock?.text;
-
-    if (!finalContent) {
-      return res.status(500).json({ message: 'Failed to get final text response from Claude' });
-    }
-
-    return res.json({
-      content: finalContent,
-      provider: 'claude',
-      usage: secondUsage,
-      functionExecuted: {
-        name: toolName,
-        success: functionResult.success
-      }
-    });
-  }
-
-  const textBlock = contentBlocks.find((block: any) => block.type === 'text');
-  const content = textBlock?.text;
-
-  if (!content) {
-    return res.status(500).json({ message: 'Failed to get text response from Claude' });
-  }
-
-  return res.json({
-    content,
-    provider: 'claude',
-    usage: usage,
-  });
-}
-
-/**
- * Handle Groq chat request for staff with Responses API
- * Uses the /v1/responses endpoint (NOT /chat/completions)
- * Cost-optimized alternative using open-source models
+ * Handle Groq chat request for staff with optimized Chat Completions API
+ * Supports: llama-3.1-8b-instant (default, fast) and openai/gpt-oss-20b (advanced reasoning)
+ * Features: Parallel tool calls, prompt caching, retry logic, reasoning mode with extended tokens
  */
 async function handleStaffGroqRequest(
   messages: any[],
@@ -1434,28 +1401,27 @@ async function handleStaffGroqRequest(
   subscriptionTier?: 'free' | 'pro',
   model?: string
 ) {
-  try {
-    const groqKey = process.env.GROQ_API_KEY;
-    if (!groqKey) {
-      console.error('[Groq] API key not configured');
-      return res.status(500).json({ message: 'Groq API key not configured on server' });
-    }
+  const groqKey = process.env.GROQ_API_KEY;
+  if (!groqKey) {
+    console.error('[Groq] API key not configured');
+    return res.status(500).json({ message: 'Groq API key not configured on server' });
+  }
 
-    // Use provided model or fall back to env variable or default
-    const groqModel = model || process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
-    const groqBaseUrl = 'https://api.groq.com/openai';
+  // TEMPORARY: Force GPT-OSS only (skip Llama)
+  const groqModel = 'openai/gpt-oss-20b';
+  const isReasoningModel = true;
 
-    // Determine which API to use based on model
-    const useResponsesAPI = groqModel.includes('gpt-oss') || groqModel.includes('openai/');
-    const apiEndpoint = useResponsesAPI ? '/v1/responses' : '/v1/chat/completions';
+  console.log(`[Groq] Staff FORCING GPT-OSS model: ${groqModel} (Llama fallback disabled)`);
 
-    console.log(`[Groq] Staff using model: ${groqModel} with ${useResponsesAPI ? 'Responses' : 'Chat Completions'} API`);
+  // Optimize prompt structure for caching: static content first (cached), dynamic last
+  const dateContext = getFullSystemContext(timezone);
+  const formattingInstructions = `
+🌍 LANGUAGE RULE - CRITICAL:
+ALWAYS respond in the SAME LANGUAGE the user is speaking.
+- If user writes in Spanish → respond in Spanish
+- If user writes in English → respond in English
+- Match the user's language exactly, even mid-conversation
 
-    // Build messages with date context and formatting instructions
-    const dateContext = getFullSystemContext(timezone);
-
-    // CRITICAL: Venue link formatting MUST be first for all models to follow
-    const formattingInstructions = `
 🔴 CRITICAL FORMATTING RULE - MUST FOLLOW:
 Every venue name MUST use this exact format: [LINK:Venue Name]
 Example: "Venue: [LINK:Seawell Ballroom]"
@@ -1476,272 +1442,222 @@ How many events to show:
 - "upcoming" / "all upcoming" → Show all events
 - "last month" / "shifts from last month" → Show all events from previous month`;
 
-    const contextWithFormatting = `${dateContext}\n\n${formattingInstructions}`;
+  const systemContent = `${dateContext}\n\n${formattingInstructions}`;
 
-    const processedMessages: any[] = [];
-    let hasSystemMessage = false;
-    for (const msg of messages) {
-      if (msg.role === 'system') {
-        processedMessages.push({
-          role: 'system',
-          content: `${contextWithFormatting}\n\n${msg.content}`
-        });
-        hasSystemMessage = true;
-      } else {
-        processedMessages.push({
-          role: msg.role,
-          content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)
-        });
-      }
-    }
+  // Build messages: system prompt first (cached), then conversation
+  const processedMessages: any[] = [];
+  let hasSystemMessage = false;
 
-    if (!hasSystemMessage) {
-      processedMessages.unshift({
+  for (const msg of messages) {
+    if (msg.role === 'system') {
+      processedMessages.push({
         role: 'system',
-        content: contextWithFormatting
+        content: `${systemContent}\n\n${msg.content}`
+      });
+      hasSystemMessage = true;
+    } else {
+      processedMessages.push({
+        role: msg.role,
+        content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)
       });
     }
+  }
 
-    // Build tools array based on API type
-    let groqTools: any[];
-    if (useResponsesAPI) {
-      // Responses API: flat structure
-      groqTools = STAFF_AI_TOOLS.map(tool => ({
-        type: 'function',
-        name: tool.name,
-        description: tool.description,
-        parameters: tool.parameters
-      }));
-    } else {
-      // Chat Completions API: nested structure
-      groqTools = STAFF_AI_TOOLS.map(tool => ({
-        type: 'function',
-        function: {
-          name: tool.name,
-          description: tool.description,
-          parameters: tool.parameters
-        }
-      }));
+  if (!hasSystemMessage) {
+    processedMessages.unshift({
+      role: 'system',
+      content: systemContent
+    });
+  }
+
+  // Build tools array for Chat Completions API
+  const groqTools = STAFF_AI_TOOLS.map(tool => ({
+    type: 'function',
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parameters
     }
+  }));
 
-    // Build request body based on API type
-    let requestBody: any;
-    if (useResponsesAPI) {
-      // GPT-OSS uses reasoning mode which needs more tokens
-      const adjustedMaxTokens = maxTokens * 3; // Triple for reasoning overhead
-      requestBody = {
-        model: groqModel,
-        input: processedMessages,
-        temperature,
-        max_output_tokens: adjustedMaxTokens,
-        tools: groqTools,
-      };
-    } else {
-      requestBody = {
-        model: groqModel,
-        messages: processedMessages,
-        temperature,
-        max_tokens: maxTokens,
-        tools: groqTools,
-      };
-    }
+  // Build request body with model-specific optimizations
+  const requestBody: any = {
+    model: groqModel,
+    messages: processedMessages,
+    temperature: isReasoningModel ? 0.5 : temperature, // Lower temp for reasoning stability
+    max_tokens: isReasoningModel ? 4000 : maxTokens,    // Much higher for reasoning models
+    tools: groqTools,
+    tool_choice: 'auto'
+  };
 
-    const headers = {
-      'Authorization': `Bearer ${groqKey}`,
-      'Content-Type': 'application/json',
-    };
+  // Add reasoning parameters for gpt-oss models
+  if (isReasoningModel) {
+    requestBody.reasoning_format = 'hidden'; // Hide reasoning tokens, show only final answer
+    console.log(`[Groq] Using reasoning mode with ${requestBody.max_tokens} max tokens`);
+  }
 
-    console.log(`[Groq] Calling ${apiEndpoint}...`);
+  const headers = {
+    'Authorization': `Bearer ${groqKey}`,
+    'Content-Type': 'application/json',
+  };
 
-    const response = await axios.post(
-      `${groqBaseUrl}${apiEndpoint}`,
-      requestBody,
-      { headers, validateStatus: () => true }
-    );
+  // Retry logic with exponential backoff
+  const maxRetries = 3;
+  let lastError: any = null;
 
-    console.log('[Groq] Response status:', response.status);
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[Groq] Attempt ${attempt}/${maxRetries} - Calling /v1/chat/completions...`);
 
-    if (response.status >= 300) {
-      console.error('[Groq] API error:', response.status, response.data);
+      // Extended timeout for reasoning models (120s vs 60s)
+      const timeout = isReasoningModel ? 120000 : 60000;
+
+      const response = await axios.post(
+        'https://api.groq.com/openai/v1/chat/completions',
+        requestBody,
+        { headers, validateStatus: () => true, timeout }
+      );
+
+      console.log('[Groq] Response status:', response.status);
+
+      // Handle rate limits with retry
       if (response.status === 429) {
+        const retryAfter = parseInt(response.headers['retry-after'] || '5', 10);
+        if (attempt < maxRetries) {
+          console.log(`[Groq] Rate limited, retrying after ${retryAfter}s...`);
+          await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+          continue;
+        }
         return res.status(429).json({
           message: 'Groq API rate limit reached. Please try again later.',
         });
       }
-      return res.status(response.status).json({
-        message: `Groq API error: ${response.statusText}`,
-        details: response.data,
-      });
-    }
 
-    // Parse response based on API type
-    if (useResponsesAPI) {
-      // Responses API: output blocks format
-      const outputBlocks = response.data.output;
-      if (!outputBlocks || outputBlocks.length === 0) {
-        return res.status(500).json({ message: 'Failed to get response from Groq' });
-      }
+      // Handle other errors
+      if (response.status >= 300) {
+        console.error('[Groq] API error:', response.status, response.data);
 
-      // Check for function calls
-      const functionCallBlock = outputBlocks.find((block: any) => block.type === 'function_call');
-      if (functionCallBlock) {
-        console.log('[Groq] Function call requested:', functionCallBlock.name);
+        // Store error
+        lastError = { status: response.status, data: response.data };
 
-        const functionName = functionCallBlock.name;
-        const functionArgs = functionCallBlock.arguments;
+        // TEMPORARY: Llama fallback disabled - fail immediately with GPT-OSS errors
+        console.log('[Groq] GPT-OSS failed, NO FALLBACK (Llama fallback temporarily disabled)');
 
-        const functionResult = await executeStaffFunction(functionName, functionArgs, userId!, userKey!, subscriptionTier || 'free');
-
-        // Second request for Responses API
-        const messagesWithFunctionResult = [
-          ...processedMessages,
-          { role: 'assistant', content: functionCallBlock.text || '' },
-          { role: 'user', content: `Function ${functionName} returned: ${JSON.stringify(functionResult)}\n\nPlease present this naturally.` }
-        ];
-
-        const secondResponse = await axios.post(
-          `${groqBaseUrl}${apiEndpoint}`,
-          {
-            model: groqModel,
-            input: messagesWithFunctionResult,
-            temperature,
-            max_output_tokens: maxTokens * 3, // GPT-OSS reasoning mode needs more tokens
-          },
-          { headers, validateStatus: () => true }
-        );
-
-        if (secondResponse.status >= 300) {
-          console.error('[Groq] Second API call error:', secondResponse.status);
-          return res.status(secondResponse.status).json({
-            message: `Groq API error: ${secondResponse.statusText}`,
-            details: secondResponse.data,
-          });
-        }
-
-        const secondOutput = secondResponse.data.output;
-        const messageBlock = secondOutput?.find((block: any) => block.type === 'message');
-        const textContent = messageBlock?.content?.find((item: any) => item.type === 'output_text');
-        const finalContent = textContent?.text;
-
-        if (!finalContent) {
-          return res.status(500).json({ message: 'Failed to get final response from Groq' });
-        }
-
-        return res.json({
-          content: finalContent,
-          provider: 'groq',
-          functionExecuted: {
-            name: functionName,
-            success: functionResult.success
-          }
+        return res.status(response.status).json({
+          message: `Groq API error: ${response.statusText}`,
+          details: response.data,
         });
       }
 
-      // Extract text content
-      console.log('[Groq] Output blocks structure:', JSON.stringify(outputBlocks, null, 2));
-
-      const messageBlock = outputBlocks.find((block: any) => block.type === 'message');
-      console.log('[Groq] Message block:', JSON.stringify(messageBlock, null, 2));
-
-      const textContent = messageBlock?.content?.find((item: any) => item.type === 'output_text');
-      const content = textContent?.text;
-
-      if (!content) {
-        console.error('[Groq] No text content found. messageBlock:', messageBlock, 'textContent:', textContent);
-        return res.status(500).json({ message: 'Failed to get text response from Groq' });
-      }
-
-      return res.json({ content, provider: 'groq' });
-
-    } else {
-      // Chat Completions API: choices format
+      // Parse successful response
       const choice = response.data.choices?.[0];
       if (!choice) {
-        return res.status(500).json({ message: 'Failed to get response from Groq' });
+        throw new Error('No choices in response');
       }
 
       const assistantMessage = choice.message;
 
-      // Check for tool calls
+      // Handle tool calls (including parallel calls for llama)
       if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-        const toolCall = assistantMessage.tool_calls[0];
-        console.log('[Groq] Tool call requested:', toolCall.function.name);
+        console.log(`[Groq] ${assistantMessage.tool_calls.length} tool call(s) requested`);
 
-        const functionName = toolCall.function.name;
-        const functionArgs = JSON.parse(toolCall.function.arguments);
+        // Execute tool calls in parallel
+        const toolResults = await Promise.all(
+          assistantMessage.tool_calls.map(async (toolCall: any) => {
+            const functionName = toolCall.function.name;
+            const functionArgs = JSON.parse(toolCall.function.arguments);
 
-        const functionResult = await executeStaffFunction(functionName, functionArgs, userId!, userKey!, subscriptionTier || 'free');
+            console.log(`[Groq] Executing ${functionName}:`, functionArgs);
 
-        // Second request for Chat Completions API
-        const messagesWithToolResult = [
+            const result = await executeStaffFunction(
+              functionName,
+              functionArgs,
+              userId!,
+              userKey!,
+              subscriptionTier || 'free'
+            );
+
+            return {
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              content: JSON.stringify(result)
+            };
+          })
+        );
+
+        // Second request with tool results
+        const messagesWithToolResults = [
           ...processedMessages,
           assistantMessage,
-          {
-            role: 'tool',
-            tool_call_id: toolCall.id,
-            content: JSON.stringify(functionResult)
-          }
+          ...toolResults
         ];
 
         const secondResponse = await axios.post(
-          `${groqBaseUrl}${apiEndpoint}`,
+          'https://api.groq.com/openai/v1/chat/completions',
           {
-            model: groqModel,
-            messages: messagesWithToolResult,
-            temperature,
-            max_tokens: maxTokens,
+            model: requestBody.model, // Use same model as first request
+            messages: messagesWithToolResults,
+            temperature: requestBody.temperature,
+            max_tokens: requestBody.max_tokens,
           },
-          { headers, validateStatus: () => true }
+          { headers, validateStatus: () => true, timeout: 60000 }
         );
 
         if (secondResponse.status >= 300) {
           console.error('[Groq] Second API call error:', secondResponse.status);
-          return res.status(secondResponse.status).json({
-            message: `Groq API error: ${secondResponse.statusText}`,
-            details: secondResponse.data,
-          });
+          throw new Error(`Second API call failed: ${secondResponse.statusText}`);
         }
 
         const finalContent = secondResponse.data.choices?.[0]?.message?.content;
 
         if (!finalContent) {
-          return res.status(500).json({ message: 'Failed to get final response from Groq' });
+          throw new Error('No content in second response');
         }
 
         return res.json({
           content: finalContent,
           provider: 'groq',
-          functionExecuted: {
-            name: functionName,
-            success: functionResult.success
-          }
+          model: requestBody.model,
+          toolsUsed: assistantMessage.tool_calls.map((tc: any) => tc.function.name)
         });
       }
 
       // No tool calls, return content directly
       const content = assistantMessage.content;
       if (!content) {
-        return res.status(500).json({ message: 'Failed to get text response from Groq' });
+        throw new Error('No content in response');
       }
 
-      return res.json({ content, provider: 'groq' });
+      return res.json({
+        content,
+        provider: 'groq',
+        model: requestBody.model
+      });
+
+    } catch (error: any) {
+      lastError = error;
+      console.error(`[Groq] Attempt ${attempt}/${maxRetries} failed:`, {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data
+      });
+
+      // If this was the last attempt, fall through to error handler
+      if (attempt === maxRetries) break;
+
+      // Exponential backoff: 1s, 2s, 4s
+      const backoffMs = Math.pow(2, attempt - 1) * 1000;
+      console.log(`[Groq] Retrying after ${backoffMs}ms...`);
+      await new Promise(resolve => setTimeout(resolve, backoffMs));
     }
-
-  } catch (error: any) {
-    console.error('[Groq] Request failed with error:', {
-      message: error.message,
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      data: error.response?.data,
-      stack: error.stack
-    });
-
-    return res.status(500).json({
-      message: 'Groq API request failed',
-      error: error.message,
-      details: error.response?.data || error.message
-    });
   }
+
+  // All retries exhausted
+  return res.status(500).json({
+    message: 'Groq API request failed after retries',
+    error: lastError?.message || 'Unknown error',
+    details: lastError?.response?.data || lastError?.message
+  });
 }
 
 export default router;

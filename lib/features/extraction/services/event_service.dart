@@ -206,6 +206,7 @@ class EventService {
     String eventId, {
     List<String>? audienceUserKeys,
     List<String>? audienceTeamIds,
+    String? visibilityType,
   }) async {
     try {
       final data = <String, dynamic>{};
@@ -214,6 +215,9 @@ class EventService {
       }
       if (audienceTeamIds != null) {
         data['audience_team_ids'] = audienceTeamIds;
+      }
+      if (visibilityType != null) {
+        data['visibilityType'] = visibilityType;
       }
 
       final response = await _apiClient.post(
@@ -248,6 +252,71 @@ class EventService {
       );
     } on DioException catch (e) {
       throw Exception('Failed to remove staff member: ${e.message}');
+    }
+  }
+
+  Future<Map<String, dynamic>> getEvent(String eventId) async {
+    try {
+      final response = await _apiClient.get('/events/$eventId');
+
+      if (response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300) {
+        return response.data as Map<String, dynamic>;
+      }
+      throw Exception(
+        'Failed to get event (${response.statusCode}): ${response.data}',
+      );
+    } on DioException catch (e) {
+      throw Exception('Failed to get event: ${e.message}');
+    }
+  }
+
+  Future<Map<String, dynamic>> unpublishEvent(String eventId) async {
+    try {
+      final response = await _apiClient.post('/events/$eventId/unpublish');
+
+      if (response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300) {
+        return response.data as Map<String, dynamic>;
+      }
+      throw Exception(
+        'Failed to unpublish event (${response.statusCode}): ${response.data}',
+      );
+    } on DioException catch (e) {
+      throw Exception('Failed to unpublish event: ${e.message}');
+    }
+  }
+
+  Future<Map<String, dynamic>> changeVisibility(
+    String eventId, {
+    required String visibilityType,
+    List<String>? audienceTeamIds,
+  }) async {
+    try {
+      final data = <String, dynamic>{
+        'visibilityType': visibilityType,
+      };
+      if (audienceTeamIds != null) {
+        data['audience_team_ids'] = audienceTeamIds;
+      }
+
+      final response = await _apiClient.patch(
+        '/events/$eventId/visibility',
+        data: data,
+      );
+
+      if (response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300) {
+        return response.data as Map<String, dynamic>;
+      }
+      throw Exception(
+        'Failed to change visibility (${response.statusCode}): ${response.data}',
+      );
+    } on DioException catch (e) {
+      throw Exception('Failed to change visibility: ${e.message}');
     }
   }
 

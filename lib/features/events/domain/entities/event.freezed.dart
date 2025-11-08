@@ -44,6 +44,9 @@ mixin _$Event {
   /// Current status of the event
   EventStatus get status => throw _privateConstructorUsedError;
 
+  /// Visibility type: 'private' (invited only), 'public' (all staff), or 'private_public' (both)
+  String? get visibilityType => throw _privateConstructorUsedError;
+
   /// List of roles needed for this event
   List<EventRole> get roles => throw _privateConstructorUsedError;
 
@@ -104,6 +107,7 @@ abstract class $EventCopyWith<$Res> {
     String? venueName,
     Address? address,
     EventStatus status,
+    String? visibilityType,
     List<EventRole> roles,
     String? notes,
     String? contactName,
@@ -146,6 +150,7 @@ class _$EventCopyWithImpl<$Res, $Val extends Event>
     Object? venueName = freezed,
     Object? address = freezed,
     Object? status = null,
+    Object? visibilityType = freezed,
     Object? roles = null,
     Object? notes = freezed,
     Object? contactName = freezed,
@@ -198,6 +203,10 @@ class _$EventCopyWithImpl<$Res, $Val extends Event>
                 ? _value.status
                 : status // ignore: cast_nullable_to_non_nullable
                       as EventStatus,
+            visibilityType: freezed == visibilityType
+                ? _value.visibilityType
+                : visibilityType // ignore: cast_nullable_to_non_nullable
+                      as String?,
             roles: null == roles
                 ? _value.roles
                 : roles // ignore: cast_nullable_to_non_nullable
@@ -288,6 +297,7 @@ abstract class _$$EventImplCopyWith<$Res> implements $EventCopyWith<$Res> {
     String? venueName,
     Address? address,
     EventStatus status,
+    String? visibilityType,
     List<EventRole> roles,
     String? notes,
     String? contactName,
@@ -330,6 +340,7 @@ class __$$EventImplCopyWithImpl<$Res>
     Object? venueName = freezed,
     Object? address = freezed,
     Object? status = null,
+    Object? visibilityType = freezed,
     Object? roles = null,
     Object? notes = freezed,
     Object? contactName = freezed,
@@ -382,6 +393,10 @@ class __$$EventImplCopyWithImpl<$Res>
             ? _value.status
             : status // ignore: cast_nullable_to_non_nullable
                   as EventStatus,
+        visibilityType: freezed == visibilityType
+            ? _value.visibilityType
+            : visibilityType // ignore: cast_nullable_to_non_nullable
+                  as String?,
         roles: null == roles
             ? _value._roles
             : roles // ignore: cast_nullable_to_non_nullable
@@ -452,6 +467,7 @@ class _$EventImpl extends _Event {
     this.venueName,
     this.address,
     this.status = EventStatus.draft,
+    this.visibilityType,
     final List<EventRole> roles = const [],
     this.notes,
     this.contactName,
@@ -505,6 +521,10 @@ class _$EventImpl extends _Event {
   @override
   @JsonKey()
   final EventStatus status;
+
+  /// Visibility type: 'private' (invited only), 'public' (all staff), or 'private_public' (both)
+  @override
+  final String? visibilityType;
 
   /// List of roles needed for this event
   final List<EventRole> _roles;
@@ -576,7 +596,7 @@ class _$EventImpl extends _Event {
 
   @override
   String toString() {
-    return 'Event(id: $id, title: $title, clientId: $clientId, clientName: $clientName, startDate: $startDate, endDate: $endDate, venueName: $venueName, address: $address, status: $status, roles: $roles, notes: $notes, contactName: $contactName, contactPhone: $contactPhone, contactEmail: $contactEmail, setupTime: $setupTime, headcount: $headcount, uniform: $uniform, specialRequirements: $specialRequirements, createdAt: $createdAt, updatedAt: $updatedAt, createdBy: $createdBy, metadata: $metadata)';
+    return 'Event(id: $id, title: $title, clientId: $clientId, clientName: $clientName, startDate: $startDate, endDate: $endDate, venueName: $venueName, address: $address, status: $status, visibilityType: $visibilityType, roles: $roles, notes: $notes, contactName: $contactName, contactPhone: $contactPhone, contactEmail: $contactEmail, setupTime: $setupTime, headcount: $headcount, uniform: $uniform, specialRequirements: $specialRequirements, createdAt: $createdAt, updatedAt: $updatedAt, createdBy: $createdBy, metadata: $metadata)';
   }
 
   @override
@@ -597,6 +617,8 @@ class _$EventImpl extends _Event {
                 other.venueName == venueName) &&
             (identical(other.address, address) || other.address == address) &&
             (identical(other.status, status) || other.status == status) &&
+            (identical(other.visibilityType, visibilityType) ||
+                other.visibilityType == visibilityType) &&
             const DeepCollectionEquality().equals(other._roles, _roles) &&
             (identical(other.notes, notes) || other.notes == notes) &&
             (identical(other.contactName, contactName) ||
@@ -633,6 +655,7 @@ class _$EventImpl extends _Event {
     venueName,
     address,
     status,
+    visibilityType,
     const DeepCollectionEquality().hash(_roles),
     notes,
     contactName,
@@ -668,6 +691,7 @@ abstract class _Event extends Event {
     final String? venueName,
     final Address? address,
     final EventStatus status,
+    final String? visibilityType,
     final List<EventRole> roles,
     final String? notes,
     final String? contactName,
@@ -719,6 +743,10 @@ abstract class _Event extends Event {
   /// Current status of the event
   @override
   EventStatus get status;
+
+  /// Visibility type: 'private' (invited only), 'public' (all staff), or 'private_public' (both)
+  @override
+  String? get visibilityType;
 
   /// List of roles needed for this event
   @override

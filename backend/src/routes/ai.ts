@@ -275,7 +275,7 @@ router.post('/ai/transcribe', requireAuth, upload.single('audio'), async (req, r
       filename: req.file.originalname,
       contentType: req.file.mimetype,
     });
-    formData.append('model', 'whisper-large-v3');
+    formData.append('model', 'whisper-large-v3-turbo');
 
     // Auto-detect language (supports English, Spanish, and 96 other languages)
     // By not specifying 'language', Whisper will detect it automatically
@@ -391,7 +391,7 @@ const AI_TOOLS = [
           description: 'Search query - can be venue name, address, city, or any location-related term'
         },
         client_name: {
-          type: 'string',
+          type: ['string', 'null'],
           description: 'Optional: Filter results by client name'
         }
       },
@@ -405,19 +405,19 @@ const AI_TOOLS = [
       type: 'object',
       properties: {
         client_name: {
-          type: 'string',
+          type: ['string', 'null'],
           description: 'Filter by client name'
         },
         date: {
-          type: 'string',
+          type: ['string', 'null'],
           description: 'ISO date (YYYY-MM-DD) or month filter (e.g., "2024-03")'
         },
         venue_name: {
-          type: 'string',
+          type: ['string', 'null'],
           description: 'Filter by venue name'
         },
         event_name: {
-          type: 'string',
+          type: ['string', 'null'],
           description: 'Search by event name'
         }
       }
@@ -434,11 +434,11 @@ const AI_TOOLS = [
           description: 'ISO date (YYYY-MM-DD) to check availability'
         },
         role: {
-          type: 'string',
+          type: ['string', 'null'],
           description: 'Optional: Filter by specific role (e.g., "Server", "Bartender")'
         },
         member_name: {
-          type: 'string',
+          type: ['string', 'null'],
           description: 'Optional: Check specific team member by name'
         }
       },
@@ -506,7 +506,7 @@ const AI_TOOLS = [
           description: 'The hourly rate in dollars (e.g., 25.50)'
         },
         currency: {
-          type: 'string',
+          type: ['string', 'null'],
           description: 'Optional currency code (defaults to USD)'
         }
       },
@@ -536,15 +536,15 @@ const AI_TOOLS = [
           description: 'When staff shift ENDS (e.g., "23:00" or "11:00 PM")'
         },
         venue_name: {
-          type: 'string',
+          type: ['string', 'null'],
           description: 'Name of the venue/location'
         },
         venue_address: {
-          type: 'string',
+          type: ['string', 'null'],
           description: 'Full street address of the venue'
         },
         roles: {
-          type: 'array',
+          type: ['array', 'null'],
           description: 'Staff roles needed with counts',
           items: {
             type: 'object',
@@ -555,23 +555,23 @@ const AI_TOOLS = [
           }
         },
         uniform: {
-          type: 'string',
+          type: ['string', 'null'],
           description: 'Dress code/uniform requirements (optional)'
         },
         notes: {
-          type: 'string',
+          type: ['string', 'null'],
           description: 'Additional details, instructions, event name if needed, special requirements'
         },
         contact_name: {
-          type: 'string',
+          type: ['string', 'null'],
           description: 'On-site contact person name'
         },
         contact_phone: {
-          type: 'string',
+          type: ['string', 'null'],
           description: 'On-site contact phone number'
         },
         headcount_total: {
-          type: 'number',
+          type: ['number', 'null'],
           description: 'Expected guest headcount/attendance'
         }
       },
@@ -1027,7 +1027,7 @@ router.post('/ai/chat/message', requireAuth, async (req, res) => {
     const validated = chatMessageSchema.parse(req.body);
     const { messages, temperature, maxTokens, provider, model } = validated;
 
-    console.log(`[ai/chat/message] Using provider: ${provider}, model: ${model || 'default'}`);
+    console.log(`[ai/chat/message] Using Groq, model: ${model || 'llama-3.1-8b-instant'}`);
 
     // Get managerId from authenticated user
     const managerId = (req as any).user?._id || (req as any).user?.managerId;
@@ -1038,13 +1038,8 @@ router.post('/ai/chat/message', requireAuth, async (req, res) => {
     // Detect user's timezone from IP
     const timezone = getTimezoneFromRequest(req);
 
-    if (provider === 'claude') {
-      return await handleClaudeRequest(messages, temperature, maxTokens, res, timezone, managerId);
-    } else if (provider === 'groq') {
-      return await handleGroqRequest(messages, temperature, maxTokens, res, timezone, model, managerId);
-    } else {
-      return await handleOpenAIRequest(messages, temperature, maxTokens, res, timezone, managerId);
-    }
+    // Always use Groq (optimized for cost and performance)
+    return await handleGroqRequest(messages, temperature, maxTokens, res, timezone, model, managerId);
   } catch (err: any) {
     console.error('[ai/chat/message] Error:', err);
     if (err instanceof z.ZodError) {
@@ -1060,280 +1055,9 @@ router.post('/ai/chat/message', requireAuth, async (req, res) => {
 });
 
 /**
- * Handle OpenAI chat request
- */
-async function handleOpenAIRequest(
-  messages: any[],
-  temperature: number,
-  maxTokens: number,
-  res: any,
-  timezone?: string,
-  managerId?: mongoose.Types.ObjectId
-) {
-  const openaiKey = process.env.OPENAI_API_KEY;
-  if (!openaiKey) {
-    console.error('[OpenAI] API key not configured');
-    return res.status(500).json({ message: 'OpenAI API key not configured on server' });
-  }
-
-  const textModel = process.env.OPENAI_TEXT_MODEL || 'gpt-4o';
-  const openaiBaseUrl = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
-
-  // Inject date/time context into system messages with user's timezone
-  const dateContext = getFullSystemContext(timezone);
-  const enhancedMessages = messages.map((msg, index) => {
-    // Add date context to the first system message
-    if (msg.role === 'system' && index === 0) {
-      return {
-        ...msg,
-        content: `${dateContext}\n\n${msg.content}`
-      };
-    }
-    // If no system message exists, add one at the beginning
-    return msg;
-  });
-
-  // If there's no system message, prepend one with date context
-  const hasSystemMessage = messages.some(msg => msg.role === 'system');
-  const finalMessages = hasSystemMessage
-    ? enhancedMessages
-    : [{ role: 'system', content: dateContext }, ...messages];
-
-  const requestBody = {
-    model: textModel,
-    messages: finalMessages,
-    temperature,
-    max_tokens: maxTokens,
-    tools: AI_TOOLS.map(tool => ({
-      type: 'function',
-      function: {
-        name: tool.name,
-        description: tool.description,
-        parameters: tool.parameters,
-      }
-    })),
-    tool_choice: 'auto', // Allow model to choose when to use tools
-  };
-
-  const headers: any = {
-    'Authorization': `Bearer ${openaiKey}`,
-    'Content-Type': 'application/json',
-  };
-
-  const orgId = process.env.OPENAI_ORG_ID;
-  if (orgId) {
-    headers['OpenAI-Organization'] = orgId;
-  }
-
-  const response = await axios.post(
-    `${openaiBaseUrl}/chat/completions`,
-    requestBody,
-    { headers }
-  );
-
-  if (response.status >= 300) {
-    console.error('[OpenAI] API error:', response.status, response.data);
-    if (response.status === 429) {
-      return res.status(429).json({
-        message: 'OpenAI API rate limit reached. Please try again later.',
-      });
-    }
-    return res.status(response.status).json({
-      message: `OpenAI API error: ${response.statusText}`,
-    });
-  }
-
-  const message = response.data.choices?.[0]?.message;
-  const content = message?.content;
-  const toolCalls = message?.tool_calls;
-
-  // If model wants to call a function/tool
-  if (toolCalls && toolCalls.length > 0) {
-    console.log('[OpenAI] Tool calls requested:', JSON.stringify(toolCalls, null, 2));
-
-    // Execute the function call
-    const toolCall = toolCalls[0];
-    const functionName = toolCall.function?.name;
-    const functionArgs = JSON.parse(toolCall.function?.arguments || '{}');
-
-    console.log('[OpenAI] Executing function:', functionName, functionArgs);
-
-    // Execute the function call
-    if (!managerId) {
-      return res.status(401).json({ message: 'Manager ID required for function calls' });
-    }
-
-    const toolResponse = await executeFunctionCall(functionName, functionArgs, managerId);
-
-    return res.json({
-      content: toolResponse,
-      provider: 'openai',
-      toolCall: { name: functionName, arguments: functionArgs }
-    });
-  }
-
-  if (!content) {
-    return res.status(500).json({ message: 'Failed to get response from OpenAI' });
-  }
-
-  return res.json({ content, provider: 'openai' });
-}
-
-/**
- * Handle Claude chat request with prompt caching
- */
-async function handleClaudeRequest(
-  messages: any[],
-  temperature: number,
-  maxTokens: number,
-  res: any,
-  timezone?: string,
-  managerId?: mongoose.Types.ObjectId
-) {
-  const claudeKey = process.env.CLAUDE_API_KEY;
-  if (!claudeKey) {
-    console.error('[Claude] API key not configured');
-    return res.status(500).json({ message: 'Claude API key not configured on server' });
-  }
-
-  const claudeModel = process.env.CLAUDE_MODEL || 'claude-sonnet-4-5-20250929';
-  const claudeBaseUrl = process.env.CLAUDE_BASE_URL || 'https://api.anthropic.com/v1';
-
-  // Convert OpenAI-style messages to Claude format
-  // System message goes in separate 'system' parameter with cache_control
-  let systemMessage = '';
-  const userMessages: any[] = [];
-
-  // Inject date/time context at the beginning of system message with user's timezone
-  const dateContext = getFullSystemContext(timezone);
-  systemMessage = `${dateContext}\n\n`;
-
-  for (const msg of messages) {
-    if (msg.role === 'system') {
-      systemMessage += (systemMessage ? '\n\n' : '') + msg.content;
-    } else {
-      userMessages.push({
-        role: msg.role === 'assistant' ? 'assistant' : 'user',
-        content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
-      });
-    }
-  }
-
-  // Add cache_control to system message for prompt caching
-  // This caches the instructions and context, dramatically reducing costs by up to 90%
-  const requestBody = {
-    model: claudeModel,
-    max_tokens: maxTokens,
-    temperature,
-    system: systemMessage ? [
-      {
-        type: 'text',
-        text: systemMessage,
-        cache_control: { type: 'ephemeral' }, // Enable prompt caching
-      },
-    ] : 'You are a helpful AI assistant for event staffing.',
-    messages: userMessages,
-    tools: AI_TOOLS.map(tool => ({
-      name: tool.name,
-      description: tool.description,
-      input_schema: tool.parameters,
-    })),
-  };
-
-  const headers = {
-    'x-api-key': claudeKey,
-    'anthropic-version': '2023-06-01',
-    'anthropic-beta': 'prompt-caching-2024-07-31', // Enable caching beta
-    'Content-Type': 'application/json',
-  };
-
-  console.log('[Claude] Calling API with prompt caching enabled...');
-
-  const response = await axios.post(
-    `${claudeBaseUrl}/messages`,
-    requestBody,
-    { headers, validateStatus: () => true }
-  );
-
-  if (response.status >= 300) {
-    console.error('[Claude] API error:', response.status, response.data);
-    if (response.status === 429) {
-      return res.status(429).json({
-        message: 'Claude API rate limit reached. Please try again later.',
-      });
-    }
-    return res.status(response.status).json({
-      message: `Claude API error: ${response.statusText}`,
-      details: response.data,
-    });
-  }
-
-  // Log cache usage statistics
-  const usage = response.data.usage;
-  if (usage) {
-    console.log('[Claude] Token usage:', {
-      input: usage.input_tokens,
-      output: usage.output_tokens,
-      cache_creation: usage.cache_creation_input_tokens || 0,
-      cache_read: usage.cache_read_input_tokens || 0,
-    });
-
-    // Calculate cost savings from caching
-    if (usage.cache_read_input_tokens > 0) {
-      const savings = ((usage.cache_read_input_tokens / (usage.input_tokens + usage.cache_read_input_tokens)) * 100).toFixed(1);
-      console.log(`[Claude] Prompt caching saved ${savings}% on input tokens`);
-    }
-  }
-
-  const contentBlocks = response.data.content;
-  if (!contentBlocks || contentBlocks.length === 0) {
-    return res.status(500).json({ message: 'Failed to get response from Claude' });
-  }
-
-  // Check if Claude wants to use a tool
-  const toolUseBlock = contentBlocks.find((block: any) => block.type === 'tool_use');
-  if (toolUseBlock) {
-    console.log('[Claude] Tool use requested:', JSON.stringify(toolUseBlock, null, 2));
-
-    const toolName = toolUseBlock.name;
-    const toolInput = toolUseBlock.input;
-
-    console.log('[Claude] Executing function:', toolName, toolInput);
-
-    // Execute the function call
-    if (!managerId) {
-      return res.status(401).json({ message: 'Manager ID required for function calls' });
-    }
-
-    const toolResponse = await executeFunctionCall(toolName, toolInput, managerId);
-
-    return res.json({
-      content: toolResponse,
-      provider: 'claude',
-      usage: usage,
-      toolCall: { name: toolName, input: toolInput }
-    });
-  }
-
-  // Extract text content
-  const textBlock = contentBlocks.find((block: any) => block.type === 'text');
-  const content = textBlock?.text;
-
-  if (!content) {
-    return res.status(500).json({ message: 'Failed to get text response from Claude' });
-  }
-
-  return res.json({
-    content,
-    provider: 'claude',
-    usage: usage, // Include usage stats for monitoring
-  });
-}
-
-/**
- * Handle Groq chat request with Responses API
- * Uses the /v1/responses endpoint (NOT /chat/completions)
- * Cost-optimized alternative to OpenAI/Claude
+ * Handle Groq chat request for manager with optimized Chat Completions API
+ * Supports: llama-3.1-8b-instant (fast/cheap) and openai/gpt-oss-20b (reasoning)
+ * Features: Parallel tool calls, prompt caching, retry logic, reasoning mode
  */
 async function handleGroqRequest(
   messages: any[],
@@ -1344,291 +1068,236 @@ async function handleGroqRequest(
   model?: string,
   managerId?: mongoose.Types.ObjectId
 ) {
-  try {
-    const groqKey = process.env.GROQ_API_KEY;
-    if (!groqKey) {
-      console.error('[Groq] API key not configured');
-      return res.status(500).json({ message: 'Groq API key not configured on server' });
-    }
+  const groqKey = process.env.GROQ_API_KEY;
+  if (!groqKey) {
+    console.error('[Groq] API key not configured');
+    return res.status(500).json({ message: 'Groq API key not configured on server' });
+  }
 
-    // Use provided model or fall back to env variable or default
-    const groqModel = model || process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
-    const groqBaseUrl = 'https://api.groq.com/openai';
+  // TEMPORARY: Force GPT-OSS only (skip Llama)
+  const groqModel = 'openai/gpt-oss-20b';
+  const isReasoningModel = true;
 
-    // Determine which API to use based on model
-    const useResponsesAPI = groqModel.includes('gpt-oss') || groqModel.includes('openai/');
-    const apiEndpoint = useResponsesAPI ? '/v1/responses' : '/v1/chat/completions';
+  console.log(`[Groq] Manager FORCING GPT-OSS model: ${groqModel} (Llama fallback disabled)`);
 
-    console.log(`[Groq] Using model: ${groqModel} with ${useResponsesAPI ? 'Responses' : 'Chat Completions'} API`);
+  // Optimize prompt structure for caching: static content first (cached), dynamic last
+  const dateContext = getFullSystemContext(timezone);
 
-    // Build messages with date context
-    const dateContext = getFullSystemContext(timezone);
-    const processedMessages: any[] = [];
+  const languageInstructions = `
+🌍 LANGUAGE RULE - CRITICAL:
+ALWAYS respond in the SAME LANGUAGE the user is speaking.
+- If user writes in Spanish → respond in Spanish
+- If user writes in English → respond in English
+- Match the user's language exactly, even mid-conversation
+`;
 
-    let hasSystemMessage = false;
-    for (const msg of messages) {
-      if (msg.role === 'system') {
-        processedMessages.push({
-          role: 'system',
-          content: `${dateContext}\n\n${msg.content}`
-        });
-        hasSystemMessage = true;
-      } else {
-        processedMessages.push({
-          role: msg.role,
-          content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)
-        });
-      }
-    }
+  const systemContent = `${dateContext}\n\n${languageInstructions}`;
 
-    if (!hasSystemMessage) {
-      processedMessages.unshift({
+  // Build messages: system prompt first (cached), then conversation
+  const processedMessages: any[] = [];
+  let hasSystemMessage = false;
+
+  for (const msg of messages) {
+    if (msg.role === 'system') {
+      processedMessages.push({
         role: 'system',
-        content: dateContext
+        content: `${systemContent}\n\n${msg.content}`
+      });
+      hasSystemMessage = true;
+    } else {
+      processedMessages.push({
+        role: msg.role,
+        content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)
       });
     }
+  }
 
-    // Build tools array based on API type
-    let groqTools: any[];
-    if (useResponsesAPI) {
-      // Responses API: flat structure
-      groqTools = AI_TOOLS.map(tool => ({
-        type: 'function',
-        name: tool.name,
-        description: tool.description,
-        parameters: tool.parameters
-      }));
-    } else {
-      // Chat Completions API: nested structure
-      groqTools = AI_TOOLS.map(tool => ({
-        type: 'function',
-        function: {
-          name: tool.name,
-          description: tool.description,
-          parameters: tool.parameters
-        }
-      }));
+  if (!hasSystemMessage) {
+    processedMessages.unshift({
+      role: 'system',
+      content: systemContent
+    });
+  }
+
+  // Build tools array for Chat Completions API
+  const groqTools = AI_TOOLS.map(tool => ({
+    type: 'function',
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parameters
     }
+  }));
 
-    // Build request body based on API type
-    let requestBody: any;
-    if (useResponsesAPI) {
-      // GPT-OSS uses reasoning mode which needs more tokens
-      const adjustedMaxTokens = maxTokens * 3; // Triple for reasoning overhead
-      requestBody = {
-        model: groqModel,
-        input: processedMessages,
-        temperature,
-        max_output_tokens: adjustedMaxTokens,
-        tools: groqTools,
-      };
-    } else {
-      requestBody = {
-        model: groqModel,
-        messages: processedMessages,
-        temperature,
-        max_tokens: maxTokens,
-        tools: groqTools,
-      };
-    }
+  // Build request body with model-specific optimizations
+  const requestBody: any = {
+    model: groqModel,
+    messages: processedMessages,
+    temperature: isReasoningModel ? 0.6 : temperature, // Higher temp for reasoning
+    max_tokens: isReasoningModel ? maxTokens * 2 : maxTokens, // More tokens for reasoning
+    tools: groqTools,
+    tool_choice: 'auto'
+  };
 
-    const headers = {
-      'Authorization': `Bearer ${groqKey}`,
-      'Content-Type': 'application/json',
-    };
+  // Add reasoning parameters for gpt-oss models
+  if (isReasoningModel) {
+    requestBody.reasoning_format = 'hidden'; // Hide reasoning, show only final answer
+  }
 
-    console.log(`[Groq] Calling ${apiEndpoint}...`);
+  const headers = {
+    'Authorization': `Bearer ${groqKey}`,
+    'Content-Type': 'application/json',
+  };
 
-    const response = await axios.post(
-      `${groqBaseUrl}${apiEndpoint}`,
-      requestBody,
-      { headers, validateStatus: () => true }
-    );
+  // Retry logic with exponential backoff
+  const maxRetries = 3;
+  let lastError: any = null;
 
-    console.log('[Groq] Response status:', response.status);
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[Groq] Attempt ${attempt}/${maxRetries} - Calling /v1/chat/completions...`);
 
-    if (response.status >= 300) {
-      console.error('[Groq] API error:', response.status, JSON.stringify(response.data));
+      const response = await axios.post(
+        'https://api.groq.com/openai/v1/chat/completions',
+        requestBody,
+        { headers, validateStatus: () => true, timeout: 60000 }
+      );
+
+      console.log('[Groq] Response status:', response.status);
+
+      // Handle rate limits with retry
       if (response.status === 429) {
+        const retryAfter = parseInt(response.headers['retry-after'] || '5', 10);
+        if (attempt < maxRetries) {
+          console.log(`[Groq] Rate limited, retrying after ${retryAfter}s...`);
+          await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+          continue;
+        }
         return res.status(429).json({
           message: 'Groq API rate limit reached. Please try again later.',
         });
       }
-      return res.status(response.status).json({
-        message: `Groq API error: ${response.statusText}`,
-        details: response.data,
-      });
-    }
 
-    // Parse response based on API type
-    if (useResponsesAPI) {
-      // Responses API: output blocks format
-      const outputBlocks = response.data.output;
-      if (!outputBlocks || outputBlocks.length === 0) {
-        return res.status(500).json({ message: 'Failed to get response from Groq' });
-      }
+      // Handle other errors
+      if (response.status >= 300) {
+        console.error('[Groq] API error:', response.status, response.data);
 
-      // Check for function calls
-      const functionCallBlock = outputBlocks.find((block: any) => block.type === 'function_call');
-      if (functionCallBlock) {
-        console.log('[Groq] Function call requested:', functionCallBlock.name);
+        // TEMPORARY: Llama fallback disabled - fail immediately with GPT-OSS errors
+        console.log('[Groq] GPT-OSS failed, NO FALLBACK (Llama fallback temporarily disabled)');
 
-        const functionName = functionCallBlock.name;
-        const functionArgs = functionCallBlock.arguments;
-
-        if (!managerId) {
-          return res.status(401).json({ message: 'Manager ID required for function calls' });
-        }
-
-        const toolResponse = await executeFunctionCall(functionName, functionArgs, managerId);
-
-        // Second request for Responses API
-        const messagesWithFunctionResult = [
-          ...processedMessages,
-          { role: 'assistant', content: functionCallBlock.text || '' },
-          { role: 'user', content: `Function ${functionName} returned: ${toolResponse}\n\nPlease present this naturally.` }
-        ];
-
-        const secondResponse = await axios.post(
-          `${groqBaseUrl}${apiEndpoint}`,
-          {
-            model: groqModel,
-            input: messagesWithFunctionResult,
-            temperature,
-            max_output_tokens: maxTokens * 3, // GPT-OSS reasoning mode needs more tokens
-          },
-          { headers, validateStatus: () => true }
-        );
-
-        if (secondResponse.status >= 300) {
-          console.error('[Groq] Second API call error:', secondResponse.status);
-          return res.status(secondResponse.status).json({
-            message: `Groq API error: ${secondResponse.statusText}`,
-            details: secondResponse.data,
-          });
-        }
-
-        const secondOutput = secondResponse.data.output;
-        const textBlock = secondOutput?.find((block: any) => block.type === 'text');
-        const finalContent = textBlock?.text;
-
-        if (!finalContent) {
-          return res.status(500).json({ message: 'Failed to get final response from Groq' });
-        }
-
-        return res.json({
-          content: finalContent,
-          provider: 'groq',
-          toolCall: { name: functionName, arguments: functionArgs }
+        return res.status(response.status).json({
+          message: `Groq API error: ${response.statusText}`,
+          details: response.data,
         });
       }
 
-      // Extract text content
-      console.log('[Groq] Output blocks structure:', JSON.stringify(outputBlocks, null, 2));
-
-      const messageBlock = outputBlocks.find((block: any) => block.type === 'message');
-      console.log('[Groq] Message block:', JSON.stringify(messageBlock, null, 2));
-
-      const textContent = messageBlock?.content?.find((item: any) => item.type === 'output_text');
-      const content = textContent?.text;
-
-      if (!content) {
-        console.error('[Groq] No text content found. messageBlock:', messageBlock, 'textContent:', textContent);
-        return res.status(500).json({ message: 'Failed to get text response from Groq' });
-      }
-
-      return res.json({ content, provider: 'groq' });
-
-    } else {
-      // Chat Completions API: choices format
+      // Parse successful response
       const choice = response.data.choices?.[0];
       if (!choice) {
-        return res.status(500).json({ message: 'Failed to get response from Groq' });
+        throw new Error('No choices in response');
       }
 
       const assistantMessage = choice.message;
 
-      // Check for tool calls
+      // Handle tool calls (including parallel calls for llama)
       if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-        const toolCall = assistantMessage.tool_calls[0];
-        console.log('[Groq] Tool call requested:', toolCall.function.name);
-
-        const functionName = toolCall.function.name;
-        const functionArgs = JSON.parse(toolCall.function.arguments);
+        console.log(`[Groq] ${assistantMessage.tool_calls.length} tool call(s) requested`);
 
         if (!managerId) {
           return res.status(401).json({ message: 'Manager ID required for function calls' });
         }
 
-        const toolResponse = await executeFunctionCall(functionName, functionArgs, managerId);
+        // Execute tool calls in parallel
+        const toolResults = await Promise.all(
+          assistantMessage.tool_calls.map(async (toolCall: any) => {
+            const functionName = toolCall.function.name;
+            const functionArgs = JSON.parse(toolCall.function.arguments);
 
-        // Second request for Chat Completions API
-        const messagesWithToolResult = [
+            console.log(`[Groq] Executing ${functionName}:`, functionArgs);
+
+            const result = await executeFunctionCall(functionName, functionArgs, managerId);
+
+            return {
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              content: result
+            };
+          })
+        );
+
+        // Second request with tool results
+        const messagesWithToolResults = [
           ...processedMessages,
           assistantMessage,
-          {
-            role: 'tool',
-            tool_call_id: toolCall.id,
-            content: toolResponse
-          }
+          ...toolResults
         ];
 
         const secondResponse = await axios.post(
-          `${groqBaseUrl}${apiEndpoint}`,
+          'https://api.groq.com/openai/v1/chat/completions',
           {
-            model: groqModel,
-            messages: messagesWithToolResult,
-            temperature,
-            max_tokens: maxTokens,
+            model: requestBody.model, // Use same model as first request
+            messages: messagesWithToolResults,
+            temperature: requestBody.temperature,
+            max_tokens: requestBody.max_tokens,
           },
-          { headers, validateStatus: () => true }
+          { headers, validateStatus: () => true, timeout: 60000 }
         );
 
         if (secondResponse.status >= 300) {
           console.error('[Groq] Second API call error:', secondResponse.status);
-          return res.status(secondResponse.status).json({
-            message: `Groq API error: ${secondResponse.statusText}`,
-            details: secondResponse.data,
-          });
+          throw new Error(`Second API call failed: ${secondResponse.statusText}`);
         }
 
         const finalContent = secondResponse.data.choices?.[0]?.message?.content;
 
         if (!finalContent) {
-          return res.status(500).json({ message: 'Failed to get final response from Groq' });
+          throw new Error('No content in second response');
         }
 
         return res.json({
           content: finalContent,
           provider: 'groq',
-          toolCall: { name: functionName, arguments: functionArgs }
+          model: requestBody.model,
+          toolsUsed: assistantMessage.tool_calls.map((tc: any) => tc.function.name)
         });
       }
 
       // No tool calls, return content directly
       const content = assistantMessage.content;
       if (!content) {
-        return res.status(500).json({ message: 'Failed to get text response from Groq' });
+        throw new Error('No content in response');
       }
 
-      return res.json({ content, provider: 'groq' });
+      return res.json({
+        content,
+        provider: 'groq',
+        model: requestBody.model
+      });
+
+    } catch (error: any) {
+      lastError = error;
+      console.error(`[Groq] Attempt ${attempt}/${maxRetries} failed:`, {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data
+      });
+
+      // If this was the last attempt, fall through to error handler
+      if (attempt === maxRetries) break;
+
+      // Exponential backoff: 1s, 2s, 4s
+      const backoffMs = Math.pow(2, attempt - 1) * 1000;
+      console.log(`[Groq] Retrying after ${backoffMs}ms...`);
+      await new Promise(resolve => setTimeout(resolve, backoffMs));
     }
-
-  } catch (error: any) {
-    console.error('[Groq] Request failed with error:', {
-      message: error.message,
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      data: error.response?.data,
-      stack: error.stack
-    });
-
-    return res.status(500).json({
-      message: 'Groq API request failed',
-      error: error.message,
-      details: error.response?.data || error.message
-    });
   }
+
+  // All retries exhausted
+  return res.status(500).json({
+    message: 'Groq API request failed after retries',
+    error: lastError?.message || 'Unknown error',
+    details: lastError?.response?.data || lastError?.message
+  });
 }
 
 /**
