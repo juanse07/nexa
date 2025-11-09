@@ -1500,7 +1500,10 @@ router.get('/events', requireAuth, async (req, res) => {
       // The visibility filters above already ensure they only see events they're invited to
       filter.$and = [
         {
-          status: 'published'  // Only published events (public or private via visibilityType)
+          $or: [
+            { status: { $ne: 'draft' } },  // Non-draft events
+            { accepted_staff: { $exists: true, $ne: [], $not: { $size: 0 } } }  // Events with accepted staff
+          ]
         }
       ];
 
