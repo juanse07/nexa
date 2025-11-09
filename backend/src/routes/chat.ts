@@ -935,14 +935,14 @@ router.post('/invitations/:messageId/respond', requireAuth, async (req, res) => 
           });
 
           // Emit to staff so they see shift disappear from Available tab in real-time
-          const audienceTeams = eventDoc.audience_team_ids || [];
+          const audienceTeams = (eventDoc.audience_team_ids || []).map(id => String(id));
           if (audienceTeams.length > 0) {
             emitToTeams(audienceTeams, 'event:fulfilled', {
               eventId: String(eventId),
             });
           }
 
-          const audienceUsers = eventDoc.audience_user_keys || [];
+          const audienceUsers = (eventDoc.audience_user_keys || []).map(key => String(key));
           for (const userKey of audienceUsers) {
             emitToUser(userKey, 'event:fulfilled', {
               eventId: String(eventId),
