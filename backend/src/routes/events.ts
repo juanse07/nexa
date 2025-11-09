@@ -1140,11 +1140,19 @@ router.patch('/events/:id', requireAuth, async (req, res) => {
       updateData.date = new Date(updateData.date);
     }
 
-    // Get the event before update to detect status changes
+    // Get the event before update to detect status changes and audience changes
     const eventBefore = await EventModel.findOne({
       _id: new mongoose.Types.ObjectId(eventId),
       managerId,
     }).lean();
+
+    // Track old audience for comparison
+    const oldAudienceUsers = eventBefore?.audience_user_keys
+      ? (eventBefore.audience_user_keys as any[]).map((v: any) => v?.toString()).filter(Boolean)
+      : [];
+    const oldAudienceTeams = eventBefore?.audience_team_ids
+      ? (eventBefore.audience_team_ids as any[]).map((v: any) => v?.toString()).filter(Boolean)
+      : [];
 
     // Update the event
     const result = await EventModel.updateOne(
@@ -1175,13 +1183,29 @@ router.patch('/events/:id', requireAuth, async (req, res) => {
 
     emitToManager(String(managerId), 'event:updated', responsePayload);
 
+    // Determine which users/teams are NEW vs EXISTING
     const updateTeams = (responsePayload.audience_team_ids || []) as string[];
-    if (updateTeams.length > 0) {
-      emitToTeams(updateTeams, 'event:updated', responsePayload);
+    const updateUsers = (responsePayload.audience_user_keys || []) as string[];
+
+    const newTeams = updateTeams.filter(t => !oldAudienceTeams.includes(t));
+    const existingTeams = updateTeams.filter(t => oldAudienceTeams.includes(t));
+
+    const newUsers = updateUsers.filter(u => !oldAudienceUsers.includes(u));
+    const existingUsers = updateUsers.filter(u => oldAudienceUsers.includes(u));
+
+    // Emit event:created to NEWLY invited staff (so they see it appear in Available tab)
+    if (newTeams.length > 0) {
+      emitToTeams(newTeams, 'event:created', responsePayload);
+    }
+    for (const key of newUsers) {
+      emitToUser(key, 'event:created', responsePayload);
     }
 
-    const updateUsers = (responsePayload.audience_user_keys || []) as string[];
-    for (const key of updateUsers) {
+    // Emit event:updated to EXISTING staff (who were already in the audience)
+    if (existingTeams.length > 0) {
+      emitToTeams(existingTeams, 'event:updated', responsePayload);
+    }
+    for (const key of existingUsers) {
       emitToUser(key, 'event:updated', responsePayload);
     }
 
