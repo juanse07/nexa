@@ -399,8 +399,8 @@ const AI_TOOLS = [
     }
   },
   {
-    name: 'search_events',
-    description: 'Find events by various criteria from the database. Use this when users ask about specific events, dates, or want to see event lists.',
+    name: 'search_shifts',
+    description: 'Find shifts by various criteria from the database. Use this when users ask about specific shifts, dates, or want to see shift lists.',
     parameters: {
       type: 'object',
       properties: {
@@ -514,8 +514,8 @@ const AI_TOOLS = [
     }
   },
   {
-    name: 'create_event',
-    description: 'Create a new staffing event. IMPORTANT: Managers only care about CALL TIME (when staff should arrive), NOT guest arrival time. Call time is the staff arrival time.',
+    name: 'create_shift',
+    description: 'Create a new staffing shift. IMPORTANT: Managers only care about CALL TIME (when staff should arrive), NOT guest arrival time. Call time is the staff arrival time.',
     parameters: {
       type: 'object',
       properties: {
@@ -525,7 +525,7 @@ const AI_TOOLS = [
         },
         date: {
           type: 'string',
-          description: 'Event date in ISO format (YYYY-MM-DD)'
+          description: 'Shift date in ISO format (YYYY-MM-DD)'
         },
         call_time: {
           type: 'string',
@@ -560,7 +560,7 @@ const AI_TOOLS = [
         },
         notes: {
           type: ['string', 'null'],
-          description: 'Additional details, instructions, event name if needed, special requirements'
+          description: 'Additional details, instructions, shift name if needed, special requirements'
         },
         contact_name: {
           type: ['string', 'null'],
@@ -626,7 +626,7 @@ async function executeFunctionCall(
         return `Found ${events.length} address(es):\n${results}`;
       }
 
-      case 'search_events': {
+      case 'search_shifts': {
         const { client_name, date, venue_name, event_name } = functionArgs;
         const filter: any = { managerId };
 
@@ -653,14 +653,14 @@ async function executeFunctionCall(
           .lean();
 
         if (events.length === 0) {
-          return 'No events found matching the criteria';
+          return 'No shifts found matching the criteria';
         }
 
         const results = events.map(e =>
           `${e.event_name} - Client: ${e.client_name}, Date: ${e.date}, Venue: ${e.venue_name || 'TBD'}, Status: ${e.status || 'pending'}`
         ).join('\n');
 
-        return `Found ${events.length} event(s):\n${results}`;
+        return `Found ${events.length} shift(s):\n${results}`;
       }
 
       case 'check_availability': {
@@ -814,7 +814,7 @@ async function executeFunctionCall(
         }
       }
 
-      case 'create_event': {
+      case 'create_shift': {
         const {
           client_name,
           date,
@@ -835,7 +835,7 @@ async function executeFunctionCall(
           return `❌ Missing required fields. Need: client_name, date, call_time (staff arrival), end_time`;
         }
 
-        // Auto-generate event name from client and date
+        // Auto-generate shift name from client and date
         const eventDate = new Date(date);
         const eventName = `${client_name} - ${eventDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
 

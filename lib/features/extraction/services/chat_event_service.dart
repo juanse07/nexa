@@ -49,7 +49,7 @@ class ChatMessage {
   }
 }
 
-/// Service for handling AI chat-powered event creation
+/// Service for handling AI chat-powered shift creation
 class ChatEventService {
   static String? _cachedInstructions;
   final ClientsService _clientsService = ClientsService();
@@ -84,7 +84,7 @@ class ChatEventService {
   List<Map<String, dynamic>> get pendingUpdates => List.unmodifiable(_pendingUpdates);
   List<Map<String, dynamic>> get existingEvents => List.unmodifiable(_existingEvents);
 
-  static const String _fallbackPrompt = '''You are a friendly AI assistant helping create catering event staffing records. Your job is to collect event details through conversation.
+  static const String _fallbackPrompt = '''You are a friendly AI assistant helping create catering shift staffing records. Your job is to collect shift details through conversation.
 
 Ask for information ONE field at a time in a natural, conversational way. Required fields:
 - client_name

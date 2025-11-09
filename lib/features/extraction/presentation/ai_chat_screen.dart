@@ -164,7 +164,7 @@ class _AIChatScreenState extends State<AIChatScreen>
             ListTile(
               leading: const Icon(Icons.picture_as_pdf),
               title: const Text('Upload PDF Document'),
-              subtitle: const Text('Extract event data from PDF files'),
+              subtitle: const Text('Extract shift data from PDF files'),
               onTap: () {
                 Navigator.pop(context);
                 _pickDocument();
@@ -260,7 +260,7 @@ class _AIChatScreenState extends State<AIChatScreen>
     }
   }
 
-  /// Process an image file: extract event data using Vision API, present in chat for review
+  /// Process an image file: extract shift data using Vision API, present in chat for review
   Future<void> _processImage(File imageFile) async {
     // Add image to list with pending status
     setState(() {
@@ -352,7 +352,7 @@ class _AIChatScreenState extends State<AIChatScreen>
         throw Exception('No text found in PDF. The PDF might be scanned or image-based.');
       }
 
-      // Send extracted text to extraction API to get structured event data
+      // Send extracted text to extraction API to get structured shift data
       final structuredData = await _extractionService.extractStructuredData(
         input: extractedText,
       );
@@ -483,13 +483,13 @@ class _AIChatScreenState extends State<AIChatScreen>
     });
   }
 
-  /// Save extracted event data as draft
+  /// Save extracted shift data as draft
   Future<void> _saveDraftEventFromExtraction() async {
     try {
       final currentData = _aiChatService.currentEventData;
 
       if (currentData.isEmpty) {
-        throw Exception('No event data to save');
+        throw Exception('No shift data to save');
       }
 
       // Save as draft event
@@ -500,14 +500,14 @@ class _AIChatScreenState extends State<AIChatScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✓ Event saved to Pending Events'),
+            content: Text('✓ Shift saved to Pending Shifts'),
             backgroundColor: Color(0xFF059669),
             duration: Duration(seconds: 2),
           ),
         );
 
         // Send confirmation to chat
-        await _aiChatService.sendMessage('✓ Event saved successfully! You can find it in Pending Events.');
+        await _aiChatService.sendMessage('✓ Shift saved successfully! You can find it in Pending Shifts.');
         setState(() {});
       }
     } catch (e) {
@@ -515,7 +515,7 @@ class _AIChatScreenState extends State<AIChatScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to save event: $e'),
+            content: Text('Failed to save shift: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -559,7 +559,7 @@ class _AIChatScreenState extends State<AIChatScreen>
   Future<void> _autoSaveAfterTimeout() async {
     final autoSaveMsg = ChatMessage(
       role: 'assistant',
-      content: '⏱️ Confirmation timed out. Saving event automatically...',
+      content: '⏱️ Confirmation timed out. Saving shift automatically...',
     );
 
     setState(() {
@@ -604,7 +604,7 @@ class _AIChatScreenState extends State<AIChatScreen>
       // Show success message
       final successMsg = ChatMessage(
         role: 'assistant',
-        content: '✅ Event saved to Pending Events!\n\n[LINK:📋 View in Pending]',
+        content: '✅ Shift saved to Pending Shifts!\n\n[LINK:📋 View in Pending]',
       );
 
       setState(() {
@@ -614,11 +614,11 @@ class _AIChatScreenState extends State<AIChatScreen>
       _scrollToBottom(animated: true);
 
     } catch (e) {
-      print('[AIChatScreen] ✗ Failed to save event: $e');
+      print('[AIChatScreen] ✗ Failed to save shift: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to save event: $e'),
+            content: Text('Failed to save shift: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -653,7 +653,7 @@ class _AIChatScreenState extends State<AIChatScreen>
     _scrollToBottom(animated: true);
   }
 
-  /// Handle cancel - discard event
+  /// Handle cancel - discard shift
   void _handleCancel() {
     _confirmationTimer?.cancel();
 
