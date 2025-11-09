@@ -928,11 +928,26 @@ router.post('/invitations/:messageId/respond', requireAuth, async (req, res) => 
           await eventDoc.save();
 
           // Emit socket event for fulfilled status
-          const { emitToManager: emitManager } = await import('../socket/server');
+          const { emitToManager: emitManager, emitToTeams, emitToUser } = await import('../socket/server');
           emitManager(message.managerId.toString(), 'event:fulfilled', {
             eventId: String(eventId),
             fulfilledAt: eventDoc.fulfilledAt,
           });
+
+          // Emit to staff so they see shift disappear from Available tab in real-time
+          const audienceTeams = eventDoc.audience_team_ids || [];
+          if (audienceTeams.length > 0) {
+            emitToTeams(audienceTeams, 'event:fulfilled', {
+              eventId: String(eventId),
+            });
+          }
+
+          const audienceUsers = eventDoc.audience_user_keys || [];
+          for (const userKey of audienceUsers) {
+            emitToUser(userKey, 'event:fulfilled', {
+              eventId: String(eventId),
+            });
+          }
 
           // Send notification to manager
           await notificationService.sendToUser(
