@@ -62,7 +62,7 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
         if (dateField != null) {
           try {
             final startDateStr = dateField as String;
-            print('[INVITATION_DIALOG] Event: ${event['title'] ?? event['shift_name']}');
+            print('[INVITATION_DIALOG] Event: ${event['title'] ?? event['event_name']}');
             print('[INVITATION_DIALOG]   date field: $startDateStr');
 
             // Parse date - handles both "2026-03-15" and "2026-03-15T10:00:00.000Z" formats
@@ -83,7 +83,7 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
             return false;
           }
         }
-        print('[INVITATION_DIALOG] Event ${event['title'] ?? event['shift_name']} has no date field');
+        print('[INVITATION_DIALOG] Event ${event['title'] ?? event['event_name']} has no date field');
         return false;
       }).toList();
 

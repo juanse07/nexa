@@ -1,15 +1,15 @@
 {
   "@@locale": "en",
 
-  "jobDataExtractor": "Job Data Extractor",
+  "jobDataExtractor": "Shift Data Extractor",
   "@jobDataExtractor": {
-    "description": "Title for the job data extraction feature"
+    "description": "Title for the shift data extraction feature"
   },
-  "uploadPdfToExtract": "Upload a PDF or image to extract catering job details",
+  "uploadPdfToExtract": "Upload a PDF or image to extract catering shift details",
   "@uploadPdfToExtract": {
     "description": "Subtitle explaining PDF upload feature"
   },
-  "enterJobDetailsManually": "Enter job details manually for precise control",
+  "enterJobDetailsManually": "Enter shift details manually for precise control",
   "@enterJobDetailsManually": {
     "description": "Subtitle for manual entry option"
   },
@@ -17,17 +17,17 @@
   "@createJobsThroughAI": {
     "description": "Subtitle for AI chat feature"
   },
-  "jobDetails": "Job Details",
+  "jobDetails": "Shift Details",
   "@jobDetails": {
-    "description": "Section header for job details"
+    "description": "Section header for shift details"
   },
-  "jobInformation": "Job Information",
+  "jobInformation": "Shift Information",
   "@jobInformation": {
-    "description": "Section header for job information form"
+    "description": "Section header for shift information form"
   },
-  "jobTitle": "Job Title",
+  "jobTitle": "Shift Title",
   "@jobTitle": {
-    "description": "Label for job name/title field"
+    "description": "Label for shift name/title field"
   },
   "clientName": "Client Name",
   "@clientName": {
@@ -81,9 +81,9 @@
   "@notes": {
     "description": "Label for notes field"
   },
-  "job": "Job",
-  "@job": {
-    "description": "Label for job in summary display"
+  "shift": "Shift",
+  "@shift": {
+    "description": "Label for shift in summary display"
   },
   "client": "Client",
   "@client": {
@@ -107,7 +107,7 @@
   },
   "jobsTabLabel": "Jobs • {pendingCount} pending, {upcomingCount} upcoming, {pastCount} past",
   "@jobsTabLabel": {
-    "description": "Tab label showing job counts",
+    "description": "Tab label showing shift counts",
     "placeholders": {
       "pendingCount": {
         "type": "int"
@@ -150,42 +150,42 @@
       }
     }
   },
-  "pleaseSelectDate": "Please select a date for the job",
+  "pleaseSelectDate": "Please select a date for the shift",
   "@pleaseSelectDate": {
     "description": "Error message when date is not selected"
   },
-  "jobSavedToPending": "Job saved to pending. Go to Jobs tab to review.",
+  "jobSavedToPending": "Shift saved to pending. Go to Jobs tab to review.",
   "@jobSavedToPending": {
-    "description": "Success message when job is saved to pending"
+    "description": "Success message when shift is saved to pending"
   },
-  "jobDetailsCopied": "Job details copied to clipboard",
+  "jobDetailsCopied": "Shift details copied to clipboard",
   "@jobDetailsCopied": {
-    "description": "Success message when job details are copied"
+    "description": "Success message when shift details are copied"
   },
-  "jobPublished": "Job published",
-  "@jobPublished": {
-    "description": "Success message when job is published"
+  "jobPosted": "Shift posted",
+  "@jobPosted": {
+    "description": "Success message when shift is posted"
   },
-  "sendJobInvitation": "Send Job Invitation",
+  "sendJobInvitation": "Send Shift Invitation",
   "@sendJobInvitation": {
-    "description": "Title for dialog to send job invitation"
+    "description": "Title for dialog to send shift invitation"
   },
-  "inviteToJob": "Invite {name} to a job",
+  "inviteToJob": "Invite {name} to a shift",
   "@inviteToJob": {
-    "description": "Subtitle for job invitation dialog",
+    "description": "Subtitle for shift invitation dialog",
     "placeholders": {
       "name": {
         "type": "String"
       }
     }
   },
-  "jobInvitationSent": "Job invitation sent!",
+  "jobInvitationSent": "Shift invitation sent!",
   "@jobInvitationSent": {
-    "description": "Success message when job invitation is sent"
+    "description": "Success message when shift invitation is sent"
   },
-  "jobNotFound": "Job not found",
+  "jobNotFound": "Shift not found",
   "@jobNotFound": {
-    "description": "Error message when job is not found"
+    "description": "Error message when shift is not found"
   },
   "guests": "{count} guests",
   "@guests": {
@@ -200,9 +200,9 @@
   "@rolesNeeded": {
     "description": "Section header for roles needed"
   },
-  "untitledJob": "Untitled Job",
+  "untitledJob": "Untitled Shift",
   "@untitledJob": {
-    "description": "Fallback text when job has no title"
+    "description": "Fallback text when shift has no title"
   },
   "expectedHeadcount": "Expected Headcount",
   "@expectedHeadcount": {
@@ -216,29 +216,29 @@
   "@contactEmail": {
     "description": "Label for contact email field"
   },
-  "errorJobIdMissing": "Error: Job ID is missing...",
+  "errorJobIdMissing": "Error: Shift ID is missing...",
   "@errorJobIdMissing": {
-    "description": "Error message when job ID is missing"
+    "description": "Error message when shift ID is missing"
   },
-  "publishJob": "Publish Job",
-  "@publishJob": {
-    "description": "Title for publish job screen"
+  "postJob": "Post Shift",
+  "@postJob": {
+    "description": "Title for post shift screen"
   },
-  "setRolesForJob": "Set roles for this job",
+  "setRolesForJob": "Set roles for this shift",
   "@setRolesForJob": {
     "description": "Dialog title for setting roles"
   },
   "searchJobs": "Search jobs...",
   "@searchJobs": {
-    "description": "Hint text for job search field"
+    "description": "Hint text for shift search field"
   },
   "locationTbd": "Location TBD",
   "@locationTbd": {
     "description": "Placeholder when location is to be determined"
   },
-  "shareJobPrefix": "Job: {clientName}",
+  "shareJobPrefix": "Shift: {clientName}",
   "@shareJobPrefix": {
-    "description": "Prefix for sharing job details",
+    "description": "Prefix for sharing shift details",
     "placeholders": {
       "clientName": {
         "type": "String"
@@ -322,7 +322,7 @@
   },
   "youveBeenInvitedTo": "You've been invited to {jobName}",
   "@youveBeenInvitedTo": {
-    "description": "Chat message preview for job invitation",
+    "description": "Chat message preview for shift invitation",
     "placeholders": {
       "jobName": {
         "type": "String"
@@ -446,9 +446,9 @@
   "@additionalNotes": {
     "description": "Section header for additional notes"
   },
-  "saveJobDetails": "Save Job Details",
+  "saveJobDetails": "Save Shift Details",
   "@saveJobDetails": {
-    "description": "Button text for saving job details"
+    "description": "Button text for saving shift details"
   },
   "saveToPending": "Save to Pending",
   "@saveToPending": {
@@ -471,7 +471,7 @@
   "@startConversation": {
     "description": "Header for AI chat empty state"
   },
-  "aiWillGuideYou": "The AI will guide you through creating a job",
+  "aiWillGuideYou": "The AI will guide you through creating a shift",
   "@aiWillGuideYou": {
     "description": "Subtitle explaining AI chat functionality"
   },
@@ -496,9 +496,9 @@
     "description": "Label for address/direction field (Spanish-style)"
   },
 
-  "jobFor": "Job for: {clientName}",
+  "jobFor": "Shift for: {clientName}",
   "@jobFor": {
-    "description": "Label showing which client the job is for",
+    "description": "Label showing which client the shift is for",
     "placeholders": {
       "clientName": {
         "type": "String"

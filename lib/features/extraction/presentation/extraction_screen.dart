@@ -471,7 +471,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     if (d == null) return;
     setState(() {
       structuredData = d;
-      _eventNameController.text = (d['event_name'] ?? '').toString();
+      _eventNameController.text = (d['shift_name'] ?? '').toString();
       _clientNameController.text = (d['client_name'] ?? '').toString();
       _dateController.text = (d['date'] ?? '').toString();
       _startTimeController.text = (d['start_time'] ?? '').toString();
@@ -783,7 +783,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
     if (_formKey.currentState!.validate()) {
       final manualData = {
-        'event_name': _eventNameController.text.trim(),
+        'shift_name': _eventNameController.text.trim(),
         'client_name': _clientNameController.text.trim(),
         'date': _dateController.text.trim(),
         'start_time': _startTimeController.text.trim(),
@@ -1170,7 +1170,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       case 0: // Post a Job tab
         if (structuredData != null && structuredData!.isNotEmpty) {
           final eventName =
-              structuredData!['event_name']?.toString() ?? 'Untitled Event';
+              structuredData!['shift_name']?.toString() ?? 'Untitled Event';
           return eventName.length > 20
               ? '${eventName.substring(0, 20)}...'
               : eventName;
@@ -2699,7 +2699,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
   String _summarizeEvent(Map<String, dynamic> data) {
     final client = (data['client_name'] ?? '').toString();
-    final name = (data['event_name'] ?? data['venue_name'] ?? 'Untitled')
+    final name = (data['shift_name'] ?? data['venue_name'] ?? 'Untitled')
         .toString();
     final date = (data['date'] ?? '').toString();
     return [
@@ -4003,16 +4003,16 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final DateTime? aDate = _eventDateTime(a);
     final DateTime? bDate = _eventDateTime(b);
     if (aDate == null && bDate == null) {
-      return (a['event_name'] ?? '').toString().compareTo(
-        (b['event_name'] ?? '').toString(),
+      return (a['shift_name'] ?? '').toString().compareTo(
+        (b['shift_name'] ?? '').toString(),
       );
     }
     if (aDate == null) return 1;
     if (bDate == null) return -1;
     final cmp = aDate.compareTo(bDate);
     if (cmp != 0) return cmp;
-    return (a['event_name'] ?? '').toString().compareTo(
-      (b['event_name'] ?? '').toString(),
+    return (a['shift_name'] ?? '').toString().compareTo(
+      (b['shift_name'] ?? '').toString(),
     );
   }
 
@@ -4020,16 +4020,16 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final DateTime? aDate = _eventDateTime(a);
     final DateTime? bDate = _eventDateTime(b);
     if (aDate == null && bDate == null) {
-      return (a['event_name'] ?? '').toString().compareTo(
-        (b['event_name'] ?? '').toString(),
+      return (a['shift_name'] ?? '').toString().compareTo(
+        (b['shift_name'] ?? '').toString(),
       );
     }
     if (aDate == null) return 1;
     if (bDate == null) return -1;
     final cmp = bDate.compareTo(aDate);
     if (cmp != 0) return cmp;
-    return (a['event_name'] ?? '').toString().compareTo(
-      (b['event_name'] ?? '').toString(),
+    return (a['shift_name'] ?? '').toString().compareTo(
+      (b['shift_name'] ?? '').toString(),
     );
   }
 
@@ -4269,7 +4269,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       for (final e in items) {
         final status = (e['status'] ?? 'draft').toString();
         final d = parseDate(e);
-        final eventName = (e['event_name'] ?? e['client_name'] ?? 'Unknown').toString();
+        final eventName = (e['shift_name'] ?? e['client_name'] ?? 'Unknown').toString();
         final eventId = (e['_id'] ?? e['id'] ?? 'unknown').toString();
 
         // Check if event is past (FIXED: normalize both dates to midnight to avoid timezone issues)
@@ -4300,34 +4300,34 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         }
 
         // Tab logic (priority order):
-        // 1. Pending = drafts not sent to anyone yet
+        // 1. Pending = draft events only
         // 2. Full = fulfilled or no open positions
-        // 3. Posted = sent to people (public or private) with open positions
+        // 3. Posted = published events (public or private visibility)
 
-        final acceptedStaff = (e['accepted_staff'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-        final hasSentToStaff = acceptedStaff.isNotEmpty;
         final eventId = e['_id'] ?? e['id'] ?? 'unknown';
-        final eventName = e['title'] ?? e['event_name'] ?? e['venue_name'] ?? 'Untitled';
+        final eventName = e['title'] ?? e['shift_name'] ?? e['venue_name'] ?? 'Untitled';
+        final visibilityType = e['visibilityType']?.toString() ?? 'unknown';
 
-        print('[EVENT CATEGORIZE] Event: $eventId ($eventName) | Status: $status | HasStaff: $hasSentToStaff (${acceptedStaff.length})');
+        print('[EVENT CATEGORIZE] Event: $eventId ($eventName) | Status: $status | Visibility: $visibilityType');
 
-        if (status == 'draft' && !hasSentToStaff) {
-          // True draft - not sent to anyone yet
+        if (status == 'draft') {
+          // True drafts - not published yet
           pending.add(e);
-          print('  → Classified as: PENDING (draft, not sent)');
+          print('  → Classified as: PENDING (draft)');
         } else if (status == 'fulfilled' || !_hasOpenPositions(e)) {
+          // Fulfilled or full events
           full.add(e);
           print('  → Classified as: FULL (fulfilled or no open positions)');
-        } else if (status == 'published' || (status == 'draft' && hasSentToStaff)) {
-          // Posted publicly OR sent privately through chat
+        } else if (status == 'published') {
+          // Published events (both public and private)
           available.add(e);
-          if (status == 'published') {
-            print('  → Classified as: POSTED (published with open positions)');
+          if (visibilityType == 'private') {
+            print('  → Classified as: POSTED (published - private)');
           } else {
-            print('  → Classified as: POSTED (private - sent through chat)');
+            print('  → Classified as: POSTED (published - public)');
           }
         } else {
-          // Fallback for other statuses (confirmed, in_progress, etc.)
+          // Fallback for other statuses (in_progress, completed, etc.)
           pending.add(e);
           print('  → Classified as: PENDING (fallback for status: $status)');
         }
@@ -5033,7 +5033,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             // Backend events have data at top level (not wrapped in 'data' field)
             final client = (d['client_name'] ?? '').toString();
             final name =
-                (d['event_name'] ?? d['venue_name'] ?? 'Untitled')
+                (d['shift_name'] ?? d['venue_name'] ?? 'Untitled')
                     .toString();
             final dateRaw = (d['date'] ?? '').toString();
             final dateFormatted = dateRaw.isNotEmpty
@@ -6959,8 +6959,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               ],
                             ),
                           ),
-                          // Privacy badge (for published events OR drafts sent to staff)
-                          if (status == 'published' || ((e['accepted_staff'] as List?)?.isNotEmpty ?? false))
+                          // Privacy badge (for published events only - both public and private)
+                          if (status == 'published')
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
@@ -8062,7 +8062,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             orElse: () => {},
           );
           if (existingEvent.isNotEmpty) {
-            final nameRaw = existingEvent['event_name'] ?? existingEvent['name'];
+            final nameRaw = existingEvent['shift_name'] ?? existingEvent['name'];
             eventName = nameRaw?.toString() ?? 'Event';
           }
 
@@ -8199,10 +8199,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (data['event_name'] != null)
+        if (data['shift_name'] != null)
           DetailRow(
             label: AppLocalizations.of(context)!.job,
-            value: data['event_name'].toString(),
+            value: data['shift_name'].toString(),
             icon: Icons.celebration,
           ),
         if (data['client_name'] != null)

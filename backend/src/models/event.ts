@@ -75,7 +75,8 @@ export interface EventDocument extends Document {
   chatEnabled?: boolean;
   chatEnabledAt?: Date;
 
-  event_name?: string;
+  shift_name?: string;
+  event_name?: string; // Deprecated: for backward compatibility
   client_name?: string;
   third_party_company_name?: string;
   date?: Date | string;
@@ -203,7 +204,8 @@ const EventSchema = new Schema<EventDocument>(
       default: 'private',
     },
 
-    event_name: { type: String, trim: true },
+    shift_name: { type: String, trim: true },
+    event_name: { type: String, trim: true }, // Deprecated: for backward compatibility
     client_name: { type: String, trim: true },
     third_party_company_name: { type: String, trim: true },
     date: { type: Date },

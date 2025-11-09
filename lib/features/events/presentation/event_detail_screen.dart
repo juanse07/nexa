@@ -31,7 +31,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final String title = (event['client_name'] ?? 'Client').toString();
-    final String subtitle = (event['event_name'] ?? event['venue_name'] ?? AppLocalizations.of(context)!.untitledJob).toString();
+    final String subtitle = (event['shift_name'] ?? event['venue_name'] ?? AppLocalizations.of(context)!.untitledJob).toString();
 
     String dateStr = '';
     bool isUpcoming = false;

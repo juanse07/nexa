@@ -1190,7 +1190,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     );
 
     // If role not found, use roleId as the role name for display
-    final eventName = eventData['title'] as String? ?? eventData['shift_name'] as String? ?? 'Event';
+    final eventName = eventData['title'] as String? ?? eventData['event_name'] as String? ?? 'Event';
     final roleName = role.isNotEmpty
         ? (role['role_name'] as String? ?? role['role'] as String? ?? role['name'] as String? ?? roleId)
         : roleId;
