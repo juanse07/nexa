@@ -300,7 +300,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Invitations sent: $successCount successful${failureCount > 0 ? ", $failureCount failed" : ""}. Event remains private.',
+            'Invitations sent: $successCount successful${failureCount > 0 ? ", $failureCount failed" : ""}. Event published privately - only invited staff can see it.',
           ),
           backgroundColor: successCount > 0 ? Colors.green : Colors.orange,
         ),
@@ -483,16 +483,16 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
       // Send individual invitations to selected users via chat
       // IMPORTANT: Wrap invitation sending in try-catch to ensure screen closes even if this fails
       // Only send individual invitations when NOT publishing to entire team
-      String publishMessage = AppLocalizations.of(context)!.jobPublished;
+      String publishMessage = AppLocalizations.of(context)!.jobPosted;
       if (!_visibleToEntireTeam && _selectedKeys.isNotEmpty && eventId.isNotEmpty) {
         print('[PUBLISH] Will send individual invitations to ${_selectedKeys.length} users');
         try {
           await _sendJobInvitationsToUsers(eventId, publishedEvent, roleDefs);
-          publishMessage = '${AppLocalizations.of(context)!.jobPublished} and invitations sent';
+          publishMessage = '${AppLocalizations.of(context)!.jobPosted} and invitations sent';
           print('[PUBLISH] ✓ Invitations sent successfully');
         } catch (e) {
           print('[PUBLISH] ✗ Failed to send invitations: $e');
-          publishMessage = '${AppLocalizations.of(context)!.jobPublished}, but some invitations failed';
+          publishMessage = '${AppLocalizations.of(context)!.jobPosted}, but some invitations failed';
         }
       } else {
         print('[PUBLISH] Skipping individual invitations (visibleToEntireTeam: $_visibleToEntireTeam, selectedKeys: ${_selectedKeys.length})');
@@ -609,7 +609,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
         .toString();
     final date = (data['date'] ?? '').toString();
     return Scaffold(
-      appBar: AppBar(title: Text(AppLocalizations.of(context)!.publishJob)),
+      appBar: AppBar(title: Text(AppLocalizations.of(context)!.postJob)),
       body: Column(
         children: [
           Expanded(

@@ -4304,8 +4304,6 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         // 2. Full = fulfilled or no open positions
         // 3. Posted = published events (public or private visibility)
 
-        final eventId = e['_id'] ?? e['id'] ?? 'unknown';
-        final eventName = e['title'] ?? e['shift_name'] ?? e['venue_name'] ?? 'Untitled';
         final visibilityType = e['visibilityType']?.toString() ?? 'unknown';
 
         print('[EVENT CATEGORIZE] Event: $eventId ($eventName) | Status: $status | Visibility: $visibilityType');
@@ -8201,7 +8199,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       children: [
         if (data['shift_name'] != null)
           DetailRow(
-            label: AppLocalizations.of(context)!.job,
+            label: AppLocalizations.of(context)!.shift,
             value: data['shift_name'].toString(),
             icon: Icons.celebration,
           ),

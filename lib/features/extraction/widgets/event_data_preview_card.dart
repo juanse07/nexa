@@ -61,7 +61,7 @@ class EventDataPreviewCard extends StatelessWidget {
       children: [
         if (eventData['event_name'] != null)
           DetailRow(
-            label: AppLocalizations.of(context)!.job,
+            label: AppLocalizations.of(context)!.shift,
             value: eventData['event_name'].toString(),
             icon: Icons.celebration,
           ),

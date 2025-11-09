@@ -33,7 +33,7 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final eventName = widget.event['event_name']?.toString() ?? AppLocalizations.of(context)!.job;
+    final eventName = widget.event['event_name']?.toString() ?? AppLocalizations.of(context)!.shift;
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surfaceContainerLowest,
@@ -60,7 +60,7 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      widget.event['event_name']?.toString() ?? AppLocalizations.of(context)!.job,
+                      widget.event['event_name']?.toString() ?? AppLocalizations.of(context)!.shift,
                       style: theme.textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
