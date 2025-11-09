@@ -1496,14 +1496,11 @@ router.get('/events', requireAuth, async (req, res) => {
 
       filter.$or = visibilityFilters;
 
-      // Staff see non-draft events, OR events with at least one accepted staff
-      // Once any staff accepts, the event is no longer considered a draft
+      // Staff can only see published events (not drafts)
+      // The visibility filters above already ensure they only see events they're invited to
       filter.$and = [
         {
-          $or: [
-            { status: { $ne: 'draft' } },  // Non-draft events always visible
-            { accepted_staff: { $exists: true, $ne: [], $not: { $size: 0 } } }  // Events with accepted staff
-          ]
+          status: 'published'  // Only published events (public or private via visibilityType)
         }
       ];
 
@@ -1820,12 +1817,25 @@ router.post('/events/:id/respond', requireAuth, async (req, res) => {
         (updatedEvent.accepted_staff as any[]) || []
       );
 
+      // Auto-publish draft events when first staff accepts (especially for private invitations)
+      const updateFields: any = { role_stats, updatedAt: new Date() };
+
+      if (responseVal === 'accept' && updatedEvent.status === 'draft') {
+        updateFields.status = 'published';
+        updateFields.publishedAt = new Date();
+        console.log(`[respond] Auto-publishing event ${eventId} from draft to published (first staff acceptance)`);
+      }
+
       await EventModel.updateOne(
         { _id: updatedEvent._id },
-        { $set: { role_stats, updatedAt: new Date() }, $inc: { version: 1 } }
+        { $set: updateFields, $inc: { version: 1 } }
       );
 
       updatedEvent.role_stats = role_stats as any;
+      if (updateFields.status) {
+        updatedEvent.status = updateFields.status;
+        updatedEvent.publishedAt = updateFields.publishedAt;
+      }
 
       // Success - return updated event
       if (!updatedEvent) {
