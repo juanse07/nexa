@@ -4306,6 +4306,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
         final acceptedStaff = (e['accepted_staff'] as List?)?.cast<Map<String, dynamic>>() ?? [];
         final hasSentToStaff = acceptedStaff.isNotEmpty;
+        final eventId = e['_id'] ?? e['id'] ?? 'unknown';
+        final eventName = e['title'] ?? e['event_name'] ?? e['venue_name'] ?? 'Untitled';
+
+        print('[EVENT CATEGORIZE] Event: $eventId ($eventName) | Status: $status | HasStaff: $hasSentToStaff (${acceptedStaff.length})');
 
         if (status == 'draft' && !hasSentToStaff) {
           // True draft - not sent to anyone yet
@@ -5122,7 +5126,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           ),
                         );
                         if (changed == true) {
-                          await _loadPendingDrafts();
+                          // Refresh both pending drafts AND posted events
+                          await Future.wait([
+                            _loadPendingDrafts(),
+                            _loadEvents(),
+                          ]);
                         }
                       },
                       child: const Text('Publish'),

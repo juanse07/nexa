@@ -464,6 +464,10 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
         audienceTeamIds = _selectedTeamIds.toList();
       }
 
+      print('[PUBLISH] About to publish event: ${widget.draftId}');
+      print('[PUBLISH] audienceUserKeys: $audienceUserKeys');
+      print('[PUBLISH] audienceTeamIds: $audienceTeamIds');
+
       // Automatically set visibility to 'public' when publishing to teams
       final publishedEvent = await _eventService.publishEvent(
         widget.draftId,
@@ -471,17 +475,35 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
         audienceTeamIds: audienceTeamIds,
         visibilityType: 'public',
       );
+
+      print('[PUBLISH] ✓ Event published successfully');
       final eventId = (publishedEvent['_id'] ?? publishedEvent['id'] ?? '').toString();
+      print('[PUBLISH] Event ID: $eventId');
 
       // Send individual invitations to selected users via chat
-      if (_selectedKeys.isNotEmpty && eventId.isNotEmpty) {
-        await _sendJobInvitationsToUsers(eventId, publishedEvent, roleDefs);
+      // IMPORTANT: Wrap invitation sending in try-catch to ensure screen closes even if this fails
+      // Only send individual invitations when NOT publishing to entire team
+      String publishMessage = AppLocalizations.of(context)!.jobPublished;
+      if (!_visibleToEntireTeam && _selectedKeys.isNotEmpty && eventId.isNotEmpty) {
+        print('[PUBLISH] Will send individual invitations to ${_selectedKeys.length} users');
+        try {
+          await _sendJobInvitationsToUsers(eventId, publishedEvent, roleDefs);
+          publishMessage = '${AppLocalizations.of(context)!.jobPublished} and invitations sent';
+          print('[PUBLISH] ✓ Invitations sent successfully');
+        } catch (e) {
+          print('[PUBLISH] ✗ Failed to send invitations: $e');
+          publishMessage = '${AppLocalizations.of(context)!.jobPublished}, but some invitations failed';
+        }
+      } else {
+        print('[PUBLISH] Skipping individual invitations (visibleToEntireTeam: $_visibleToEntireTeam, selectedKeys: ${_selectedKeys.length})');
       }
+
+      print('[PUBLISH] Closing publish screen and showing success message');
       if (!mounted) return;
       Navigator.of(context).pop(true);
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.jobPublished)));
+      ).showSnackBar(SnackBar(content: Text(publishMessage)));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -561,6 +583,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
 
     final result = await showDialog<Map<String, String>?>(
       context: context,
+      barrierDismissible: true, // Allow dismissing by tapping outside
       builder: (context) => _RoleAssignmentDialog(
         users: _selectedKeys.map((key) {
           final user = _keyToUser[key];
