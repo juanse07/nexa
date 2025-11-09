@@ -285,4 +285,4 @@ EventSchema.index({ 'accepted_staff.userKey': 1 }, { sparse: true });
 EventSchema.index({ status: 1, date: 1 });
 
 export const EventModel: Model<EventDocument> =
-  mongoose.models.Event || mongoose.model<EventDocument>('Event', EventSchema);
+  mongoose.models.Event || mongoose.model<EventDocument>('Event', EventSchema, 'shifts');
