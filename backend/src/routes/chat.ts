@@ -948,6 +948,34 @@ router.post('/invitations/:messageId/respond', requireAuth, async (req, res) => 
           );
 
           updatedEvent = eventDoc.toObject();
+        } else {
+          // First acceptance (partial fill) → publish as private
+          console.log('[INVITATION] First acceptance - transitioning draft to published (private)');
+          eventDoc.status = 'published';
+          eventDoc.visibilityType = 'private';
+          eventDoc.publishedAt = new Date();
+          eventDoc.publishedBy = name || String(message.managerId);
+
+          // Add accepting user to audience if not already there
+          if (!eventDoc.audience_user_keys) {
+            eventDoc.audience_user_keys = [];
+          }
+          if (!eventDoc.audience_user_keys.includes(userKey)) {
+            eventDoc.audience_user_keys.push(userKey);
+          }
+
+          await eventDoc.save();
+
+          // Emit socket event for published status
+          const { emitToManager: emitManager } = await import('../socket/server');
+          emitManager(message.managerId.toString(), 'event:published', {
+            eventId: String(eventId),
+            status: 'published',
+            visibilityType: 'private',
+            publishedAt: eventDoc.publishedAt,
+          });
+
+          updatedEvent = eventDoc.toObject();
         }
       }
     }
@@ -1200,12 +1228,9 @@ router.post('/invitations/send-bulk', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Event not found or not owned by you' });
     }
 
-    // Event must be in draft status to send private invitations
-    if (event.status !== 'draft') {
-      return res.status(400).json({
-        error: `Cannot send private invitations for event with status '${event.status}'. Only draft events can have private invitations.`,
-      });
-    }
+    // Event should be draft when sending first private invitations
+    // (If already published, we're adding more invitations to existing event)
+    const wasAlreadyPublished = event.status === 'published';
 
     // Import capacity helper
     const { checkRoleHasCapacity } = await import('../utils/eventCapacity');
@@ -1437,12 +1462,56 @@ router.post('/invitations/send-bulk', requireAuth, async (req, res) => {
 
     console.log('[BULK INVITATION] Complete:', { successCount, failureCount });
 
+    // If at least one invitation was successful, publish the event as private
+    if (successCount > 0 && !wasAlreadyPublished) {
+      console.log('[BULK INVITATION] Publishing event as private');
+
+      // Collect all successfully invited user keys
+      const invitedUserKeys = results
+        .filter((r) => r.success)
+        .map((r) => r.userKey);
+
+      // Update event to published status with private visibility
+      event.status = 'published';
+      event.visibilityType = 'private';
+      event.publishedAt = new Date();
+      event.publishedBy = name || String(managerId);
+
+      // Set audience_user_keys to invited users (merge with existing if any)
+      const existingAudience = event.audience_user_keys || [];
+      event.audience_user_keys = [...new Set([...existingAudience, ...invitedUserKeys])];
+
+      await event.save();
+
+      console.log(`[BULK INVITATION] Event ${eventId} published as private to ${event.audience_user_keys.length} users`);
+
+      // Emit event:published socket event to manager
+      const eventObj = event.toObject();
+      emitToManager(String(managerId), 'event:published', {
+        ...eventObj,
+        id: String(eventObj._id),
+        managerId: String(eventObj.managerId),
+      });
+    } else if (successCount > 0 && wasAlreadyPublished) {
+      // Event already published, just update audience_user_keys
+      const invitedUserKeys = results
+        .filter((r) => r.success)
+        .map((r) => r.userKey);
+
+      const existingAudience = event.audience_user_keys || [];
+      event.audience_user_keys = [...new Set([...existingAudience, ...invitedUserKeys])];
+
+      await event.save();
+      console.log(`[BULK INVITATION] Added ${invitedUserKeys.length} more users to published event`);
+    }
+
     return res.json({
-      message: `Invitations sent: ${successCount} successful, ${failureCount} failed`,
+      message: `Invitations sent: ${successCount} successful, ${failureCount} failed. Event ${wasAlreadyPublished ? 'updated' : 'published as private'}.`,
       successCount,
       failureCount,
       results,
-      eventStatus: event.status, // Confirm event remains in draft
+      eventStatus: event.status,
+      visibilityType: event.visibilityType,
     });
   } catch (error) {
     console.error('Error sending bulk invitations:', error);
