@@ -597,6 +597,7 @@ router.post('/events/:id/publish', requireAuth, async (req, res) => {
     }
 
     // Update event to published status
+    console.log(`[EVENT PUBLISH] Changing status from '${event.status}' to 'published' for event ${eventId}`);
     event.status = 'published';
     event.publishedAt = new Date();
     event.publishedBy = manager.email || manager.name || String(managerId);
@@ -609,6 +610,7 @@ router.post('/events/:id/publish', requireAuth, async (req, res) => {
     }
 
     await event.save();
+    console.log(`[EVENT PUBLISH] ✓ Event ${eventId} saved successfully with status: ${event.status}`);
 
     const eventObj = event.toObject();
     const responsePayload = {
