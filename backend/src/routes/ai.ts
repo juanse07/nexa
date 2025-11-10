@@ -1467,7 +1467,7 @@ YOU MUST RETURN AT LEAST ${minVenues} VENUES. Prioritize the most popular and la
     };
 
     const requestBody = {
-      model: 'sonar-pro',
+      model: 'sonar', // Using cheapest model with web search (was 'sonar-pro')
       messages: [
         { role: 'user', content: prompt }
       ],
@@ -1571,6 +1571,7 @@ YOU MUST RETURN AT LEAST ${minVenues} VENUES. Prioritize the most popular and la
         name: String(v.name).trim(),
         address: String(v.address).trim(),
         city: String(v.city).trim(),
+        cityName: city, // Link venue to city from request
       }))
       .slice(0, venueCapacity); // Cap at capacity (30 for tourist cities, 80 for metro)
 
@@ -1583,11 +1584,16 @@ YOU MUST RETURN AT LEAST ${minVenues} VENUES. Prioritize the most popular and la
     // Smart merge: Keep manual venues + merge with AI venues
     const existingVenues = manager.venueList || [];
 
-    // 1. Separate manual venues (these are preserved)
-    const manualVenues = existingVenues.filter((v: any) => v.source === 'manual');
+    // 1. Separate manual venues (these are preserved) and ensure they have cityName
+    const manualVenues = existingVenues
+      .filter((v: any) => v.source === 'manual')
+      .map((v: any) => ({
+        ...v,
+        cityName: v.cityName || city, // Add cityName if missing (backward compatibility)
+      }));
     console.log(`[discover-venues] Preserving ${manualVenues.length} manually added venues`);
 
-    // 2. Mark new venues as AI-discovered
+    // 2. Mark new venues as AI-discovered (cityName already added above)
     const aiVenues = validatedVenues.map(v => ({ ...v, source: 'ai' as const }));
 
     // 3. Remove duplicates (case-insensitive name match)
