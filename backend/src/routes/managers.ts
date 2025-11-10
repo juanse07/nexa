@@ -28,6 +28,16 @@ const venueUpdateSchema = z.object({
   city: z.string().trim().min(1).max(100).optional(),
 });
 
+const citySchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  isTourist: z.boolean(),
+});
+
+const cityUpdateSchema = z.object({
+  name: z.string().trim().min(1).max(200).optional(),
+  isTourist: z.boolean().optional(),
+});
+
 router.get('/managers/me', requireAuth, async (req, res) => {
   try {
     if (!(req as any).authUser?.provider || !(req as any).authUser?.sub) {
@@ -59,7 +69,8 @@ router.get('/managers/me', requireAuth, async (req, res) => {
       last_name: (manager as any).last_name,
       picture: (manager as any).picture,
       app_id: (manager as any).app_id,
-      preferredCity: (manager as any).preferredCity,
+      preferredCity: (manager as any).preferredCity, // DEPRECATED
+      cities: (manager as any).cities || [],
       venueList: (manager as any).venueList || [],
       venueListUpdatedAt: (manager as any).venueListUpdatedAt,
     });
@@ -110,7 +121,8 @@ router.patch('/managers/me', requireAuth, async (req, res) => {
       last_name: updated.last_name,
       picture: updated.picture,
       app_id: updated.app_id,
-      preferredCity: updated.preferredCity,
+      preferredCity: updated.preferredCity, // DEPRECATED
+      cities: updated.cities || [],
       venueList: updated.venueList || [],
       venueListUpdatedAt: updated.venueListUpdatedAt,
     });
@@ -243,6 +255,156 @@ router.delete('/managers/me/venues/:index', requireAuth, async (req, res) => {
     // eslint-disable-next-line no-console
     console.error('[managers] DELETE /me/venues/:index failed', err);
     return res.status(500).json({ message: 'Failed to delete venue', error: (err as Error).message });
+  }
+});
+
+// POST /managers/me/cities - Add a new city
+router.post('/managers/me/cities', requireAuth, async (req, res) => {
+  try {
+    if (!(req as any).authUser?.provider || !(req as any).authUser?.sub) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const parsed = citySchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Validation failed', details: parsed.error.format() });
+    }
+
+    const manager = await ManagerModel.findOne({
+      provider: (req as any).authUser.provider,
+      subject: (req as any).authUser.sub,
+    });
+    if (!manager) return res.status(404).json({ message: 'Manager not found' });
+
+    // Check for duplicate city name
+    const existingCity = (manager.cities || []).find(
+      (c) => c.name.toLowerCase() === parsed.data.name.toLowerCase()
+    );
+    if (existingCity) {
+      return res.status(409).json({ message: 'This city is already in your list' });
+    }
+
+    // Add new city
+    manager.cities = manager.cities || [];
+    manager.cities.push(parsed.data);
+    await manager.save();
+
+    return res.status(201).json({
+      message: 'City added successfully',
+      cities: manager.cities,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[managers] POST /me/cities failed', err);
+    return res.status(500).json({ message: 'Failed to add city', error: (err as Error).message });
+  }
+});
+
+// PATCH /managers/me/cities/:index - Update a city at specific index
+router.patch('/managers/me/cities/:index', requireAuth, async (req, res) => {
+  try {
+    if (!(req as any).authUser?.provider || !(req as any).authUser?.sub) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const index = parseInt(req.params.index || '0', 10);
+    if (isNaN(index) || index < 0) {
+      return res.status(400).json({ message: 'Invalid index parameter' });
+    }
+
+    const parsed = cityUpdateSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Validation failed', details: parsed.error.format() });
+    }
+
+    // At least one field must be provided
+    if (parsed.data.name === undefined && parsed.data.isTourist === undefined) {
+      return res.status(400).json({ message: 'At least one field (name, isTourist) must be provided' });
+    }
+
+    const manager = await ManagerModel.findOne({
+      provider: (req as any).authUser.provider,
+      subject: (req as any).authUser.sub,
+    });
+    if (!manager) return res.status(404).json({ message: 'Manager not found' });
+
+    if (!manager.cities || index >= manager.cities.length) {
+      return res.status(404).json({ message: 'City not found at index' });
+    }
+
+    // Check for duplicate city name if updating name
+    if (parsed.data.name) {
+      const duplicate = manager.cities.find(
+        (c, i) => i !== index && c.name.toLowerCase() === parsed.data.name!.toLowerCase()
+      );
+      if (duplicate) {
+        return res.status(409).json({ message: 'This city name is already in your list' });
+      }
+    }
+
+    // Update city fields
+    const city = manager.cities[index];
+    if (city) {
+      if (parsed.data.name !== undefined) city.name = parsed.data.name;
+      if (parsed.data.isTourist !== undefined) city.isTourist = parsed.data.isTourist;
+    }
+
+    await manager.save();
+
+    return res.json({
+      message: 'City updated successfully',
+      cities: manager.cities,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[managers] PATCH /me/cities/:index failed', err);
+    return res.status(500).json({ message: 'Failed to update city', error: (err as Error).message });
+  }
+});
+
+// DELETE /managers/me/cities/:index - Delete a city at specific index
+router.delete('/managers/me/cities/:index', requireAuth, async (req, res) => {
+  try {
+    if (!(req as any).authUser?.provider || !(req as any).authUser?.sub) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const index = parseInt(req.params.index || '0', 10);
+    if (isNaN(index) || index < 0) {
+      return res.status(400).json({ message: 'Invalid index parameter' });
+    }
+
+    const manager = await ManagerModel.findOne({
+      provider: (req as any).authUser.provider,
+      subject: (req as any).authUser.sub,
+    });
+    if (!manager) return res.status(404).json({ message: 'Manager not found' });
+
+    if (!manager.cities || index >= manager.cities.length) {
+      return res.status(404).json({ message: 'City not found at index' });
+    }
+
+    const deletedCityName = manager.cities[index].name;
+
+    // Remove city at index
+    manager.cities.splice(index, 1);
+
+    // Optionally remove venues associated with this city
+    if (manager.venueList) {
+      manager.venueList = manager.venueList.filter((v) => v.cityName !== deletedCityName);
+    }
+
+    await manager.save();
+
+    return res.json({
+      message: 'City and associated venues deleted successfully',
+      cities: manager.cities,
+      venueList: manager.venueList || [],
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[managers] DELETE /me/cities/:index failed', err);
+    return res.status(500).json({ message: 'Failed to delete city', error: (err as Error).message });
   }
 });
 

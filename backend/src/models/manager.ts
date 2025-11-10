@@ -27,11 +27,16 @@ export interface ManagerDocument extends Document {
   }>;
 
   // Personalized venue discovery
-  preferredCity?: string; // e.g., "Denver, CO, USA"
+  preferredCity?: string; // DEPRECATED: Use cities array instead. Kept for backward compatibility
+  cities?: Array<{
+    name: string; // e.g., "Denver, CO, USA"
+    isTourist: boolean; // true = tourist city (strict search), false = metro area (broad search)
+  }>;
   venueList?: Array<{
     name: string;
     address: string;
     city: string;
+    cityName?: string; // Links venue to cities array entry
     source?: 'ai' | 'manual'; // Track if venue was AI-discovered or manually added
   }>;
   venueListUpdatedAt?: Date;
@@ -68,11 +73,16 @@ const ManagerSchema = new Schema<ManagerDocument>(
     }],
 
     // Personalized venue discovery
-    preferredCity: { type: String, trim: true },
+    preferredCity: { type: String, trim: true }, // DEPRECATED: kept for backward compatibility
+    cities: [{
+      name: { type: String, required: true, trim: true },
+      isTourist: { type: Boolean, required: true, default: false },
+    }],
     venueList: [{
       name: { type: String, required: true },
       address: { type: String, required: true },
       city: { type: String, required: true },
+      cityName: { type: String, trim: true }, // Links to cities array entry
       source: { type: String, enum: ['ai', 'manual'], default: 'ai' },
     }],
     venueListUpdatedAt: { type: Date },
