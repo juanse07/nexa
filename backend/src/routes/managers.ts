@@ -384,7 +384,11 @@ router.delete('/managers/me/cities/:index', requireAuth, async (req, res) => {
       return res.status(404).json({ message: 'City not found at index' });
     }
 
-    const deletedCityName = manager.cities[index].name;
+    const cityToDelete = manager.cities[index];
+    if (!cityToDelete) {
+      return res.status(404).json({ message: 'City not found at index' });
+    }
+    const deletedCityName = cityToDelete.name;
 
     // Remove city at index
     manager.cities.splice(index, 1);

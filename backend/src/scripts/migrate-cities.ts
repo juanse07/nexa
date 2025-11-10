@@ -64,8 +64,11 @@ async function migratePreferredCity() {
 
         // Update venues to include cityName
         const updatedVenueList = (manager.venueList || []).map((venue) => ({
-          ...venue.toObject(),
+          name: venue.name,
+          address: venue.address,
+          city: venue.city,
           cityName: venue.cityName || manager.preferredCity!, // Add cityName if missing
+          source: venue.source,
         }));
 
         console.log(`  - New cities array: ${JSON.stringify(cities)}`);
