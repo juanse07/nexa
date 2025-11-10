@@ -1,6 +1,14 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:nexa/services/notification_service.dart';
 import '../../../../core/widgets/custom_sliver_app_bar.dart';
+import '../../../../core/config/app_config.dart';
+import '../../../auth/data/services/auth_service.dart';
+import '../../../onboarding/presentation/manager_onboarding_screen.dart';
+import '../../../onboarding/presentation/venue_list_screen.dart';
+import '../../../venues/presentation/venue_form_screen.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -18,6 +26,69 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _hoursNotifications = true;
   bool _systemNotifications = true;
   bool _marketingNotifications = false;
+
+  // Venue management
+  String? _preferredCity;
+  int _venueCount = 0;
+  String? _venueUpdatedAt;
+  bool _loadingVenues = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVenueInfo();
+  }
+
+  /// Load current venue information from backend
+  Future<void> _loadVenueInfo() async {
+    try {
+      final token = await AuthService.getJwt();
+      if (token == null) return;
+
+      final baseUrl = AppConfig.instance.baseUrl;
+      final response = await http.get(
+        Uri.parse('$baseUrl/managers/me'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200 && mounted) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          _preferredCity = data['preferredCity'] as String?;
+          final venueList = data['venueList'] as List?;
+          _venueCount = venueList?.length ?? 0;
+          _venueUpdatedAt = data['venueListUpdatedAt'] as String?;
+        });
+      }
+    } catch (e) {
+      print('[Settings] Failed to load venue info: $e');
+    }
+  }
+
+  /// Open venue discovery screen
+  Future<void> _updateVenues() async {
+    final result = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => const ManagerOnboardingScreen(),
+      ),
+    );
+
+    if (result == true && mounted) {
+      // Reload venue info after update
+      await _loadVenueInfo();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Venues updated successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
+  }
 
   Future<void> _sendTestNotification() async {
     setState(() => _sendingTest = true);
@@ -234,11 +305,194 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 16),
+                // Venue Management Section
+                Card(
+                  elevation: 0,
+                  color: theme.colorScheme.surfaceContainer,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.location_city,
+                              color: theme.colorScheme.primary,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Location & Venues',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        if (_preferredCity != null) ...[
+                          _buildInfoRow(
+                            icon: Icons.place,
+                            label: 'City',
+                            value: _preferredCity!,
+                            theme: theme,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildInfoRow(
+                            icon: Icons.business,
+                            label: 'Venues',
+                            value: '$_venueCount discovered',
+                            theme: theme,
+                          ),
+                          if (_venueUpdatedAt != null) ...[
+                            const SizedBox(height: 12),
+                            _buildInfoRow(
+                              icon: Icons.update,
+                              label: 'Last Updated',
+                              value: _formatDate(_venueUpdatedAt!),
+                              theme: theme,
+                            ),
+                          ],
+                        ] else ...[
+                          Text(
+                            'No venue discovery set up yet. Personalized venues help the AI suggest accurate event locations in your area.',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: _loadingVenues ? null : _updateVenues,
+                            icon: _loadingVenues
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : Icon(_preferredCity != null
+                                    ? Icons.refresh
+                                    : Icons.add_location),
+                            label: Text(
+                              _loadingVenues
+                                  ? 'Updating...'
+                                  : (_preferredCity != null
+                                      ? 'Update City & Venues'
+                                      : 'Set Up Venues'),
+                            ),
+                          ),
+                        ),
+                        if (_venueCount > 0) ...[
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (context) => const VenueListScreen(),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.list),
+                              label: Text('View All $_venueCount Venues'),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              onPressed: () async {
+                                final result = await Navigator.of(context).push<bool>(
+                                  MaterialPageRoute(
+                                    builder: (context) => const VenueFormScreen(),
+                                  ),
+                                );
+                                if (result == true && mounted) {
+                                  _loadVenueInfo(); // Reload venue count
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Venue added successfully!'),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                }
+                              },
+                              icon: const Icon(Icons.add_location_alt),
+                              label: const Text('Add New Venue'),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
               ]),
             ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildInfoRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    required ThemeData theme,
+  }) {
+    return Row(
+      children: [
+        Icon(
+          icon,
+          size: 20,
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+        const SizedBox(width: 8),
+        Text(
+          '$label: ',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _formatDate(String isoDate) {
+    try {
+      final date = DateTime.parse(isoDate);
+      final now = DateTime.now();
+      final difference = now.difference(date);
+
+      if (difference.inDays == 0) {
+        return 'Today';
+      } else if (difference.inDays == 1) {
+        return 'Yesterday';
+      } else if (difference.inDays < 7) {
+        return '${difference.inDays} days ago';
+      } else if (difference.inDays < 30) {
+        final weeks = (difference.inDays / 7).floor();
+        return '$weeks ${weeks == 1 ? 'week' : 'weeks'} ago';
+      } else {
+        return '${date.month}/${date.day}/${date.year}';
+      }
+    } catch (e) {
+      return 'Unknown';
+    }
   }
 }

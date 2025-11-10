@@ -13,6 +13,19 @@ const updateSchema = z.object({
     .regex(/^\d{9}$/)
     .optional(),
   picture: z.string().url().max(2048).optional(),
+  preferredCity: z.string().trim().min(1).max(200).optional(),
+});
+
+const venueSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  address: z.string().trim().min(1).max(500),
+  city: z.string().trim().min(1).max(100),
+});
+
+const venueUpdateSchema = z.object({
+  name: z.string().trim().min(1).max(200).optional(),
+  address: z.string().trim().min(1).max(500).optional(),
+  city: z.string().trim().min(1).max(100).optional(),
 });
 
 router.get('/managers/me', requireAuth, async (req, res) => {
@@ -46,6 +59,9 @@ router.get('/managers/me', requireAuth, async (req, res) => {
       last_name: (manager as any).last_name,
       picture: (manager as any).picture,
       app_id: (manager as any).app_id,
+      preferredCity: (manager as any).preferredCity,
+      venueList: (manager as any).venueList || [],
+      venueListUpdatedAt: (manager as any).venueListUpdatedAt,
     });
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -94,11 +110,139 @@ router.patch('/managers/me', requireAuth, async (req, res) => {
       last_name: updated.last_name,
       picture: updated.picture,
       app_id: updated.app_id,
+      preferredCity: updated.preferredCity,
+      venueList: updated.venueList || [],
+      venueListUpdatedAt: updated.venueListUpdatedAt,
     });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[managers] PATCH /me failed', err);
     return res.status(500).json({ message: 'Failed to update manager profile', error: (err as Error).message });
+  }
+});
+
+// POST /managers/me/venues - Add a new venue
+router.post('/managers/me/venues', requireAuth, async (req, res) => {
+  try {
+    if (!(req as any).authUser?.provider || !(req as any).authUser?.sub) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const parsed = venueSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Validation failed', details: parsed.error.format() });
+    }
+
+    const manager = await ManagerModel.findOne({
+      provider: (req as any).authUser.provider,
+      subject: (req as any).authUser.sub,
+    });
+    if (!manager) return res.status(404).json({ message: 'Manager not found' });
+
+    // Add new venue with source='manual'
+    const newVenue = { ...parsed.data, source: 'manual' as const };
+    manager.venueList = manager.venueList || [];
+    manager.venueList.push(newVenue);
+    await manager.save();
+
+    return res.status(201).json({
+      message: 'Venue added successfully',
+      venueList: manager.venueList,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[managers] POST /me/venues failed', err);
+    return res.status(500).json({ message: 'Failed to add venue', error: (err as Error).message });
+  }
+});
+
+// PATCH /managers/me/venues/:index - Update a venue at specific index
+router.patch('/managers/me/venues/:index', requireAuth, async (req, res) => {
+  try {
+    if (!(req as any).authUser?.provider || !(req as any).authUser?.sub) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const index = parseInt(req.params.index || '0', 10);
+    if (isNaN(index) || index < 0) {
+      return res.status(400).json({ message: 'Invalid index parameter' });
+    }
+
+    const parsed = venueUpdateSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Validation failed', details: parsed.error.format() });
+    }
+
+    // At least one field must be provided
+    if (!parsed.data.name && !parsed.data.address && !parsed.data.city) {
+      return res.status(400).json({ message: 'At least one field (name, address, city) must be provided' });
+    }
+
+    const manager = await ManagerModel.findOne({
+      provider: (req as any).authUser.provider,
+      subject: (req as any).authUser.sub,
+    });
+    if (!manager) return res.status(404).json({ message: 'Manager not found' });
+
+    if (!manager.venueList || index >= manager.venueList.length) {
+      return res.status(404).json({ message: 'Venue not found at index' });
+    }
+
+    // Update venue fields (preserve source)
+    const venue = manager.venueList[index];
+    if (venue) {
+      if (parsed.data.name) venue.name = parsed.data.name;
+      if (parsed.data.address) venue.address = parsed.data.address;
+      if (parsed.data.city) venue.city = parsed.data.city;
+    }
+
+    await manager.save();
+
+    return res.json({
+      message: 'Venue updated successfully',
+      venueList: manager.venueList,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[managers] PATCH /me/venues/:index failed', err);
+    return res.status(500).json({ message: 'Failed to update venue', error: (err as Error).message });
+  }
+});
+
+// DELETE /managers/me/venues/:index - Delete a venue at specific index
+router.delete('/managers/me/venues/:index', requireAuth, async (req, res) => {
+  try {
+    if (!(req as any).authUser?.provider || !(req as any).authUser?.sub) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const index = parseInt(req.params.index || '0', 10);
+    if (isNaN(index) || index < 0) {
+      return res.status(400).json({ message: 'Invalid index parameter' });
+    }
+
+    const manager = await ManagerModel.findOne({
+      provider: (req as any).authUser.provider,
+      subject: (req as any).authUser.sub,
+    });
+    if (!manager) return res.status(404).json({ message: 'Manager not found' });
+
+    if (!manager.venueList || index >= manager.venueList.length) {
+      return res.status(404).json({ message: 'Venue not found at index' });
+    }
+
+    // Remove venue at index
+    manager.venueList.splice(index, 1);
+    await manager.save();
+
+    return res.json({
+      message: 'Venue deleted successfully',
+      venueList: manager.venueList,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[managers] DELETE /me/venues/:index failed', err);
+    return res.status(500).json({ message: 'Failed to delete venue', error: (err as Error).message });
   }
 });
 

@@ -115,7 +115,7 @@ router.get('/ai/manager/context', requireAuth, async (req, res) => {
 
     // Load manager details
     const manager = await ManagerModel.findById(managerId)
-      .select('email first_name last_name name')
+      .select('email first_name last_name name preferredCity venueList')
       .lean();
 
     if (!manager) {
@@ -194,8 +194,15 @@ router.get('/ai/manager/context', requireAuth, async (req, res) => {
         email: manager.email,
         firstName: manager.first_name || 'Manager',
         lastName: manager.last_name || '',
-        name: manager.name || 'Manager'
+        name: manager.name || 'Manager',
+        preferredCity: (manager as any).preferredCity
       },
+      venues: ((manager as any).venueList || []).map((venue: any) => ({
+        name: venue.name,
+        address: venue.address,
+        city: venue.city,
+        source: venue.source || 'ai'
+      })),
       clients: clients.map((client: any) => ({
         id: client._id,
         name: client.name,
@@ -233,6 +240,7 @@ router.get('/ai/manager/context', requireAuth, async (req, res) => {
         totalClients: clients.length,
         totalEvents: events.length,
         totalTeamMembers: teamMembers.length,
+        totalVenues: ((manager as any).venueList || []).length,
         upcomingEvents: events.filter((e: any) => new Date(e.date) >= new Date()).length,
         pastEvents: events.filter((e: any) => new Date(e.date) < new Date()).length
       }
@@ -1336,5 +1344,288 @@ async function callOpenAIWithRetries(
   }
   throw new Error('Max retry attempts reached');
 }
+
+/**
+ * POST /api/ai/discover-venues
+ * Discover popular event venues in a city using Perplexity AI with automatic web search
+ * Saves personalized venue list to manager's profile
+ */
+router.post('/ai/discover-venues', requireAuth, async (req, res) => {
+  try {
+    const { city, isTourist } = req.body;
+
+    if (!city || typeof city !== 'string') {
+      return res.status(400).json({ message: 'City is required' });
+    }
+
+    const isTouristCity = isTourist === true; // Default to false if not provided
+
+    const perplexityKey = process.env.PERPLEXITY_API_KEY;
+    if (!perplexityKey) {
+      console.error('[discover-venues] PERPLEXITY_API_KEY not configured');
+      return res.status(500).json({ message: 'Perplexity API key not configured on server' });
+    }
+
+    // Get manager from auth
+    if (!(req as any).authUser?.provider || !(req as any).authUser?.sub) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const manager = await ManagerModel.findOne({
+      provider: (req as any).authUser.provider,
+      subject: (req as any).authUser.sub,
+    });
+
+    if (!manager) {
+      return res.status(404).json({ message: 'Manager not found' });
+    }
+
+    console.log(`[discover-venues] Researching venues for ${isTouristCity ? 'tourist city' : 'metro area'}: ${city} using Perplexity AI`);
+
+    // Extract city name and state from "City, State, Country" format
+    const metroArea = city.includes(',') ? (city.split(',')[0] || city).trim() : city;
+    const state = city.includes(',') ? (city.split(',')[1] || '').trim() : '';
+
+    // Determine venue capacity and search strategy based on city type
+    const venueCapacity = isTouristCity ? 30 : 80;
+    const minVenues = isTouristCity ? 10 : 70;
+
+    // Create prompt based on city type
+    let prompt: string;
+
+    if (isTouristCity) {
+      // Tourist city: Search ONLY within the specific city limits
+      prompt = `Find event venues located specifically IN ${metroArea}${state ? ', ' + state : ''}.
+
+CRITICAL: Only include venues that are PHYSICALLY LOCATED in ${metroArea} itself, not in nearby cities or the surrounding metro area.
+
+Find ${minVenues}-${venueCapacity} venues including:
+1. **HOTELS** - Hotels, resorts, lodges with event spaces, ballrooms, or meeting rooms in ${metroArea}
+2. **WEDDING VENUES** - Wedding venues, reception halls, banquet facilities in ${metroArea}
+3. **RESTAURANTS & BARS** - Restaurants, breweries, wineries with private event rooms or buyout options in ${metroArea}
+4. **EVENT CENTERS** - Conference centers, community centers, event halls in ${metroArea}
+5. **UNIQUE VENUES** - Historic buildings, museums, theaters, galleries with event spaces in ${metroArea}
+6. **OUTDOOR VENUES** - Parks, gardens, ranches, ski resorts (if applicable) in ${metroArea}
+
+CRITICAL: DO NOT include venues from nearby cities. For example, if searching for ${metroArea}, do NOT include venues from other cities even if they are close by.
+
+For EACH venue, provide:
+- Exact official name
+- Complete address (street number, street, city, state, ZIP)
+- City name (must be ${metroArea})
+
+Return ONLY this JSON format (no markdown, no explanations):
+{
+  "venues": [
+    {"name": "Example Hotel & Resort", "address": "123 Main St, ${metroArea}, ${state} 12345", "city": "${metroArea}"}
+  ]
+}
+
+Return ${minVenues}-${venueCapacity} venues that are all located in ${metroArea}.`;
+    } else {
+      // Metro city: Search ENTIRE metropolitan area (current behavior)
+      prompt = `Find the ${minVenues}-${venueCapacity} MOST POPULAR and LARGEST event venues in the ${city} metropolitan area and surrounding region.
+
+CRITICAL INSTRUCTIONS:
+1. PRIORITIZE THE BIGGEST AND MOST WELL-KNOWN VENUES FIRST
+2. Include venues from the ENTIRE metro area (downtown, suburbs, all cities in the region)
+3. Focus on venues that host MAJOR events (thousands of people, large weddings, big conferences)
+4. Do NOT focus only on small local venues in one specific suburb
+
+MUST INCLUDE these types of major venues (search the entire metro area):
+1. **STADIUMS & ARENAS** - Sports venues, amphitheaters (like Ball Arena, stadiums, major concert venues)
+2. **CONVENTION CENTERS** - Major convention centers and conference facilities
+3. **MAJOR HOTELS** - Large hotels with ballrooms and event spaces (Marriott, Hilton, Hyatt, etc.)
+4. **POPULAR WEDDING VENUES** - Well-known wedding venues and reception halls across the metro
+5. **CONCERT HALLS & THEATERS** - Major performance venues and concert halls
+6. **MUSEUMS & CULTURAL CENTERS** - Major museums and cultural venues
+7. **COUNTRY CLUBS & GOLF COURSES** - Upscale venues with event spaces
+8. **UNIQUE POPULAR VENUES** - Well-known breweries, wineries, historic buildings, specialty venues
+
+Search across ALL cities in the ${metroArea} metro area, not just one suburb. Include downtown venues, suburban venues, and everything in between.
+
+For EACH venue, provide:
+- Exact official name
+- Complete address (street number, street, city, state, ZIP)
+- City name
+
+Return ONLY this JSON format (no markdown, no explanations):
+{
+  "venues": [
+    {"name": "Ball Arena", "address": "1000 Chopper Cir, Denver, CO 80204", "city": "Denver"},
+    {"name": "Colorado Convention Center", "address": "700 14th St, Denver, CO 80202", "city": "Denver"}
+  ]
+}
+
+YOU MUST RETURN AT LEAST ${minVenues} VENUES. Prioritize the most popular and largest venues first.`;
+    }
+
+    const headers = {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${perplexityKey}`,
+    };
+
+    const requestBody = {
+      model: 'sonar-pro',
+      messages: [
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.3,
+      max_tokens: 4000, // Increased for more venues
+    };
+
+    console.log('[discover-venues] Calling Perplexity API...');
+
+    const response = await axios.post(
+      'https://api.perplexity.ai/chat/completions',
+      requestBody,
+      { headers, validateStatus: () => true, timeout: 90000 } // 90s timeout for web search
+    );
+
+    if (response.status !== 200) {
+      console.error('[discover-venues] Perplexity API error:', response.status, response.data);
+      return res.status(response.status).json({
+        message: 'Failed to discover venues',
+        error: response.data
+      });
+    }
+
+    // Perplexity returns standard OpenAI format with content in message.content
+    const content = response.data.choices?.[0]?.message?.content;
+
+    if (!content) {
+      console.error('[discover-venues] No content in response. Response:', JSON.stringify(response.data, null, 2).substring(0, 500));
+      return res.status(500).json({ message: 'No venue data returned' });
+    }
+
+    console.log('[discover-venues] Response length:', content.length, 'chars');
+    console.log('[discover-venues] Full response:', content);
+
+    // Parse JSON response
+    let venueData;
+    try {
+      // Try to parse directly first (Perplexity should return clean JSON)
+      let cleanedContent = content.trim();
+
+      // Remove markdown code blocks if present
+      if (cleanedContent.startsWith('```')) {
+        cleanedContent = cleanedContent
+          .replace(/```json\n?/g, '')
+          .replace(/```\n?/g, '')
+          .trim();
+      }
+
+      // Try direct parsing first
+      try {
+        venueData = JSON.parse(cleanedContent);
+      } catch (directParseError) {
+        // If that fails, extract JSON object from text using brace counting
+        const jsonStartPattern = /\{\s*"venues"\s*:\s*\[/;
+        const startMatch = cleanedContent.match(jsonStartPattern);
+
+        if (!startMatch) {
+          throw new Error('Could not find JSON start pattern in response');
+        }
+
+        const startIndex = cleanedContent.indexOf(startMatch[0]);
+        let braceCount = 0;
+        let endIndex = -1;
+
+        for (let i = startIndex; i < cleanedContent.length; i++) {
+          if (cleanedContent[i] === '{') braceCount++;
+          else if (cleanedContent[i] === '}') {
+            braceCount--;
+            if (braceCount === 0) {
+              endIndex = i + 1;
+              break;
+            }
+          }
+        }
+
+        if (endIndex === -1) {
+          throw new Error('Could not find matching closing brace');
+        }
+
+        const jsonString = cleanedContent.substring(startIndex, endIndex);
+        venueData = JSON.parse(jsonString);
+      }
+
+      console.log('[discover-venues] Successfully parsed JSON');
+    } catch (parseError) {
+      console.error('[discover-venues] Failed to parse JSON:', parseError);
+      console.error('[discover-venues] Content sample:', content.substring(0, 1000));
+      return res.status(500).json({ message: 'Failed to parse venue data' });
+    }
+
+    const venues = venueData.venues;
+    if (!Array.isArray(venues) || venues.length === 0) {
+      console.error('[discover-venues] No venues in response');
+      return res.status(500).json({ message: 'No venues found' });
+    }
+
+    // Validate and clean venue data
+    const validatedVenues = venues
+      .filter(v => v.name && v.address && v.city)
+      .map(v => ({
+        name: String(v.name).trim(),
+        address: String(v.address).trim(),
+        city: String(v.city).trim(),
+      }))
+      .slice(0, venueCapacity); // Cap at capacity (30 for tourist cities, 80 for metro)
+
+    if (validatedVenues.length === 0) {
+      return res.status(500).json({ message: 'No valid venues found' });
+    }
+
+    console.log(`[discover-venues] Found ${validatedVenues.length} AI-discovered venues`);
+
+    // Smart merge: Keep manual venues + merge with AI venues
+    const existingVenues = manager.venueList || [];
+
+    // 1. Separate manual venues (these are preserved)
+    const manualVenues = existingVenues.filter((v: any) => v.source === 'manual');
+    console.log(`[discover-venues] Preserving ${manualVenues.length} manually added venues`);
+
+    // 2. Mark new venues as AI-discovered
+    const aiVenues = validatedVenues.map(v => ({ ...v, source: 'ai' as const }));
+
+    // 3. Remove duplicates (case-insensitive name match)
+    const manualNames = new Set(manualVenues.map((v: any) => v.name.toLowerCase().trim()));
+    const uniqueAIVenues = aiVenues.filter((v: any) => !manualNames.has(v.name.toLowerCase().trim()));
+    console.log(`[discover-venues] Adding ${uniqueAIVenues.length} unique AI venues (${aiVenues.length - uniqueAIVenues.length} duplicates removed)`);
+
+    // 4. Combine and cap at capacity (keep all manual, trim AI if needed)
+    const mergedVenues = [...manualVenues, ...uniqueAIVenues];
+    const finalVenues = mergedVenues.slice(0, venueCapacity);
+
+    if (mergedVenues.length > venueCapacity) {
+      console.log(`[discover-venues] Capped venues at ${venueCapacity} (had ${mergedVenues.length} total)`);
+    }
+
+    // Save to manager's profile
+    manager.preferredCity = city;
+    manager.venueList = finalVenues;
+    manager.venueListUpdatedAt = new Date();
+    await manager.save();
+
+    console.log(`[discover-venues] Saved ${finalVenues.length} total venues (${manualVenues.length} manual + ${finalVenues.length - manualVenues.length} AI) for ${city}`);
+
+    return res.json({
+      success: true,
+      city,
+      venueCount: validatedVenues.length,
+      venues: validatedVenues,
+      updatedAt: manager.venueListUpdatedAt,
+    });
+
+  } catch (error: any) {
+    console.error('[discover-venues] Error:', error);
+    return res.status(500).json({
+      message: 'Failed to discover venues',
+      error: error.message
+    });
+  }
+});
 
 export default router;

@@ -26,6 +26,16 @@ export interface ManagerDocument extends Document {
     lastActive: Date;
   }>;
 
+  // Personalized venue discovery
+  preferredCity?: string; // e.g., "Denver, CO, USA"
+  venueList?: Array<{
+    name: string;
+    address: string;
+    city: string;
+    source?: 'ai' | 'manual'; // Track if venue was AI-discovered or manually added
+  }>;
+  venueListUpdatedAt?: Date;
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -56,6 +66,16 @@ const ManagerSchema = new Schema<ManagerDocument>(
       deviceType: { type: String, enum: ['ios', 'android', 'web'], required: true },
       lastActive: { type: Date, default: Date.now },
     }],
+
+    // Personalized venue discovery
+    preferredCity: { type: String, trim: true },
+    venueList: [{
+      name: { type: String, required: true },
+      address: { type: String, required: true },
+      city: { type: String, required: true },
+      source: { type: String, enum: ['ai', 'manual'], default: 'ai' },
+    }],
+    venueListUpdatedAt: { type: Date },
   },
   { timestamps: true }
 );
