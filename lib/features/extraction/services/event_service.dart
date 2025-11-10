@@ -5,12 +5,38 @@ import 'package:nexa/core/network/api_client.dart';
 import 'package:nexa/core/network/socket_manager.dart';
 import 'package:nexa/core/di/injection.dart';
 
+/// Result of fetching events with delta sync support
+class EventFetchResult {
+  EventFetchResult({
+    required this.events,
+    this.serverTimestamp,
+    this.isDeltaSync = false,
+    this.changeCount,
+  });
+
+  final List<Map<String, dynamic>> events;
+  final String? serverTimestamp;
+  final bool isDeltaSync;
+  final int? changeCount;
+
+  bool get hasChanges => events.isNotEmpty;
+
+  @override
+  String toString() {
+    if (isDeltaSync) {
+      return 'EventFetchResult(delta: $changeCount changes, timestamp: $serverTimestamp)';
+    }
+    return 'EventFetchResult(full: ${events.length} items, timestamp: $serverTimestamp)';
+  }
+}
+
 class EventService {
   EventService() : _apiClient = getIt<ApiClient>() {
     _setupSocketListeners();
   }
 
   final ApiClient _apiClient;
+  String? _lastSyncTimestamp;
 
   // Stream controllers for event status changes
   final StreamController<Map<String, dynamic>> _eventFulfilledController =
@@ -40,7 +66,29 @@ class EventService {
     _eventReopenedController.close();
   }
 
+  /// Gets the last sync timestamp
+  String? get lastSyncTimestamp => _lastSyncTimestamp;
+
+  /// Clears the last sync timestamp (forces full sync on next fetch)
+  void clearLastSyncTimestamp() {
+    _lastSyncTimestamp = null;
+    print('[EventService] Cleared last sync timestamp - next fetch will be full sync');
+  }
+
+  /// Legacy method for backwards compatibility - fetches events without delta sync metadata
   Future<List<Map<String, dynamic>>> fetchEvents({String? userKey}) async {
+    final result = await fetchEventsWithSync(userKey: userKey, useDeltaSync: false);
+    return result.events;
+  }
+
+  /// Fetches events with delta sync support
+  ///
+  /// If [useDeltaSync] is true and a last sync timestamp exists, only changed events are returned.
+  /// Returns both the events and sync metadata for tracking.
+  Future<EventFetchResult> fetchEventsWithSync({
+    String? userKey,
+    bool useDeltaSync = true,
+  }) async {
     try {
       final options = Options(headers: <String, String>{'Accept': 'application/json'});
 
@@ -48,34 +96,72 @@ class EventService {
         options.headers!['x-user-key'] = userKey.trim();
       }
 
-      final response = await _apiClient.get('/events', options: options);
+      // Build query parameters
+      final queryParams = <String, dynamic>{};
+      if (useDeltaSync && _lastSyncTimestamp != null) {
+        queryParams['lastSync'] = _lastSyncTimestamp;
+        print('[EventService] Delta sync - fetching changes since $_lastSyncTimestamp');
+      } else {
+        print('[EventService] Full sync - fetching all events');
+      }
+
+      final response = await _apiClient.get(
+        '/events',
+        queryParameters: queryParams.isNotEmpty ? queryParams : null,
+        options: options,
+      );
 
       if (response.statusCode != null &&
           response.statusCode! >= 200 &&
           response.statusCode! < 300) {
         final dynamic decoded = response.data;
+
+        List<Map<String, dynamic>> events;
+        String? serverTimestamp;
+        bool isDelta = false;
+
         // Support two shapes:
         // 1) Legacy: top-level array of events
         // 2) Current: object { events: [...], serverTimestamp, deltaSync }
         if (decoded is List) {
-          return decoded
+          events = decoded
               .whereType<Map<String, dynamic>>()
               .map((e) => e)
               .toList(growable: false);
-        }
-        if (decoded is Map<String, dynamic>) {
+          // Use current time as timestamp for legacy format
+          serverTimestamp = DateTime.now().toIso8601String();
+        } else if (decoded is Map<String, dynamic>) {
           final dynamic eventsField = decoded['events'];
           if (eventsField is List) {
-            return eventsField
+            events = eventsField
                 .whereType<Map<String, dynamic>>()
                 .map((e) => e)
                 .toList(growable: false);
+          } else {
+            events = const <Map<String, dynamic>>[];
           }
-          // If backend returns an object without 'events', fallback to empty list
-          return const <Map<String, dynamic>>[];
+          serverTimestamp = decoded['serverTimestamp'] as String?;
+          isDelta = decoded['deltaSync'] == true;
+        } else {
+          // Unknown shape
+          events = const <Map<String, dynamic>>[];
+          serverTimestamp = DateTime.now().toIso8601String();
         }
-        // Unknown shape
-        return const <Map<String, dynamic>>[];
+
+        // Save the server timestamp for next sync
+        if (serverTimestamp != null) {
+          _lastSyncTimestamp = serverTimestamp;
+        }
+
+        final result = EventFetchResult(
+          events: events,
+          serverTimestamp: serverTimestamp,
+          isDeltaSync: isDelta,
+          changeCount: isDelta ? events.length : null,
+        );
+
+        print('[EventService] Fetched: $result');
+        return result;
       }
       throw Exception(
         'Failed to load events (${response.statusCode}): ${response.data}',
@@ -95,6 +181,8 @@ class EventService {
       if (response.statusCode != null &&
           response.statusCode! >= 200 &&
           response.statusCode! < 300) {
+        // Clear last sync to force fresh sync on next fetch
+        clearLastSyncTimestamp();
         return response.data as Map<String, dynamic>;
       }
       throw Exception(
@@ -128,6 +216,8 @@ class EventService {
         }
 
         print('[EventService.createBatchEvents] Successfully created ${eventsField.length} events');
+        // Clear last sync to force fresh sync on next fetch
+        clearLastSyncTimestamp();
         return eventsField.cast<Map<String, dynamic>>();
       }
 
@@ -165,6 +255,8 @@ class EventService {
           response.statusCode! >= 200 &&
           response.statusCode! < 300) {
         print('[EventService.updateEvent] ✓ Update successful');
+        // Clear last sync to force fresh sync on next fetch
+        clearLastSyncTimestamp();
         return response.data as Map<String, dynamic>;
       }
       throw Exception(
@@ -185,6 +277,8 @@ class EventService {
       if (response.statusCode != null &&
           response.statusCode! >= 200 &&
           response.statusCode! < 300) {
+        // Clear last sync to force fresh sync on next fetch
+        clearLastSyncTimestamp();
         return;
       }
       throw Exception(

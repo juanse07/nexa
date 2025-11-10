@@ -62,12 +62,15 @@ class ChatEventService {
   List<Map<String, dynamic>> _existingEvents = [];
   List<Map<String, dynamic>> _existingTeamMembers = [];
   List<Map<String, dynamic>> _membersAvailability = [];
+  String? _preferredCity;
+  List<Map<String, dynamic>> _venueList = [];
 
   // Cache timestamps for smart reloading
   DateTime? _clientsCacheTime;
   DateTime? _eventsCacheTime;
   DateTime? _teamMembersCacheTime;
   DateTime? _availabilityCacheTime;
+  DateTime? _venuesCacheTime;
   static const Duration _cacheValidDuration = Duration(minutes: 5);
 
   // Track created entities during chat
@@ -321,12 +324,60 @@ Be conversational and friendly. If the user provides multiple pieces of informat
     }
   }
 
+  /// Load manager's personalized venue list with caching
+  Future<void> _loadManagerVenues({bool forceRefresh = false}) async {
+    // Check if cache is valid
+    if (!forceRefresh &&
+        _venuesCacheTime != null &&
+        DateTime.now().difference(_venuesCacheTime!) < _cacheValidDuration &&
+        _venueList.isNotEmpty) {
+      print('Using cached venues (${_venueList.length} venues in $_preferredCity)');
+      return;
+    }
+
+    try {
+      print('Fetching manager venue list from backend...');
+      final token = await AuthService.getJwt();
+      if (token == null) {
+        print('[ChatEventService] Not authenticated');
+        return;
+      }
+
+      final response = await http.get(
+        Uri.parse('${AppConfig.instance.baseUrl}/managers/me'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        _preferredCity = data['preferredCity'];
+        final venueList = data['venueList'] as List?;
+        _venueList = venueList?.cast<Map<String, dynamic>>() ?? [];
+        _venuesCacheTime = DateTime.now();
+
+        print('Loaded ${_venueList.length} venues for ${_preferredCity ?? "unknown city"}');
+      } else {
+        print('[ChatEventService] Failed to load venues: ${response.statusCode}');
+        _venueList = [];
+        _preferredCity = null;
+      }
+    } catch (e) {
+      print('Failed to load venues: $e');
+      _venueList = [];
+      _preferredCity = null;
+    }
+  }
+
   /// Invalidate cache when data changes
   void _invalidateCache() {
     _clientsCacheTime = null;
     _eventsCacheTime = null;
     _teamMembersCacheTime = null;
     _availabilityCacheTime = null;
+    _venuesCacheTime = null;
     print('Cache invalidated');
   }
 
@@ -499,6 +550,27 @@ Be conversational and friendly. If the user provides multiple pieces of informat
     return buffer.toString();
   }
 
+  /// Format personalized venues for AI context
+  String _formatVenuesForContext() {
+    if (_venueList.isEmpty) {
+      return '## Popular Venues\nNo personalized venue list available. Manager can set up venues in settings.';
+    }
+
+    final buffer = StringBuffer();
+    buffer.writeln('## Popular Venues in $_preferredCity (${_venueList.length} total)');
+    buffer.writeln('Use these venues to auto-complete addresses when users mention them:\n');
+
+    for (final venue in _venueList) {
+      final name = venue['name'] as String? ?? 'Unknown';
+      final address = venue['address'] as String? ?? 'Unknown';
+      final city = venue['city'] as String? ?? '';
+
+      buffer.writeln('- **$name** - $address${city.isNotEmpty ? ", $city" : ""}');
+    }
+
+    return buffer.toString();
+  }
+
   /// Build system prompt with current context (smart loading)
   Future<String> _buildSystemPrompt({
     String? userMessage,
@@ -526,6 +598,9 @@ Be conversational and friendly. If the user provides multiple pieces of informat
       // Load team members and their availability for AI context
       await _loadExistingTeamMembers();
       await _loadMembersAvailability();
+
+      // Load personalized venue list
+      await _loadManagerVenues();
     } else {
       print('Using cached context data - skipping heavy loading');
     }
@@ -536,17 +611,21 @@ Be conversational and friendly. If the user provides multiple pieces of informat
 
     final eventsContext = _formatEventsForContext();
     final teamMembersContext = _formatTeamMembersForContext();
+    final venuesContext = _formatVenuesForContext();
 
     return '''$instructions
 
 ## Current Context
 - $clientsList
+${_preferredCity != null ? '- Manager\'s City: $_preferredCity' : ''}
 
 ## Team Members
 $teamMembersContext
 
 ## Existing Events
 $eventsContext
+
+$venuesContext
 
 ## Event Updates
 If the user wants to modify an existing event, respond with "EVENT_UPDATE" followed by a JSON object:

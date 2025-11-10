@@ -9,28 +9,28 @@ class AppLocalizationsEs extends AppLocalizations {
   AppLocalizationsEs([String locale = 'es']) : super(locale);
 
   @override
-  String get jobDataExtractor => 'Extractor de Datos de Trabajo';
+  String get jobDataExtractor => 'Extractor de Datos de Turno';
 
   @override
   String get uploadPdfToExtract =>
-      'Sube un PDF o imagen para extraer detalles del trabajo de catering';
+      'Sube un PDF o imagen para extraer detalles del turno de catering';
 
   @override
   String get enterJobDetailsManually =>
-      'Ingresa los detalles del trabajo manualmente para un control preciso';
+      'Ingresa los detalles del turno manualmente para un control preciso';
 
   @override
   String get createJobsThroughAI =>
       'Crea trabajos mediante conversación natural con IA';
 
   @override
-  String get jobDetails => 'Detalles del Trabajo';
+  String get jobDetails => 'Detalles del Turno';
 
   @override
-  String get jobInformation => 'Información del Trabajo';
+  String get jobInformation => 'Información del Turno';
 
   @override
-  String get jobTitle => 'Título del Trabajo';
+  String get jobTitle => 'Título del Turno';
 
   @override
   String get clientName => 'Nombre del Cliente';
@@ -72,7 +72,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get notes => 'Notas';
 
   @override
-  String get job => 'Trabajo';
+  String get shift => 'Shift';
 
   @override
   String get client => 'Cliente';
@@ -109,33 +109,31 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
-  String get pleaseSelectDate =>
-      'Por favor selecciona una fecha para el trabajo';
+  String get pleaseSelectDate => 'Por favor selecciona una fecha para el turno';
 
   @override
   String get jobSavedToPending =>
-      'Trabajo guardado como pendiente. Ve a la pestaña Trabajos para revisar.';
+      'Turno guardado como pendiente. Ve a la pestaña Trabajos para revisar.';
 
   @override
-  String get jobDetailsCopied =>
-      'Detalles del trabajo copiados al portapapeles';
+  String get jobDetailsCopied => 'Detalles del turno copiados al portapapeles';
 
   @override
-  String get jobPublished => 'Trabajo publicado';
+  String get jobPosted => 'Shift posted';
 
   @override
-  String get sendJobInvitation => 'Enviar Invitación de Trabajo';
+  String get sendJobInvitation => 'Enviar Invitación de Turno';
 
   @override
   String inviteToJob(String name) {
-    return 'Invitar a $name a un trabajo';
+    return 'Invitar a $name a un turno';
   }
 
   @override
-  String get jobInvitationSent => '¡Invitación de trabajo enviada!';
+  String get jobInvitationSent => '¡Invitación de turno enviada!';
 
   @override
-  String get jobNotFound => 'Trabajo no encontrado';
+  String get jobNotFound => 'Turno no encontrado';
 
   @override
   String guests(int count) {
@@ -146,7 +144,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get rolesNeeded => 'Roles Necesarios';
 
   @override
-  String get untitledJob => 'Trabajo Sin Título';
+  String get untitledJob => 'Turno Sin Título';
 
   @override
   String get expectedHeadcount => 'Cantidad de Personas Esperada';
@@ -158,13 +156,13 @@ class AppLocalizationsEs extends AppLocalizations {
   String get contactEmail => 'Correo Electrónico de Contacto';
 
   @override
-  String get errorJobIdMissing => 'Error: Falta el ID del trabajo...';
+  String get errorJobIdMissing => 'Error: Falta el ID del turno...';
 
   @override
-  String get publishJob => 'Publicar Trabajo';
+  String get postJob => 'Post Shift';
 
   @override
-  String get setRolesForJob => 'Establecer roles para este trabajo';
+  String get setRolesForJob => 'Establecer roles para este turno';
 
   @override
   String get searchJobs => 'Buscar trabajos...';
@@ -174,7 +172,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String shareJobPrefix(String clientName) {
-    return 'Trabajo: $clientName';
+    return 'Turno: $clientName';
   }
 
   @override
@@ -313,7 +311,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get additionalNotes => 'Notas Adicionales';
 
   @override
-  String get saveJobDetails => 'Guardar Detalles del Trabajo';
+  String get saveJobDetails => 'Guardar Detalles del Turno';
 
   @override
   String get saveToPending => 'Guardar como Pendiente';
@@ -331,7 +329,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get startConversation => 'Iniciar una Conversación';
 
   @override
-  String get aiWillGuideYou => 'La IA te guiará para crear un trabajo';
+  String get aiWillGuideYou => 'La IA te guiará para crear un turno';
 
   @override
   String get startNewConversation => 'Iniciar Nueva Conversación';
@@ -350,7 +348,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String jobFor(String clientName) {
-    return 'Trabajo para: $clientName';
+    return 'Turno para: $clientName';
   }
 
   @override

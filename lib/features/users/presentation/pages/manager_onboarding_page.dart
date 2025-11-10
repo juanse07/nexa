@@ -15,6 +15,7 @@ import 'package:nexa/features/users/presentation/pages/manager_profile_page.dart
 import 'package:nexa/features/teams/data/services/teams_service.dart';
 import 'package:nexa/core/network/socket_manager.dart';
 import 'package:nexa/services/notification_service.dart';
+import 'package:nexa/features/onboarding/presentation/venue_onboarding_gate.dart';
 
 class ManagerOnboardingGate extends StatefulWidget {
   const ManagerOnboardingGate({super.key});
@@ -373,7 +374,8 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
     }
 
     if (snapshot.isComplete) {
-      return const MainScreen();
+      // Business onboarding complete, now check venue onboarding
+      return const VenueOnboardingGate();
     }
 
     return Scaffold(

@@ -41,6 +41,7 @@ import '../widgets/upload_container.dart';
 import '../widgets/event_data_preview_card.dart';
 import '../../extraction/widgets/chat_message_widget.dart';
 import '../../extraction/widgets/chat_input_widget.dart';
+import '../../extraction/widgets/event_confirmation_card.dart';
 import 'mixins/event_data_mixin.dart';
 import 'pending_publish_screen.dart';
 import 'pending_edit_screen.dart';
@@ -275,7 +276,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     _socketSubscription = SocketManager.instance.events.listen((event) {
       if (!mounted) return;
       if (event.event.startsWith('event:')) {
-        _loadEvents();
+        // Use delta sync for real-time updates (don't show loading indicator)
+        print('[Socket] Event update received: ${event.event}');
+        _loadEvents(showLoading: false);
         _loadPendingDrafts();
       } else if (event.event.startsWith('team:')) {
         _loadClients();
@@ -288,9 +291,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     // Add scroll listener for AI Chat header hide/show
     _aiChatScrollController.addListener(_handleAIChatScroll);
 
-    // Start timer for real-time updates
+    // Start timer for periodic delta sync (every 1 minute)
     _updateTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
       if (mounted) {
+        print('[Timer] Periodic delta sync');
+        // Use delta sync to fetch any changes (don't show loading indicator)
+        _loadEvents(showLoading: false);
         setState(() {
           // This will trigger a rebuild and update the time display
         });
@@ -1533,17 +1539,28 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      body: NotificationListener<ScrollNotification>(
-        onNotification: (notification) {
-          _handleScroll(notification);
-          return false;
+      body: RefreshIndicator(
+        onRefresh: () async {
+          // Only refresh events when on Events tab
+          if (_selectedIndex == 1) {
+            await _refreshEvents();
+          }
+          // Could add refresh logic for other tabs here if needed
         },
-        child: Stack(
-          children: [
-            // Main scrollable content - Full screen
-            CustomScrollView(
-              controller: _mainScrollController,
-              slivers: [
+        // Customize colors to match app theme
+        color: const Color(0xFF6366F1),
+        backgroundColor: Colors.white,
+        child: NotificationListener<ScrollNotification>(
+          onNotification: (notification) {
+            _handleScroll(notification);
+            return false;
+          },
+          child: Stack(
+            children: [
+              // Main scrollable content - Full screen
+              CustomScrollView(
+                controller: _mainScrollController,
+                slivers: [
                 // Top padding to show first card below header initially
                 SliverToBoxAdapter(
                   child: SizedBox(
@@ -1560,8 +1577,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               ],
             ),
 
-            // Animated app bar (overlaid) - Facebook style with persistent safe area
-            Positioned(
+              // Animated app bar (overlaid) - Facebook style with persistent safe area
+              Positioned(
               top: 0,
               left: 0,
               right: 0,
@@ -1762,7 +1779,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   ),
                 ),
               ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -4237,15 +4255,73 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     }
   }
 
-  Future<void> _loadEvents() async {
-    setState(() {
-      _isEventsLoading = true;
-      _eventsError = null;
-    });
+  /// Merges delta changes into existing events list
+  /// Returns a new list with updates applied
+  List<Map<String, dynamic>> _mergeDeltaEvents(
+    List<Map<String, dynamic>> existing,
+    List<Map<String, dynamic>> changes,
+  ) {
+    // Create a map for quick lookup by event ID
+    final Map<String, Map<String, dynamic>> eventMap = {};
+
+    // Add all existing events to the map
+    for (final event in existing) {
+      final id = (event['_id'] ?? event['id'])?.toString();
+      if (id != null) {
+        eventMap[id] = event;
+      }
+    }
+
+    // Apply changes (updates or new events)
+    for (final change in changes) {
+      final id = (change['_id'] ?? change['id'])?.toString();
+      if (id != null) {
+        eventMap[id] = change; // Replace existing or add new
+        print('[_mergeDeltaEvents] Updated/added event: $id');
+      }
+    }
+
+    // Convert back to list
+    return eventMap.values.toList();
+  }
+
+  /// Refreshes events with a full sync (forces complete reload)
+  Future<void> _refreshEvents() async {
+    print('[_refreshEvents] Force full sync');
+    _eventService.clearLastSyncTimestamp();
+    await _loadEvents();
+  }
+
+  /// Loads events with delta sync support for efficient updates
+  Future<void> _loadEvents({bool showLoading = true}) async {
+    if (showLoading) {
+      setState(() {
+        _isEventsLoading = true;
+        _eventsError = null;
+      });
+    }
     try {
       print('[_loadEvents] Fetching events with userKey: $_viewerUserKey');
-      final items = await _eventService.fetchEvents(userKey: _viewerUserKey);
-      print('[_loadEvents] Received ${items.length} events from API');
+
+      // Use delta sync to only fetch changes
+      final result = await _eventService.fetchEventsWithSync(
+        userKey: _viewerUserKey,
+        useDeltaSync: true,
+      );
+
+      print('[_loadEvents] Received: $result');
+
+      List<Map<String, dynamic>> items;
+
+      if (result.isDeltaSync && _events != null) {
+        // Merge delta changes into existing events
+        print('[_loadEvents] Merging ${result.events.length} delta changes');
+        items = _mergeDeltaEvents(_events!, result.events);
+      } else {
+        // Full sync - replace everything
+        print('[_loadEvents] Full sync with ${result.events.length} events');
+        items = result.events;
+      }
 
       // Helper: Parse date from event
       DateTime? parseDate(Map<String, dynamic> e) {
@@ -7873,6 +7949,42 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         ),
         // Show pending update previews
         _buildUpdatePreviewCards(),
+        // Show event confirmation card when event is complete
+        if (_aiChatService.eventComplete && _aiChatService.currentEventData.isNotEmpty)
+          EventConfirmationCard(
+            eventData: _aiChatService.currentEventData,
+            onConfirm: () async {
+              // Save event to drafts
+              final currentData = Map<String, dynamic>.from(_aiChatService.currentEventData);
+              setState(() {
+                structuredData = currentData;
+                extractedText = 'AI Chat extracted data';
+                errorMessage = null;
+                _lastStructuredFromUpload = false;
+              });
+
+              _draftService.saveDraft(currentData);
+              await _loadPendingDrafts();
+
+              _showSuccessBanner(context, 'Event created and saved to pending!');
+
+              // Clear the event data and start a new conversation
+              _aiChatService.clearCurrentEventData();
+              _aiChatService.startNewConversation();
+
+              setState(() {});
+            },
+            onEdit: () {
+              // User can continue chatting to edit the event
+              _showSuccessBanner(context, 'Continue chatting to make changes!');
+            },
+            onCancel: () {
+              // Clear the current event and start over
+              _aiChatService.clearCurrentEventData();
+              _aiChatService.startNewConversation();
+              setState(() {});
+            },
+          ),
         // Only show input widget when conversation has started
         ColoredBox(
           color: Colors.transparent,
@@ -7960,33 +8072,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 }
               }
 
-              // Check if event creation is complete - auto-save it
-              if (_aiChatService.eventComplete && _aiChatService.currentEventData.isNotEmpty) {
-                print('[ExtractionScreen] Event complete detected - auto-saving...');
-                try {
-                  final currentData = Map<String, dynamic>.from(_aiChatService.currentEventData);
-
-                  setState(() {
-                    structuredData = currentData;
-                    extractedText = 'AI Chat extracted data';
-                    errorMessage = null;
-                    _lastStructuredFromUpload = false;
-                  });
-
-                  _draftService.saveDraft(currentData);
-                  await _loadPendingDrafts();
-
-                  if (mounted) {
-                    _showSuccessBanner(context, 'Event created and saved to pending!');
-                  }
-
-                  print('[ExtractionScreen] ✓ Event auto-saved successfully');
-                } catch (e) {
-                  print('[ExtractionScreen] ✗ Failed to auto-save event: $e');
-                }
-              }
-
-              // Scroll to bottom after message
+              // Scroll to bottom after message (or show confirmation card if event is complete)
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (_aiChatScrollController.hasClients) {
                   _aiChatScrollController.animateTo(

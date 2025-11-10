@@ -9,28 +9,28 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get jobDataExtractor => 'Job Data Extractor';
+  String get jobDataExtractor => 'Shift Data Extractor';
 
   @override
   String get uploadPdfToExtract =>
-      'Upload a PDF or image to extract catering job details';
+      'Upload a PDF or image to extract catering shift details';
 
   @override
   String get enterJobDetailsManually =>
-      'Enter job details manually for precise control';
+      'Enter shift details manually for precise control';
 
   @override
   String get createJobsThroughAI =>
       'Create jobs through natural conversation with AI';
 
   @override
-  String get jobDetails => 'Job Details';
+  String get jobDetails => 'Shift Details';
 
   @override
-  String get jobInformation => 'Job Information';
+  String get jobInformation => 'Shift Information';
 
   @override
-  String get jobTitle => 'Job Title';
+  String get jobTitle => 'Shift Title';
 
   @override
   String get clientName => 'Client Name';
@@ -72,7 +72,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notes => 'Notes';
 
   @override
-  String get job => 'Job';
+  String get shift => 'Shift';
 
   @override
   String get client => 'Client';
@@ -109,31 +109,31 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get pleaseSelectDate => 'Please select a date for the job';
+  String get pleaseSelectDate => 'Please select a date for the shift';
 
   @override
   String get jobSavedToPending =>
-      'Job saved to pending. Go to Jobs tab to review.';
+      'Shift saved to pending. Go to Jobs tab to review.';
 
   @override
-  String get jobDetailsCopied => 'Job details copied to clipboard';
+  String get jobDetailsCopied => 'Shift details copied to clipboard';
 
   @override
-  String get jobPublished => 'Job published';
+  String get jobPosted => 'Shift posted';
 
   @override
-  String get sendJobInvitation => 'Send Job Invitation';
+  String get sendJobInvitation => 'Send Shift Invitation';
 
   @override
   String inviteToJob(String name) {
-    return 'Invite $name to a job';
+    return 'Invite $name to a shift';
   }
 
   @override
-  String get jobInvitationSent => 'Job invitation sent!';
+  String get jobInvitationSent => 'Shift invitation sent!';
 
   @override
-  String get jobNotFound => 'Job not found';
+  String get jobNotFound => 'Shift not found';
 
   @override
   String guests(int count) {
@@ -144,7 +144,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get rolesNeeded => 'Roles Needed';
 
   @override
-  String get untitledJob => 'Untitled Job';
+  String get untitledJob => 'Untitled Shift';
 
   @override
   String get expectedHeadcount => 'Expected Headcount';
@@ -156,13 +156,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get contactEmail => 'Contact Email';
 
   @override
-  String get errorJobIdMissing => 'Error: Job ID is missing...';
+  String get errorJobIdMissing => 'Error: Shift ID is missing...';
 
   @override
-  String get publishJob => 'Publish Job';
+  String get postJob => 'Post Shift';
 
   @override
-  String get setRolesForJob => 'Set roles for this job';
+  String get setRolesForJob => 'Set roles for this shift';
 
   @override
   String get searchJobs => 'Search jobs...';
@@ -172,7 +172,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String shareJobPrefix(String clientName) {
-    return 'Job: $clientName';
+    return 'Shift: $clientName';
   }
 
   @override
@@ -311,7 +311,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get additionalNotes => 'Additional Notes';
 
   @override
-  String get saveJobDetails => 'Save Job Details';
+  String get saveJobDetails => 'Save Shift Details';
 
   @override
   String get saveToPending => 'Save to Pending';
@@ -329,7 +329,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get startConversation => 'Start a Conversation';
 
   @override
-  String get aiWillGuideYou => 'The AI will guide you through creating a job';
+  String get aiWillGuideYou => 'The AI will guide you through creating a shift';
 
   @override
   String get startNewConversation => 'Start New Conversation';
@@ -348,7 +348,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String jobFor(String clientName) {
-    return 'Job for: $clientName';
+    return 'Shift for: $clientName';
   }
 
   @override

@@ -98,22 +98,22 @@ abstract class AppLocalizations {
     Locale('es'),
   ];
 
-  /// Title for the job data extraction feature
+  /// Title for the shift data extraction feature
   ///
   /// In en, this message translates to:
-  /// **'Job Data Extractor'**
+  /// **'Shift Data Extractor'**
   String get jobDataExtractor;
 
   /// Subtitle explaining PDF upload feature
   ///
   /// In en, this message translates to:
-  /// **'Upload a PDF or image to extract catering job details'**
+  /// **'Upload a PDF or image to extract catering shift details'**
   String get uploadPdfToExtract;
 
   /// Subtitle for manual entry option
   ///
   /// In en, this message translates to:
-  /// **'Enter job details manually for precise control'**
+  /// **'Enter shift details manually for precise control'**
   String get enterJobDetailsManually;
 
   /// Subtitle for AI chat feature
@@ -122,22 +122,22 @@ abstract class AppLocalizations {
   /// **'Create jobs through natural conversation with AI'**
   String get createJobsThroughAI;
 
-  /// Section header for job details
+  /// Section header for shift details
   ///
   /// In en, this message translates to:
-  /// **'Job Details'**
+  /// **'Shift Details'**
   String get jobDetails;
 
-  /// Section header for job information form
+  /// Section header for shift information form
   ///
   /// In en, this message translates to:
-  /// **'Job Information'**
+  /// **'Shift Information'**
   String get jobInformation;
 
-  /// Label for job name/title field
+  /// Label for shift name/title field
   ///
   /// In en, this message translates to:
-  /// **'Job Title'**
+  /// **'Shift Title'**
   String get jobTitle;
 
   /// Label for client name field
@@ -218,11 +218,11 @@ abstract class AppLocalizations {
   /// **'Notes'**
   String get notes;
 
-  /// Label for job in summary display
+  /// Label for shift in summary display
   ///
   /// In en, this message translates to:
-  /// **'Job'**
-  String get job;
+  /// **'Shift'**
+  String get shift;
 
   /// Label for client in summary display
   ///
@@ -254,7 +254,7 @@ abstract class AppLocalizations {
   /// **'Phone'**
   String get phone;
 
-  /// Tab label showing job counts
+  /// Tab label showing shift counts
   ///
   /// In en, this message translates to:
   /// **'Jobs • {pendingCount} pending, {upcomingCount} upcoming, {pastCount} past'**
@@ -279,49 +279,49 @@ abstract class AppLocalizations {
   /// Error message when date is not selected
   ///
   /// In en, this message translates to:
-  /// **'Please select a date for the job'**
+  /// **'Please select a date for the shift'**
   String get pleaseSelectDate;
 
-  /// Success message when job is saved to pending
+  /// Success message when shift is saved to pending
   ///
   /// In en, this message translates to:
-  /// **'Job saved to pending. Go to Jobs tab to review.'**
+  /// **'Shift saved to pending. Go to Jobs tab to review.'**
   String get jobSavedToPending;
 
-  /// Success message when job details are copied
+  /// Success message when shift details are copied
   ///
   /// In en, this message translates to:
-  /// **'Job details copied to clipboard'**
+  /// **'Shift details copied to clipboard'**
   String get jobDetailsCopied;
 
-  /// Success message when job is published
+  /// Success message when shift is posted
   ///
   /// In en, this message translates to:
-  /// **'Job published'**
-  String get jobPublished;
+  /// **'Shift posted'**
+  String get jobPosted;
 
-  /// Title for dialog to send job invitation
+  /// Title for dialog to send shift invitation
   ///
   /// In en, this message translates to:
-  /// **'Send Job Invitation'**
+  /// **'Send Shift Invitation'**
   String get sendJobInvitation;
 
-  /// Subtitle for job invitation dialog
+  /// Subtitle for shift invitation dialog
   ///
   /// In en, this message translates to:
-  /// **'Invite {name} to a job'**
+  /// **'Invite {name} to a shift'**
   String inviteToJob(String name);
 
-  /// Success message when job invitation is sent
+  /// Success message when shift invitation is sent
   ///
   /// In en, this message translates to:
-  /// **'Job invitation sent!'**
+  /// **'Shift invitation sent!'**
   String get jobInvitationSent;
 
-  /// Error message when job is not found
+  /// Error message when shift is not found
   ///
   /// In en, this message translates to:
-  /// **'Job not found'**
+  /// **'Shift not found'**
   String get jobNotFound;
 
   /// Display text for number of guests
@@ -336,10 +336,10 @@ abstract class AppLocalizations {
   /// **'Roles Needed'**
   String get rolesNeeded;
 
-  /// Fallback text when job has no title
+  /// Fallback text when shift has no title
   ///
   /// In en, this message translates to:
-  /// **'Untitled Job'**
+  /// **'Untitled Shift'**
   String get untitledJob;
 
   /// Label for expected headcount field
@@ -360,25 +360,25 @@ abstract class AppLocalizations {
   /// **'Contact Email'**
   String get contactEmail;
 
-  /// Error message when job ID is missing
+  /// Error message when shift ID is missing
   ///
   /// In en, this message translates to:
-  /// **'Error: Job ID is missing...'**
+  /// **'Error: Shift ID is missing...'**
   String get errorJobIdMissing;
 
-  /// Title for publish job screen
+  /// Title for post shift screen
   ///
   /// In en, this message translates to:
-  /// **'Publish Job'**
-  String get publishJob;
+  /// **'Post Shift'**
+  String get postJob;
 
   /// Dialog title for setting roles
   ///
   /// In en, this message translates to:
-  /// **'Set roles for this job'**
+  /// **'Set roles for this shift'**
   String get setRolesForJob;
 
-  /// Hint text for job search field
+  /// Hint text for shift search field
   ///
   /// In en, this message translates to:
   /// **'Search jobs...'**
@@ -390,10 +390,10 @@ abstract class AppLocalizations {
   /// **'Location TBD'**
   String get locationTbd;
 
-  /// Prefix for sharing job details
+  /// Prefix for sharing shift details
   ///
   /// In en, this message translates to:
-  /// **'Job: {clientName}'**
+  /// **'Shift: {clientName}'**
   String shareJobPrefix(String clientName);
 
   /// Bottom navigation bar label for create tab
@@ -498,7 +498,7 @@ abstract class AppLocalizations {
   /// **'Messages ({count})'**
   String messages(int count);
 
-  /// Chat message preview for job invitation
+  /// Chat message preview for shift invitation
   ///
   /// In en, this message translates to:
   /// **'You\'ve been invited to {jobName}'**
@@ -636,10 +636,10 @@ abstract class AppLocalizations {
   /// **'Additional Notes'**
   String get additionalNotes;
 
-  /// Button text for saving job details
+  /// Button text for saving shift details
   ///
   /// In en, this message translates to:
-  /// **'Save Job Details'**
+  /// **'Save Shift Details'**
   String get saveJobDetails;
 
   /// Button text for saving to pending
@@ -675,7 +675,7 @@ abstract class AppLocalizations {
   /// Subtitle explaining AI chat functionality
   ///
   /// In en, this message translates to:
-  /// **'The AI will guide you through creating a job'**
+  /// **'The AI will guide you through creating a shift'**
   String get aiWillGuideYou;
 
   /// Button text to start new AI conversation
@@ -708,10 +708,10 @@ abstract class AppLocalizations {
   /// **'Address'**
   String get direccion;
 
-  /// Label showing which client the job is for
+  /// Label showing which client the shift is for
   ///
   /// In en, this message translates to:
-  /// **'Job for: {clientName}'**
+  /// **'Shift for: {clientName}'**
   String jobFor(String clientName);
 
   /// Status badge when invitation is accepted
