@@ -1512,7 +1512,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       case 3: // Hours tab
         return const HoursApprovalListScreen();
       case 4: // Catalog tab
-        return Container(); // Content is handled by slivers
+        return TabBarView(
+          controller: _catalogTabController,
+          children: [
+            _buildClientsInner(), // Like _eventsInner for Jobs tab
+            _buildRolesInner(),
+            _buildTariffsInner(),
+          ],
+        );
       default:
         return Container();
     }
@@ -4574,14 +4581,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   List<Widget> _buildCatalogSlivers() {
-    return [
-      SliverFillRemaining(
-        child: TabBarView(
-          controller: _catalogTabController,
-          children: [_buildClientsTab(), _buildRolesTab(), _buildTariffsTab()],
-        ),
-      ),
-    ];
+    return []; // Content is handled by TabBarView in _buildBody like Jobs tab
   }
 
   Widget _buildEventsTab() {
@@ -5321,6 +5321,394 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           ],
         ),
       );
+  }
+
+  Widget _buildClientsInner() {
+    final List<Map<String, dynamic>> items = _clients ?? const [];
+    return RefreshIndicator(
+      onRefresh: _loadClients,
+      color: const Color(0xFF6366F1),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(20), // EXACTLY like Jobs tab!
+        children: [
+          if (kIsWeb)
+            Align(
+              alignment: Alignment.centerRight,
+              child: _maybeWebRefreshButton(
+                onPressed: _loadClients,
+                label: 'Refresh clients',
+                padding: const EdgeInsets.only(top: 12),
+              ),
+            ),
+          if (kIsWeb) const SizedBox(height: 4),
+          if (items.isNotEmpty)
+            ElevatedButton.icon(
+              onPressed: () async {
+                final name = await _promptNewClientName();
+                if (name == null) return;
+                try {
+                  await _clientsService.createClient(name);
+                  await _loadClients();
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Client created'),
+                      backgroundColor: Color(0xFF059669),
+                    ),
+                  );
+                } catch (e) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error creating client: $e'),
+                      backgroundColor: const Color(0xFFDC2626),
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('Add Client'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6366F1),
+                foregroundColor: Colors.white,
+              ),
+            ),
+          if (items.isNotEmpty) const SizedBox(height: 16),
+          if (_isClientsLoading && items.isEmpty)
+            const Center(child: LoadingIndicator(text: 'Loading clients...')),
+          if (_clientsError != null) ...[
+            ErrorBanner(message: _clientsError!),
+            const SizedBox(height: 12),
+          ],
+          if (!_isClientsLoading && items.isEmpty && _clientsError == null)
+            Container(
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.grey.shade100, width: 1),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 20,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.business_outlined,
+                    size: 48,
+                    color: Colors.grey.shade400,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No clients yet',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Add your first client to get started',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey.shade500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ...items.map((c) => _clientListTile(c)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRolesInner() {
+    final items = _roles ?? const [];
+    return RefreshIndicator(
+      onRefresh: _loadRoles,
+      color: const Color(0xFF6366F1),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(20), // EXACTLY like Jobs tab!
+        children: [
+          if (kIsWeb)
+            Align(
+              alignment: Alignment.centerRight,
+              child: _maybeWebRefreshButton(
+                onPressed: _loadRoles,
+                label: 'Refresh roles',
+                padding: const EdgeInsets.only(top: 12),
+              ),
+            ),
+          if (kIsWeb) const SizedBox(height: 4),
+          if (items.isNotEmpty)
+            ElevatedButton.icon(
+              onPressed: () async {
+                final name = await _promptNewNamedItem('New Role', 'Role name');
+                if (name == null) return;
+                try {
+                  await _rolesService.createRole(name);
+                  await _loadRoles();
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Role created'),
+                      backgroundColor: Color(0xFF059669),
+                    ),
+                  );
+                } catch (e) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error creating role: $e'),
+                      backgroundColor: const Color(0xFFDC2626),
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('Add Role'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6366F1),
+                foregroundColor: Colors.white,
+              ),
+            ),
+          if (items.isNotEmpty) const SizedBox(height: 16),
+          if (_isRolesLoading && items.isEmpty)
+            const Center(child: LoadingIndicator(text: 'Loading roles...')),
+          if (_rolesError != null) ...[
+            ErrorBanner(message: _rolesError!),
+            const SizedBox(height: 12),
+          ],
+          if (!_isRolesLoading && items.isEmpty && _rolesError == null)
+            Container(
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.grey.shade100, width: 1),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 20,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.work_outline,
+                    size: 48,
+                    color: Colors.grey.shade400,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No roles yet',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Add your first role to get started',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey.shade500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ...items.map((r) => _roleListTile(r)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTariffsInner() {
+    final clients = _clients ?? const [];
+    final roles = _roles ?? const [];
+    final tariffs = _tariffs ?? const [];
+    final isWeb = ResponsiveLayout.shouldUseDesktopLayout(context);
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        await _loadClients();
+        await _loadRoles();
+        await _loadTariffs();
+      },
+      color: const Color(0xFF6366F1),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(20), // EXACTLY like Jobs tab!
+        children: [
+          if (kIsWeb)
+            Align(
+              alignment: Alignment.centerRight,
+              child: _maybeWebRefreshButton(
+                onPressed: () async {
+                  await _loadClients();
+                  await _loadRoles();
+                  await _loadTariffs();
+                },
+                label: 'Refresh tariffs',
+                padding: const EdgeInsets.only(top: 12),
+              ),
+            ),
+          if (kIsWeb) const SizedBox(height: 4),
+          // Client and Role Filters
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  value: _selectedClientIdForTariffs,
+                  hint: const Text('All Clients'),
+                  items: [
+                    const DropdownMenuItem(
+                      value: null,
+                      child: Text('All Clients'),
+                    ),
+                    ...clients.map(
+                      (c) => DropdownMenuItem(
+                        value: c['id']?.toString(),
+                        child: Text(c['name']?.toString() ?? 'Unnamed Client'),
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedClientIdForTariffs = value;
+                    });
+                    _loadTariffs();
+                  },
+                  decoration: const InputDecoration(
+                    labelText: 'Client',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  value: _selectedRoleIdForTariffs,
+                  hint: const Text('All Roles'),
+                  items: [
+                    const DropdownMenuItem(
+                      value: null,
+                      child: Text('All Roles'),
+                    ),
+                    ...roles.map(
+                      (r) => DropdownMenuItem(
+                        value: r['id']?.toString(),
+                        child: Text(r['name']?.toString() ?? 'Unnamed Role'),
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedRoleIdForTariffs = value;
+                    });
+                    _loadTariffs();
+                  },
+                  decoration: const InputDecoration(
+                    labelText: 'Role',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () async {
+              await _showCreateTariffDialog();
+            },
+            icon: const Icon(Icons.add),
+            label: const Text('Add Tariff'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF6366F1),
+              foregroundColor: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (_isTariffsLoading && tariffs.isEmpty)
+            const Center(child: LoadingIndicator(text: 'Loading tariffs...')),
+          if (_tariffsError != null) ...[
+            ErrorBanner(message: _tariffsError!),
+            const SizedBox(height: 12),
+          ],
+          if (!_isTariffsLoading && tariffs.isEmpty && _tariffsError == null)
+            Container(
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.grey.shade100, width: 1),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 20,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.attach_money,
+                    size: 48,
+                    color: Colors.grey.shade400,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No tariffs yet',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Create your first tariff to set pricing',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey.shade500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (tariffs.isNotEmpty)
+            isWeb
+                ? GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: ResponsiveLayout.getGridColumns(context),
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
+                      childAspectRatio: 2.5,
+                    ),
+                    itemCount: tariffs.length,
+                    itemBuilder: (context, index) => _tariffTile(tariffs[index]),
+                  )
+                : Column(children: tariffs.map((t) => _tariffTile(t)).toList()),
+        ],
+      ),
+    );
   }
 
   Widget _buildCatalogTab() {
