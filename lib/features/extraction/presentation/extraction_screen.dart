@@ -1601,33 +1601,20 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     animation: _headerAnimation,
                     builder: (context, child) {
                       return Container(
-                        decoration: BoxDecoration(
-                          // Blue transparent background for catalog tab
-                          color: _selectedIndex == 4
-                            ? Colors.blue.withOpacity(0.3) // Blue transparent for catalog
-                            : null, // Use gradient for other tabs
-                          gradient: _selectedIndex == 4
-                            ? null
-                            : const LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [Color(0xFF7C3AED), Color(0xFF6D28D9)],
-                              ),
-                          boxShadow: _selectedIndex == 4
-                            ? [
-                                BoxShadow(
-                                  color: Colors.blue.withOpacity(0.2),
-                                  blurRadius: 8,
-                                  offset: Offset(0, 4),
-                                ),
-                              ]
-                            : [
-                                BoxShadow(
-                                  color: Colors.black12,
-                                  blurRadius: 4,
-                                  offset: Offset(0, 2),
-                                ),
-                              ],
+                        decoration: const BoxDecoration(
+                          // Keep original gradient for all tabs
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [Color(0xFF7C3AED), Color(0xFF6D28D9)],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black12,
+                              blurRadius: 4,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
                         ),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
@@ -4601,7 +4588,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     return [
       // Top padding to position catalog content below floating header
       SliverToBoxAdapter(
-        child: SizedBox(height: 200), // Full floating header clearance + space for TabBar
+        child: SizedBox(height: 240), // Extra space to move cards down more
       ),
       SliverFillRemaining(
         child: Stack(
@@ -4610,9 +4597,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               controller: _catalogTabController,
               children: [_buildClientsInner(), _buildRolesInner(), _buildTariffsInner()],
             ),
-            // Floating Action Button at bottom right
+            // Floating Action Button above bottom bar
             Positioned(
-              bottom: 20,
+              bottom: 80,
               right: 20,
               child: FloatingActionButton(
                 onPressed: _showAddItemDialog,
