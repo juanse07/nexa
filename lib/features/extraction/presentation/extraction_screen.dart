@@ -4597,17 +4597,17 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               controller: _catalogTabController,
               children: [_buildClientsInner(), _buildRolesInner(), _buildTariffsInner()],
             ),
-            // Floating Action Button above bottom bar
+            // Floating Action Button further up, white background (turned off look)
             Positioned(
-              bottom: 80,
+              bottom: 120,
               right: 20,
               child: FloatingActionButton(
                 onPressed: _showAddItemDialog,
-                backgroundColor: Colors.grey.withOpacity(0.8),
-                elevation: 4,
+                backgroundColor: Colors.white, // White background (turned off look)
+                elevation: 2,
                 child: const Icon(
                   Icons.add,
-                  color: Colors.grey,
+                  color: Colors.grey, // Grey icon
                   size: 24,
                 ),
               ),
