@@ -5338,10 +5338,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(
+          top: 20,    // Add top padding so buttons aren't hidden behind header
           left: 20,
           right: 20,
           bottom: 20,
-        ), // No top padding - button should be right under TabBar
+        ),
         children: [
           if (kIsWeb)
             Align(
@@ -5448,10 +5449,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(
+          top: 20,    // Add top padding so buttons aren't hidden behind header
           left: 20,
           right: 20,
           bottom: 20,
-        ), // No top padding - button should be right under TabBar
+        ),
         children: [
           if (kIsWeb)
             Align(
@@ -5566,10 +5568,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(
+          top: 20,    // Add top padding so buttons aren't hidden behind header
           left: 20,
           right: 20,
           bottom: 20,
-        ), // No top padding - button should be right under TabBar
+        ),
         children: [
           if (kIsWeb)
             Align(
