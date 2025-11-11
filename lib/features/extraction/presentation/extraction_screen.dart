@@ -368,6 +368,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   void _handleScroll(ScrollNotification notification) {
+    // Skip header animation for catalog tab - always show header
+    if (_selectedIndex == 4) {
+      if (!_isHeaderVisible) {
+        _showHeader();
+      }
+      return;
+    }
+
     // Only handle scroll updates from the main scrollable
     if (notification is! ScrollUpdateNotification) return;
 
@@ -1593,20 +1601,33 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     animation: _headerAnimation,
                     builder: (context, child) {
                       return Container(
-                        // Keep background color extended into safe area (Facebook style)
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [Color(0xFF7C3AED), Color(0xFF6D28D9)],
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black12,
-                              blurRadius: 4,
-                              offset: Offset(0, 2),
-                            ),
-                          ],
+                        decoration: BoxDecoration(
+                          // Blue transparent background for catalog tab
+                          color: _selectedIndex == 4
+                            ? Colors.blue.withOpacity(0.3) // Blue transparent for catalog
+                            : null, // Use gradient for other tabs
+                          gradient: _selectedIndex == 4
+                            ? null
+                            : const LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [Color(0xFF7C3AED), Color(0xFF6D28D9)],
+                              ),
+                          boxShadow: _selectedIndex == 4
+                            ? [
+                                BoxShadow(
+                                  color: Colors.blue.withOpacity(0.2),
+                                  blurRadius: 8,
+                                  offset: Offset(0, 4),
+                                ),
+                              ]
+                            : [
+                                BoxShadow(
+                                  color: Colors.black12,
+                                  blurRadius: 4,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
                         ),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
@@ -4583,12 +4604,99 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         child: SizedBox(height: 200), // Full floating header clearance + space for TabBar
       ),
       SliverFillRemaining(
-        child: TabBarView(
-          controller: _catalogTabController,
-          children: [_buildClientsInner(), _buildRolesInner(), _buildTariffsInner()],
+        child: Stack(
+          children: [
+            TabBarView(
+              controller: _catalogTabController,
+              children: [_buildClientsInner(), _buildRolesInner(), _buildTariffsInner()],
+            ),
+            // Floating Action Button at bottom right
+            Positioned(
+              bottom: 20,
+              right: 20,
+              child: FloatingActionButton(
+                onPressed: _showAddItemDialog,
+                backgroundColor: Colors.grey.withOpacity(0.8),
+                elevation: 4,
+                child: const Icon(
+                  Icons.add,
+                  color: Colors.grey,
+                  size: 24,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     ];
+  }
+
+  void _showAddItemDialog() {
+    // Determine which tab is currently active
+    final int currentIndex = _catalogTabController.index;
+    String title = '';
+    String hintText = '';
+
+    switch (currentIndex) {
+      case 0: // Clients tab
+        title = 'New Client';
+        hintText = 'Client name';
+        break;
+      case 1: // Roles tab
+        title = 'New Role';
+        hintText = 'Role name';
+        break;
+      case 2: // Tariffs tab
+        _showCreateTariffDialog();
+        return;
+    }
+
+    _promptNewNamedItem(title, hintText).then((name) {
+      if (name == null) return;
+
+      switch (currentIndex) {
+        case 0: // Clients
+          _clientsService.createClient(name).then((_) {
+            _loadClients();
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Client created'),
+                backgroundColor: Color(0xFF059669),
+              ),
+            );
+          }).catchError((e) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error creating client: $e'),
+                backgroundColor: const Color(0xFFDC2626),
+              ),
+            );
+          });
+          break;
+        case 1: // Roles
+          _rolesService.createRole(name).then((_) {
+            _loadRoles();
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Role created'),
+                backgroundColor: Color(0xFF059669),
+              ),
+            );
+          }).catchError((e) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error creating role: $e'),
+                backgroundColor: const Color(0xFFDC2626),
+              ),
+            );
+          });
+          break;
+      }
+    });
   }
 
   Widget _buildEventsTab() {
@@ -5354,39 +5462,6 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               ),
             ),
           if (kIsWeb) const SizedBox(height: 4),
-          if (items.isNotEmpty)
-            ElevatedButton.icon(
-              onPressed: () async {
-                final name = await _promptNewClientName();
-                if (name == null) return;
-                try {
-                  await _clientsService.createClient(name);
-                  await _loadClients();
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Client created'),
-                      backgroundColor: Color(0xFF059669),
-                    ),
-                  );
-                } catch (e) {
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Error creating client: $e'),
-                      backgroundColor: const Color(0xFFDC2626),
-                    ),
-                  );
-                }
-              },
-              icon: const Icon(Icons.add),
-              label: const Text('Add Client'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6366F1),
-                foregroundColor: Colors.white,
-              ),
-            ),
-          if (items.isNotEmpty) const SizedBox(height: 16),
           if (_isClientsLoading && items.isEmpty)
             const Center(child: LoadingIndicator(text: 'Loading clients...')),
           if (_clientsError != null) ...[
@@ -5465,39 +5540,6 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               ),
             ),
           if (kIsWeb) const SizedBox(height: 4),
-          if (items.isNotEmpty)
-            ElevatedButton.icon(
-              onPressed: () async {
-                final name = await _promptNewNamedItem('New Role', 'Role name');
-                if (name == null) return;
-                try {
-                  await _rolesService.createRole(name);
-                  await _loadRoles();
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Role created'),
-                      backgroundColor: Color(0xFF059669),
-                    ),
-                  );
-                } catch (e) {
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Error creating role: $e'),
-                      backgroundColor: const Color(0xFFDC2626),
-                    ),
-                  );
-                }
-              },
-              icon: const Icon(Icons.add),
-              label: const Text('Add Role'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6366F1),
-                foregroundColor: Colors.white,
-              ),
-            ),
-          if (items.isNotEmpty) const SizedBox(height: 16),
           if (_isRolesLoading && items.isEmpty)
             const Center(child: LoadingIndicator(text: 'Loading roles...')),
           if (_rolesError != null) ...[
@@ -5651,18 +5693,6 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: () async {
-              await _showCreateTariffDialog();
-            },
-            icon: const Icon(Icons.add),
-            label: const Text('Add Tariff'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF6366F1),
-              foregroundColor: Colors.white,
-            ),
           ),
           const SizedBox(height: 16),
           if (_isTariffsLoading && tariffs.isEmpty)
