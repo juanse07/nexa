@@ -1564,7 +1564,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 // Top padding to show first card below header initially
                 SliverToBoxAdapter(
                   child: SizedBox(
-                    height: statusBarHeight + 200, // Dynamic based on device + header height
+                    height: statusBarHeight + (_selectedIndex == 4 ? 120 : 200), // Less padding for catalog tabs
                   ),
                 ),
                 ..._buildSliverContent(),
