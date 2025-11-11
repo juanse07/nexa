@@ -1566,18 +1566,21 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 controller: _mainScrollController,
                 slivers: [
                 // Top padding to show first card below header initially
-                SliverToBoxAdapter(
-                  child: SizedBox(
-                    height: statusBarHeight + 200, // Dynamic based on device + header height
+                // Only add padding for tabs that use sliver content (not Jobs/Catalog which use TabBarView)
+                if (_selectedIndex != 1 && _selectedIndex != 4)
+                  SliverToBoxAdapter(
+                    child: SizedBox(
+                      height: statusBarHeight + 200, // Dynamic based on device + header height
+                    ),
                   ),
-                ),
                 ..._buildSliverContent(),
-                // Add bottom padding for last card
-                const SliverToBoxAdapter(
-                  child: SizedBox(
-                    height: 100, // Bottom padding for scrolling past bottom bar
+                // Add bottom padding for last card (only for tabs with sliver content)
+                if (_selectedIndex != 1 && _selectedIndex != 4)
+                  const SliverToBoxAdapter(
+                    child: SizedBox(
+                      height: 100, // Bottom padding for scrolling past bottom bar
+                    ),
                   ),
-                ),
               ],
             ),
 
