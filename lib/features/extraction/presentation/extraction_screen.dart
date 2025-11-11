@@ -5337,7 +5337,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       color: const Color(0xFF6366F1),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(20), // EXACTLY like Jobs tab!
+        padding: const EdgeInsets.only(
+          left: 20,
+          right: 20,
+          bottom: 20,
+        ), // No top padding - button should be right under TabBar
         children: [
           if (kIsWeb)
             Align(
@@ -5443,7 +5447,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       color: const Color(0xFF6366F1),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(20), // EXACTLY like Jobs tab!
+        padding: const EdgeInsets.only(
+          left: 20,
+          right: 20,
+          bottom: 20,
+        ), // No top padding - button should be right under TabBar
         children: [
           if (kIsWeb)
             Align(
@@ -5557,7 +5565,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       color: const Color(0xFF6366F1),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(20), // EXACTLY like Jobs tab!
+        padding: const EdgeInsets.only(
+          left: 20,
+          right: 20,
+          bottom: 20,
+        ), // No top padding - button should be right under TabBar
         children: [
           if (kIsWeb)
             Align(
