@@ -1561,13 +1561,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               CustomScrollView(
                 controller: _mainScrollController,
                 slivers: [
-                // Top padding to show first card below header initially (catalog tabs can scroll to AppBar)
-                if (_selectedIndex != 4)
-                  SliverToBoxAdapter(
-                    child: SizedBox(
-                      height: statusBarHeight + 200, // Dynamic based on device + header height
-                    ),
+                // Top padding to show first card below header initially
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: statusBarHeight + 200, // Dynamic based on device + header height
                   ),
+                ),
                 ..._buildSliverContent(),
                 // Add bottom padding for last card
                 const SliverToBoxAdapter(
@@ -4578,15 +4577,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   List<Widget> _buildCatalogSlivers() {
-    // Tabs are in the floating header, just return content
-    return [
-      SliverFillRemaining(
-        child: TabBarView(
-          controller: _catalogTabController,
-          children: [_buildClientsTab(), _buildRolesTab(), _buildTariffsTab()],
-        ),
-      ),
-    ];
+    // Return empty slivers since catalog tabs use TabBarView in _buildBody
+    return [];
   }
 
   Widget _buildEventsTab() {
@@ -5267,7 +5259,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       color: const Color(0xFF6366F1),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.only(
+          top: 100, // Extra space for floating header
+          left: 20,
+          right: 20,
+          bottom: 20,
+        ),
           children: [
             if (kIsWeb)
               Align(
