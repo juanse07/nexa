@@ -5325,7 +5325,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           ],
         ),
       ),
-    );
+  );
   }
 
   Widget _buildCatalogTab() {
