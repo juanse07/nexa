@@ -1512,14 +1512,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       case 3: // Hours tab
         return const HoursApprovalListScreen();
       case 4: // Catalog tab
-        return TabBarView(
-          controller: _catalogTabController,
-          children: [
-            _buildClientsInner(), // Like _eventsInner for Jobs tab
-            _buildRolesInner(),
-            _buildTariffsInner(),
-          ],
-        );
+        return Container(); // Content is handled by slivers
       default:
         return Container();
     }
@@ -4584,7 +4577,18 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   List<Widget> _buildCatalogSlivers() {
-    return []; // Content is handled by TabBarView in _buildBody like Jobs tab
+    return [
+      // Small top padding to position catalog TabBarView below floating header
+      SliverToBoxAdapter(
+        child: SizedBox(height: 80), // Just enough space for floating header
+      ),
+      SliverFillRemaining(
+        child: TabBarView(
+          controller: _catalogTabController,
+          children: [_buildClientsInner(), _buildRolesInner(), _buildTariffsInner()],
+        ),
+      ),
+    ];
   }
 
   Widget _buildEventsTab() {
