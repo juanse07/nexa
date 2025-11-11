@@ -4575,13 +4575,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
   List<Widget> _buildCatalogSlivers() {
     return [
-      SliverPadding(
-        padding: const EdgeInsets.only(top: 80), // Space for floating header
-        sliver: SliverFillRemaining(
-          child: TabBarView(
-            controller: _catalogTabController,
-            children: [_buildClientsTab(), _buildRolesTab(), _buildTariffsTab()],
-          ),
+      SliverFillRemaining(
+        child: TabBarView(
+          controller: _catalogTabController,
+          children: [_buildClientsTab(), _buildRolesTab(), _buildTariffsTab()],
         ),
       ),
     ];
