@@ -4603,7 +4603,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               right: 20,
               child: FloatingActionButton(
                 onPressed: _showAddItemDialog,
-                backgroundColor: Colors.white, // White background (turned off look)
+                backgroundColor: Colors.white.withOpacity(0.8), // Semi-transparent white background
                 elevation: 2,
                 child: const Icon(
                   Icons.add,
