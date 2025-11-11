@@ -4578,9 +4578,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
   List<Widget> _buildCatalogSlivers() {
     return [
-      // Top padding to position catalog TabBarView below floating header AND TabBar
+      // Top padding to position catalog content below floating header only
       SliverToBoxAdapter(
-        child: SizedBox(height: 120), // Space for floating header + TabBar clearance
+        child: SizedBox(height: 80), // Just enough space for floating header clearance
       ),
       SliverFillRemaining(
         child: TabBarView(
