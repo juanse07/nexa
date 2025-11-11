@@ -5324,8 +5324,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             ...items.map((c) => _clientListTile(c)),
           ],
         ),
-      ),
-  );
+      );
   }
 
   Widget _buildCatalogTab() {
