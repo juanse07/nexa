@@ -5261,13 +5261,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
   Widget _buildClientsTab() {
     final List<Map<String, dynamic>> items = _clients ?? const [];
-    return SafeArea(
-      child: RefreshIndicator(
-        onRefresh: _loadClients,
-        color: const Color(0xFF6366F1),
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(20),
+    return RefreshIndicator(
+      onRefresh: _loadClients,
+      color: const Color(0xFF6366F1),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(20),
           children: [
             if (kIsWeb)
               Align(
