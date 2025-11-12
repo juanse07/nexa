@@ -39,6 +39,7 @@ dependencies:
   # State Management
   flutter_bloc: ^8.1.6
   equatable: ^2.0.5
+  provider: ^6.1.2
 
   # Dependency Injection
   get_it: ^8.0.2
@@ -177,5 +178,5 @@ flutter_launcher_icons:
   # see https://flutter.dev/to/font-from-package
 
 # Dependency overrides to fix version conflicts
-dependency_overrides:
-  record_platform_interface: 1.2.0  # Compatible version without startStream requirement
+# dependency_overrides:
+#   record_platform_interface: 1.2.0  # Compatible version without startStream requirement
