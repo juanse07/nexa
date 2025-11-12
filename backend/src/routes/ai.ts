@@ -1467,7 +1467,7 @@ YOU MUST RETURN AT LEAST ${minVenues} VENUES. Prioritize the most popular and la
     };
 
     const requestBody = {
-      model: 'sonar', // Using cheapest model with web search (was 'sonar-pro')
+      model: 'sonar-pro', // Premium model for better quality and accuracy
       messages: [
         { role: 'user', content: prompt }
       ],
@@ -1565,57 +1565,110 @@ YOU MUST RETURN AT LEAST ${minVenues} VENUES. Prioritize the most popular and la
     }
 
     // Validate and clean venue data
-    const validatedVenues = venues
+    const rawVenues = venues
       .filter(v => v.name && v.address && v.city)
       .map(v => ({
         name: String(v.name).trim(),
         address: String(v.address).trim(),
         city: String(v.city).trim(),
         cityName: city, // Link venue to city from request
-      }))
+      }));
+
+    // Remove duplicates within AI results (case-insensitive name match)
+    const seenNames = new Set<string>();
+    const validatedVenues = rawVenues
+      .filter(v => {
+        const normalizedName = v.name.toLowerCase().trim();
+        if (seenNames.has(normalizedName)) {
+          return false; // Skip duplicate
+        }
+        seenNames.add(normalizedName);
+        return true;
+      })
       .slice(0, venueCapacity); // Cap at capacity (30 for tourist cities, 80 for metro)
 
     if (validatedVenues.length === 0) {
       return res.status(500).json({ message: 'No valid venues found' });
     }
 
-    console.log(`[discover-venues] Found ${validatedVenues.length} AI-discovered venues`);
+    const duplicatesRemoved = rawVenues.length - validatedVenues.length;
+    console.log(`[discover-venues] Found ${validatedVenues.length} unique AI venues (removed ${duplicatesRemoved} duplicates from AI response)`);
 
-    // Smart merge: Keep manual venues + merge with AI venues
+    // Smart merge for multi-city support:
+    // 1. Keep ALL venues from OTHER cities (preserve other cities' venues)
     const existingVenues = manager.venueList || [];
+    const venuesFromOtherCities = existingVenues.filter((v: any) =>
+      v.cityName && v.cityName !== city
+    );
 
-    // 1. Separate manual venues (these are preserved) and ensure they have cityName
-    const manualVenues = existingVenues
-      .filter((v: any) => v.source === 'manual')
-      .map((v: any) => ({
-        ...v,
-        cityName: v.cityName || city, // Add cityName if missing (backward compatibility)
-      }));
-    console.log(`[discover-venues] Preserving ${manualVenues.length} manually added venues`);
+    // 2. Keep manual venues from THIS city
+    const manualVenuesThisCity = existingVenues
+      .filter((v: any) => v.cityName === city && v.source === 'manual');
 
-    // 2. Mark new venues as AI-discovered (cityName already added above)
+    console.log(`[discover-venues] Preserving ${venuesFromOtherCities.length} venues from other cities`);
+    console.log(`[discover-venues] Preserving ${manualVenuesThisCity.length} manual venues from ${city}`);
+
+    // 3. Add new AI venues for THIS city
     const aiVenues = validatedVenues.map(v => ({ ...v, source: 'ai' as const }));
 
-    // 3. Remove duplicates (case-insensitive name match)
-    const manualNames = new Set(manualVenues.map((v: any) => v.name.toLowerCase().trim()));
+    // 4. Remove duplicate AI venues (case-insensitive name match)
+    const manualNames = new Set(manualVenuesThisCity.map((v: any) => v.name.toLowerCase().trim()));
     const uniqueAIVenues = aiVenues.filter((v: any) => !manualNames.has(v.name.toLowerCase().trim()));
-    console.log(`[discover-venues] Adding ${uniqueAIVenues.length} unique AI venues (${aiVenues.length - uniqueAIVenues.length} duplicates removed)`);
+    console.log(`[discover-venues] Adding ${uniqueAIVenues.length} unique AI venues for ${city} (${aiVenues.length - uniqueAIVenues.length} duplicates removed)`);
 
-    // 4. Combine and cap at capacity (keep all manual, trim AI if needed)
-    const mergedVenues = [...manualVenues, ...uniqueAIVenues];
-    const finalVenues = mergedVenues.slice(0, venueCapacity);
+    // 5. Combine all venues: other cities + this city's manual + this city's AI
+    const finalVenues = [
+      ...venuesFromOtherCities,
+      ...manualVenuesThisCity,
+      ...uniqueAIVenues
+    ];
 
-    if (mergedVenues.length > venueCapacity) {
-      console.log(`[discover-venues] Capped venues at ${venueCapacity} (had ${mergedVenues.length} total)`);
+    console.log(`[discover-venues] Total venues after update: ${finalVenues.length} (${venuesFromOtherCities.length} from other cities, ${manualVenuesThisCity.length} manual + ${uniqueAIVenues.length} AI from ${city})`);
+
+    // Save with retry logic for version conflicts
+    let retries = 3;
+    let saved = false;
+    let lastError: any = null;
+
+    while (retries > 0 && !saved) {
+      try {
+        // Refresh manager document to get latest version
+        const freshManager = await ManagerModel.findOne({
+          provider: (req as any).authUser.provider,
+          subject: (req as any).authUser.sub,
+        });
+
+        if (!freshManager) {
+          return res.status(404).json({ message: 'Manager not found' });
+        }
+
+        // Update only venueList and timestamp (NOT preferredCity - it's deprecated)
+        freshManager.venueList = finalVenues;
+        freshManager.venueListUpdatedAt = new Date();
+        await freshManager.save();
+
+        saved = true;
+        console.log(`[discover-venues] Successfully saved venues`);
+      } catch (saveError: any) {
+        lastError = saveError;
+        if (saveError.name === 'VersionError' && retries > 1) {
+          console.log(`[discover-venues] Version conflict, retrying... (${retries - 1} retries left)`);
+          retries--;
+          // Wait a bit before retrying (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 100 * (4 - retries)));
+        } else {
+          retries = 0;
+        }
+      }
     }
 
-    // Save to manager's profile
-    manager.preferredCity = city;
-    manager.venueList = finalVenues;
-    manager.venueListUpdatedAt = new Date();
-    await manager.save();
-
-    console.log(`[discover-venues] Saved ${finalVenues.length} total venues (${manualVenues.length} manual + ${finalVenues.length - manualVenues.length} AI) for ${city}`);
+    if (!saved) {
+      console.error('[discover-venues] Failed to save after retries:', lastError);
+      return res.status(500).json({
+        message: 'Failed to save venues due to concurrent updates. Please try again.',
+        error: lastError?.message
+      });
+    }
 
     return res.json({
       success: true,

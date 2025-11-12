@@ -2710,4 +2710,56 @@ router.get('/events/user/:userKey', async (req, res) => {
   }
 });
 
+// Debug endpoint to check user's past events
+router.get('/events/debug/my-past-events', requireAuth, async (req, res) => {
+  try {
+    const authUser = (req as any).user as AuthenticatedUser | undefined;
+    const userKey = authUser?.provider && authUser.sub
+      ? `${authUser.provider}:${authUser.sub}`
+      : undefined;
+
+    if (!userKey) {
+      return res.status(401).json({ message: 'User not authenticated' });
+    }
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    // Find all events where user is in accepted_staff
+    const allUserEvents = await EventModel.find({
+      'accepted_staff.userKey': userKey
+    }).lean();
+
+    console.log(`[DEBUG] User: ${userKey}`);
+    console.log(`[DEBUG] Total user events: ${allUserEvents.length}`);
+
+    // Filter past events
+    const pastEvents = allUserEvents.filter(event => {
+      if (!event.date) return false;
+      const eventDate = new Date(event.date);
+      return eventDate < today;
+    });
+
+    console.log(`[DEBUG] Past events: ${pastEvents.length}`);
+
+    return res.json({
+      userKey,
+      today: today.toISOString(),
+      totalEvents: allUserEvents.length,
+      pastEventsCount: pastEvents.length,
+      pastEvents: pastEvents.map(event => ({
+        id: String(event._id),
+        event_name: event.event_name,
+        date: event.date,
+        client_name: event.client_name,
+        status: event.status
+      }))
+    });
+
+  } catch (err) {
+    console.error('[DEBUG] Error:', err);
+    return res.status(500).json({ message: 'Failed to debug events' });
+  }
+});
+
 export default router;
