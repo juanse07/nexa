@@ -1539,6 +1539,10 @@ router.get('/events', requireAuth, async (req, res) => {
       console.log('[EVENTS DEBUG] Staff events found:', events.length);
       if (events.length > 0 && events[0]) {
         console.log('[EVENTS DEBUG] First event audience_team_ids:', events[0].audience_team_ids);
+        console.log('[EVENTS DEBUG] First 3 events summary:');
+        events.slice(0, 3).forEach((evt: any, i: number) => {
+          console.log(`  ${i+1}. ${evt.event_name} - date: ${evt.date}, status: ${evt.status}, accepted_staff: ${(evt.accepted_staff || []).length}`);
+        });
       }
     }
 
@@ -1569,6 +1573,12 @@ router.get('/events', requireAuth, async (req, res) => {
     });
 
     // Include current server timestamp for next sync
+    if (!managerScope) {
+      console.log('[EVENTS DEBUG] Returning to staff app:', mappedEvents.length, 'events');
+      if (mappedEvents.length > 0) {
+        console.log('[EVENTS DEBUG] Sample event dates:', mappedEvents.slice(0, 3).map((e: any) => e.date));
+      }
+    }
     return res.json({
       events: mappedEvents,
       serverTimestamp: new Date().toISOString(),
