@@ -2,7 +2,9 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
 import 'package:nexa/services/notification_service.dart';
+import 'package:nexa/services/terminology_provider.dart';
 import '../../../../core/widgets/custom_sliver_app_bar.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../auth/data/services/auth_service.dart';
@@ -36,10 +38,21 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _venueUpdatedAt;
   bool _loadingVenues = false;
 
+  // Terminology management
+  String? _selectedTerminology;
+
   @override
   void initState() {
     super.initState();
     _loadVenueInfo();
+    // Load current terminology after frame is built
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() {
+          _selectedTerminology = context.read<TerminologyProvider>().terminology;
+        });
+      }
+    });
   }
 
   /// Load current venue information from backend
@@ -313,6 +326,138 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                         ),
                       ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Terminology Section
+                Card(
+                  elevation: 0,
+                  color: theme.colorScheme.surfaceContainer,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Consumer<TerminologyProvider>(
+                      builder: (context, terminologyProvider, _) {
+                        // Initialize selected terminology if not set
+                        _selectedTerminology ??= terminologyProvider.terminology;
+
+                        final bool hasChanges = _selectedTerminology != terminologyProvider.terminology;
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.work_outline,
+                                  color: theme.colorScheme.primary,
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  'Work Terminology',
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'How do you prefer to call your work assignments?',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            RadioListTile<String>(
+                              title: const Text('Jobs'),
+                              subtitle: const Text('e.g., "My Jobs", "Create Job"'),
+                              value: 'Jobs',
+                              groupValue: _selectedTerminology,
+                              onChanged: (value) {
+                                if (value != null) {
+                                  setState(() {
+                                    _selectedTerminology = value;
+                                  });
+                                }
+                              },
+                            ),
+                            RadioListTile<String>(
+                              title: const Text('Shifts'),
+                              subtitle: const Text('e.g., "My Shifts", "Create Shift"'),
+                              value: 'Shifts',
+                              groupValue: _selectedTerminology,
+                              onChanged: (value) {
+                                if (value != null) {
+                                  setState(() {
+                                    _selectedTerminology = value;
+                                  });
+                                }
+                              },
+                            ),
+                            RadioListTile<String>(
+                              title: const Text('Events'),
+                              subtitle: const Text('e.g., "My Events", "Create Event"'),
+                              value: 'Events',
+                              groupValue: _selectedTerminology,
+                              onChanged: (value) {
+                                if (value != null) {
+                                  setState(() {
+                                    _selectedTerminology = value;
+                                  });
+                                }
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                            SizedBox(
+                              width: double.infinity,
+                              child: FilledButton.icon(
+                                onPressed: hasChanges
+                                    ? () async {
+                                        await terminologyProvider.setTerminology(_selectedTerminology!);
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                              content: Text('Terminology updated successfully!'),
+                                              backgroundColor: Colors.green,
+                                            ),
+                                          );
+                                        }
+                                      }
+                                    : null,
+                                icon: const Icon(Icons.check),
+                                label: const Text('Save Terminology'),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.primaryContainer.withOpacity(0.5),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.info_outline,
+                                    size: 20,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'This will update how work assignments appear throughout the app',
+                                      style: theme.textTheme.bodySmall?.copyWith(
+                                        color: theme.colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ),
                 ),

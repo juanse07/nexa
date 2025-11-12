@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../../services/terminology_provider.dart';
 import '../services/audio_transcription_service.dart';
 
 /// Widget for chat input with text field, attachment, microphone, and send button
@@ -110,8 +112,11 @@ class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProv
         throw Exception('Recording failed');
       }
 
-      // Transcribe the audio
-      final transcribedText = await _audioService.transcribeAudio(audioPath);
+      // Get user's terminology preference
+      final terminology = context.read<TerminologyProvider>().plural.toLowerCase();
+
+      // Transcribe the audio with terminology context
+      final transcribedText = await _audioService.transcribeAudio(audioPath, terminology: terminology);
 
       if (transcribedText != null && transcribedText.isNotEmpty) {
         // Add transcribed text to the input field

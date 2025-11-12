@@ -3,12 +3,14 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:provider/provider.dart';
 
 import 'package:nexa/features/auth/data/services/auth_service.dart';
 import 'package:nexa/features/auth/presentation/pages/login_page.dart';
 import 'package:nexa/features/users/presentation/pages/manager_onboarding_page.dart';
 import 'package:nexa/shared/presentation/theme/theme.dart';
 import 'package:nexa/l10n/app_localizations.dart';
+import 'package:nexa/services/terminology_provider.dart';
 
 /// The root widget of the Nexa application.
 ///
@@ -54,9 +56,11 @@ class NexaApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Nexa',
-      debugShowCheckedModeBanner: false,
+    return ChangeNotifierProvider(
+      create: (_) => TerminologyProvider(),
+      child: MaterialApp(
+        title: 'Nexa',
+        debugShowCheckedModeBanner: false,
 
       // Localization configuration
       localizationsDelegates: const [
@@ -102,6 +106,7 @@ class NexaApp extends StatelessWidget {
           child: child!,
         );
       },
+      ),
     );
   }
 }

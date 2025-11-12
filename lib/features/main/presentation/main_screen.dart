@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import '../../../services/terminology_provider.dart';
 // ===== HOME DASHBOARD COMMENTED OUT - SAVED FOR FUTURE USE =====
 // import '../../home/presentation/home_screen.dart';
 // ===== END HOME DASHBOARD IMPORT =====
@@ -262,7 +264,7 @@ class _MainScreenState extends State<MainScreen>
               // _buildNavButton(0, Icons.home_rounded, 'Home'),
               // _buildNavButton(1, Icons.add_circle_outline, 'Create'),
               // ===== END REMOVED BUTTONS =====
-              _buildNavButton(0, Icons.view_module, 'Jobs'), // Was index 2, now 0
+              _buildNavButton(0, Icons.view_module, context.watch<TerminologyProvider>().plural), // Was index 2, now 0
               _buildNavButton(1, Icons.chat_bubble_outline, 'Chat'), // Was index 3, now 1
               _buildNavButton(2, Icons.inventory_2, 'Catalog'), // Was index 4, now 2
             ],
@@ -385,7 +387,7 @@ class _MainScreenState extends State<MainScreen>
           // _buildRailItem(0, Icons.home_rounded, 'Home'),
           // _buildRailItem(1, Icons.add_circle_outline, 'Create'),
           // ===== END REMOVED BUTTONS =====
-          _buildRailItem(0, Icons.view_module, 'Jobs'), // Was index 2, now 0
+          _buildRailItem(0, Icons.view_module, context.watch<TerminologyProvider>().plural), // Was index 2, now 0
           _buildRailItem(1, Icons.chat_bubble_outline, 'Chat'), // Was index 3, now 1
           _buildRailItem(2, Icons.inventory_2, 'Catalog'), // Was index 4, now 2
           const Spacer(),

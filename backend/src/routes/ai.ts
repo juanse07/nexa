@@ -256,7 +256,8 @@ router.get('/ai/manager/context', requireAuth, async (req, res) => {
 /**
  * POST /api/ai/transcribe
  * Transcribe audio to text using Groq Whisper API (fast & cheap!)
- * Accepts audio file upload and returns transcribed text
+ * Accepts audio file upload and optional terminology parameter
+ * Returns transcribed text
  */
 router.post('/ai/transcribe', requireAuth, upload.single('audio'), async (req, res) => {
   let tempFilePath: string | null = null;
@@ -274,6 +275,13 @@ router.post('/ai/transcribe', requireAuth, upload.single('audio'), async (req, r
       return res.status(500).json({ message: 'Groq API key not configured on server' });
     }
 
+    // Get user's terminology preference (jobs, shifts, or events)
+    // Defaults to 'shifts' if not provided
+    const terminology = (req.body.terminology || 'shifts').toLowerCase();
+    const singularTerm = terminology.endsWith('s') ? terminology.slice(0, -1) : terminology;
+
+    console.log(`[ai/transcribe] Using terminology: ${terminology} (singular: ${singularTerm})`);
+
     // Groq Whisper endpoint (NOT the Responses API endpoint)
     const groqWhisperUrl = 'https://api.groq.com/openai/v1';
 
@@ -289,8 +297,8 @@ router.post('/ai/transcribe', requireAuth, upload.single('audio'), async (req, r
     // By not specifying 'language', Whisper will detect it automatically
     // This allows Spanish-speaking users to use voice input naturally
 
-    // Minimal domain prompt for faster transcription
-    const domainPrompt = 'event staffing: server bartender captain chef venue client';
+    // Domain prompt with user's terminology for better context
+    const domainPrompt = `${terminology} staffing: server bartender captain chef venue client ${singularTerm}`;
     formData.append('prompt', domainPrompt);
 
     const headers: any = {

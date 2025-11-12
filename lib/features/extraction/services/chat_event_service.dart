@@ -87,7 +87,9 @@ class ChatEventService {
   List<Map<String, dynamic>> get pendingUpdates => List.unmodifiable(_pendingUpdates);
   List<Map<String, dynamic>> get existingEvents => List.unmodifiable(_existingEvents);
 
-  static const String _fallbackPrompt = '''You are a friendly AI assistant helping create catering shift staffing records. Your job is to collect shift details through conversation.
+  static const String _fallbackPrompt = '''You are a friendly AI assistant helping create catering work assignment records. Your job is to collect details through conversation.
+
+IMPORTANT: Use the terminology preference specified by the user (Jobs, Shifts, or Events). If no preference is specified, use "shifts" as default.
 
 Ask for information ONE field at a time in a natural, conversational way. Required fields:
 - client_name
@@ -575,6 +577,7 @@ Be conversational and friendly. If the user provides multiple pieces of informat
   Future<String> _buildSystemPrompt({
     String? userMessage,
     bool skipHeavyLoading = false,
+    String? terminology,
   }) async {
     final instructions = await _loadInstructions();
 
@@ -613,7 +616,31 @@ Be conversational and friendly. If the user provides multiple pieces of informat
     final teamMembersContext = _formatTeamMembersForContext();
     final venuesContext = _formatVenuesForContext();
 
-    return '''$instructions
+    // Build terminology instructions
+    final terminologyInstructions = terminology != null ? '''
+
+## 🔑 CRITICAL: User's Terminology Preference
+
+The user has chosen to use "${terminology}" terminology (not "Jobs", "Shifts", or "Events").
+
+**YOU MUST:**
+- Always use "${terminology.toLowerCase()}" when referring to work assignments
+- Use the singular form "${_getSingularForm(terminology)}" for single items
+- Replace any mention of "shift", "job", or "event" with "${terminology.toLowerCase()}" in your responses
+- Use this terminology in all JSON responses, confirmations, and messages
+
+**Examples:**
+- ❌ "Let's create a shift for..."
+- ✅ "Let's create a ${terminology.toLowerCase().substring(0, terminology.length - 1)} for..."
+- ❌ "Your shift on Nov 24..."
+- ✅ "Your ${terminology.toLowerCase().substring(0, terminology.length - 1)} on Nov 24..."
+
+**IMPORTANT**: The markdown instructions below may say "shift" - IGNORE that and use "${terminology.toLowerCase()}" instead!
+''' : '';
+
+    return '''$terminologyInstructions
+
+$instructions
 
 ## Current Context
 - $clientsList
@@ -637,6 +664,14 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
   }
 }
 ''';
+  }
+
+  /// Get singular form of terminology
+  String _getSingularForm(String plural) {
+    if (plural == 'Shifts') return 'shift';
+    if (plural == 'Events') return 'event';
+    if (plural == 'Jobs') return 'job';
+    return plural.toLowerCase().substring(0, plural.length - 1); // fallback: remove 's'
   }
 
   /// Update current event data (e.g., from extraction)
@@ -679,7 +714,7 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
   }
 
   /// Send a user message and get AI response
-  Future<ChatMessage> sendMessage(String userMessage) async {
+  Future<ChatMessage> sendMessage(String userMessage, {String? terminology}) async {
     // Add user message to history
     final userMsg = ChatMessage(role: 'user', content: userMessage);
     _conversationHistory.add(userMsg);
@@ -694,6 +729,7 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
     final systemPrompt = await _buildSystemPrompt(
       userMessage: userMessage,
       skipHeavyLoading: !needsFullContext,
+      terminology: terminology,
     );
 
     // Build messages for API call

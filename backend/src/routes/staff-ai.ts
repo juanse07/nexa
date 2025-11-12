@@ -86,6 +86,7 @@ router.get('/ai/staff/system-info', requireAuth, async (req, res) => {
 /**
  * POST /api/ai/staff/transcribe
  * Transcribe audio to text using Groq Whisper API (fast & cheap!)
+ * Accepts audio file upload and optional terminology parameter
  * Same as manager transcription but scoped to staff
  */
 router.post('/ai/staff/transcribe', requireAuth, upload.single('audio'), async (req, res) => {
@@ -104,6 +105,13 @@ router.post('/ai/staff/transcribe', requireAuth, upload.single('audio'), async (
       return res.status(500).json({ message: 'Groq API key not configured on server' });
     }
 
+    // Get user's terminology preference (jobs, shifts, or events)
+    // Defaults to 'shifts' if not provided
+    const terminology = (req.body.terminology || 'shifts').toLowerCase();
+    const singularTerm = terminology.endsWith('s') ? terminology.slice(0, -1) : terminology;
+
+    console.log(`[ai/staff/transcribe] Using terminology: ${terminology} (singular: ${singularTerm})`);
+
     const groqWhisperUrl = 'https://api.groq.com/openai/v1';
 
     const formData = new FormData();
@@ -113,8 +121,8 @@ router.post('/ai/staff/transcribe', requireAuth, upload.single('audio'), async (
     });
     formData.append('model', 'whisper-large-v3-turbo');
 
-    // Minimal bilingual prompt for faster transcription
-    const domainPrompt = 'shifts turnos server mesero bartender cantinero venue';
+    // Bilingual domain prompt with user's terminology for better transcription context
+    const domainPrompt = `${terminology} turnos server mesero bartender cantinero venue ${singularTerm}`;
     formData.append('prompt', domainPrompt);
 
     const headers: any = {

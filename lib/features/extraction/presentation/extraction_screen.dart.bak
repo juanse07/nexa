@@ -8,9 +8,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
 import 'package:nexa/l10n/app_localizations.dart';
-import 'package:nexa/services/terminology_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:get_it/get_it.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -43,7 +41,6 @@ import '../widgets/upload_container.dart';
 import '../widgets/event_data_preview_card.dart';
 import '../../extraction/widgets/chat_message_widget.dart';
 import '../../extraction/widgets/chat_input_widget.dart';
-import '../../extraction/widgets/event_confirmation_card.dart';
 import 'mixins/event_data_mixin.dart';
 import 'pending_publish_screen.dart';
 import 'pending_edit_screen.dart';
@@ -278,9 +275,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     _socketSubscription = SocketManager.instance.events.listen((event) {
       if (!mounted) return;
       if (event.event.startsWith('event:')) {
-        // Use delta sync for real-time updates (don't show loading indicator)
-        print('[Socket] Event update received: ${event.event}');
-        _loadEvents(showLoading: false);
+        _loadEvents();
         _loadPendingDrafts();
       } else if (event.event.startsWith('team:')) {
         _loadClients();
@@ -293,12 +288,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     // Add scroll listener for AI Chat header hide/show
     _aiChatScrollController.addListener(_handleAIChatScroll);
 
-    // Start timer for periodic delta sync (every 1 minute)
+    // Start timer for real-time updates
     _updateTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
       if (mounted) {
-        print('[Timer] Periodic delta sync');
-        // Use delta sync to fetch any changes (don't show loading indicator)
-        _loadEvents(showLoading: false);
         setState(() {
           // This will trigger a rebuild and update the time display
         });
@@ -370,14 +362,6 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   void _handleScroll(ScrollNotification notification) {
-    // Skip header animation for catalog tab - always show header
-    if (_selectedIndex == 4) {
-      if (!_isHeaderVisible) {
-        _showHeader();
-      }
-      return;
-    }
-
     // Only handle scroll updates from the main scrollable
     if (notification is! ScrollUpdateNotification) return;
 
@@ -487,7 +471,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     if (d == null) return;
     setState(() {
       structuredData = d;
-      _eventNameController.text = (d['shift_name'] ?? '').toString();
+      _eventNameController.text = (d['event_name'] ?? '').toString();
       _clientNameController.text = (d['client_name'] ?? '').toString();
       _dateController.text = (d['date'] ?? '').toString();
       _startTimeController.text = (d['start_time'] ?? '').toString();
@@ -799,7 +783,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
     if (_formKey.currentState!.validate()) {
       final manualData = {
-        'shift_name': _eventNameController.text.trim(),
+        'event_name': _eventNameController.text.trim(),
         'client_name': _clientNameController.text.trim(),
         'date': _dateController.text.trim(),
         'start_time': _startTimeController.text.trim(),
@@ -1186,14 +1170,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       case 0: // Post a Job tab
         if (structuredData != null && structuredData!.isNotEmpty) {
           final eventName =
-              structuredData!['shift_name']?.toString() ?? 'Untitled Event';
+              structuredData!['event_name']?.toString() ?? 'Untitled Event';
           return eventName.length > 20
               ? '${eventName.substring(0, 20)}...'
               : eventName;
         }
         return greeting;
       case 1: // Events tab
-        return context.read<TerminologyProvider>().plural;
+        return 'Jobs';
       case 2: // Chat tab
         return "Chat";
       case 3: // Hours tab
@@ -1206,26 +1190,20 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   String _getCurrentSectionName() {
-    final terminology = context.read<TerminologyProvider>().plural;
     switch (_selectedIndex) {
       case 0:
-        return terminology; // Create is treated as part of Jobs
+        return 'Jobs'; // Create is treated as part of Jobs
       case 1:
-        return terminology;
+        return 'Jobs';
       case 4:
         return 'Catalog';
       default:
-        return terminology;
+        return 'Jobs';
     }
   }
 
   Future<void> _handleNavigationDropdown(String section) async {
     HapticFeedback.lightImpact();
-    final terminology = context.read<TerminologyProvider>().plural;
-
-    if (section == terminology) {
-      section = 'Jobs'; // Normalize to 'Jobs' for logic purposes
-    }
 
     switch (section) {
       case 'Jobs':
@@ -1528,7 +1506,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       case 3: // Hours tab
         return const HoursApprovalListScreen();
       case 4: // Catalog tab
-        return Container(); // Content is handled by slivers
+        return TabBarView(
+          controller: _catalogTabController,
+          children: [_buildClientsTab(), _buildRolesTab(), _buildTariffsTab()],
+        );
       default:
         return Container();
     }
@@ -1552,49 +1533,35 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          // Only refresh events when on Events tab
-          if (_selectedIndex == 1) {
-            await _refreshEvents();
-          }
-          // Could add refresh logic for other tabs here if needed
+      body: NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          _handleScroll(notification);
+          return false;
         },
-        // Customize colors to match app theme
-        color: const Color(0xFF6366F1),
-        backgroundColor: Colors.white,
-        child: NotificationListener<ScrollNotification>(
-          onNotification: (notification) {
-            _handleScroll(notification);
-            return false;
-          },
-          child: Stack(
-            children: [
-              // Main scrollable content - Full screen
-              CustomScrollView(
-                controller: _mainScrollController,
-                slivers: [
+        child: Stack(
+          children: [
+            // Main scrollable content - Full screen
+            CustomScrollView(
+              controller: _mainScrollController,
+              slivers: [
                 // Top padding to show first card below header initially
-                // Only add padding for tabs that use sliver content (not Catalog which uses TabBarView)
-                if (_selectedIndex != 4)
-                  SliverToBoxAdapter(
-                    child: SizedBox(
-                      height: statusBarHeight + 200, // Dynamic based on device + header height
-                    ),
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: statusBarHeight + 200, // Dynamic based on device + header height
                   ),
+                ),
                 ..._buildSliverContent(),
-                // Add bottom padding for last card (only for tabs with sliver content)
-                if (_selectedIndex != 4)
-                  const SliverToBoxAdapter(
-                    child: SizedBox(
-                      height: 100, // Bottom padding for scrolling past bottom bar
-                    ),
+                // Add bottom padding for last card
+                const SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: 100, // Bottom padding for scrolling past bottom bar
                   ),
+                ),
               ],
             ),
 
-              // Animated app bar (overlaid) - Facebook style with persistent safe area
-              Positioned(
+            // Animated app bar (overlaid) - Facebook style with persistent safe area
+            Positioned(
               top: 0,
               left: 0,
               right: 0,
@@ -1609,8 +1576,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     animation: _headerAnimation,
                     builder: (context, child) {
                       return Container(
+                        // Keep background color extended into safe area (Facebook style)
                         decoration: const BoxDecoration(
-                          // Keep original gradient for all tabs
                           gradient: LinearGradient(
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
@@ -1747,11 +1714,15 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               width: 28,
                               height: 28,
                               decoration: BoxDecoration(
-                                color: const Color(0xFF6B7280),
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFF7C3AED), Color(0xFF6D28D9)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
                                 shape: BoxShape.circle,
                                 boxShadow: [
                                   BoxShadow(
-                                    color: const Color(0xFF6B7280).withOpacity(0.3),
+                                    color: const Color(0xFF7C3AED).withOpacity(0.3),
                                     blurRadius: 8,
                                     offset: const Offset(0, 2),
                                   ),
@@ -1769,14 +1740,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               child: _isJobChipExpanded
                                   ? Row(
                                       mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const SizedBox(width: 8),
+                                      children: const [
+                                        SizedBox(width: 8),
                                         Text(
-                                          'New ${context.read<TerminologyProvider>().singular}',
-                                          style: const TextStyle(
+                                          'New Job',
+                                          style: TextStyle(
                                             fontSize: 15,
                                             fontWeight: FontWeight.w600,
-                                            color: Color(0xFF6B7280),
+                                            color: Color(0xFF374151),
                                             letterSpacing: -0.2,
                                           ),
                                         ),
@@ -1791,8 +1762,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   ),
                 ),
               ),
-            ],
-          ),
+          ],
         ),
       ),
     );
@@ -1944,9 +1914,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          '${context.read<TerminologyProvider>().plural} Management',
-                          style: const TextStyle(
+                        const Text(
+                          'Events Management',
+                          style: TextStyle(
                             color: Colors.white,
                             fontSize: 18,
                             fontWeight: FontWeight.w600,
@@ -2729,7 +2699,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
   String _summarizeEvent(Map<String, dynamic> data) {
     final client = (data['client_name'] ?? '').toString();
-    final name = (data['shift_name'] ?? data['venue_name'] ?? 'Untitled')
+    final name = (data['event_name'] ?? data['venue_name'] ?? 'Untitled')
         .toString();
     final date = (data['date'] ?? '').toString();
     return [
@@ -4033,16 +4003,16 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final DateTime? aDate = _eventDateTime(a);
     final DateTime? bDate = _eventDateTime(b);
     if (aDate == null && bDate == null) {
-      return (a['shift_name'] ?? '').toString().compareTo(
-        (b['shift_name'] ?? '').toString(),
+      return (a['event_name'] ?? '').toString().compareTo(
+        (b['event_name'] ?? '').toString(),
       );
     }
     if (aDate == null) return 1;
     if (bDate == null) return -1;
     final cmp = aDate.compareTo(bDate);
     if (cmp != 0) return cmp;
-    return (a['shift_name'] ?? '').toString().compareTo(
-      (b['shift_name'] ?? '').toString(),
+    return (a['event_name'] ?? '').toString().compareTo(
+      (b['event_name'] ?? '').toString(),
     );
   }
 
@@ -4050,16 +4020,16 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final DateTime? aDate = _eventDateTime(a);
     final DateTime? bDate = _eventDateTime(b);
     if (aDate == null && bDate == null) {
-      return (a['shift_name'] ?? '').toString().compareTo(
-        (b['shift_name'] ?? '').toString(),
+      return (a['event_name'] ?? '').toString().compareTo(
+        (b['event_name'] ?? '').toString(),
       );
     }
     if (aDate == null) return 1;
     if (bDate == null) return -1;
     final cmp = bDate.compareTo(aDate);
     if (cmp != 0) return cmp;
-    return (a['shift_name'] ?? '').toString().compareTo(
-      (b['shift_name'] ?? '').toString(),
+    return (a['event_name'] ?? '').toString().compareTo(
+      (b['event_name'] ?? '').toString(),
     );
   }
 
@@ -4267,73 +4237,15 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     }
   }
 
-  /// Merges delta changes into existing events list
-  /// Returns a new list with updates applied
-  List<Map<String, dynamic>> _mergeDeltaEvents(
-    List<Map<String, dynamic>> existing,
-    List<Map<String, dynamic>> changes,
-  ) {
-    // Create a map for quick lookup by event ID
-    final Map<String, Map<String, dynamic>> eventMap = {};
-
-    // Add all existing events to the map
-    for (final event in existing) {
-      final id = (event['_id'] ?? event['id'])?.toString();
-      if (id != null) {
-        eventMap[id] = event;
-      }
-    }
-
-    // Apply changes (updates or new events)
-    for (final change in changes) {
-      final id = (change['_id'] ?? change['id'])?.toString();
-      if (id != null) {
-        eventMap[id] = change; // Replace existing or add new
-        print('[_mergeDeltaEvents] Updated/added event: $id');
-      }
-    }
-
-    // Convert back to list
-    return eventMap.values.toList();
-  }
-
-  /// Refreshes events with a full sync (forces complete reload)
-  Future<void> _refreshEvents() async {
-    print('[_refreshEvents] Force full sync');
-    _eventService.clearLastSyncTimestamp();
-    await _loadEvents();
-  }
-
-  /// Loads events with delta sync support for efficient updates
-  Future<void> _loadEvents({bool showLoading = true}) async {
-    if (showLoading) {
-      setState(() {
-        _isEventsLoading = true;
-        _eventsError = null;
-      });
-    }
+  Future<void> _loadEvents() async {
+    setState(() {
+      _isEventsLoading = true;
+      _eventsError = null;
+    });
     try {
       print('[_loadEvents] Fetching events with userKey: $_viewerUserKey');
-
-      // Use delta sync to only fetch changes
-      final result = await _eventService.fetchEventsWithSync(
-        userKey: _viewerUserKey,
-        useDeltaSync: true,
-      );
-
-      print('[_loadEvents] Received: $result');
-
-      List<Map<String, dynamic>> items;
-
-      if (result.isDeltaSync && _events != null) {
-        // Merge delta changes into existing events
-        print('[_loadEvents] Merging ${result.events.length} delta changes');
-        items = _mergeDeltaEvents(_events!, result.events);
-      } else {
-        // Full sync - replace everything
-        print('[_loadEvents] Full sync with ${result.events.length} events');
-        items = result.events;
-      }
+      final items = await _eventService.fetchEvents(userKey: _viewerUserKey);
+      print('[_loadEvents] Received ${items.length} events from API');
 
       // Helper: Parse date from event
       DateTime? parseDate(Map<String, dynamic> e) {
@@ -4357,7 +4269,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       for (final e in items) {
         final status = (e['status'] ?? 'draft').toString();
         final d = parseDate(e);
-        final eventName = (e['shift_name'] ?? e['client_name'] ?? 'Unknown').toString();
+        final eventName = (e['event_name'] ?? e['client_name'] ?? 'Unknown').toString();
         final eventId = (e['_id'] ?? e['id'] ?? 'unknown').toString();
 
         // Check if event is past (FIXED: normalize both dates to midnight to avoid timezone issues)
@@ -4392,6 +4304,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         // 2. Full = fulfilled or no open positions
         // 3. Posted = published events (public or private visibility)
 
+        final eventId = e['_id'] ?? e['id'] ?? 'unknown';
+        final eventName = e['title'] ?? e['event_name'] ?? e['venue_name'] ?? 'Untitled';
         final visibilityType = e['visibilityType']?.toString() ?? 'unknown';
 
         print('[EVENT CATEGORIZE] Event: $eventId ($eventName) | Status: $status | Visibility: $visibilityType');
@@ -4488,7 +4402,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             child: Padding(
               padding: const EdgeInsets.all(32),
               child: Text(
-                'No ${context.read<TerminologyProvider>().plural.toLowerCase()} found',
+                'No events found',
                 style: TextStyle(
                   fontSize: 16,
                   color: Colors.grey[600],
@@ -4589,105 +4503,15 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   List<Widget> _buildCatalogSlivers() {
+    // Tabs are in the floating header, just return content
     return [
-      // Top padding to position catalog content below floating header
-      SliverToBoxAdapter(
-        child: SizedBox(height: 240), // Extra space to move cards down more
-      ),
       SliverFillRemaining(
-        child: Stack(
-          children: [
-            TabBarView(
-              controller: _catalogTabController,
-              children: [_buildClientsInner(), _buildRolesInner(), _buildTariffsInner()],
-            ),
-            // Floating Action Button further up, white background (turned off look)
-            Positioned(
-              bottom: 120,
-              right: 20,
-              child: FloatingActionButton(
-                onPressed: _showAddItemDialog,
-                backgroundColor: Colors.white.withOpacity(0.8), // Semi-transparent white background
-                elevation: 2,
-                child: const Icon(
-                  Icons.add,
-                  color: Colors.grey, // Grey icon
-                  size: 24,
-                ),
-              ),
-            ),
-          ],
+        child: TabBarView(
+          controller: _catalogTabController,
+          children: [_buildClientsTab(), _buildRolesTab(), _buildTariffsTab()],
         ),
       ),
     ];
-  }
-
-  void _showAddItemDialog() {
-    // Determine which tab is currently active
-    final int currentIndex = _catalogTabController.index;
-    String title = '';
-    String hintText = '';
-
-    switch (currentIndex) {
-      case 0: // Clients tab
-        title = 'New Client';
-        hintText = 'Client name';
-        break;
-      case 1: // Roles tab
-        title = 'New Role';
-        hintText = 'Role name';
-        break;
-      case 2: // Tariffs tab
-        _showCreateTariffDialog();
-        return;
-    }
-
-    _promptNewNamedItem(title, hintText).then((name) {
-      if (name == null) return;
-
-      switch (currentIndex) {
-        case 0: // Clients
-          _clientsService.createClient(name).then((_) {
-            _loadClients();
-            if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Client created'),
-                backgroundColor: Color(0xFF059669),
-              ),
-            );
-          }).catchError((e) {
-            if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Error creating client: $e'),
-                backgroundColor: const Color(0xFFDC2626),
-              ),
-            );
-          });
-          break;
-        case 1: // Roles
-          _rolesService.createRole(name).then((_) {
-            _loadRoles();
-            if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Role created'),
-                backgroundColor: Color(0xFF059669),
-              ),
-            );
-          }).catchError((e) {
-            if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Error creating role: $e'),
-                backgroundColor: const Color(0xFFDC2626),
-              ),
-            );
-          });
-          break;
-      }
-    });
   }
 
   Widget _buildEventsTab() {
@@ -5209,7 +5033,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             // Backend events have data at top level (not wrapped in 'data' field)
             final client = (d['client_name'] ?? '').toString();
             final name =
-                (d['shift_name'] ?? d['venue_name'] ?? 'Untitled')
+                (d['event_name'] ?? d['venue_name'] ?? 'Untitled')
                     .toString();
             final dateRaw = (d['date'] ?? '').toString();
             final dateFormatted = dateRaw.isNotEmpty
@@ -5363,12 +5187,13 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
   Widget _buildClientsTab() {
     final List<Map<String, dynamic>> items = _clients ?? const [];
-    return RefreshIndicator(
-      onRefresh: _loadClients,
-      color: const Color(0xFF6366F1),
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(20),
+    return SafeArea(
+      child: RefreshIndicator(
+        onRefresh: _loadClients,
+        color: const Color(0xFF6366F1),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(20),
           children: [
             if (kIsWeb)
               Align(
@@ -5426,330 +5251,6 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             ...items.map((c) => _clientListTile(c)),
           ],
         ),
-      );
-  }
-
-  Widget _buildClientsInner() {
-    final List<Map<String, dynamic>> items = _clients ?? const [];
-    return RefreshIndicator(
-      onRefresh: _loadClients,
-      color: const Color(0xFF6366F1),
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.only(
-          top: 36,    // Add top padding so buttons aren't hidden behind header
-          left: 20,
-          right: 20,
-          bottom: 20,
-        ),
-        children: [
-          if (kIsWeb)
-            Align(
-              alignment: Alignment.centerRight,
-              child: _maybeWebRefreshButton(
-                onPressed: _loadClients,
-                label: 'Refresh clients',
-                padding: const EdgeInsets.only(top: 12),
-              ),
-            ),
-          if (kIsWeb) const SizedBox(height: 4),
-          if (_isClientsLoading && items.isEmpty)
-            const Center(child: LoadingIndicator(text: 'Loading clients...')),
-          if (_clientsError != null) ...[
-            ErrorBanner(message: _clientsError!),
-            const SizedBox(height: 12),
-          ],
-          if (!_isClientsLoading && items.isEmpty && _clientsError == null)
-            Container(
-              padding: const EdgeInsets.all(32),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.grey.shade100, width: 1),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    blurRadius: 20,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.business_outlined,
-                    size: 48,
-                    color: Colors.grey.shade400,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No clients yet',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey.shade700,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Add your first client to get started',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey.shade500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ...items.map((c) => _clientListTile(c)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRolesInner() {
-    final items = _roles ?? const [];
-    return RefreshIndicator(
-      onRefresh: _loadRoles,
-      color: const Color(0xFF6366F1),
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.only(
-          top: 36,    // Add top padding so buttons aren't hidden behind header
-          left: 20,
-          right: 20,
-          bottom: 20,
-        ),
-        children: [
-          if (kIsWeb)
-            Align(
-              alignment: Alignment.centerRight,
-              child: _maybeWebRefreshButton(
-                onPressed: _loadRoles,
-                label: 'Refresh roles',
-                padding: const EdgeInsets.only(top: 12),
-              ),
-            ),
-          if (kIsWeb) const SizedBox(height: 4),
-          if (_isRolesLoading && items.isEmpty)
-            const Center(child: LoadingIndicator(text: 'Loading roles...')),
-          if (_rolesError != null) ...[
-            ErrorBanner(message: _rolesError!),
-            const SizedBox(height: 12),
-          ],
-          if (!_isRolesLoading && items.isEmpty && _rolesError == null)
-            Container(
-              padding: const EdgeInsets.all(32),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.grey.shade100, width: 1),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    blurRadius: 20,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.work_outline,
-                    size: 48,
-                    color: Colors.grey.shade400,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No roles yet',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey.shade700,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Add your first role to get started',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey.shade500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ...items.map((r) => _roleListTile(r)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTariffsInner() {
-    final clients = _clients ?? const [];
-    final roles = _roles ?? const [];
-    final tariffs = _tariffs ?? const [];
-    final isWeb = ResponsiveLayout.shouldUseDesktopLayout(context);
-
-    return RefreshIndicator(
-      onRefresh: () async {
-        await _loadClients();
-        await _loadRoles();
-        await _loadTariffs();
-      },
-      color: const Color(0xFF6366F1),
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.only(
-          top: 36,    // Add top padding so buttons aren't hidden behind header
-          left: 20,
-          right: 20,
-          bottom: 20,
-        ),
-        children: [
-          if (kIsWeb)
-            Align(
-              alignment: Alignment.centerRight,
-              child: _maybeWebRefreshButton(
-                onPressed: () async {
-                  await _loadClients();
-                  await _loadRoles();
-                  await _loadTariffs();
-                },
-                label: 'Refresh tariffs',
-                padding: const EdgeInsets.only(top: 12),
-              ),
-            ),
-          if (kIsWeb) const SizedBox(height: 4),
-          // Client and Role Filters
-          Padding(
-            padding: const EdgeInsets.only(top: 16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-              DropdownButtonFormField<String>(
-                value: _selectedClientIdForTariffs,
-                hint: const Text('All Clients'),
-                items: [
-                  const DropdownMenuItem(
-                    value: null,
-                    child: Text('All Clients'),
-                  ),
-                  ...clients.map(
-                    (c) => DropdownMenuItem(
-                      value: c['id']?.toString(),
-                      child: Text(c['name']?.toString() ?? 'Unnamed Client'),
-                    ),
-                  ),
-                ],
-                onChanged: (value) {
-                  setState(() {
-                    _selectedClientIdForTariffs = value;
-                  });
-                  _loadTariffs();
-                },
-                decoration: const InputDecoration(
-                  labelText: 'Client',
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                ),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                value: _selectedRoleIdForTariffs,
-                hint: const Text('All Roles'),
-                items: [
-                  const DropdownMenuItem(
-                    value: null,
-                    child: Text('All Roles'),
-                  ),
-                  ...roles.map(
-                    (r) => DropdownMenuItem(
-                      value: r['id']?.toString(),
-                      child: Text(r['name']?.toString() ?? 'Unnamed Role'),
-                    ),
-                  ),
-                ],
-                onChanged: (value) {
-                  setState(() {
-                    _selectedRoleIdForTariffs = value;
-                  });
-                  _loadTariffs();
-                },
-                decoration: const InputDecoration(
-                  labelText: 'Role',
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                ),
-              ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          if (_isTariffsLoading && tariffs.isEmpty)
-            const Center(child: LoadingIndicator(text: 'Loading tariffs...')),
-          if (_tariffsError != null) ...[
-            ErrorBanner(message: _tariffsError!),
-            const SizedBox(height: 12),
-          ],
-          if (!_isTariffsLoading && tariffs.isEmpty && _tariffsError == null)
-            Container(
-              padding: const EdgeInsets.all(32),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.grey.shade100, width: 1),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    blurRadius: 20,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.attach_money,
-                    size: 48,
-                    color: Colors.grey.shade400,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No tariffs yet',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey.shade700,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Create your first tariff to set pricing',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey.shade500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          if (tariffs.isNotEmpty)
-            isWeb
-                ? GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: ResponsiveLayout.getGridColumns(context),
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 16,
-                      childAspectRatio: 2.5,
-                    ),
-                    itemCount: tariffs.length,
-                    itemBuilder: (context, index) => _tariffTile(tariffs[index]),
-                  )
-                : Column(children: tariffs.map((t) => _tariffTile(t)).toList()),
-        ],
       ),
     );
   }
@@ -8374,42 +7875,6 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         ),
         // Show pending update previews
         _buildUpdatePreviewCards(),
-        // Show event confirmation card when event is complete
-        if (_aiChatService.eventComplete && _aiChatService.currentEventData.isNotEmpty)
-          EventConfirmationCard(
-            eventData: _aiChatService.currentEventData,
-            onConfirm: () async {
-              // Save event to drafts
-              final currentData = Map<String, dynamic>.from(_aiChatService.currentEventData);
-              setState(() {
-                structuredData = currentData;
-                extractedText = 'AI Chat extracted data';
-                errorMessage = null;
-                _lastStructuredFromUpload = false;
-              });
-
-              _draftService.saveDraft(currentData);
-              await _loadPendingDrafts();
-
-              _showSuccessBanner(context, 'Event created and saved to pending!');
-
-              // Clear the event data and start a new conversation
-              _aiChatService.clearCurrentEventData();
-              _aiChatService.startNewConversation();
-
-              setState(() {});
-            },
-            onEdit: () {
-              // User can continue chatting to edit the event
-              _showSuccessBanner(context, 'Continue chatting to make changes!');
-            },
-            onCancel: () {
-              // Clear the current event and start over
-              _aiChatService.clearCurrentEventData();
-              _aiChatService.startNewConversation();
-              setState(() {});
-            },
-          ),
         // Only show input widget when conversation has started
         ColoredBox(
           color: Colors.transparent,
@@ -8497,7 +7962,33 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 }
               }
 
-              // Scroll to bottom after message (or show confirmation card if event is complete)
+              // Check if event creation is complete - auto-save it
+              if (_aiChatService.eventComplete && _aiChatService.currentEventData.isNotEmpty) {
+                print('[ExtractionScreen] Event complete detected - auto-saving...');
+                try {
+                  final currentData = Map<String, dynamic>.from(_aiChatService.currentEventData);
+
+                  setState(() {
+                    structuredData = currentData;
+                    extractedText = 'AI Chat extracted data';
+                    errorMessage = null;
+                    _lastStructuredFromUpload = false;
+                  });
+
+                  _draftService.saveDraft(currentData);
+                  await _loadPendingDrafts();
+
+                  if (mounted) {
+                    _showSuccessBanner(context, 'Event created and saved to pending!');
+                  }
+
+                  print('[ExtractionScreen] ✓ Event auto-saved successfully');
+                } catch (e) {
+                  print('[ExtractionScreen] ✗ Failed to auto-save event: $e');
+                }
+              }
+
+              // Scroll to bottom after message
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (_aiChatScrollController.hasClients) {
                   _aiChatScrollController.animateTo(
@@ -8571,7 +8062,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             orElse: () => {},
           );
           if (existingEvent.isNotEmpty) {
-            final nameRaw = existingEvent['shift_name'] ?? existingEvent['name'];
+            final nameRaw = existingEvent['event_name'] ?? existingEvent['name'];
             eventName = nameRaw?.toString() ?? 'Event';
           }
 
@@ -8708,10 +8199,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (data['shift_name'] != null)
+        if (data['event_name'] != null)
           DetailRow(
-            label: AppLocalizations.of(context)!.shift,
-            value: data['shift_name'].toString(),
+            label: AppLocalizations.of(context)!.job,
+            value: data['event_name'].toString(),
             icon: Icons.celebration,
           ),
         if (data['client_name'] != null)

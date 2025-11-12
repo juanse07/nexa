@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'widgets/stats_card.dart';
 import '../../main/presentation/main_screen.dart';
 import '../../extraction/presentation/extraction_screen.dart';
@@ -8,6 +9,7 @@ import '../../teams/presentation/pages/teams_management_page.dart';
 import '../../hours_approval/presentation/hours_approval_list_screen.dart';
 import '../../chat/presentation/conversations_screen.dart';
 import '../data/services/home_stats_service.dart';
+import '../../../../services/terminology_provider.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -29,8 +31,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   String _teamName = 'My Team';
   bool _statsLoading = true;
 
-  // Filter dropdown
-  String _selectedFilter = 'Jobs';
+  // Filter dropdown - will be initialized in initState
+  late String _selectedFilter;
 
   final List<FeatureItem> _features = [
     FeatureItem(
@@ -105,6 +107,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       if ((_scrollOffset - _scrollController.offset).abs() > 15) {
         setState(() {
           _scrollOffset = _scrollController.offset;
+        });
+      }
+    });
+
+    // Initialize filter with user's terminology after frame is rendered
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final terminology = context.read<TerminologyProvider>().plural;
+        setState(() {
+          _selectedFilter = terminology;
         });
       }
     });
@@ -188,13 +200,18 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   Future<void> _handleFilterSelection(String filter) async {
     HapticFeedback.lightImpact();
 
+    final terminology = context.read<TerminologyProvider>().plural;
+
+    // Check if filter matches current terminology (Jobs/Shifts/Events)
+    if (filter == terminology || filter == 'Jobs' || filter == 'Shifts' || filter == 'Events') {
+      // Navigate to Jobs/Shifts/Events tab (MainScreen index 2)
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const MainScreen(initialIndex: 2)),
+      );
+      return;
+    }
+
     switch (filter) {
-      case 'Jobs':
-        // Navigate to Jobs tab (MainScreen index 2)
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const MainScreen(initialIndex: 2)),
-        );
-        break;
       case 'Clients':
         // Navigate to Catalog tab (MainScreen index 4)
         Navigator.of(context).pushReplacement(
@@ -300,6 +317,20 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
+    final terminologyProvider = context.watch<TerminologyProvider>();
+
+    // Keep _selectedFilter in sync with terminology
+    if (_selectedFilter != terminologyProvider.plural &&
+        (_selectedFilter == 'Jobs' || _selectedFilter == 'Shifts' || _selectedFilter == 'Events')) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _selectedFilter = terminologyProvider.plural;
+          });
+        }
+      });
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       body: SafeArea(
@@ -338,6 +369,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       flexibleSpace: RepaintBoundary(
         child: LayoutBuilder(
         builder: (context, constraints) {
+          final terminologyProvider = context.watch<TerminologyProvider>();
           final double expandRatio = ((constraints.maxHeight - kToolbarHeight) /
                                      (280.0 - kToolbarHeight)).clamp(0.0, 1.0);
           final double parallaxOffset = _scrollOffset * 0.5;
@@ -473,7 +505,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                       menuMaxHeight: 400,
                                       alignment: AlignmentDirectional.bottomStart,
                                       selectedItemBuilder: (BuildContext context) {
-                                        return ['Jobs', 'Clients', 'Teams', 'Catalog', 'AI Chat'].map((String value) {
+                                        final terminology = context.read<TerminologyProvider>().plural;
+                                        return [terminology, 'Clients', 'Teams', 'Catalog', 'AI Chat'].map((String value) {
                                           return Align(
                                             alignment: Alignment.centerLeft,
                                             child: Text(
@@ -489,14 +522,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                       },
                                       items: [
                                       DropdownMenuItem(
-                                        value: 'Jobs',
+                                        value: terminologyProvider.plural,
                                         child: IconTheme(
                                           data: const IconThemeData(color: Colors.white),
                                           child: Row(
-                                            children: const [
-                                              Icon(Icons.work_outline, size: 18),
-                                              SizedBox(width: 12),
-                                              Text('Jobs'),
+                                            children: [
+                                              const Icon(Icons.work_outline, size: 18),
+                                              const SizedBox(width: 12),
+                                              Text(terminologyProvider.plural),
                                             ],
                                           ),
                                         ),
@@ -624,7 +657,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           menuMaxHeight: 400,
                           alignment: AlignmentDirectional.bottomStart,
                           selectedItemBuilder: (BuildContext context) {
-                            return ['Jobs', 'Clients', 'Teams', 'Catalog', 'AI Chat'].map((String value) {
+                            final terminology = context.read<TerminologyProvider>().plural;
+                            return [terminology, 'Clients', 'Teams', 'Catalog', 'AI Chat'].map((String value) {
                               return Align(
                                 alignment: Alignment.centerLeft,
                                 child: Text(
@@ -640,14 +674,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           },
                           items: [
                           DropdownMenuItem(
-                            value: 'Jobs',
+                            value: terminologyProvider.plural,
                             child: IconTheme(
                               data: const IconThemeData(color: Colors.white),
                               child: Row(
-                                children: const [
-                                  Icon(Icons.work_outline, size: 16),
-                                  SizedBox(width: 8),
-                                  Text('Jobs'),
+                                children: [
+                                  const Icon(Icons.work_outline, size: 16),
+                                  const SizedBox(width: 8),
+                                  Text(terminologyProvider.plural),
                                 ],
                               ),
                             ),

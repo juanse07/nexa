@@ -7,8 +7,10 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // For HapticFeedback
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
+import '../../../services/terminology_provider.dart';
 import '../services/chat_event_service.dart';
 import '../services/event_service.dart';
 import '../services/extraction_service.dart';
@@ -1333,7 +1335,9 @@ class _AIChatScreenState extends State<AIChatScreen>
                   });
 
                   try {
-                    await _aiChatService.sendMessage(message);
+                    // Get user's terminology preference
+                    final terminology = context.read<TerminologyProvider>().plural;
+                    await _aiChatService.sendMessage(message, terminology: terminology);
 
                     // Show confirmation card if event is complete
                     if (_aiChatService.eventComplete && _aiChatService.currentEventData.isNotEmpty) {
