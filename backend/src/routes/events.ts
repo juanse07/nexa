@@ -1533,6 +1533,11 @@ router.get('/events', requireAuth, async (req, res) => {
 
       console.log('[EVENTS DEBUG] Staff filter:', JSON.stringify(filter, null, 2));
     }
+
+    // Log database name to debug discrepancy
+    console.log('[EVENTS DEBUG] Database name:', mongoose.connection.db?.databaseName || 'unknown');
+    console.log('[EVENTS DEBUG] EventModel collection:', EventModel.collection.name);
+
     const events = await EventModel.find(filter).sort({ createdAt: -1 }).lean();
 
     if (!managerScope) {
