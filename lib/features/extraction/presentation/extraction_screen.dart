@@ -1739,15 +1739,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               width: 28,
                               height: 28,
                               decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [Color(0xFF7C3AED), Color(0xFF6D28D9)],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
+                                color: const Color(0xFF6B7280),
                                 shape: BoxShape.circle,
                                 boxShadow: [
                                   BoxShadow(
-                                    color: const Color(0xFF7C3AED).withOpacity(0.3),
+                                    color: const Color(0xFF6B7280).withOpacity(0.3),
                                     blurRadius: 8,
                                     offset: const Offset(0, 2),
                                   ),
@@ -1772,7 +1768,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                           style: TextStyle(
                                             fontSize: 15,
                                             fontWeight: FontWeight.w600,
-                                            color: Color(0xFF374151),
+                                            color: Color(0xFF6B7280),
                                             letterSpacing: -0.2,
                                           ),
                                         ),
@@ -5433,7 +5429,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(
-          top: 20,    // Add top padding so buttons aren't hidden behind header
+          top: 36,    // Add top padding so buttons aren't hidden behind header
           left: 20,
           right: 20,
           bottom: 20,
@@ -5511,7 +5507,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(
-          top: 20,    // Add top padding so buttons aren't hidden behind header
+          top: 36,    // Add top padding so buttons aren't hidden behind header
           left: 20,
           right: 20,
           bottom: 20,
@@ -5597,7 +5593,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(
-          top: 20,    // Add top padding so buttons aren't hidden behind header
+          top: 36,    // Add top padding so buttons aren't hidden behind header
           left: 20,
           right: 20,
           bottom: 20,
@@ -5618,68 +5614,68 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             ),
           if (kIsWeb) const SizedBox(height: 4),
           // Client and Role Filters
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  value: _selectedClientIdForTariffs,
-                  hint: const Text('All Clients'),
-                  items: [
-                    const DropdownMenuItem(
-                      value: null,
-                      child: Text('All Clients'),
-                    ),
-                    ...clients.map(
-                      (c) => DropdownMenuItem(
-                        value: c['id']?.toString(),
-                        child: Text(c['name']?.toString() ?? 'Unnamed Client'),
-                      ),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedClientIdForTariffs = value;
-                    });
-                    _loadTariffs();
-                  },
-                  decoration: const InputDecoration(
-                    labelText: 'Client',
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          Padding(
+            padding: const EdgeInsets.only(top: 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+              DropdownButtonFormField<String>(
+                value: _selectedClientIdForTariffs,
+                hint: const Text('All Clients'),
+                items: [
+                  const DropdownMenuItem(
+                    value: null,
+                    child: Text('All Clients'),
                   ),
+                  ...clients.map(
+                    (c) => DropdownMenuItem(
+                      value: c['id']?.toString(),
+                      child: Text(c['name']?.toString() ?? 'Unnamed Client'),
+                    ),
+                  ),
+                ],
+                onChanged: (value) {
+                  setState(() {
+                    _selectedClientIdForTariffs = value;
+                  });
+                  _loadTariffs();
+                },
+                decoration: const InputDecoration(
+                  labelText: 'Client',
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  value: _selectedRoleIdForTariffs,
-                  hint: const Text('All Roles'),
-                  items: [
-                    const DropdownMenuItem(
-                      value: null,
-                      child: Text('All Roles'),
-                    ),
-                    ...roles.map(
-                      (r) => DropdownMenuItem(
-                        value: r['id']?.toString(),
-                        child: Text(r['name']?.toString() ?? 'Unnamed Role'),
-                      ),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedRoleIdForTariffs = value;
-                    });
-                    _loadTariffs();
-                  },
-                  decoration: const InputDecoration(
-                    labelText: 'Role',
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: _selectedRoleIdForTariffs,
+                hint: const Text('All Roles'),
+                items: [
+                  const DropdownMenuItem(
+                    value: null,
+                    child: Text('All Roles'),
                   ),
+                  ...roles.map(
+                    (r) => DropdownMenuItem(
+                      value: r['id']?.toString(),
+                      child: Text(r['name']?.toString() ?? 'Unnamed Role'),
+                    ),
+                  ),
+                ],
+                onChanged: (value) {
+                  setState(() {
+                    _selectedRoleIdForTariffs = value;
+                  });
+                  _loadTariffs();
+                },
+                decoration: const InputDecoration(
+                  labelText: 'Role',
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 ),
               ),
-            ],
+              ],
+            ),
           ),
           const SizedBox(height: 16),
           if (_isTariffsLoading && tariffs.isEmpty)

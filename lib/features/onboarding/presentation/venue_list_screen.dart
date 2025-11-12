@@ -5,7 +5,9 @@ import 'package:http/http.dart' as http;
 
 import '../../../core/config/app_config.dart';
 import '../../auth/data/services/auth_service.dart';
+import '../../cities/data/models/city.dart';
 import '../../venues/data/models/venue.dart';
+import '../../venues/presentation/tabbed_venue_screen.dart';
 import '../../venues/presentation/venue_form_screen.dart';
 
 class VenueListScreen extends StatefulWidget {
@@ -17,7 +19,9 @@ class VenueListScreen extends StatefulWidget {
 
 class _VenueListScreenState extends State<VenueListScreen> {
   bool _isLoading = true;
+  bool _shouldUseTabbedView = false;
   String? _preferredCity;
+  List<City> _cities = [];
   List<Venue> _venues = [];
   String? _error;
 
@@ -54,7 +58,26 @@ class _VenueListScreenState extends State<VenueListScreen> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+        // Check if manager has multiple cities configured
+        final citiesJson = data['cities'] as List?;
+        final cities = (citiesJson ?? [])
+            .map((json) => City.fromJson(json as Map<String, dynamic>))
+            .toList();
+
+        // If multiple cities, navigate to tabbed view
+        if (cities.length > 1 && mounted) {
+          // Replace current route with tabbed view
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) => const TabbedVenueScreen(),
+            ),
+          );
+          return;
+        }
+
         setState(() {
+          _cities = cities;
           _preferredCity = data['preferredCity'] as String?;
           final venueList = data['venueList'] as List?;
           _venues = venueList
@@ -292,7 +315,9 @@ class _VenueListScreenState extends State<VenueListScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                _preferredCity ?? 'Your Area',
+                                _cities.isNotEmpty
+                                    ? _cities.first.name
+                                    : (_preferredCity ?? 'Your Area'),
                                 style: const TextStyle(
                                   fontSize: 24,
                                   fontWeight: FontWeight.bold,

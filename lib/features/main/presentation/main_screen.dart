@@ -287,7 +287,7 @@ class _MainScreenState extends State<MainScreen>
             Icon(
               icon,
               color: isSelected ? Colors.white : Colors.white.withOpacity(0.7),
-              size: 22, // Optimized for 48px height
+              size: 28, // Larger icons for better visibility
             ),
             const SizedBox(height: 2),
             Text(

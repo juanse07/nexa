@@ -6,6 +6,8 @@ import 'package:nexa/services/notification_service.dart';
 import '../../../../core/widgets/custom_sliver_app_bar.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../auth/data/services/auth_service.dart';
+import '../../../cities/data/models/city.dart';
+import '../../../cities/presentation/cities_list_screen.dart';
 import '../../../onboarding/presentation/manager_onboarding_screen.dart';
 import '../../../onboarding/presentation/venue_list_screen.dart';
 import '../../../venues/presentation/venue_form_screen.dart';
@@ -28,7 +30,8 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _marketingNotifications = false;
 
   // Venue management
-  String? _preferredCity;
+  String? _preferredCity; // DEPRECATED: kept for backward compatibility
+  List<City> _cities = [];
   int _venueCount = 0;
   String? _venueUpdatedAt;
   bool _loadingVenues = false;
@@ -57,7 +60,15 @@ class _SettingsPageState extends State<SettingsPage> {
       if (response.statusCode == 200 && mounted) {
         final data = jsonDecode(response.body);
         setState(() {
+          // Load cities (new multi-city structure)
+          final citiesJson = data['cities'] as List?;
+          _cities = (citiesJson ?? [])
+              .map((json) => City.fromJson(json as Map<String, dynamic>))
+              .toList();
+
+          // Fallback to preferredCity for backward compatibility
           _preferredCity = data['preferredCity'] as String?;
+
           final venueList = data['venueList'] as List?;
           _venueCount = venueList?.length ?? 0;
           _venueUpdatedAt = data['venueListUpdatedAt'] as String?;
@@ -331,7 +342,33 @@ class _SettingsPageState extends State<SettingsPage> {
                           ],
                         ),
                         const SizedBox(height: 16),
-                        if (_preferredCity != null) ...[
+                        if (_cities.isNotEmpty) ...[
+                          _buildInfoRow(
+                            icon: Icons.location_city,
+                            label: _cities.length == 1 ? 'City' : 'Cities',
+                            value: _cities.length == 1
+                                ? _cities.first.name
+                                : '${_cities.length} cities configured',
+                            theme: theme,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildInfoRow(
+                            icon: Icons.business,
+                            label: 'Venues',
+                            value: '$_venueCount discovered',
+                            theme: theme,
+                          ),
+                          if (_venueUpdatedAt != null) ...[
+                            const SizedBox(height: 12),
+                            _buildInfoRow(
+                              icon: Icons.update,
+                              label: 'Last Updated',
+                              value: _formatDate(_venueUpdatedAt!),
+                              theme: theme,
+                            ),
+                          ],
+                        ] else if (_preferredCity != null) ...[
+                          // Fallback for backward compatibility with old single-city structure
                           _buildInfoRow(
                             icon: Icons.place,
                             label: 'City',
@@ -356,7 +393,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           ],
                         ] else ...[
                           Text(
-                            'No venue discovery set up yet. Personalized venues help the AI suggest accurate event locations in your area.',
+                            'No cities configured yet. Add cities to discover venues and help the AI suggest accurate event locations in your area.',
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
                             ),
@@ -366,26 +403,23 @@ class _SettingsPageState extends State<SettingsPage> {
                         SizedBox(
                           width: double.infinity,
                           child: FilledButton.icon(
-                            onPressed: _loadingVenues ? null : _updateVenues,
-                            icon: _loadingVenues
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : Icon(_preferredCity != null
-                                    ? Icons.refresh
-                                    : Icons.add_location),
-                            label: Text(
-                              _loadingVenues
-                                  ? 'Updating...'
-                                  : (_preferredCity != null
-                                      ? 'Update City & Venues'
-                                      : 'Set Up Venues'),
-                            ),
+                            onPressed: () async {
+                              await Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) => const CitiesListScreen(),
+                                ),
+                              );
+                              // Reload venue info after returning from cities management
+                              if (mounted) {
+                                await _loadVenueInfo();
+                              }
+                            },
+                            icon: Icon(_cities.isNotEmpty || _preferredCity != null
+                                ? Icons.location_city
+                                : Icons.add_location_alt),
+                            label: Text(_cities.isNotEmpty || _preferredCity != null
+                                ? 'Manage Cities'
+                                : 'Add Cities'),
                           ),
                         ),
                         if (_venueCount > 0) ...[

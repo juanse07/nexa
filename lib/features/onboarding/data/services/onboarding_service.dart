@@ -5,6 +5,7 @@ import 'package:geocoding/geocoding.dart';
 
 import '../../../../core/config/app_config.dart';
 import '../../../auth/data/services/auth_service.dart';
+import '../../../cities/data/models/city.dart';
 import '../../presentation/widgets/enhanced_city_picker.dart';
 
 /// Service for managing manager onboarding flow
@@ -194,7 +195,83 @@ class OnboardingService {
     }
   }
 
-  /// Complete onboarding: save city and discover venues
+  /// Complete onboarding with multiple cities (new multi-city flow)
+  static Future<OnboardingResult> completeOnboardingWithCities(List<City> cities) async {
+    try {
+      if (cities.isEmpty) {
+        return OnboardingResult(
+          success: false,
+          message: 'No cities provided',
+        );
+      }
+
+      final token = await AuthService.getJwt();
+      if (token == null) {
+        return OnboardingResult(
+          success: false,
+          message: 'Not authenticated',
+        );
+      }
+
+      final baseUrl = AppConfig.instance.baseUrl;
+      int successCount = 0;
+
+      // Add each city to the manager's profile
+      for (final city in cities) {
+        try {
+          final url = Uri.parse('$baseUrl/managers/me/cities');
+          print('[OnboardingService] Adding city: ${city.name} (tourist: ${city.isTourist})');
+
+          final response = await http.post(
+            url,
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode(city.toJson()),
+          );
+
+          if (response.statusCode == 201 || response.statusCode == 200) {
+            successCount++;
+            print('[OnboardingService] Successfully added city: ${city.name}');
+          } else {
+            print('[OnboardingService] Failed to add city ${city.name}: ${response.statusCode} ${response.body}');
+          }
+        } catch (e) {
+          print('[OnboardingService] Error adding city ${city.name}: $e');
+        }
+      }
+
+      if (successCount == 0) {
+        return OnboardingResult(
+          success: false,
+          message: 'Failed to add any cities',
+        );
+      }
+
+      if (successCount < cities.length) {
+        return OnboardingResult(
+          success: true,
+          message: 'Added $successCount of ${cities.length} cities successfully',
+        );
+      }
+
+      return OnboardingResult(
+        success: true,
+        message: cities.length == 1
+            ? 'City configured successfully!'
+            : 'All ${cities.length} cities configured successfully!',
+      );
+    } catch (e) {
+      print('[OnboardingService] Error completing onboarding with cities: $e');
+      return OnboardingResult(
+        success: false,
+        message: 'Unexpected error: $e',
+      );
+    }
+  }
+
+  /// Complete onboarding: save city and discover venues (DEPRECATED - use completeOnboardingWithCities)
   static Future<OnboardingResult> completeOnboarding(String city) async {
     try {
       // First, save the preferred city

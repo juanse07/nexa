@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../cities/data/models/city.dart';
 import '../data/services/onboarding_service.dart';
-import 'venue_list_screen.dart';
-import 'widgets/enhanced_city_picker.dart';
+import 'widgets/multi_city_picker.dart';
 
 /// Manager onboarding screen with city selection and venue discovery
 class ManagerOnboardingScreen extends StatefulWidget {
@@ -19,10 +19,13 @@ class ManagerOnboardingScreen extends StatefulWidget {
 
 class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
   int _currentStep = 0;
+  List<City> _selectedCities = [];
+  String? _errorMessage;
+
+  // Legacy fields (keep for potential backward compatibility)
   String? _selectedCity;
   bool _isDetectingLocation = false;
   bool _isDiscoveringVenues = false;
-  String? _errorMessage;
   int? _venueCount;
 
   final TextEditingController _cityController = TextEditingController();
@@ -72,11 +75,11 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
     }
   }
 
-  /// Complete onboarding with selected city
+  /// Complete onboarding with selected cities
   Future<void> _completeOnboarding() async {
-    if (_selectedCity == null || _selectedCity!.isEmpty) {
+    if (_selectedCities.isEmpty) {
       setState(() {
-        _errorMessage = 'Please select a city';
+        _errorMessage = 'Please add at least one city';
       });
       return;
     }
@@ -88,11 +91,10 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
     });
 
     try {
-      final result = await OnboardingService.completeOnboarding(_selectedCity!);
+      final result = await OnboardingService.completeOnboardingWithCities(_selectedCities);
 
       if (result.success) {
         setState(() {
-          _venueCount = result.venueCount;
           _currentStep = 3; // Move to success screen
           _isDiscoveringVenues = false;
         });
@@ -234,7 +236,7 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
           ),
           const SizedBox(height: 12),
           const Text(
-            'We\'ll find popular event venues in your area to help you create events faster.',
+            'Add one or more cities where you operate. You can discover venues for each city later.',
             style: TextStyle(
               fontSize: 14,
               color: Colors.grey,
@@ -242,60 +244,14 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
           ),
           const SizedBox(height: 32),
 
-          // Location detection button
-          if (_isDetectingLocation)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24.0),
-                child: Column(
-                  children: [
-                    CircularProgressIndicator(),
-                    SizedBox(height: 16),
-                    Text('Detecting your location...'),
-                  ],
-                ),
-              ),
-            )
-          else if (_selectedCity == null)
-            OutlinedButton.icon(
-              onPressed: _detectLocation,
-              icon: const Icon(Icons.my_location),
-              label: const Text('Detect My Location'),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
-              ),
-            ),
-
-          const SizedBox(height: 24),
-
-          // City input with picker dialog
-          TextField(
-            controller: _cityController,
-            readOnly: true,
-            decoration: InputDecoration(
-              labelText: 'City *',
-              hintText: 'Select your city',
-              prefixIcon: const Icon(Icons.location_city),
-              suffixIcon: const Icon(Icons.arrow_drop_down),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              filled: true,
-            ),
-            onTap: () async {
-              final result = await showDialog<String>(
-                context: context,
-                builder: (context) => EnhancedCityPicker(
-                  initialCity: _selectedCity,
-                ),
-              );
-              if (result != null) {
-                setState(() {
-                  _selectedCity = result;
-                  _cityController.text = result;
-                  _errorMessage = null;
-                });
-              }
+          // Multi-city picker widget
+          MultiCityPicker(
+            initialCities: _selectedCities,
+            onCitiesChanged: (cities) {
+              setState(() {
+                _selectedCities = cities;
+                _errorMessage = null;
+              });
             },
           ),
 
@@ -328,7 +284,7 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
           SizedBox(
             width: double.infinity,
             child: FilledButton(
-              onPressed: _selectedCity != null && _selectedCity!.isNotEmpty
+              onPressed: _selectedCities.isNotEmpty
                   ? _completeOnboarding
                   : null,
               style: FilledButton.styleFrom(
@@ -336,7 +292,7 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
                 backgroundColor: Colors.purple,
               ),
               child: const Text(
-                'Discover Venues',
+                'Continue',
                 style: TextStyle(fontSize: 16),
               ),
             ),
@@ -353,8 +309,11 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
     );
   }
 
-  /// Step 2: Loading venues
+  /// Step 2: Setting up cities
   Widget _buildLoadingStep() {
+    final cityCount = _selectedCities.length;
+    final cityNames = _selectedCities.map((c) => c.displayName).join(', ');
+
     return Center(
       key: const ValueKey('loading'),
       child: Padding(
@@ -368,16 +327,29 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
             ),
             const SizedBox(height: 32),
             Text(
-              'Discovering venues in\n$_selectedCity',
+              cityCount == 1
+                  ? 'Setting up your city...'
+                  : 'Setting up your $cityCount cities...',
               style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w600,
               ),
               textAlign: TextAlign.center,
             ),
+            if (cityCount <= 3) ...[
+              const SizedBox(height: 12),
+              Text(
+                cityNames,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
             const SizedBox(height: 16),
             const Text(
-              'This may take a moment...',
+              'This will only take a moment...',
               style: TextStyle(
                 fontSize: 14,
                 color: Colors.grey,
@@ -420,7 +392,9 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            'We discovered ${_venueCount ?? 0} popular venues in $_selectedCity.',
+            _selectedCities.length == 1
+                ? 'Your city has been configured successfully!'
+                : 'Your ${_selectedCities.length} cities have been configured successfully!',
             style: const TextStyle(
               fontSize: 16,
               color: Colors.grey,
@@ -429,7 +403,7 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'These venues will help you create events faster with AI assistance.',
+            'You can now discover venues for each city from Settings > Manage Cities.',
             style: TextStyle(
               fontSize: 14,
               color: Colors.grey,
@@ -448,24 +422,6 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
               child: const Text(
                 'Start Using Nexa',
                 style: TextStyle(fontSize: 16),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const VenueListScreen(),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.location_on),
-              label: Text('View All ${_venueCount ?? 0} Venues'),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
               ),
             ),
           ),

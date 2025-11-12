@@ -117,8 +117,9 @@ class _EnhancedCityPickerState extends State<EnhancedCityPicker> {
                 prefixIcon: const Icon(Icons.public),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 filled: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
               ),
+              isExpanded: true,
               items: [
                 const DropdownMenuItem<String>(value: null, child: Text('All Countries')),
                 ...uniqueCountries.map((c) => DropdownMenuItem(value: c, child: Text(c))),
@@ -286,16 +287,15 @@ class CityEntry {
   const CityEntry(this.name, this.country, {this.state, this.isTourist = false});
 }
 
-// Comprehensive city database with tourist destinations marked
+// Comprehensive city database - Focus on English, Spanish, Portuguese markets
 final List<CityEntry> allCities = [
-  // Colorado - Including ALL tourist destinations
+  // ========== UNITED STATES ==========
+  // Colorado
   const CityEntry('Denver', 'United States', state: 'Colorado'),
   const CityEntry('Colorado Springs', 'United States', state: 'Colorado'),
   const CityEntry('Aurora', 'United States', state: 'Colorado'),
   const CityEntry('Fort Collins', 'United States', state: 'Colorado'),
   const CityEntry('Boulder', 'United States', state: 'Colorado'),
-
-  // Colorado Tourist/Resort Cities
   const CityEntry('Vail', 'United States', state: 'Colorado', isTourist: true),
   const CityEntry('Aspen', 'United States', state: 'Colorado', isTourist: true),
   const CityEntry('Breckenridge', 'United States', state: 'Colorado', isTourist: true),
@@ -440,35 +440,170 @@ final List<CityEntry> allCities = [
   const CityEntry('Banff', 'Canada', state: 'Alberta', isTourist: true),
   const CityEntry('Niagara Falls', 'Canada', state: 'Ontario', isTourist: true),
   const CityEntry('Quebec City', 'Canada', state: 'Quebec', isTourist: true),
+  const CityEntry('Winnipeg', 'Canada', state: 'Manitoba'),
+  const CityEntry('Halifax', 'Canada', state: 'Nova Scotia'),
 
-  // Mexico
+  // ========== UNITED KINGDOM ==========
+  const CityEntry('London', 'United Kingdom'),
+  const CityEntry('Manchester', 'United Kingdom'),
+  const CityEntry('Birmingham', 'United Kingdom'),
+  const CityEntry('Glasgow', 'United Kingdom'),
+  const CityEntry('Edinburgh', 'United Kingdom'),
+  const CityEntry('Liverpool', 'United Kingdom'),
+  const CityEntry('Bristol', 'United Kingdom'),
+  const CityEntry('Leeds', 'United Kingdom'),
+  const CityEntry('Cardiff', 'United Kingdom'),
+  const CityEntry('Belfast', 'United Kingdom'),
+  const CityEntry('Oxford', 'United Kingdom', isTourist: true),
+  const CityEntry('Cambridge', 'United Kingdom', isTourist: true),
+  const CityEntry('Bath', 'United Kingdom', isTourist: true),
+
+  // ========== AUSTRALIA ==========
+  const CityEntry('Sydney', 'Australia'),
+  const CityEntry('Melbourne', 'Australia'),
+  const CityEntry('Brisbane', 'Australia'),
+  const CityEntry('Perth', 'Australia'),
+  const CityEntry('Adelaide', 'Australia'),
+  const CityEntry('Gold Coast', 'Australia', isTourist: true),
+  const CityEntry('Cairns', 'Australia', isTourist: true),
+  const CityEntry('Byron Bay', 'Australia', isTourist: true),
+
+  // ========== NEW ZEALAND (Suggested) ==========
+  const CityEntry('Auckland', 'New Zealand'),
+  const CityEntry('Wellington', 'New Zealand'),
+  const CityEntry('Christchurch', 'New Zealand'),
+  const CityEntry('Queenstown', 'New Zealand', isTourist: true),
+  const CityEntry('Rotorua', 'New Zealand', isTourist: true),
+
+  // ========== MEXICO ==========
   const CityEntry('Mexico City', 'Mexico'),
   const CityEntry('Guadalajara', 'Mexico'),
   const CityEntry('Monterrey', 'Mexico'),
+  const CityEntry('Puebla', 'Mexico'),
+  const CityEntry('Tijuana', 'Mexico'),
+  const CityEntry('León', 'Mexico'),
+  const CityEntry('Querétaro', 'Mexico'),
+  const CityEntry('Mérida', 'Mexico'),
   const CityEntry('Cancún', 'Mexico', isTourist: true),
   const CityEntry('Playa del Carmen', 'Mexico', isTourist: true),
   const CityEntry('Cabo San Lucas', 'Mexico', isTourist: true),
   const CityEntry('Puerto Vallarta', 'Mexico', isTourist: true),
   const CityEntry('Tulum', 'Mexico', isTourist: true),
+  const CityEntry('Cozumel', 'Mexico', isTourist: true),
+  const CityEntry('Mazatlán', 'Mexico', isTourist: true),
+  const CityEntry('Los Cabos', 'Mexico', isTourist: true),
+  const CityEntry('San Miguel de Allende', 'Mexico', isTourist: true),
+  const CityEntry('Oaxaca', 'Mexico', isTourist: true),
 
-  // Add all international cities from before...
-  const CityEntry('London', 'United Kingdom'),
-  const CityEntry('Paris', 'France'),
-  const CityEntry('Berlin', 'Germany'),
+  // ========== COLOMBIA ==========
+  const CityEntry('Bogotá', 'Colombia'),
+  const CityEntry('Medellín', 'Colombia'),
+  const CityEntry('Cali', 'Colombia'),
+  const CityEntry('Barranquilla', 'Colombia'),
+  const CityEntry('Cartagena', 'Colombia', isTourist: true),
+  const CityEntry('Santa Marta', 'Colombia', isTourist: true),
+  const CityEntry('Bucaramanga', 'Colombia'),
+  const CityEntry('Pereira', 'Colombia'),
+  const CityEntry('Manizales', 'Colombia'),
+  const CityEntry('San Andrés', 'Colombia', isTourist: true),
+
+  // ========== ECUADOR ==========
+  const CityEntry('Quito', 'Ecuador'),
+  const CityEntry('Guayaquil', 'Ecuador'),
+  const CityEntry('Cuenca', 'Ecuador'),
+  const CityEntry('Manta', 'Ecuador'),
+  const CityEntry('Galápagos Islands', 'Ecuador', isTourist: true),
+  const CityEntry('Montañita', 'Ecuador', isTourist: true),
+  const CityEntry('Baños', 'Ecuador', isTourist: true),
+
+  // ========== PERU ==========
+  const CityEntry('Lima', 'Peru'),
+  const CityEntry('Arequipa', 'Peru'),
+  const CityEntry('Trujillo', 'Peru'),
+  const CityEntry('Chiclayo', 'Peru'),
+  const CityEntry('Cusco', 'Peru', isTourist: true),
+  const CityEntry('Machu Picchu', 'Peru', isTourist: true),
+  const CityEntry('Puno', 'Peru', isTourist: true),
+  const CityEntry('Iquitos', 'Peru', isTourist: true),
+  const CityEntry('Huaraz', 'Peru', isTourist: true),
+
+  // ========== CHILE ==========
+  const CityEntry('Santiago', 'Chile'),
+  const CityEntry('Valparaíso', 'Chile'),
+  const CityEntry('Viña del Mar', 'Chile'),
+  const CityEntry('Concepción', 'Chile'),
+  const CityEntry('La Serena', 'Chile'),
+  const CityEntry('Antofagasta', 'Chile'),
+  const CityEntry('Temuco', 'Chile'),
+  const CityEntry('Puerto Varas', 'Chile', isTourist: true),
+  const CityEntry('Pucón', 'Chile', isTourist: true),
+  const CityEntry('San Pedro de Atacama', 'Chile', isTourist: true),
+  const CityEntry('Puerto Natales', 'Chile', isTourist: true),
+
+  // ========== COSTA RICA ==========
+  const CityEntry('San José', 'Costa Rica'),
+  const CityEntry('Alajuela', 'Costa Rica'),
+  const CityEntry('Cartago', 'Costa Rica'),
+  const CityEntry('Heredia', 'Costa Rica'),
+  const CityEntry('Liberia', 'Costa Rica'),
+  const CityEntry('Manuel Antonio', 'Costa Rica', isTourist: true),
+  const CityEntry('Tamarindo', 'Costa Rica', isTourist: true),
+  const CityEntry('Jacó', 'Costa Rica', isTourist: true),
+  const CityEntry('La Fortuna', 'Costa Rica', isTourist: true),
+  const CityEntry('Monteverde', 'Costa Rica', isTourist: true),
+
+  // ========== ARGENTINA ==========
+  const CityEntry('Buenos Aires', 'Argentina'),
+  const CityEntry('Córdoba', 'Argentina'),
+  const CityEntry('Rosario', 'Argentina'),
+  const CityEntry('Mendoza', 'Argentina'),
+  const CityEntry('La Plata', 'Argentina'),
+  const CityEntry('Mar del Plata', 'Argentina', isTourist: true),
+  const CityEntry('Bariloche', 'Argentina', isTourist: true),
+  const CityEntry('Salta', 'Argentina', isTourist: true),
+  const CityEntry('Ushuaia', 'Argentina', isTourist: true),
+  const CityEntry('El Calafate', 'Argentina', isTourist: true),
+
+  // ========== SPAIN ==========
   const CityEntry('Madrid', 'Spain'),
   const CityEntry('Barcelona', 'Spain'),
-  const CityEntry('Rome', 'Italy'),
-  const CityEntry('Milan', 'Italy'),
-  const CityEntry('Amsterdam', 'Netherlands'),
-  const CityEntry('Brussels', 'Belgium'),
-  const CityEntry('Zurich', 'Switzerland'),
-  const CityEntry('Vienna', 'Austria'),
-  const CityEntry('Tokyo', 'Japan'),
-  const CityEntry('Seoul', 'South Korea'),
-  const CityEntry('Sydney', 'Australia'),
-  const CityEntry('Melbourne', 'Australia'),
-  const CityEntry('Singapore', 'Singapore'),
-  const CityEntry('Dubai', 'United Arab Emirates'),
+  const CityEntry('Valencia', 'Spain'),
+  const CityEntry('Seville', 'Spain'),
+  const CityEntry('Zaragoza', 'Spain'),
+  const CityEntry('Málaga', 'Spain'),
+  const CityEntry('Bilbao', 'Spain'),
+  const CityEntry('Granada', 'Spain', isTourist: true),
+  const CityEntry('Toledo', 'Spain', isTourist: true),
+  const CityEntry('San Sebastián', 'Spain', isTourist: true),
+  const CityEntry('Ibiza', 'Spain', isTourist: true),
+  const CityEntry('Mallorca', 'Spain', isTourist: true),
+  const CityEntry('Marbella', 'Spain', isTourist: true),
+
+  // ========== BRAZIL ==========
   const CityEntry('São Paulo', 'Brazil'),
-  const CityEntry('Buenos Aires', 'Argentina'),
+  const CityEntry('Rio de Janeiro', 'Brazil'),
+  const CityEntry('Brasília', 'Brazil'),
+  const CityEntry('Salvador', 'Brazil'),
+  const CityEntry('Fortaleza', 'Brazil'),
+  const CityEntry('Belo Horizonte', 'Brazil'),
+  const CityEntry('Manaus', 'Brazil'),
+  const CityEntry('Curitiba', 'Brazil'),
+  const CityEntry('Recife', 'Brazil'),
+  const CityEntry('Porto Alegre', 'Brazil'),
+  const CityEntry('Florianópolis', 'Brazil', isTourist: true),
+  const CityEntry('Búzios', 'Brazil', isTourist: true),
+  const CityEntry('Foz do Iguaçu', 'Brazil', isTourist: true),
+  const CityEntry('Fernando de Noronha', 'Brazil', isTourist: true),
+  const CityEntry('Paraty', 'Brazil', isTourist: true),
+
+  // ========== PORTUGAL ==========
+  const CityEntry('Lisbon', 'Portugal'),
+  const CityEntry('Porto', 'Portugal'),
+  const CityEntry('Faro', 'Portugal'),
+  const CityEntry('Braga', 'Portugal'),
+  const CityEntry('Coimbra', 'Portugal'),
+  const CityEntry('Funchal', 'Portugal', isTourist: true),
+  const CityEntry('Sintra', 'Portugal', isTourist: true),
+  const CityEntry('Lagos', 'Portugal', isTourist: true),
+  const CityEntry('Algarve', 'Portugal', isTourist: true),
 ];
