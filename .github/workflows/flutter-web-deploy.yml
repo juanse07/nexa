@@ -125,7 +125,6 @@ jobs:
         run: |
           flutter build web \
             --release \
-            --web-renderer canvaskit \
             --source-maps
         # --release: Production optimizations (minification, tree-shaking)
         # --web-renderer canvaskit: Better performance for complex UIs
