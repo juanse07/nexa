@@ -780,6 +780,30 @@ const STAFF_AI_TOOLS = [
       properties: {}
     }
   },
+  {
+    name: 'performance_current_month',
+    description: 'Get my performance statistics for the current month. Shows events/shifts analyzed by position (bartender, server, etc), total money earned, and hours worked. Use when I ask about my current month performance, "how am I doing this month", or "my stats this month".',
+    parameters: {
+      type: 'object',
+      properties: {}
+    }
+  },
+  {
+    name: 'performance_last_month',
+    description: 'Get my performance statistics for last month. Shows events/shifts analyzed by position (bartender, server, etc), total money earned, and hours worked. Use when I ask about last month\'s performance, "how did I do last month", or "my stats last month".',
+    parameters: {
+      type: 'object',
+      properties: {}
+    }
+  },
+  {
+    name: 'performance_last_year',
+    description: 'Get my performance statistics for the last 12 months. Shows events/shifts analyzed by position (bartender, server, etc), total money earned, and hours worked. Use when I ask about yearly performance, "how did I do this year", "annual stats", or "year in review".',
+    parameters: {
+      type: 'object',
+      properties: {}
+    }
+  },
 ];
 
 /**
@@ -1262,6 +1286,297 @@ async function executeDeclineShift(
 }
 
 /**
+ * Execute performance_current_month function
+ * Returns performance statistics for the current month
+ */
+async function executePerformanceCurrentMonth(
+  userId: string,
+  userKey: string
+): Promise<{ success: boolean; message: string; data?: any }> {
+  try {
+    console.log(`[executePerformanceCurrentMonth] Getting current month stats for userId ${userId}`);
+
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+    // Query events for this month where user is assigned
+    const events = await EventModel.find({
+      'assignments.memberId': userId,
+      date: { $gte: startOfMonth, $lte: endOfMonth }
+    }).lean();
+
+    // Analyze by position
+    const positionStats: Record<string, { count: number; hours: number; earnings: number }> = {};
+    let totalHours = 0;
+    let totalEarnings = 0;
+    let totalEvents = 0;
+
+    for (const event of events) {
+      const assignments = (event as any).assignments || [];
+      const userAssignment = assignments.find((a: any) => a.memberId?.toString() === userId);
+
+      if (userAssignment && userAssignment.status === 'accepted') {
+        const position = userAssignment.position || 'Staff';
+        const wage = userAssignment.wage || 0;
+
+        // Calculate hours (assuming events have startTime and endTime)
+        let hours = 0;
+        if ((event as any).startTime && (event as any).endTime) {
+          const start = new Date(`${(event as any).date}T${(event as any).startTime}`);
+          const end = new Date(`${(event as any).date}T${(event as any).endTime}`);
+          hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+          if (hours < 0) hours += 24; // Handle overnight events
+        } else {
+          hours = 6; // Default assumption if times not specified
+        }
+
+        const earnings = wage * hours;
+
+        if (!positionStats[position]) {
+          positionStats[position] = { count: 0, hours: 0, earnings: 0 };
+        }
+
+        positionStats[position].count++;
+        positionStats[position].hours += hours;
+        positionStats[position].earnings += earnings;
+
+        totalHours += hours;
+        totalEarnings += earnings;
+        totalEvents++;
+      }
+    }
+
+    // Format response
+    const positionBreakdown = Object.entries(positionStats).map(([position, stats]) => ({
+      position,
+      events: stats.count,
+      hours: Math.round(stats.hours * 10) / 10,
+      earnings: Math.round(stats.earnings * 100) / 100
+    }));
+
+    return {
+      success: true,
+      message: `Performance for ${now.toLocaleString('default', { month: 'long', year: 'numeric' })}`,
+      data: {
+        period: 'current_month',
+        totalEvents,
+        totalHours: Math.round(totalHours * 10) / 10,
+        totalEarnings: Math.round(totalEarnings * 100) / 100,
+        byPosition: positionBreakdown,
+        averageWage: totalHours > 0 ? Math.round((totalEarnings / totalHours) * 100) / 100 : 0
+      }
+    };
+  } catch (error: any) {
+    console.error('[executePerformanceCurrentMonth] Error:', error);
+    return {
+      success: false,
+      message: `Failed to get performance data: ${error.message}`
+    };
+  }
+}
+
+/**
+ * Execute performance_last_month function
+ * Returns performance statistics for last month
+ */
+async function executePerformanceLastMonth(
+  userId: string,
+  userKey: string
+): Promise<{ success: boolean; message: string; data?: any }> {
+  try {
+    console.log(`[executePerformanceLastMonth] Getting last month stats for userId ${userId}`);
+
+    const now = new Date();
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+
+    // Query events for last month where user is assigned
+    const events = await EventModel.find({
+      'assignments.memberId': userId,
+      date: { $gte: startOfLastMonth, $lte: endOfLastMonth }
+    }).lean();
+
+    // Analyze by position (same logic as current month)
+    const positionStats: Record<string, { count: number; hours: number; earnings: number }> = {};
+    let totalHours = 0;
+    let totalEarnings = 0;
+    let totalEvents = 0;
+
+    for (const event of events) {
+      const assignments = (event as any).assignments || [];
+      const userAssignment = assignments.find((a: any) => a.memberId?.toString() === userId);
+
+      if (userAssignment && userAssignment.status === 'accepted') {
+        const position = userAssignment.position || 'Staff';
+        const wage = userAssignment.wage || 0;
+
+        // Calculate hours
+        let hours = 0;
+        if ((event as any).startTime && (event as any).endTime) {
+          const start = new Date(`${(event as any).date}T${(event as any).startTime}`);
+          const end = new Date(`${(event as any).date}T${(event as any).endTime}`);
+          hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+          if (hours < 0) hours += 24;
+        } else {
+          hours = 6;
+        }
+
+        const earnings = wage * hours;
+
+        if (!positionStats[position]) {
+          positionStats[position] = { count: 0, hours: 0, earnings: 0 };
+        }
+
+        positionStats[position].count++;
+        positionStats[position].hours += hours;
+        positionStats[position].earnings += earnings;
+
+        totalHours += hours;
+        totalEarnings += earnings;
+        totalEvents++;
+      }
+    }
+
+    const positionBreakdown = Object.entries(positionStats).map(([position, stats]) => ({
+      position,
+      events: stats.count,
+      hours: Math.round(stats.hours * 10) / 10,
+      earnings: Math.round(stats.earnings * 100) / 100
+    }));
+
+    return {
+      success: true,
+      message: `Performance for ${startOfLastMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}`,
+      data: {
+        period: 'last_month',
+        totalEvents,
+        totalHours: Math.round(totalHours * 10) / 10,
+        totalEarnings: Math.round(totalEarnings * 100) / 100,
+        byPosition: positionBreakdown,
+        averageWage: totalHours > 0 ? Math.round((totalEarnings / totalHours) * 100) / 100 : 0
+      }
+    };
+  } catch (error: any) {
+    console.error('[executePerformanceLastMonth] Error:', error);
+    return {
+      success: false,
+      message: `Failed to get performance data: ${error.message}`
+    };
+  }
+}
+
+/**
+ * Execute performance_last_year function
+ * Returns performance statistics for the last 12 months
+ */
+async function executePerformanceLastYear(
+  userId: string,
+  userKey: string
+): Promise<{ success: boolean; message: string; data?: any }> {
+  try {
+    console.log(`[executePerformanceLastYear] Getting last 12 months stats for userId ${userId}`);
+
+    const now = new Date();
+    const startOfYear = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+
+    // Query events for last 12 months where user is assigned
+    const events = await EventModel.find({
+      'assignments.memberId': userId,
+      date: { $gte: startOfYear, $lte: now }
+    }).lean();
+
+    // Analyze by position and by month
+    const positionStats: Record<string, { count: number; hours: number; earnings: number }> = {};
+    const monthlyStats: Record<string, { events: number; hours: number; earnings: number }> = {};
+    let totalHours = 0;
+    let totalEarnings = 0;
+    let totalEvents = 0;
+
+    for (const event of events) {
+      const assignments = (event as any).assignments || [];
+      const userAssignment = assignments.find((a: any) => a.memberId?.toString() === userId);
+
+      if (userAssignment && userAssignment.status === 'accepted') {
+        const position = userAssignment.position || 'Staff';
+        const wage = userAssignment.wage || 0;
+        const eventDate = new Date((event as any).date);
+        const monthKey = `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, '0')}`;
+
+        // Calculate hours
+        let hours = 0;
+        if ((event as any).startTime && (event as any).endTime) {
+          const start = new Date(`${(event as any).date}T${(event as any).startTime}`);
+          const end = new Date(`${(event as any).date}T${(event as any).endTime}`);
+          hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+          if (hours < 0) hours += 24;
+        } else {
+          hours = 6;
+        }
+
+        const earnings = wage * hours;
+
+        // Update position stats
+        if (!positionStats[position]) {
+          positionStats[position] = { count: 0, hours: 0, earnings: 0 };
+        }
+        positionStats[position].count++;
+        positionStats[position].hours += hours;
+        positionStats[position].earnings += earnings;
+
+        // Update monthly stats
+        if (!monthlyStats[monthKey]) {
+          monthlyStats[monthKey] = { events: 0, hours: 0, earnings: 0 };
+        }
+        monthlyStats[monthKey].events++;
+        monthlyStats[monthKey].hours += hours;
+        monthlyStats[monthKey].earnings += earnings;
+
+        totalHours += hours;
+        totalEarnings += earnings;
+        totalEvents++;
+      }
+    }
+
+    const positionBreakdown = Object.entries(positionStats).map(([position, stats]) => ({
+      position,
+      events: stats.count,
+      hours: Math.round(stats.hours * 10) / 10,
+      earnings: Math.round(stats.earnings * 100) / 100
+    }));
+
+    // Calculate monthly average
+    const monthCount = Object.keys(monthlyStats).length || 1;
+    const monthlyAverage = {
+      events: Math.round(totalEvents / monthCount * 10) / 10,
+      hours: Math.round(totalHours / monthCount * 10) / 10,
+      earnings: Math.round(totalEarnings / monthCount * 100) / 100
+    };
+
+    return {
+      success: true,
+      message: 'Performance for last 12 months',
+      data: {
+        period: 'last_year',
+        totalEvents,
+        totalHours: Math.round(totalHours * 10) / 10,
+        totalEarnings: Math.round(totalEarnings * 100) / 100,
+        byPosition: positionBreakdown,
+        monthlyAverage,
+        averageWage: totalHours > 0 ? Math.round((totalEarnings / totalHours) * 100) / 100 : 0,
+        monthsCovered: monthCount
+      }
+    };
+  } catch (error: any) {
+    console.error('[executePerformanceLastYear] Error:', error);
+    return {
+      success: false,
+      message: `Failed to get performance data: ${error.message}`
+    };
+  }
+}
+
+/**
  * Execute staff function based on name and arguments
  */
 async function executeStaffFunction(
@@ -1299,6 +1614,15 @@ async function executeStaffFunction(
 
     case 'decline_shift':
       return await executeDeclineShift(userId, userKey, functionArgs.event_id, functionArgs.reason);
+
+    case 'performance_current_month':
+      return await executePerformanceCurrentMonth(userId, userKey);
+
+    case 'performance_last_month':
+      return await executePerformanceLastMonth(userId, userKey);
+
+    case 'performance_last_year':
+      return await executePerformanceLastYear(userId, userKey);
 
     default:
       return {
