@@ -85,10 +85,36 @@ class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProv
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Microphone permission required for voice input'),
-            duration: Duration(seconds: 3),
+          SnackBar(
+            content: const Text('Please allow microphone access when prompted by your browser'),
+            duration: const Duration(seconds: 4),
             backgroundColor: Colors.orange,
+            action: SnackBarAction(
+              label: 'Help',
+              textColor: Colors.white,
+              onPressed: () {
+                // Show help dialog
+                showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Microphone Access Required'),
+                    content: const Text(
+                      'To use voice input:\n\n'
+                      '1. Click the microphone button\n'
+                      '2. Allow microphone access in your browser prompt\n'
+                      '3. If you blocked it, click the lock/info icon in your browser\'s address bar to change permissions\n\n'
+                      'Note: Voice recording only works on secure (HTTPS) connections.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Got it'),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
           ),
         );
       }

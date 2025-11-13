@@ -23,16 +23,13 @@ class AudioTranscriptionService {
     try {
       print('[AudioTranscriptionService] Attempting to start recording...');
 
-      // Check if we have permission first (web will request through browser)
-      final hasPermission = await _audioRecorder.hasPermission();
-      print('[AudioTranscriptionService] Permission check result: $hasPermission');
+      // On web, we need to try starting the recording directly in response to user gesture
+      // The browser will automatically prompt for permission if not already granted
+      if (kIsWeb) {
+        try {
+          print('[AudioTranscriptionService] Web: Attempting to start recording (will prompt for permission if needed)...');
 
-      if (hasPermission) {
-        // Handle web vs mobile differently
-        if (kIsWeb) {
-          print('[AudioTranscriptionService] Starting web recording with Opus encoder...');
-          // Web doesn't need a file path - recording happens in memory
-          // For web, we provide an empty path (ignored but required by API)
+          // Try to start recording - this will trigger permission prompt if needed
           await _audioRecorder.start(
             const RecordConfig(
               encoder: AudioEncoder.opus, // Opus works better for web
@@ -41,8 +38,24 @@ class AudioTranscriptionService {
             ),
             path: '', // Empty path for web - recording is stored in memory
           );
+
           _currentRecordingPath = null; // Web returns blob URL later
-        } else {
+          _isRecording = true;
+          print('[AudioTranscriptionService] Web recording started successfully');
+          return true;
+        } catch (e) {
+          // If starting fails, it's likely due to permission denial
+          print('[AudioTranscriptionService] Web recording failed to start: $e');
+          print('[AudioTranscriptionService] This usually means permission was denied or browser blocked access');
+          _isRecording = false;
+          return false;
+        }
+      } else {
+        // For mobile/desktop, check permission first
+        final hasPermission = await _audioRecorder.hasPermission();
+        print('[AudioTranscriptionService] Mobile permission check result: $hasPermission');
+
+        if (hasPermission) {
           // Mobile/Desktop needs a file path
           final tempDir = await getTemporaryDirectory();
           final timestamp = DateTime.now().millisecondsSinceEpoch;
@@ -57,15 +70,15 @@ class AudioTranscriptionService {
             ),
             path: _currentRecordingPath!,
           );
-        }
 
-        _isRecording = true;
-        print('[AudioTranscriptionService] Recording started successfully${kIsWeb ? ' (Web mode)' : ': $_currentRecordingPath'}');
-        return true;
-      } else {
-        print('[AudioTranscriptionService] No permission to record audio - requesting permission');
-        _isRecording = false;
-        return false;
+          _isRecording = true;
+          print('[AudioTranscriptionService] Mobile recording started successfully: $_currentRecordingPath');
+          return true;
+        } else {
+          print('[AudioTranscriptionService] No permission to record audio on mobile');
+          _isRecording = false;
+          return false;
+        }
       }
     } catch (e, stackTrace) {
       print('[AudioTranscriptionService] Failed to start recording: $e');
