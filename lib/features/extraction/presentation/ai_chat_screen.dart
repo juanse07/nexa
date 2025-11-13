@@ -1303,34 +1303,39 @@ class _AIChatScreenState extends State<AIChatScreen>
 
                   // Quick action suggestion chips (for common manager tasks)
                   if (!_isLoading && _selectedImages.isEmpty && _selectedDocuments.isEmpty)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            _buildSuggestionChip(
-                              '📋 New Event',
-                              'Create new event. Tell me: how many staff roles needed, start time, end time, and venue.',
+                    Builder(
+                      builder: (context) {
+                        final terminology = context.read<TerminologyProvider>().singular;
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                _buildSuggestionChip(
+                                  '📋 New ${terminology[0].toUpperCase()}${terminology.substring(1)}',
+                                  'Help me to create a new $terminology and ask me for confirmation to save',
+                                ),
+                                const SizedBox(width: 8),
+                                _buildSuggestionChip(
+                                  '🏢 New Client',
+                                  'Add new client',
+                                ),
+                                const SizedBox(width: 8),
+                                _buildSuggestionChip(
+                                  '👤 New Role',
+                                  'Create new staff role',
+                                ),
+                                const SizedBox(width: 8),
+                                _buildSuggestionChip(
+                                  '💵 New Tariff',
+                                  'Set up new tariff. Tell me: rate, role, and client.',
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 8),
-                            _buildSuggestionChip(
-                              '🏢 New Client',
-                              'Add new client',
-                            ),
-                            const SizedBox(width: 8),
-                            _buildSuggestionChip(
-                              '👤 New Role',
-                              'Create new staff role',
-                            ),
-                            const SizedBox(width: 8),
-                            _buildSuggestionChip(
-                              '💵 New Tariff',
-                              'Set up new tariff. Tell me: rate, role, and client.',
-                            ),
-                          ],
-                        ),
-                      ),
+                          ),
+                        );
+                      }
                     ),
 
                   // Chat input
