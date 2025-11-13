@@ -1300,10 +1300,14 @@ async function executePerformanceCurrentMonth(
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
+    // Format dates as ISO strings for MongoDB comparison (events store date as string)
+    const startDateStr = startOfMonth.toISOString().split('T')[0];
+    const endDateStr = endOfMonth.toISOString().split('T')[0];
+
     // Query events for this month where user is assigned
     const events = await EventModel.find({
       'assignments.memberId': userId,
-      date: { $gte: startOfMonth, $lte: endOfMonth }
+      date: { $gte: startDateStr, $lte: endDateStr }
     }).lean();
 
     // Analyze by position
@@ -1391,10 +1395,14 @@ async function executePerformanceLastMonth(
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
 
+    // Format dates as ISO strings for MongoDB comparison (events store date as string)
+    const startDateStr = startOfLastMonth.toISOString().split('T')[0];
+    const endDateStr = endOfLastMonth.toISOString().split('T')[0];
+
     // Query events for last month where user is assigned
     const events = await EventModel.find({
       'assignments.memberId': userId,
-      date: { $gte: startOfLastMonth, $lte: endOfLastMonth }
+      date: { $gte: startDateStr, $lte: endDateStr }
     }).lean();
 
     // Analyze by position (same logic as current month)
@@ -1480,10 +1488,14 @@ async function executePerformanceLastYear(
     const now = new Date();
     const startOfYear = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
 
+    // Format dates as ISO strings for MongoDB comparison (events store date as string)
+    const startDateStr = startOfYear.toISOString().split('T')[0];
+    const endDateStr = now.toISOString().split('T')[0];
+
     // Query events for last 12 months where user is assigned
     const events = await EventModel.find({
       'assignments.memberId': userId,
-      date: { $gte: startOfYear, $lte: now }
+      date: { $gte: startDateStr, $lte: endDateStr }
     }).lean();
 
     // Analyze by position and by month
