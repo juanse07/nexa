@@ -1616,7 +1616,36 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       case 3: // Hours tab
         return const HoursApprovalListScreen();
       case 4: // Catalog tab
-        return Container(); // Content is handled by slivers
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.inventory_2_outlined,
+                size: 80,
+                color: Colors.grey.shade300,
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Catalog Coming Soon',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Manage your reusable templates and resources',
+                style: TextStyle(
+                  fontSize: 15,
+                  color: Colors.grey.shade500,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        )
       default:
         return Container();
     }

@@ -24,7 +24,7 @@ class WebTabNavigation extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final effectiveSelectedColor = selectedColor ?? theme.primaryColor;
-    final effectiveUnselectedColor = unselectedColor ?? theme.colorScheme.onSurface.withOpacity(0.6);
+    final effectiveUnselectedColor = unselectedColor ?? const Color(0xFF64748B); // Slate gray - always visible
 
     return Container(
       decoration: BoxDecoration(
@@ -47,7 +47,7 @@ class WebTabNavigation extends StatelessWidget {
               child: InkWell(
                 onTap: () => onTabSelected(index),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 18),
                   decoration: BoxDecoration(
                     border: Border(
                       bottom: BorderSide(
@@ -62,22 +62,22 @@ class WebTabNavigation extends StatelessWidget {
                       if (tab.icon != null) ...[
                         Icon(
                           tab.icon,
-                          size: 20,
+                          size: 22,
                           color: isSelected
                               ? effectiveSelectedColor
                               : effectiveUnselectedColor,
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 10),
                       ],
                       Text(
                         tab.text,
                         style: TextStyle(
-                          fontSize: 15,
+                          fontSize: 16,
                           fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                           color: isSelected
                               ? effectiveSelectedColor
                               : effectiveUnselectedColor,
-                          letterSpacing: 0.1,
+                          letterSpacing: 0.2,
                         ),
                       ),
                     ],
