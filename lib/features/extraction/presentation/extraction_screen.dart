@@ -1409,8 +1409,77 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             ),
           ),
         ];
-      case 1: // Events tab - no pinned headers (tabs are in fixed header)
-        return [];
+      case 1: // Events tab - pin the tab navigation
+        return [
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: PinnedHeaderDelegate(
+              height: 56.0,
+              safeAreaPadding: topPadding,
+              child: Container(
+                color: Colors.white,
+                child: SafeArea(
+                  top: false,
+                  bottom: false,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: kIsWeb
+                              ? WebTabNavigation(
+                                  tabs: const [
+                                    WebTab(text: 'Pending'),
+                                    WebTab(text: 'Posted'),
+                                    WebTab(text: 'Full'),
+                                  ],
+                                  selectedIndex: _eventsTabController.index,
+                                  onTabSelected: (index) {
+                                    setState(() {
+                                      _eventsTabController.animateTo(index);
+                                    });
+                                  },
+                                  selectedColor: const Color(0xFF7C3AED),
+                                )
+                              : TabBar(
+                                  controller: _eventsTabController,
+                                  tabs: const [
+                                    Tab(text: 'Pending'),
+                                    Tab(text: 'Posted'),
+                                    Tab(text: 'Full'),
+                                  ],
+                                  labelColor: const Color(0xFF7C3AED),
+                                  unselectedLabelColor: Colors.grey,
+                                  indicatorColor: const Color(0xFF7C3AED),
+                                ),
+                        ),
+                        // Past Events button
+                        TextButton.icon(
+                          onPressed: _showPastEvents,
+                          icon: const Icon(Icons.history, size: 18),
+                          label: const Text('Past'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: const Color(0xFF6B7280),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ];
       case 2: // Chat tab - pin the search bar
         return [
           SliverPersistentHeader(
