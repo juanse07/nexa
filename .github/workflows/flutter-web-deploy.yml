@@ -168,14 +168,14 @@ jobs:
           EOF
           cat build/web/build-info.json
 
-  # Job 3: Deploy to Cloudflare Pages
+  # Job 3: Deploy to Cloudflare Pages - DISABLED (Cloudflare auto-deploys from branch)
   deploy-cloudflare:
     name: Deploy to Cloudflare Pages
     needs: build-web # Only run if build succeeds
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Only deploy on push to main or android1 branches (not on PRs)
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/android1')
+    # DISABLED: Cloudflare Pages auto-deploys when code is pushed to android1 branch
+    if: false
 
     steps:
       - name: Checkout repository
