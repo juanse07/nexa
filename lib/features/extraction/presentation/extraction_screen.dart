@@ -2311,33 +2311,64 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   Widget _buildDesktopLayout(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      body: Row(
+      body: Stack(
         children: [
-          // Navigation Rail - hide when used inside MainScreen
-          if (!widget.hideNavigationRail)
-            _buildNavigationRail(context),
-          // Content
-          Expanded(
-            child: Column(
-              children: [
-                // Desktop app bar - only show when navigation rail is hidden (used inside MainScreen)
-                if (widget.hideNavigationRail)
-                  _buildDesktopAppBar(context),
-                // Main content
-                Expanded(
-                  child: ResponsiveContainer(
-                    maxWidth: 1600,
-                    child: NestedScrollView(
-                      headerSliverBuilder: (context, innerBoxIsScrolled) {
-                        return [..._buildPinnedHeaders()];
-                      },
-                      body: _buildBody(),
+          Row(
+            children: [
+              // Navigation Rail - hide when used inside MainScreen
+              if (!widget.hideNavigationRail)
+                _buildNavigationRail(context),
+              // Content
+              Expanded(
+                child: Column(
+                  children: [
+                    // Desktop app bar - only show when navigation rail is hidden (used inside MainScreen)
+                    if (widget.hideNavigationRail)
+                      _buildDesktopAppBar(context),
+                    // Main content
+                    Expanded(
+                      child: ResponsiveContainer(
+                        maxWidth: 1600,
+                        child: NestedScrollView(
+                          headerSliverBuilder: (context, innerBoxIsScrolled) {
+                            return [..._buildPinnedHeaders()];
+                          },
+                          body: _buildBody(),
+                        ),
+                      ),
                     ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          // Floating "New Job" button for Jobs tab
+          if (_selectedIndex == 1)
+            Positioned(
+              bottom: 40,
+              right: 40,
+              child: FloatingActionButton.extended(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const AIChatScreen(),
+                    ),
+                  );
+                },
+                backgroundColor: const Color(0xFF7C3AED),
+                elevation: 8,
+                icon: const Icon(Icons.add_rounded, color: Colors.white),
+                label: Text(
+                  'New ${context.read<TerminologyProvider>().singular}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
         ],
       ),
     );
