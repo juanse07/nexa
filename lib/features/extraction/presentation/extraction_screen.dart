@@ -2165,14 +2165,24 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             _buildNavigationRail(context),
           // Content
           Expanded(
-            child: ResponsiveContainer(
-              maxWidth: 1600,
-              child: NestedScrollView(
-                headerSliverBuilder: (context, innerBoxIsScrolled) {
-                  return [..._buildPinnedHeaders()];
-                },
-                body: _buildBody(),
-              ),
+            child: Column(
+              children: [
+                // Desktop app bar - only show when navigation rail is hidden (used inside MainScreen)
+                if (widget.hideNavigationRail)
+                  _buildDesktopAppBar(context),
+                // Main content
+                Expanded(
+                  child: ResponsiveContainer(
+                    maxWidth: 1600,
+                    child: NestedScrollView(
+                      headerSliverBuilder: (context, innerBoxIsScrolled) {
+                        return [..._buildPinnedHeaders()];
+                      },
+                      body: _buildBody(),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
