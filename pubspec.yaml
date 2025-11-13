@@ -180,3 +180,4 @@ flutter_launcher_icons:
 # Dependency overrides to fix version conflicts
 dependency_overrides:
   record_platform_interface: 1.2.0  # Compatible version without startStream requirement
+  record_web: 1.1.3  # Compatible version with record_platform_interface 1.2.0

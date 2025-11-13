@@ -1700,7 +1700,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           );
         }
         // Mobile uses slivers
-        return Container()
+        return Container();
       default:
         return Container();
     }
