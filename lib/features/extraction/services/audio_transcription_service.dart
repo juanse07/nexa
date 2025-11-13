@@ -24,9 +24,13 @@ class AudioTranscriptionService {
       print('[AudioTranscriptionService] Attempting to start recording...');
 
       // Check if we have permission first (web will request through browser)
-      if (await _audioRecorder.hasPermission()) {
+      final hasPermission = await _audioRecorder.hasPermission();
+      print('[AudioTranscriptionService] Permission check result: $hasPermission');
+
+      if (hasPermission) {
         // Handle web vs mobile differently
         if (kIsWeb) {
+          print('[AudioTranscriptionService] Starting web recording with Opus encoder...');
           // Web doesn't need a file path - recording happens in memory
           // For web, we provide an empty path (ignored but required by API)
           await _audioRecorder.start(
@@ -43,6 +47,7 @@ class AudioTranscriptionService {
           final tempDir = await getTemporaryDirectory();
           final timestamp = DateTime.now().millisecondsSinceEpoch;
           _currentRecordingPath = '${tempDir.path}/voice_input_$timestamp.m4a';
+          print('[AudioTranscriptionService] Starting mobile recording to: $_currentRecordingPath');
 
           await _audioRecorder.start(
             const RecordConfig(
@@ -55,14 +60,16 @@ class AudioTranscriptionService {
         }
 
         _isRecording = true;
-        print('[AudioTranscriptionService] Recording started${kIsWeb ? ' (Web mode)' : ': $_currentRecordingPath'}');
+        print('[AudioTranscriptionService] Recording started successfully${kIsWeb ? ' (Web mode)' : ': $_currentRecordingPath'}');
         return true;
       } else {
-        print('[AudioTranscriptionService] No permission to record audio');
+        print('[AudioTranscriptionService] No permission to record audio - requesting permission');
+        _isRecording = false;
         return false;
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('[AudioTranscriptionService] Failed to start recording: $e');
+      print('[AudioTranscriptionService] Stack trace: $stackTrace');
       _isRecording = false;
       return false;
     }
@@ -72,23 +79,27 @@ class AudioTranscriptionService {
   /// Returns null if recording failed or wasn't started
   Future<String?> stopRecording() async {
     try {
+      print('[AudioTranscriptionService] stopRecording called, _isRecording: $_isRecording');
+
       if (!_isRecording) {
-        print('[AudioTranscriptionService] Not currently recording');
+        print('[AudioTranscriptionService] Not currently recording - cannot stop');
         return null;
       }
 
+      print('[AudioTranscriptionService] Stopping recording...');
       final path = await _audioRecorder.stop();
       _isRecording = false;
 
       if (path == null || path.isEmpty) {
-        print('[AudioTranscriptionService] Recording path is empty');
+        print('[AudioTranscriptionService] Recording path is empty or null');
         return null;
       }
 
-      print('[AudioTranscriptionService] Recording stopped: $path');
+      print('[AudioTranscriptionService] Recording stopped successfully: $path');
       return path;
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('[AudioTranscriptionService] Failed to stop recording: $e');
+      print('[AudioTranscriptionService] Stack trace: $stackTrace');
       _isRecording = false;
       return null;
     }
