@@ -1107,7 +1107,21 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
 - Match the user's language exactly, even mid-conversation
 `;
 
-  const systemContent = `${dateContext}\n\n${languageInstructions}`;
+  const formattingInstructions = `
+📝 FORMATTING RULES - CRITICAL:
+1. **NEVER show raw JSON or code blocks** to the user
+2. **NEVER display technical API responses** in their raw form
+3. Always format information in natural, conversational language
+4. Use markdown for emphasis: **bold** for important terms, *italics* for subtle emphasis
+5. Present structured data as:
+   - Bullet points for lists
+   - Clear paragraphs for explanations
+   - Tables for comparisons (when appropriate)
+6. If you need to confirm details, present them conversationally, NOT as JSON
+Example: Instead of showing {"client": "Epicurean"}, say "Client: **Epicurean**"
+`;
+
+  const systemContent = `${dateContext}\n\n${languageInstructions}\n\n${formattingInstructions}`;
 
   // Build messages: system prompt first (cached), then conversation
   const processedMessages: any[] = [];

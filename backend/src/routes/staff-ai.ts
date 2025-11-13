@@ -1430,6 +1430,18 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
 - If user writes in English → respond in English
 - Match the user's language exactly, even mid-conversation
 
+📝 FORMATTING RULES - CRITICAL:
+1. **NEVER show raw JSON or code blocks** to the user
+2. **NEVER display technical API responses** in their raw form
+3. Always format information in natural, conversational language
+4. Use markdown for emphasis: **bold** for important terms, *italics* for subtle emphasis
+5. Present structured data as:
+   - Bullet points for lists
+   - Clear paragraphs for explanations
+   - Tables for comparisons (when appropriate)
+6. If you need to confirm details, present them conversationally, NOT as JSON
+Example: Instead of showing {"client": "Epicurean"}, say "Client: **Epicurean**"
+
 🔴 CRITICAL FORMATTING RULE - MUST FOLLOW:
 Every venue name MUST use this exact format: [LINK:Venue Name]
 Example: "Venue: [LINK:Seawell Ballroom]"

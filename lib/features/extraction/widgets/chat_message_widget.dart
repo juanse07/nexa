@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 
 import '../services/chat_event_service.dart';
 
@@ -241,14 +242,31 @@ class ChatMessageWidget extends StatelessWidget {
     final linkPattern = RegExp(r'\[LINK:([^\]]+)\]');
     final match = linkPattern.firstMatch(content);
 
-    // If no link found, return simple text
+    // If no link found, return markdown-rendered text
     if (match == null) {
-      return Text(
-        content,
-        style: TextStyle(
-          color: isUser ? Colors.white : const Color(0xFF0F172A),
-          fontSize: 15,
-          height: 1.4,
+      return MarkdownBody(
+        data: content,
+        styleSheet: MarkdownStyleSheet(
+          p: TextStyle(
+            color: isUser ? Colors.white : const Color(0xFF0F172A),
+            fontSize: 15,
+            height: 1.4,
+          ),
+          strong: TextStyle(
+            color: isUser ? Colors.white : const Color(0xFF0F172A),
+            fontSize: 15,
+            height: 1.4,
+            fontWeight: FontWeight.bold,
+          ),
+          em: TextStyle(
+            color: isUser ? Colors.white : const Color(0xFF0F172A),
+            fontSize: 15,
+            height: 1.4,
+            fontStyle: FontStyle.italic,
+          ),
+          listBullet: TextStyle(
+            color: isUser ? Colors.white : const Color(0xFF0F172A),
+          ),
         ),
       );
     }

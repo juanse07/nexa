@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
+import 'package:flutter_markdown/flutter_markdown.dart';
 
 import '../services/chat_event_service.dart';
 
@@ -393,12 +394,30 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
     final match = linkPattern.firstMatch(content);
 
     if (match == null) {
-      return Text(
-        content,
-        style: TextStyle(
-          color: isUser ? Colors.white : const Color(0xFF0F172A),
-          fontSize: 15,
-          height: 1.4,
+      // Use MarkdownBody to render markdown formatting
+      return MarkdownBody(
+        data: content,
+        styleSheet: MarkdownStyleSheet(
+          p: TextStyle(
+            color: isUser ? Colors.white : const Color(0xFF0F172A),
+            fontSize: 15,
+            height: 1.4,
+          ),
+          strong: TextStyle(
+            color: isUser ? Colors.white : const Color(0xFF0F172A),
+            fontSize: 15,
+            height: 1.4,
+            fontWeight: FontWeight.bold,
+          ),
+          em: TextStyle(
+            color: isUser ? Colors.white : const Color(0xFF0F172A),
+            fontSize: 15,
+            height: 1.4,
+            fontStyle: FontStyle.italic,
+          ),
+          listBullet: TextStyle(
+            color: isUser ? Colors.white : const Color(0xFF0F172A),
+          ),
         ),
       );
     }
