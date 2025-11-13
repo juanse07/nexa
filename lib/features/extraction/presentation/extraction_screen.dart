@@ -1517,14 +1517,31 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           ],
         );
       case 1: // Events tab
-        return TabBarView(
-          controller: _eventsTabController,
-          children: [
-            _eventsInner(_eventsPending ?? const []), // Pending tab
-            _eventsInner(_eventsAvailable ?? const []), // Posted tab
-            _eventsInner(_eventsFull ?? const []), // Full tab
-          ],
-        );
+        // For desktop/web, render events directly based on selected tab index
+        // This avoids nested scrollable conflicts with NestedScrollView
+        if (kIsWeb || ResponsiveLayout.shouldUseDesktopLayout(context)) {
+          // Directly return the content for the selected tab
+          switch (_eventsTabController.index) {
+            case 0:
+              return _eventsInner(_eventsPending ?? const []); // Pending tab
+            case 1:
+              return _eventsInner(_eventsAvailable ?? const []); // Posted tab
+            case 2:
+              return _eventsInner(_eventsFull ?? const []); // Full tab
+            default:
+              return _eventsInner(_eventsPending ?? const []);
+          }
+        } else {
+          // For mobile, use TabBarView for swipe gestures
+          return TabBarView(
+            controller: _eventsTabController,
+            children: [
+              _eventsInner(_eventsPending ?? const []), // Pending tab
+              _eventsInner(_eventsAvailable ?? const []), // Posted tab
+              _eventsInner(_eventsFull ?? const []), // Full tab
+            ],
+          );
+        }
       case 2: // Chat tab
         return _buildChatContent();
       case 3: // Hours tab
