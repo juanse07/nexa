@@ -47,9 +47,9 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
   void initState() {
     super.initState();
 
-    // Initialize fade in animation
+    // Initialize fade in animation (FASTER)
     _fadeInController = AnimationController(
-      duration: const Duration(milliseconds: 500),
+      duration: const Duration(milliseconds: 250), // Was 500ms
       vsync: this,
     );
     _fadeInAnimation = CurvedAnimation(
@@ -57,13 +57,13 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
       curve: Curves.easeOut,
     );
 
-    // Initialize slide in animation
+    // Initialize slide in animation (FASTER)
     _slideInController = AnimationController(
-      duration: const Duration(milliseconds: 400),
+      duration: const Duration(milliseconds: 200), // Was 400ms
       vsync: this,
     );
     _slideInAnimation = Tween<Offset>(
-      begin: const Offset(0.0, 0.3),
+      begin: const Offset(0.0, 0.2), // Reduced slide distance
       end: Offset.zero,
     ).animate(CurvedAnimation(
       parent: _slideInController,
@@ -76,9 +76,9 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
       vsync: this,
     );
 
-    // Initialize typing dots animation
+    // Initialize typing dots animation (FASTER)
     _typingDotsController = AnimationController(
-      duration: const Duration(seconds: 1),
+      duration: const Duration(milliseconds: 600), // Was 1 second
       vsync: this,
     )..repeat();
 
@@ -97,8 +97,8 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
     if (!isUser && widget.showTypingAnimation) {
       _isTyping = true;
 
-      // Show typing indicator for 1-2 seconds
-      Future.delayed(Duration(milliseconds: 800 + (widget.message.content.length * 2).clamp(0, 1200)), () {
+      // Show typing indicator for shorter time (FASTER)
+      Future.delayed(Duration(milliseconds: 400 + (widget.message.content.length).clamp(0, 600)), () { // Was 800-2000ms
         if (mounted) {
           setState(() {
             _isTyping = false;
