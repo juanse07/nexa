@@ -680,13 +680,17 @@ const chatMessageSchema = z.object({
 const STAFF_AI_TOOLS = [
   {
     name: 'get_my_schedule',
-    description: 'Get my shifts and assigned events (past or upcoming). Use this when I ask about my schedule, upcoming shifts, past shifts, specific event dates, or "when do I work".',
+    description: 'Get my shifts and assigned events. Returns up to 10 upcoming events by default. Use this when I ask about my schedule, upcoming shifts, past shifts, specific dates, or "when do I work".',
     parameters: {
       type: 'object',
       properties: {
         date_range: {
           type: ['string', 'null'],
-          description: 'Optional date filter. IMPORTANT: For "next shift", "upcoming shifts", or "do I work" questions, LEAVE EMPTY to find the earliest upcoming event. Use specific ranges when explicitly asked: "this_week" for this week only, "next_week" for next week, "this_month" for this month, "last_month" for previous month, or "YYYY-MM-DD" for a specific date (e.g. "2025-11-13").'
+          description: 'Optional date filter. For general schedule questions, LEAVE EMPTY to show upcoming events. Use specific ranges when explicitly asked: "this_week", "next_week", "this_month", "last_month", or "YYYY-MM-DD" for a specific date.'
+        },
+        limit: {
+          type: ['number', 'null'],
+          description: 'Number of events to return. Default is 10. Use 1 for "next shift", use specified number for "next N shifts", use 10 for general "my schedule" queries.'
         }
       }
     }
@@ -835,6 +839,7 @@ async function executeGetMySchedule(
   userId: string,
   userKey: string,
   dateRange?: string,
+  limit?: number,
   subscriptionTier: 'free' | 'pro' = 'free'
 ): Promise<{ success: boolean; message: string; data?: any }> {
   try {
@@ -890,9 +895,15 @@ async function executeGetMySchedule(
     };
     console.log('[executeGetMySchedule] Query:', JSON.stringify(query, null, 2));
 
-    // Dynamic limit based on subscription tier
-    // Free: 10 events | Pro: 50 events
-    const eventLimit = subscriptionTier === 'pro' ? 50 : 10;
+    // Dynamic limit with user override
+    // If limit specified, use it (constrained by subscription tier)
+    // Otherwise use default: Free: 10 events | Pro: 50 events
+    const maxLimit = subscriptionTier === 'pro' ? 50 : 10;
+    const eventLimit = limit
+      ? Math.min(limit, maxLimit)  // Use user limit but cap at subscription max
+      : maxLimit;  // Default to max for tier
+
+    console.log(`[executeGetMySchedule] Using limit: ${eventLimit} (requested: ${limit || 'default'}, max: ${maxLimit})`);
 
     const events = await EventModel.find(query)
     .sort({ date: 1 })
@@ -1272,7 +1283,7 @@ async function executeStaffFunction(
       );
 
     case 'get_my_schedule':
-      return await executeGetMySchedule(userId, userKey, functionArgs.date_range, subscriptionTier);
+      return await executeGetMySchedule(userId, userKey, functionArgs.date_range, functionArgs.limit, subscriptionTier);
 
     case 'get_earnings_summary':
       return await executeGetEarningsSummary(userId, userKey, functionArgs.date_range);
@@ -1456,11 +1467,14 @@ Format events in summarized list:
 - Hide: addresses, database IDs, null fields
 - Be brief, concise & friendly
 
-How many events to show:
+How many events to show - IMPORTANT:
+- "what's my schedule" / "my schedule" / "show my schedule" → Show next 10 upcoming events with header "Here are your next 10 upcoming shifts:"
 - "next shift" / "when is my next shift" → Show ONLY 1 event (the earliest)
-- "next 7 jobs" → Show up to 7 events
-- "upcoming" / "all upcoming" → Show all events
-- "last month" / "shifts from last month" → Show all events from previous month`;
+- "next [N] shifts" / "next [N] jobs" → Show exactly N events
+- "upcoming shifts" / "upcoming events" → Show next 10 upcoming events
+- "all upcoming" → Show all available events (up to limit)
+- "this week" / "this month" → Show all events in that period
+- Always include a count in your response like "Here are your next 10 shifts:" or "Your next shift is:"`;
 
   const systemContent = `${dateContext}\n\n${formattingInstructions}`;
 
