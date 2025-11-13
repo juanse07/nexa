@@ -1567,8 +1567,61 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         ];
       case 3: // Hours tab - no pinned header needed
         return [];
-      case 4: // Catalog tab - no pinned headers (tabs are in fixed header)
-        return [];
+      case 4: // Catalog tab - pin the tab navigation
+        return [
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: PinnedHeaderDelegate(
+              height: 56.0,
+              safeAreaPadding: topPadding,
+              child: Container(
+                color: Colors.white,
+                child: SafeArea(
+                  top: false,
+                  bottom: false,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: kIsWeb
+                        ? WebTabNavigation(
+                            tabs: const [
+                              WebTab(text: 'Clients'),
+                              WebTab(text: 'Roles'),
+                              WebTab(text: 'Tariffs'),
+                            ],
+                            selectedIndex: _catalogTabController.index,
+                            onTabSelected: (index) {
+                              setState(() {
+                                _catalogTabController.animateTo(index);
+                              });
+                            },
+                            selectedColor: const Color(0xFF7C3AED),
+                          )
+                        : TabBar(
+                            controller: _catalogTabController,
+                            tabs: const [
+                              Tab(text: 'Clients'),
+                              Tab(text: 'Roles'),
+                              Tab(text: 'Tariffs'),
+                            ],
+                            labelColor: const Color(0xFF7C3AED),
+                            unselectedLabelColor: Colors.grey,
+                            indicatorColor: const Color(0xFF7C3AED),
+                          ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ];
       default:
         return [];
     }
@@ -1616,36 +1669,38 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       case 3: // Hours tab
         return const HoursApprovalListScreen();
       case 4: // Catalog tab
-        return Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+        // For web/desktop, render catalog directly with TabBarView
+        if (kIsWeb || ResponsiveLayout.shouldUseDesktopLayout(context)) {
+          return Stack(
             children: [
-              Icon(
-                Icons.inventory_2_outlined,
-                size: 80,
-                color: Colors.grey.shade300,
+              TabBarView(
+                controller: _catalogTabController,
+                children: [
+                  _buildClientsInner(),
+                  _buildRolesInner(),
+                  _buildTariffsInner(),
+                ],
               ),
-              const SizedBox(height: 24),
-              Text(
-                'Catalog Coming Soon',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey.shade700,
+              // Floating Action Button for adding items
+              Positioned(
+                bottom: 120,
+                right: 20,
+                child: FloatingActionButton(
+                  onPressed: _showAddItemDialog,
+                  backgroundColor: Colors.white.withOpacity(0.9),
+                  elevation: 4,
+                  child: const Icon(
+                    Icons.add,
+                    color: Color(0xFF7C3AED),
+                    size: 28,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Manage your reusable templates and resources',
-                style: TextStyle(
-                  fontSize: 15,
-                  color: Colors.grey.shade500,
-                ),
-                textAlign: TextAlign.center,
               ),
             ],
-          ),
-        )
+          );
+        }
+        // Mobile uses slivers
+        return Container()
       default:
         return Container();
     }
