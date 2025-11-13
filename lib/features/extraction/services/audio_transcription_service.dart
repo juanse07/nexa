@@ -28,14 +28,14 @@ class AudioTranscriptionService {
         // Handle web vs mobile differently
         if (kIsWeb) {
           // Web doesn't need a file path - recording happens in memory
-          // But the package still requires a path parameter, so we pass null
+          // For web, we provide an empty path (ignored but required by API)
           await _audioRecorder.start(
             const RecordConfig(
               encoder: AudioEncoder.opus, // Opus works better for web
               bitRate: 128000, // 128 kbps
               sampleRate: 44100, // 44.1 kHz
             ),
-            path: null, // Web ignores this but it's required by the API
+            path: '', // Empty path for web - recording is stored in memory
           );
           _currentRecordingPath = null; // Web returns blob URL later
         } else {
