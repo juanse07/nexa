@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
@@ -20,27 +21,45 @@ class AudioTranscriptionService {
   /// Returns true if recording started successfully, false otherwise
   Future<bool> startRecording() async {
     try {
-      // Get temporary directory first
-      final tempDir = await getTemporaryDirectory();
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      _currentRecordingPath = '${tempDir.path}/voice_input_$timestamp.m4a';
-
       print('[AudioTranscriptionService] Attempting to start recording...');
 
-      // Start recording - the record package will request permission if needed
-      // iOS will show the permission dialog automatically on first use
-      await _audioRecorder.start(
-        const RecordConfig(
-          encoder: AudioEncoder.aacLc, // AAC format for best compatibility
-          bitRate: 128000, // 128 kbps
-          sampleRate: 44100, // 44.1 kHz
-        ),
-        path: _currentRecordingPath!,
-      );
+      // Check if we have permission first (web will request through browser)
+      if (await _audioRecorder.hasPermission()) {
+        // Handle web vs mobile differently
+        if (kIsWeb) {
+          // Web doesn't need a file path - recording happens in memory
+          await _audioRecorder.start(
+            const RecordConfig(
+              encoder: AudioEncoder.opus, // Opus works better for web
+              bitRate: 128000, // 128 kbps
+              sampleRate: 44100, // 44.1 kHz
+            ),
+            // No path parameter for web
+          );
+          _currentRecordingPath = null; // Web returns blob URL later
+        } else {
+          // Mobile/Desktop needs a file path
+          final tempDir = await getTemporaryDirectory();
+          final timestamp = DateTime.now().millisecondsSinceEpoch;
+          _currentRecordingPath = '${tempDir.path}/voice_input_$timestamp.m4a';
 
-      _isRecording = true;
-      print('[AudioTranscriptionService] Recording started: $_currentRecordingPath');
-      return true;
+          await _audioRecorder.start(
+            const RecordConfig(
+              encoder: AudioEncoder.aacLc, // AAC format for mobile
+              bitRate: 128000, // 128 kbps
+              sampleRate: 44100, // 44.1 kHz
+            ),
+            path: _currentRecordingPath!,
+          );
+        }
+
+        _isRecording = true;
+        print('[AudioTranscriptionService] Recording started${kIsWeb ? ' (Web mode)' : ': $_currentRecordingPath'}');
+        return true;
+      } else {
+        print('[AudioTranscriptionService] No permission to record audio');
+        return false;
+      }
     } catch (e) {
       print('[AudioTranscriptionService] Failed to start recording: $e');
       _isRecording = false;
@@ -82,7 +101,8 @@ class AudioTranscriptionService {
         _isRecording = false;
       }
 
-      if (_currentRecordingPath != null) {
+      // Only delete files on non-web platforms
+      if (!kIsWeb && _currentRecordingPath != null) {
         final file = File(_currentRecordingPath!);
         if (await file.exists()) {
           await file.delete();
@@ -98,9 +118,9 @@ class AudioTranscriptionService {
   /// Transcribe audio file to text using OpenAI Whisper API via backend
   /// Returns the transcribed text or null if transcription failed
   ///
-  /// [audioFilePath] Path to the audio file to transcribe
+  /// [audioPathOrUrl] Path to the audio file (mobile) or blob URL (web) to transcribe
   /// [terminology] Optional terminology preference (jobs, shifts, events) for better transcription context
-  Future<String?> transcribeAudio(String audioFilePath, {String? terminology}) async {
+  Future<String?> transcribeAudio(String audioPathOrUrl, {String? terminology}) async {
     try {
       final token = await AuthService.getJwt();
       if (token == null) {
@@ -110,7 +130,7 @@ class AudioTranscriptionService {
       final baseUrl = AppConfig.instance.baseUrl;
       final uri = Uri.parse('$baseUrl/ai/transcribe');
 
-      print('[AudioTranscriptionService] Transcribing audio: $audioFilePath');
+      print('[AudioTranscriptionService] Transcribing audio: ${kIsWeb ? 'blob URL' : audioPathOrUrl}');
       if (terminology != null) {
         print('[AudioTranscriptionService] Using terminology: $terminology');
       }
@@ -124,22 +144,44 @@ class AudioTranscriptionService {
         request.fields['terminology'] = terminology.toLowerCase();
       }
 
-      // Add audio file
-      final file = File(audioFilePath);
-      if (!await file.exists()) {
-        throw Exception('Audio file not found: $audioFilePath');
+      // Handle web vs mobile differently
+      if (kIsWeb) {
+        // For web, fetch the blob data from the URL
+        print('[AudioTranscriptionService] Fetching audio blob from URL...');
+        final blobResponse = await http.get(Uri.parse(audioPathOrUrl));
+
+        if (blobResponse.statusCode == 200) {
+          final bytes = blobResponse.bodyBytes;
+          print('[AudioTranscriptionService] Blob size: ${(bytes.length / 1024).toStringAsFixed(2)} KB');
+
+          request.files.add(
+            http.MultipartFile.fromBytes(
+              'audio',
+              bytes,
+              filename: 'voice_input.opus', // Opus format for web
+            ),
+          );
+        } else {
+          throw Exception('Failed to fetch audio blob');
+        }
+      } else {
+        // For mobile, use file path
+        final file = File(audioPathOrUrl);
+        if (!await file.exists()) {
+          throw Exception('Audio file not found: $audioPathOrUrl');
+        }
+
+        final fileSize = await file.length();
+        print('[AudioTranscriptionService] File size: ${(fileSize / 1024).toStringAsFixed(2)} KB');
+
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'audio',
+            audioPathOrUrl,
+            filename: 'voice_input.m4a',
+          ),
+        );
       }
-
-      final fileSize = await file.length();
-      print('[AudioTranscriptionService] File size: ${(fileSize / 1024).toStringAsFixed(2)} KB');
-
-      request.files.add(
-        await http.MultipartFile.fromPath(
-          'audio',
-          audioFilePath,
-          filename: 'voice_input.m4a',
-        ),
-      );
 
       // Send request
       final streamedResponse = await request.send();
@@ -152,12 +194,15 @@ class AudioTranscriptionService {
         if (text != null && text.isNotEmpty) {
           print('[AudioTranscriptionService] Transcription successful: ${text.substring(0, text.length > 50 ? 50 : text.length)}...');
 
-          // Clean up the audio file after successful transcription
-          try {
-            await file.delete();
-            print('[AudioTranscriptionService] Audio file deleted after transcription');
-          } catch (e) {
-            print('[AudioTranscriptionService] Failed to delete audio file: $e');
+          // Clean up the audio file after successful transcription (mobile only)
+          if (!kIsWeb) {
+            try {
+              final file = File(audioPathOrUrl);
+              await file.delete();
+              print('[AudioTranscriptionService] Audio file deleted after transcription');
+            } catch (e) {
+              print('[AudioTranscriptionService] Failed to delete audio file: $e');
+            }
           }
 
           return text;
