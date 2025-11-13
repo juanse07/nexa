@@ -47,8 +47,7 @@ class WebTabNavigation extends StatelessWidget {
               child: InkWell(
                 onTap: () => onTabSelected(index),
                 child: Container(
-                  constraints: const BoxConstraints(minHeight: 60),
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   decoration: BoxDecoration(
                     border: Border(
                       bottom: BorderSide(
@@ -73,13 +72,12 @@ class WebTabNavigation extends StatelessWidget {
                       Text(
                         tab.text,
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: 15,
                           fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                           color: isSelected
                               ? effectiveSelectedColor
                               : effectiveUnselectedColor,
-                          letterSpacing: 0.2,
-                          height: 1.2,
+                          letterSpacing: 0.1,
                         ),
                       ),
                     ],
