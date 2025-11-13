@@ -16,6 +16,7 @@ import '../services/event_service.dart';
 import '../services/extraction_service.dart';
 import '../services/file_processor_service.dart';
 import '../widgets/chat_message_widget.dart';
+import '../widgets/animated_chat_message_widget.dart';
 import '../widgets/chat_input_widget.dart';
 import '../widgets/image_preview_card.dart';
 import '../widgets/document_preview_card.dart';
@@ -1184,11 +1185,18 @@ class _AIChatScreenState extends State<AIChatScreen>
                                 );
                               }
 
+                              // Use animated widget for AI responses
+                              final isLastMessage = index == messages.length - 1;
+                              final isAiMessage = message.role == 'assistant';
+                              final shouldAnimate = isLastMessage && isAiMessage &&
+                                  messages.length > 1; // Only animate if it's a response to user
+
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 12),
-                                child: ChatMessageWidget(
+                                child: AnimatedChatMessageWidget(
                                   key: ValueKey('msg-$index'),
                                   message: message,
+                                  showTypingAnimation: shouldAnimate,
                                   onLinkTap: (linkText) async {
                                     if (linkText == 'Check Pending' || linkText == '📋 View in Pending') {
                                       // Clear conversation and navigate to Pending tab

@@ -1415,11 +1415,11 @@ async function handleStaffGroqRequest(
     return res.status(500).json({ message: 'Groq API key not configured on server' });
   }
 
-  // TEMPORARY: Force GPT-OSS only (skip Llama)
-  const groqModel = 'openai/gpt-oss-20b';
-  const isReasoningModel = true;
+  // Use Llama instant model for better performance and cost
+  const groqModel = model || 'llama-3.1-8b-instant';  // Fast Groq text model (as it was before GPT-OSS)
+  const isReasoningModel = false;  // Llama doesn't use reasoning format
 
-  console.log(`[Groq] Staff FORCING GPT-OSS model: ${groqModel} (Llama fallback disabled)`);
+  console.log(`[Groq] Staff using Llama model: ${groqModel}`);
 
   // Optimize prompt structure for caching: static content first (cached), dynamic last
   const dateContext = getFullSystemContext(timezone);
@@ -1548,8 +1548,8 @@ How many events to show:
         // Store error
         lastError = { status: response.status, data: response.data };
 
-        // TEMPORARY: Llama fallback disabled - fail immediately with GPT-OSS errors
-        console.log('[Groq] GPT-OSS failed, NO FALLBACK (Llama fallback temporarily disabled)');
+        // Llama model error - return error details
+        console.log('[Groq] Llama model error:', response.status);
 
         return res.status(response.status).json({
           message: `Groq API error: ${response.statusText}`,
