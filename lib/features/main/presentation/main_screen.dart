@@ -8,6 +8,7 @@ import '../../../services/terminology_provider.dart';
 // ===== END HOME DASHBOARD IMPORT =====
 import '../../extraction/presentation/extraction_screen.dart';
 import '../../chat/presentation/conversations_screen.dart';
+import '../../users/presentation/pages/settings_page.dart';
 
 class MainScreen extends StatefulWidget {
   final int initialIndex;
@@ -46,14 +47,17 @@ class _MainScreenState extends State<MainScreen>
     // const HomeScreen(), // Home (index 0)
     // const ExtractionScreen(
     //   initialScreenIndex: 0,
+    //   hideNavigationRail: true,
     // ), // Create tab (index 1)
     // ===== END DASHBOARDS =====
     const ExtractionScreen(
       initialScreenIndex: 1,
+      hideNavigationRail: true,
     ), // Jobs/Events tab (now index 0)
     const ConversationsScreen(), // Chat screen (now index 1)
     const ExtractionScreen(
       initialScreenIndex: 4,
+      hideNavigationRail: true,
     ), // Catalog screen (now index 2)
   ];
 
@@ -409,6 +413,13 @@ class _MainScreenState extends State<MainScreen>
           setState(() {
             _selectedIndex = index;
           });
+        } else if (index == -1) {
+          // Navigate to Settings
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => const SettingsPage(),
+            ),
+          );
         }
       },
       behavior: HitTestBehavior.opaque,

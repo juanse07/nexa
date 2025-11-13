@@ -69,6 +69,7 @@ class ExtractionScreen extends StatefulWidget {
   final int initialScreenIndex; // For main screen tabs (Post a Job=0, Events=1, etc.)
   final int initialEventsTabIndex; // For Events sub-tabs (Pending=0, Upcoming=1, Past=2)
   final ScrollController? scrollController; // Optional scroll controller for syncing with main screen
+  final bool hideNavigationRail; // Hide navigation rail when used inside MainScreen
 
   const ExtractionScreen({
     super.key,
@@ -76,6 +77,7 @@ class ExtractionScreen extends StatefulWidget {
     this.initialScreenIndex = 0,
     this.initialEventsTabIndex = 0,
     this.scrollController,
+    this.hideNavigationRail = false,
   });
 
   @override
@@ -2141,8 +2143,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       backgroundColor: const Color(0xFFF8FAFC),
       body: Row(
         children: [
-          // Navigation Rail
-          _buildNavigationRail(context),
+          // Navigation Rail - hide when used inside MainScreen
+          if (!widget.hideNavigationRail)
+            _buildNavigationRail(context),
           // Content
           Expanded(
             child: ResponsiveContainer(
