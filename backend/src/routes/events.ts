@@ -1399,18 +1399,25 @@ router.get('/events', requireAuth, async (req, res) => {
     let managerId: mongoose.Types.ObjectId | undefined;
 
     if (authUser?.provider && authUser.sub) {
+      console.log('[GET /events] Looking for manager with provider:', authUser.provider, 'subject:', authUser.sub);
       manager = await ManagerModel.findOne({
         provider: authUser.provider,
         subject: authUser.sub,
       });
+      console.log('[GET /events] Manager found (direct lookup):', manager ? `Yes (ID: ${manager._id})` : 'No');
 
       if (!manager && !explicitAudienceKey) {
+        console.log('[GET /events] Trying resolveManagerForRequest fallback');
         manager = await resolveManagerForRequest(req as any);
+        console.log('[GET /events] Manager found (fallback):', manager ? `Yes (ID: ${manager._id})` : 'No');
       }
 
       if (manager && !explicitAudienceKey) {
         managerScope = true;
         managerId = manager._id as mongoose.Types.ObjectId;
+        console.log('[GET /events] Using MANAGER scope with ID:', managerId);
+      } else {
+        console.log('[GET /events] Using STAFF scope for userKey:', audienceKey);
       }
     }
 
