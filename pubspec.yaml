@@ -178,5 +178,5 @@ flutter_launcher_icons:
   # see https://flutter.dev/to/font-from-package
 
 # Dependency overrides to fix version conflicts
-# dependency_overrides:
-#   record_platform_interface: 1.2.0  # Compatible version without startStream requirement
+dependency_overrides:
+  record_platform_interface: 1.2.0  # Compatible version without startStream requirement
