@@ -398,7 +398,7 @@ const chatMessageSchema = z.object({
 const AI_TOOLS = [
   {
     name: 'search_addresses',
-    description: 'Look up venue addresses from PAST events already in your database. ONLY use this to find venues from previous shifts/events you already worked. If the user is asking about a new venue or address you don\'t recognize, use search_venue instead.',
+    description: 'HYBRID venue/address search - your PRIMARY tool for finding any venue or address. First searches past events in your database, then automatically falls back to Google Places API if nothing found. Use this for any address lookup request.',
     parameters: {
       type: 'object',
       properties: {
@@ -408,7 +408,7 @@ const AI_TOOLS = [
         },
         client_name: {
           type: ['string', 'null'],
-          description: 'Optional: Filter results by client name'
+          description: 'Optional: Filter results by client name (only applies to database search)'
         }
       },
       required: ['query']
@@ -596,13 +596,13 @@ const AI_TOOLS = [
   },
   {
     name: 'search_venue',
-    description: 'Search for ANY venue address using Google Places API. Use this as your PRIMARY tool when users ask for venue addresses, locations, or want to find places. Searches ALL real-world venues (restaurants, hotels, event centers, etc.) and returns full addresses. Use search_addresses ONLY if this fails and you need to check past events.',
+    description: 'Direct Google Places API search - use ONLY when you need location-specific searches or want to browse venue types (e.g., "hotels in Boulder", "ballrooms", "conference centers"). For simple address lookups, use search_addresses instead (it includes Google Places as fallback).',
     parameters: {
       type: 'object',
       properties: {
         query: {
           type: 'string',
-          description: 'Venue search query - venue name, business name, or place type (e.g., "Toyota Arapahoe", "The Ritz", "ballroom", "conference center")'
+          description: 'Venue search query - venue name, business name, or place type (e.g., "ballroom", "conference center", "hotels")'
         },
         location: {
           type: ['string', 'null'],
@@ -653,7 +653,43 @@ async function executeFunctionCall(
           .limit(20)
           .lean();
 
+        // HYBRID SEARCH: If no database results, fallback to Google Places API
         if (events.length === 0) {
+          console.log(`[search_addresses] No database results for "${query}", falling back to Google Places API`);
+
+          try {
+            const googleMapsKey = process.env.GOOGLE_MAPS_API_KEY;
+
+            if (!googleMapsKey) {
+              return `No addresses found in your past events for "${query}"${client_name ? ` for client ${client_name}` : ''}. (Google Places search unavailable - API key not configured)`;
+            }
+
+            // Use Places Autocomplete API as fallback
+            const params = new URLSearchParams({
+              input: query,
+              key: googleMapsKey,
+              location: '39.7392,-104.9903', // Default: Denver, CO
+              radius: '50000', // 50km radius
+              region: 'us',
+              components: 'country:us'
+            });
+
+            const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?${params.toString()}`;
+            const response = await axios.get(url);
+
+            if (response.data.status === 'OK' && response.data.predictions && response.data.predictions.length > 0) {
+              const venues = response.data.predictions.slice(0, 5);
+              const results = venues.map((venue: any) =>
+                `${venue.structured_formatting?.main_text || venue.description} - ${venue.description}`
+              ).join('\n');
+
+              return `No matches in your past events, but I found these venues via Google Places:\n${results}`;
+            }
+          } catch (error: any) {
+            console.error('[search_addresses] Google Places fallback error:', error);
+            // Continue to return no results message below
+          }
+
           return `No addresses found matching "${query}"${client_name ? ` for client ${client_name}` : ''}`;
         }
 
@@ -661,7 +697,7 @@ async function executeFunctionCall(
           `${e.venue_name || 'Unknown'} - ${e.venue_address || 'No address'}, ${e.city || 'Unknown city'} (Event: ${e.event_name}, Client: ${e.client_name}, Date: ${e.date})`
         ).join('\n');
 
-        return `Found ${events.length} address(es):\n${results}`;
+        return `Found ${events.length} address(es) from your past events:\n${results}`;
       }
 
       case 'search_venue': {

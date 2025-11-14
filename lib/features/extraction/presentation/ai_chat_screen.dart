@@ -26,6 +26,7 @@ import '../widgets/document_preview_card.dart';
 import '../widgets/event_confirmation_card.dart';
 import '../widgets/batch_event_dialog.dart';
 import 'extraction_screen.dart';
+import '../../main/presentation/main_screen.dart';
 import 'dart:async';
 
 class AIChatScreen extends StatefulWidget {
@@ -531,7 +532,15 @@ class _AIChatScreenState extends State<AIChatScreen>
                   automaticallyImplyLeading: false,
                   leading: IconButton(
                     icon: const Icon(Icons.arrow_back, color: Color(0xFF1F2937)),
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: () {
+                      // Navigate back to Jobs section (Pending tab)
+                      Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute<void>(
+                          builder: (context) => const MainScreen(initialIndex: 0),
+                        ),
+                        (route) => false,
+                      );
+                    },
                   ),
                   title: const Text(
                     'AI Chat',
