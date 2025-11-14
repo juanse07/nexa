@@ -1294,47 +1294,56 @@ async function executePerformanceCurrentMonth(
   userKey: string
 ): Promise<{ success: boolean; message: string; data?: any }> {
   try {
-    console.log(`[executePerformanceCurrentMonth] Getting current month stats for userId ${userId}`);
+    console.log(`[executePerformanceCurrentMonth] Getting current month stats for userKey ${userKey}`);
 
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
-    // Format dates as ISO strings for MongoDB comparison (events store date as string)
+    // Format dates as ISO strings for MongoDB comparison (shifts store date as string)
     const startDateStr = startOfMonth.toISOString().split('T')[0];
     const endDateStr = endOfMonth.toISOString().split('T')[0];
 
-    // Query events for this month where user is assigned
+    console.log(`[executePerformanceCurrentMonth] Date range: ${startDateStr} to ${endDateStr}`);
+    console.log(`[executePerformanceCurrentMonth] Query: { 'accepted_staff.userKey': '${userKey}', date: { $gte: '${startDateStr}', $lte: '${endDateStr}' } }`);
+
+    // Query shifts for this month where user is in accepted_staff
     const events = await EventModel.find({
-      'assignments.memberId': userId,
+      'accepted_staff.userKey': userKey,
+      status: 'completed', // Only count completed shifts for performance
       date: { $gte: startDateStr, $lte: endDateStr }
     }).lean();
 
-    // Analyze by position
+    console.log(`[executePerformanceCurrentMonth] Found ${events.length} completed shifts`);
+
+    // Analyze by role/position
     const positionStats: Record<string, { count: number; hours: number; earnings: number }> = {};
     let totalHours = 0;
     let totalEarnings = 0;
     let totalEvents = 0;
 
     for (const event of events) {
-      const assignments = (event as any).assignments || [];
-      const userAssignment = assignments.find((a: any) => a.memberId?.toString() === userId);
+      const acceptedStaff = (event as any).accepted_staff || [];
+      const userInShift = acceptedStaff.find((staff: any) => staff.userKey === userKey);
 
-      if (userAssignment && userAssignment.status === 'accepted') {
-        const position = userAssignment.position || 'Staff';
-        const wage = userAssignment.wage || 0;
+      if (userInShift && userInShift.response === 'accepted') {
+        const position = userInShift.role || 'Staff';
 
-        // Calculate hours (assuming events have startTime and endTime)
+        // Calculate hours from start_time and end_time
         let hours = 0;
-        if ((event as any).startTime && (event as any).endTime) {
-          const start = new Date(`${(event as any).date}T${(event as any).startTime}`);
-          const end = new Date(`${(event as any).date}T${(event as any).endTime}`);
+        if ((event as any).start_time && (event as any).end_time) {
+          const start = new Date(`1970-01-01T${(event as any).start_time}`);
+          const end = new Date(`1970-01-01T${(event as any).end_time}`);
           hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-          if (hours < 0) hours += 24; // Handle overnight events
+          if (hours < 0) hours += 24; // Handle overnight shifts
         } else {
           hours = 6; // Default assumption if times not specified
         }
 
+        // Extract pay rate from roles array if available
+        const roles = (event as any).roles || [];
+        const roleInfo = roles.find((r: any) => r.role_name === position);
+        const wage = roleInfo?.pay_rate_info?.amount || 0;
         const earnings = wage * hours;
 
         if (!positionStats[position]) {
@@ -1389,47 +1398,65 @@ async function executePerformanceLastMonth(
   userKey: string
 ): Promise<{ success: boolean; message: string; data?: any }> {
   try {
-    console.log(`[executePerformanceLastMonth] Getting last month stats for userId ${userId}`);
+    console.log(`[executePerformanceLastMonth] Getting last month stats for userKey ${userKey}`);
 
     const now = new Date();
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
 
-    // Format dates as ISO strings for MongoDB comparison (events store date as string)
+    // Format dates as ISO strings for MongoDB comparison (shifts store date as string)
     const startDateStr = startOfLastMonth.toISOString().split('T')[0];
     const endDateStr = endOfLastMonth.toISOString().split('T')[0];
 
-    // Query events for last month where user is assigned
+    console.log(`[executePerformanceLastMonth] Date range: ${startDateStr} to ${endDateStr}`);
+    console.log(`[executePerformanceLastMonth] Query: { 'accepted_staff.userKey': '${userKey}', date: { $gte: '${startDateStr}', $lte: '${endDateStr}' } }`);
+
+    // Query shifts for last month where user is in accepted_staff
     const events = await EventModel.find({
-      'assignments.memberId': userId,
+      'accepted_staff.userKey': userKey,
+      status: 'completed', // Only count completed shifts for performance
       date: { $gte: startDateStr, $lte: endDateStr }
     }).lean();
 
-    // Analyze by position (same logic as current month)
+    console.log(`[executePerformanceLastMonth] Found ${events.length} completed shifts`);
+
+    // Log first few shift dates for debugging
+    if (events.length > 0) {
+      console.log(`[executePerformanceLastMonth] Sample shift dates:`, events.slice(0, 3).map((e: any) => e.date));
+    }
+
+    // Also check all user shifts regardless of date to see what dates exist
+    const allUserShifts = await EventModel.find({ 'accepted_staff.userKey': userKey }).limit(5).lean();
+    console.log(`[executePerformanceLastMonth] Sample of all user shift dates (for comparison):`, allUserShifts.map((e: any) => e.date));
+
+    // Analyze by role/position
     const positionStats: Record<string, { count: number; hours: number; earnings: number }> = {};
     let totalHours = 0;
     let totalEarnings = 0;
     let totalEvents = 0;
 
     for (const event of events) {
-      const assignments = (event as any).assignments || [];
-      const userAssignment = assignments.find((a: any) => a.memberId?.toString() === userId);
+      const acceptedStaff = (event as any).accepted_staff || [];
+      const userInShift = acceptedStaff.find((staff: any) => staff.userKey === userKey);
 
-      if (userAssignment && userAssignment.status === 'accepted') {
-        const position = userAssignment.position || 'Staff';
-        const wage = userAssignment.wage || 0;
+      if (userInShift && userInShift.response === 'accepted') {
+        const position = userInShift.role || 'Staff';
 
-        // Calculate hours
+        // Calculate hours from start_time and end_time
         let hours = 0;
-        if ((event as any).startTime && (event as any).endTime) {
-          const start = new Date(`${(event as any).date}T${(event as any).startTime}`);
-          const end = new Date(`${(event as any).date}T${(event as any).endTime}`);
+        if ((event as any).start_time && (event as any).end_time) {
+          const start = new Date(`1970-01-01T${(event as any).start_time}`);
+          const end = new Date(`1970-01-01T${(event as any).end_time}`);
           hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-          if (hours < 0) hours += 24;
+          if (hours < 0) hours += 24; // Handle overnight shifts
         } else {
-          hours = 6;
+          hours = 6; // Default assumption if times not specified
         }
 
+        // Extract pay rate from roles array if available
+        const roles = (event as any).roles || [];
+        const roleInfo = roles.find((r: any) => r.role_name === position);
+        const wage = roleInfo?.pay_rate_info?.amount || 0;
         const earnings = wage * hours;
 
         if (!positionStats[position]) {
@@ -1483,22 +1510,27 @@ async function executePerformanceLastYear(
   userKey: string
 ): Promise<{ success: boolean; message: string; data?: any }> {
   try {
-    console.log(`[executePerformanceLastYear] Getting last 12 months stats for userId ${userId}`);
+    console.log(`[executePerformanceLastYear] Getting last 12 months stats for userKey ${userKey}`);
 
     const now = new Date();
     const startOfYear = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
 
-    // Format dates as ISO strings for MongoDB comparison (events store date as string)
+    // Format dates as ISO strings for MongoDB comparison (shifts store date as string)
     const startDateStr = startOfYear.toISOString().split('T')[0];
     const endDateStr = now.toISOString().split('T')[0];
 
-    // Query events for last 12 months where user is assigned
+    console.log(`[executePerformanceLastYear] Date range: ${startDateStr} to ${endDateStr}`);
+
+    // Query shifts for last 12 months where user is in accepted_staff
     const events = await EventModel.find({
-      'assignments.memberId': userId,
+      'accepted_staff.userKey': userKey,
+      status: 'completed', // Only count completed shifts for performance
       date: { $gte: startDateStr, $lte: endDateStr }
     }).lean();
 
-    // Analyze by position and by month
+    console.log(`[executePerformanceLastYear] Found ${events.length} completed shifts`);
+
+    // Analyze by role/position and by month
     const positionStats: Record<string, { count: number; hours: number; earnings: number }> = {};
     const monthlyStats: Record<string, { events: number; hours: number; earnings: number }> = {};
     let totalHours = 0;
@@ -1506,26 +1538,29 @@ async function executePerformanceLastYear(
     let totalEvents = 0;
 
     for (const event of events) {
-      const assignments = (event as any).assignments || [];
-      const userAssignment = assignments.find((a: any) => a.memberId?.toString() === userId);
+      const acceptedStaff = (event as any).accepted_staff || [];
+      const userInShift = acceptedStaff.find((staff: any) => staff.userKey === userKey);
 
-      if (userAssignment && userAssignment.status === 'accepted') {
-        const position = userAssignment.position || 'Staff';
-        const wage = userAssignment.wage || 0;
+      if (userInShift && userInShift.response === 'accepted') {
+        const position = userInShift.role || 'Staff';
         const eventDate = new Date((event as any).date);
         const monthKey = `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, '0')}`;
 
-        // Calculate hours
+        // Calculate hours from start_time and end_time
         let hours = 0;
-        if ((event as any).startTime && (event as any).endTime) {
-          const start = new Date(`${(event as any).date}T${(event as any).startTime}`);
-          const end = new Date(`${(event as any).date}T${(event as any).endTime}`);
+        if ((event as any).start_time && (event as any).end_time) {
+          const start = new Date(`1970-01-01T${(event as any).start_time}`);
+          const end = new Date(`1970-01-01T${(event as any).end_time}`);
           hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-          if (hours < 0) hours += 24;
+          if (hours < 0) hours += 24; // Handle overnight shifts
         } else {
-          hours = 6;
+          hours = 6; // Default assumption if times not specified
         }
 
+        // Extract pay rate from roles array if available
+        const roles = (event as any).roles || [];
+        const roleInfo = roles.find((r: any) => r.role_name === position);
+        const wage = roleInfo?.pay_rate_info?.amount || 0;
         const earnings = wage * hours;
 
         // Update position stats
