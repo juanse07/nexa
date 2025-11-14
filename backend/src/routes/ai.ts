@@ -593,6 +593,28 @@ const AI_TOOLS = [
       },
       required: ['date', 'call_time', 'end_time', 'client_name']
     }
+  },
+  {
+    name: 'search_venue',
+    description: 'Search for event venues using Google Places API. Use this when users ask about finding venues, discovering new locations, or need venue suggestions. This searches ALL venues via Google Places, not just venues from past events. Returns venue names and full addresses.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Venue search query - venue type, name, or description (e.g., "ballroom", "hotel", "wedding venue", "conference center", "Red Rocks Amphitheatre")'
+        },
+        location: {
+          type: ['string', 'null'],
+          description: 'Optional city or area to search in (e.g., "Denver", "Boulder", "Colorado"). If not provided, uses default Denver area.'
+        },
+        limit: {
+          type: ['number', 'null'],
+          description: 'Maximum number of results to return (default: 5, max: 10)'
+        }
+      },
+      required: ['query']
+    }
   }
 ];
 
@@ -640,6 +662,57 @@ async function executeFunctionCall(
         ).join('\n');
 
         return `Found ${events.length} address(es):\n${results}`;
+      }
+
+      case 'search_venue': {
+        const { query, location, limit = 5 } = functionArgs;
+
+        try {
+          const googleMapsKey = process.env.GOOGLE_MAPS_API_KEY;
+
+          if (!googleMapsKey) {
+            return 'Google Maps API key not configured. Cannot search venues.';
+          }
+
+          // Build search query - combine venue query with location if provided
+          const searchQuery = location
+            ? `${query} in ${location}`
+            : query;
+
+          // Use Places Autocomplete API for venue search
+          const params = new URLSearchParams({
+            input: searchQuery,
+            key: googleMapsKey,
+            location: '39.7392,-104.9903', // Default: Denver, CO
+            radius: '50000', // 50km radius
+            region: 'us',
+            components: 'country:us'
+          });
+
+          const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?${params.toString()}`;
+          const response = await axios.get(url);
+
+          if (response.data.status !== 'OK' && response.data.status !== 'ZERO_RESULTS') {
+            console.error('[search_venue] API error:', response.data.status, response.data.error_message);
+            return `Failed to search venues: ${response.data.status}${response.data.error_message ? ' - ' + response.data.error_message : ''}`;
+          }
+
+          if (response.data.status === 'ZERO_RESULTS' || !response.data.predictions || response.data.predictions.length === 0) {
+            return `No venues found for "${query}"${location ? ` in ${location}` : ''}`;
+          }
+
+          // Format results - limit to requested number
+          const venues = response.data.predictions.slice(0, Math.min(limit, 10));
+          const results = venues.map((venue: any) =>
+            `${venue.structured_formatting?.main_text || venue.description} - ${venue.description}`
+          ).join('\n');
+
+          return `Found ${venues.length} venue(s):\n${results}`;
+
+        } catch (error: any) {
+          console.error('[search_venue] Error:', error);
+          return `Failed to search venues: ${error.message}`;
+        }
       }
 
       case 'search_shifts': {
