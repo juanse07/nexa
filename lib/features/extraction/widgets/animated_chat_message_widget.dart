@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:intl/intl.dart';
 import 'dart:async';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -96,7 +97,7 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
 
     // Initialize shimmer animation for typing highlight
     _shimmerController = AnimationController(
-      duration: const Duration(milliseconds: 1500),
+      duration: Duration(milliseconds: kIsWeb ? 1000 : 1500), // Faster on web to sync with typing
       vsync: this,
     )..repeat();
     _shimmerAnimation = Tween<double>(begin: -1.0, end: 2.0).animate(
@@ -135,8 +136,9 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
     if (!isUser && widget.showTypingAnimation) {
       _isTyping = true;
 
-      // Show typing indicator for shorter time (FASTER)
-      Future.delayed(Duration(milliseconds: 400 + (widget.message.content.length).clamp(0, 600)), () { // Was 800-2000ms
+      // Show typing indicator for shorter time (FASTER on web)
+      final baseDelay = kIsWeb ? 200 : 400; // Faster base delay on web
+      Future.delayed(Duration(milliseconds: baseDelay + (widget.message.content.length).clamp(0, 600)), () { // Was 800-2000ms
         if (mounted) {
           setState(() {
             _isTyping = false;
@@ -156,7 +158,7 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
 
   void _startTypewriterEffect() {
     final text = widget.message.content;
-    final duration = Duration(milliseconds: 8); // Ultra fast - 125 chars/sec
+    final duration = Duration(milliseconds: kIsWeb ? 4 : 8); // 2x faster on web to compensate for browser overhead
 
     _typewriterTimer = Timer.periodic(duration, (timer) {
       if (!mounted) {
