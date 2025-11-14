@@ -473,6 +473,39 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
         return AnimatedBuilder(
           animation: _shimmerAnimation,
           builder: (context, child) {
+            // Use simpler, web-compatible shimmer on web browsers
+            if (kIsWeb) {
+              return ShaderMask(
+                blendMode: BlendMode.srcIn, // Web-compatible blend mode
+                shaderCallback: (bounds) {
+                  return LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    stops: [
+                      (_shimmerAnimation.value - 0.5).clamp(0.0, 1.0),
+                      (_shimmerAnimation.value - 0.3).clamp(0.0, 1.0),
+                      (_shimmerAnimation.value - 0.1).clamp(0.0, 1.0),
+                      _shimmerAnimation.value.clamp(0.0, 1.0),
+                      (_shimmerAnimation.value + 0.1).clamp(0.0, 1.0),
+                      (_shimmerAnimation.value + 0.3).clamp(0.0, 1.0),
+                      (_shimmerAnimation.value + 0.5).clamp(0.0, 1.0),
+                    ],
+                    colors: const [
+                      Color(0xFF0F172A), // Dark base
+                      Color(0xFF6366F1), // Indigo
+                      Color(0xFF8B5CF6), // Purple
+                      Color(0xFFEC4899), // Pink highlight peak
+                      Color(0xFF8B5CF6), // Purple
+                      Color(0xFF6366F1), // Indigo
+                      Color(0xFF0F172A), // Dark base
+                    ],
+                  ).createShader(bounds);
+                },
+                child: child,
+              );
+            }
+
+            // Mobile: Use fancy multi-layer shimmer with glow
             return Stack(
               children: [
                 // Glow layer behind text
