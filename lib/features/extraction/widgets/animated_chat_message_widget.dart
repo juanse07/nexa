@@ -11,6 +11,7 @@ class AnimatedChatMessageWidget extends StatefulWidget {
   final String? userProfilePicture;
   final void Function(String)? onLinkTap;
   final bool showTypingAnimation;
+  final VoidCallback? onTypingTick; // Callback when typing animation updates
 
   const AnimatedChatMessageWidget({
     super.key,
@@ -18,6 +19,7 @@ class AnimatedChatMessageWidget extends StatefulWidget {
     this.onLinkTap,
     this.userProfilePicture,
     this.showTypingAnimation = false,
+    this.onTypingTick,
   });
 
   @override
@@ -31,10 +33,12 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
   late AnimationController _slideInController;
   late AnimationController _typewriterController;
   late AnimationController _typingDotsController;
+  late AnimationController _shimmerController;
 
   // Animations
   late Animation<double> _fadeInAnimation;
   late Animation<Offset> _slideInAnimation;
+  late Animation<double> _shimmerAnimation;
 
   // Typewriter effect
   String _displayedText = '';
@@ -43,6 +47,13 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
 
   // Typing indicator
   bool _isTyping = false;
+
+  // Shimmer effect for typing animation
+  bool _showShimmer = false;
+
+  // Track if animation has already played
+  static final Set<String> _animatedMessages = {};
+  bool _hasAnimated = false;
 
   @override
   void initState() {
@@ -83,12 +94,38 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
       vsync: this,
     )..repeat();
 
+    // Initialize shimmer animation for typing highlight
+    _shimmerController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    )..repeat();
+    _shimmerAnimation = Tween<double>(begin: -1.0, end: 2.0).animate(
+      CurvedAnimation(parent: _shimmerController, curve: Curves.linear),
+    );
+
     // Start animations
     _startAnimations();
   }
 
   void _startAnimations() {
     final isUser = widget.message.role == 'user';
+    // Use content hash as stable identifier (timestamp may change on rebuild)
+    final messageId = '${widget.message.role}-${widget.message.content.hashCode}';
+
+    // Check if this message has already been animated
+    if (_animatedMessages.contains(messageId)) {
+      _hasAnimated = true;
+      _displayedText = widget.message.content; // Show full text immediately
+      _fadeInController.value = 1.0; // Skip fade animation
+      _slideInController.value = 1.0; // Skip slide animation
+      return;
+    }
+
+    // Mark as animated AFTER first frame to avoid premature tracking (staff app pattern)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _animatedMessages.add(messageId);
+    });
+    _hasAnimated = true;
 
     // Start fade and slide animations
     _fadeInController.forward();
@@ -103,6 +140,7 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
         if (mounted) {
           setState(() {
             _isTyping = false;
+            _showShimmer = true; // Start shimmer effect
           });
           _startTypewriterEffect();
         }
@@ -118,7 +156,7 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
 
   void _startTypewriterEffect() {
     final text = widget.message.content;
-    final duration = Duration(milliseconds: 30); // Speed of typing
+    final duration = Duration(milliseconds: 8); // Ultra fast - 125 chars/sec
 
     _typewriterTimer = Timer.periodic(duration, (timer) {
       if (!mounted) {
@@ -128,10 +166,16 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
 
       setState(() {
         if (_currentCharIndex < text.length) {
-          _displayedText = text.substring(0, _currentCharIndex + 1);
-          _currentCharIndex++;
+          // Add 2 characters at a time for even faster, smoother effect
+          final charsToAdd = (_currentCharIndex + 2 <= text.length) ? 2 : 1;
+          _displayedText = text.substring(0, _currentCharIndex + charsToAdd);
+          _currentCharIndex += charsToAdd;
+
+          // Notify parent to scroll to bottom
+          widget.onTypingTick?.call();
         } else {
           timer.cancel();
+          _showShimmer = false; // Stop shimmer when done
           _typewriterController.forward();
         }
       });
@@ -144,6 +188,7 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
     _slideInController.dispose();
     _typewriterController.dispose();
     _typingDotsController.dispose();
+    _shimmerController.dispose();
     _typewriterTimer?.cancel();
     super.dispose();
   }
@@ -395,7 +440,7 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
 
     if (match == null) {
       // Use MarkdownBody to render markdown formatting
-      return MarkdownBody(
+      final textWidget = MarkdownBody(
         data: content,
         styleSheet: MarkdownStyleSheet(
           p: TextStyle(
@@ -420,6 +465,79 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
           ),
         ),
       );
+
+      // Apply sophisticated multi-color shimmer with glow during AI typing
+      if (!isUser && _showShimmer) {
+        return AnimatedBuilder(
+          animation: _shimmerAnimation,
+          builder: (context, child) {
+            return Stack(
+              children: [
+                // Glow layer behind text
+                Opacity(
+                  opacity: 0.6,
+                  child: ShaderMask(
+                    blendMode: BlendMode.srcATop,
+                    shaderCallback: (bounds) {
+                      return LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        stops: [
+                          (_shimmerAnimation.value - 0.4).clamp(0.0, 1.0),
+                          (_shimmerAnimation.value - 0.2).clamp(0.0, 1.0),
+                          _shimmerAnimation.value.clamp(0.0, 1.0),
+                          (_shimmerAnimation.value + 0.2).clamp(0.0, 1.0),
+                          (_shimmerAnimation.value + 0.4).clamp(0.0, 1.0),
+                        ],
+                        colors: const [
+                          Color(0xFF0F172A),
+                          Color(0xFF8B5CF6), // Soft violet
+                          Color(0xFFC084FC), // Bright purple
+                          Color(0xFF8B5CF6), // Soft violet
+                          Color(0xFF0F172A),
+                        ],
+                      ).createShader(bounds);
+                    },
+                    child: child,
+                  ),
+                ),
+                // Main text with shimmer
+                ShaderMask(
+                  blendMode: BlendMode.srcATop,
+                  shaderCallback: (bounds) {
+                    return LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      stops: [
+                        (_shimmerAnimation.value - 0.5).clamp(0.0, 1.0),
+                        (_shimmerAnimation.value - 0.3).clamp(0.0, 1.0),
+                        (_shimmerAnimation.value - 0.1).clamp(0.0, 1.0),
+                        _shimmerAnimation.value.clamp(0.0, 1.0),
+                        (_shimmerAnimation.value + 0.1).clamp(0.0, 1.0),
+                        (_shimmerAnimation.value + 0.3).clamp(0.0, 1.0),
+                        (_shimmerAnimation.value + 0.5).clamp(0.0, 1.0),
+                      ],
+                      colors: const [
+                        Color(0xFF0F172A), // Dark base
+                        Color(0xFF6366F1), // Indigo
+                        Color(0xFF8B5CF6), // Purple
+                        Color(0xFFEC4899), // Pink highlight peak
+                        Color(0xFF8B5CF6), // Purple
+                        Color(0xFF6366F1), // Indigo
+                        Color(0xFF0F172A), // Dark base
+                      ],
+                    ).createShader(bounds);
+                  },
+                  child: child,
+                ),
+              ],
+            );
+          },
+          child: textWidget,
+        );
+      }
+
+      return textWidget;
     }
 
     // Handle links (same as original)

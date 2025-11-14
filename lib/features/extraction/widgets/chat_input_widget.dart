@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -23,10 +24,12 @@ class ChatInputWidget extends StatefulWidget {
 
 class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
   final AudioTranscriptionService _audioService = AudioTranscriptionService();
   bool _hasText = false;
   bool _isRecording = false;
   bool _isTranscribing = false;
+  bool _keyboardVisible = false;
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
 
@@ -34,6 +37,7 @@ class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProv
   void initState() {
     super.initState();
     _controller.addListener(_onTextChanged);
+    _focusNode.addListener(_onFocusChanged);
 
     // Setup pulse animation for recording indicator
     _pulseController = AnimationController(
@@ -44,12 +48,22 @@ class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProv
     _pulseAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
+
+    // Auto-focus keyboard on mobile (not web)
+    if (!kIsWeb) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _focusNode.requestFocus();
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
     _controller.removeListener(_onTextChanged);
     _controller.dispose();
+    _focusNode.dispose();
     _pulseController.dispose();
     _audioService.dispose();
     super.dispose();
@@ -59,6 +73,16 @@ class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProv
     setState(() {
       _hasText = _controller.text.trim().isNotEmpty;
     });
+  }
+
+  void _onFocusChanged() {
+    setState(() {
+      _keyboardVisible = _focusNode.hasFocus;
+    });
+  }
+
+  void _hideKeyboard() {
+    _focusNode.unfocus();
   }
 
   void _sendMessage() {
@@ -239,6 +263,7 @@ class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProv
                 ),
                 child: TextField(
                   controller: _controller,
+                  focusNode: _focusNode,
                   enabled: !widget.isLoading && !_isRecording && !_isTranscribing,
                   maxLines: null,
                   textCapitalization: TextCapitalization.sentences,
@@ -279,8 +304,48 @@ class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProv
               ),
             ),
             const SizedBox(width: 4),
+            // Keyboard hide button (when keyboard is visible)
+            if (_keyboardVisible && !kIsWeb)
+              Container(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [
+                      Color(0xFFE0E7FF),  // Light indigo
+                      Color(0xFFC7D2FE),  // Medium indigo
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(18),
+                    onTap: _hideKeyboard,
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.keyboard_hide,
+                        color: Color(0xFF4F46E5),
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            if (_keyboardVisible && !kIsWeb) const SizedBox(width: 4),
             // Microphone button - tap to toggle recording
-            if (!_hasText)
+            if (!_hasText && !_keyboardVisible)
               GestureDetector(
                 onTap: _toggleRecording,
                 child: AnimatedBuilder(
@@ -362,7 +427,7 @@ class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProv
                   },
                 ),
               ),
-            if (!_hasText) const SizedBox(width: 4),
+            if (!_hasText && !_keyboardVisible) const SizedBox(width: 4),
             // Send button
             Container(
               decoration: BoxDecoration(

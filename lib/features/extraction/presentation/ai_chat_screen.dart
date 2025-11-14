@@ -11,10 +11,13 @@ import 'package:provider/provider.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 import '../../../services/terminology_provider.dart';
+import '../../../shared/services/error_display_service.dart';
+import '../providers/chat_screen_state_provider.dart';
 import '../services/chat_event_service.dart';
 import '../services/event_service.dart';
 import '../services/extraction_service.dart';
 import '../services/file_processor_service.dart';
+import '../utils/event_data_formatter.dart';
 import '../widgets/chat_message_widget.dart';
 import '../widgets/animated_chat_message_widget.dart';
 import '../widgets/chat_input_widget.dart';
@@ -39,39 +42,23 @@ class AIChatScreen extends StatefulWidget {
 
 class _AIChatScreenState extends State<AIChatScreen>
     with TickerProviderStateMixin {
-  final ChatEventService _aiChatService = ChatEventService();
+  // Services (still needed for non-provider functionality)
   final EventService _eventService = EventService();
-  final ExtractionService _extractionService = ExtractionService();
   final ImagePicker _imagePicker = ImagePicker();
-  final ScrollController _scrollController = ScrollController();
-  bool _isLoading = false;
 
-  // Confirmation flow state
-  bool _showingConfirmation = false;
-  Timer? _confirmationTimer;
-  Timer? _resetTimer;
-  Timer? _inactivityTimer;
-  int _confirmationSeconds = 90; // Changed from 30s to 90s (1.5 minutes)
+  // Provider (replaces 15+ state variables)
+  late ChatScreenStateProvider _stateProvider;
 
-  // Scroll animation state
+  // Animation controllers (no longer used - kept for compatibility)
   late AnimationController _inputAnimationController;
   late Animation<Offset> _inputSlideAnimation;
-  bool _isInputVisible = true;
-  Timer? _autoShowTimer;
-
-  // Image handling state
-  final List<File> _selectedImages = [];
-  final Map<File, ExtractionStatus> _imageStatuses = {};
-  final Map<File, String?> _imageErrors = {};
-
-  // Document handling state
-  final List<File> _selectedDocuments = [];
-  final Map<File, ExtractionStatus> _documentStatuses = {};
-  final Map<File, String?> _documentErrors = {};
 
   @override
   void initState() {
     super.initState();
+
+    // Initialize provider
+    _stateProvider = ChatScreenStateProvider();
 
     // Initialize animation controllers
     _inputAnimationController = AnimationController(
@@ -88,50 +75,61 @@ class _AIChatScreenState extends State<AIChatScreen>
       reverseCurve: Curves.easeInCubic,
     ));
 
+    // Scroll behavior disabled for fixed input UX
+    // _scrollBehavior initialization removed
+
     // Start new conversation if requested (e.g., from chat section)
     if (widget.startNewConversation) {
-      _aiChatService.startNewConversation();
+      _stateProvider.startNewConversation();
       _loadGreeting();
-    } else if (_aiChatService.conversationHistory.isEmpty) {
+    } else if (_stateProvider.conversationHistory.isEmpty) {
       // Load greeting if conversation is empty
       _loadGreeting();
     }
+
+    // Listen to provider changes
+    _stateProvider.addListener(_onProviderStateChanged);
+  }
+
+  /// Handle provider state changes
+  void _onProviderStateChanged() {
+    setState(() {
+      // Rebuild when provider state changes
+    });
   }
 
   @override
   void dispose() {
-    _scrollController.dispose();
+    _stateProvider.removeListener(_onProviderStateChanged);
+    _stateProvider.dispose(); // Disposes timers, file manager, scroll controller
     _inputAnimationController.dispose();
-    _confirmationTimer?.cancel();
-    _resetTimer?.cancel();
-    _inactivityTimer?.cancel();
-    _autoShowTimer?.cancel();
     super.dispose();
   }
 
   Future<void> _loadGreeting() async {
-    await _aiChatService.getGreeting();
-    setState(() {
-      // Greeting is already added by getGreeting()
-    });
+    await _stateProvider.loadGreeting();
+    // Provider automatically notifies listeners
   }
 
   void _scrollToBottom({bool animated = false}) {
-    if (!_scrollController.hasClients) return;
+    if (!_stateProvider.scrollController.hasClients) return;
 
-    if (animated) {
-      Future.delayed(const Duration(milliseconds: 100), () {
-        if (_scrollController.hasClients) {
-          _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
-          );
-        }
-      });
-    } else {
-      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-    }
+    // For CustomScrollView, we need to scroll to max extent (bottom)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_stateProvider.scrollController.hasClients) return;
+
+      final maxScroll = _stateProvider.scrollController.position.maxScrollExtent;
+
+      if (animated) {
+        _stateProvider.scrollController.animateTo(
+          maxScroll,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      } else {
+        _stateProvider.scrollController.jumpTo(maxScroll);
+      }
+    });
   }
 
   /// Show bottom sheet to choose camera, gallery, or documents
@@ -196,12 +194,7 @@ class _AIChatScreenState extends State<AIChatScreen>
     } catch (e) {
       print('[AIChatScreen] Error picking image from camera: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to capture photo: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        ErrorDisplayService.showError(context, 'Failed to capture photo: $e');
       }
     }
   }
@@ -222,12 +215,7 @@ class _AIChatScreenState extends State<AIChatScreen>
     } catch (e) {
       print('[AIChatScreen] Error picking images from gallery: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to select images: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        ErrorDisplayService.showError(context, 'Failed to select images: $e');
       }
     }
   }
@@ -253,243 +241,67 @@ class _AIChatScreenState extends State<AIChatScreen>
     } catch (e) {
       print('[AIChatScreen] Error picking document: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to select document: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        ErrorDisplayService.showError(context, 'Failed to select document: $e');
       }
     }
   }
 
   /// Process an image file: extract shift data using Vision API, present in chat for review
   Future<void> _processImage(File imageFile) async {
-    // Add image to list with pending status
-    setState(() {
-      _selectedImages.add(imageFile);
-      _imageStatuses[imageFile] = ExtractionStatus.pending;
-    });
-
-    // Start extraction
-    setState(() {
-      _imageStatuses[imageFile] = ExtractionStatus.extracting;
-    });
-
     try {
-      // Read image bytes and convert to base64
-      final bytes = await imageFile.readAsBytes();
-      final base64String = base64Encode(bytes);
-      final processedInput = '[[IMAGE_BASE64]]:$base64String';
+      // Process through provider (handles all state management)
+      final structuredData = await _stateProvider.processImage(imageFile);
 
-      // Call extraction API (uses Groq: Llama 4 Scout for images, Llama 3.1 for text)
-      final structuredData = await _extractionService.extractStructuredData(
-        input: processedInput,
-      );
-
-      // Mark as completed
-      setState(() {
-        _imageStatuses[imageFile] = ExtractionStatus.completed;
-      });
-
-      // Auto-remove image from list after successful extraction
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (mounted) {
-          setState(() {
-            _selectedImages.remove(imageFile);
-            _imageStatuses.remove(imageFile);
-            _imageErrors.remove(imageFile);
-          });
-        }
-      });
-
-      // Present extracted data in AI chat for review with Save button
-      final formattedText = _formatExtractedData(structuredData);
-      await _aiChatService.sendMessage(
-        'I extracted this information from your image:\n\n$formattedText'
-      );
-
-      // Store the extracted data in the chat service for the save action
-      _aiChatService.updateEventData(structuredData);
-
-      setState(() {});
+      if (structuredData != null) {
+        // Present extracted data in AI chat for review
+        final formattedText = EventDataFormatter.formatExtractedData(structuredData);
+        await _stateProvider.sendMessage(
+          'I extracted this information from your image:\n\n$formattedText'
+        );
+      }
     } catch (e) {
       print('[AIChatScreen] Error extracting from image: $e');
-      setState(() {
-        _imageStatuses[imageFile] = ExtractionStatus.failed;
-        _imageErrors[imageFile] = e.toString();
-      });
-
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to extract from image: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        ErrorDisplayService.showError(context, 'Failed to extract from image: $e');
       }
     }
   }
 
   /// Process a PDF document: extract text, get structured data, present in chat for review
   Future<void> _processDocument(File documentFile) async {
-    // Add document to list with pending status
-    setState(() {
-      _selectedDocuments.add(documentFile);
-      _documentStatuses[documentFile] = ExtractionStatus.pending;
-    });
-
-    // Start extraction
-    setState(() {
-      _documentStatuses[documentFile] = ExtractionStatus.extracting;
-    });
-
     try {
-      // Read PDF bytes
-      final bytes = await documentFile.readAsBytes();
+      // Process through provider (handles all state management and PDF extraction)
+      final structuredData = await _stateProvider.processDocument(documentFile);
 
-      // Extract text from PDF using Syncfusion
-      final extractedText = await _extractTextFromPdf(bytes);
-
-      if (extractedText.trim().isEmpty) {
-        throw Exception('No text found in PDF. The PDF might be scanned or image-based.');
-      }
-
-      // Send extracted text to extraction API to get structured shift data
-      final structuredData = await _extractionService.extractStructuredData(
-        input: extractedText,
-      );
-
-      // Mark as completed
-      setState(() {
-        _documentStatuses[documentFile] = ExtractionStatus.completed;
-      });
-
-      // Auto-remove document from list after successful extraction
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (mounted) {
-          setState(() {
-            _selectedDocuments.remove(documentFile);
-            _documentStatuses.remove(documentFile);
-            _documentErrors.remove(documentFile);
-          });
-        }
-      });
-
-      // Present extracted data in AI chat for review with Save button
-      final formattedText = _formatExtractedData(structuredData);
-      await _aiChatService.sendMessage(
-        'I extracted this information from your PDF:\n\n$formattedText'
-      );
-
-      // Store the extracted data in the chat service for the save action
-      _aiChatService.updateEventData(structuredData);
-
-      setState(() {});
-    } catch (e) {
-      print('[AIChatScreen] Error extracting from document: $e');
-      setState(() {
-        _documentStatuses[documentFile] = ExtractionStatus.failed;
-        _documentErrors[documentFile] = e.toString();
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to extract from PDF: $e'),
-            backgroundColor: Colors.red,
-          ),
+      if (structuredData != null) {
+        // Present extracted data in AI chat for review
+        final formattedText = EventDataFormatter.formatExtractedData(structuredData);
+        await _stateProvider.sendMessage(
+          'I extracted this information from your PDF:\n\n$formattedText'
         );
       }
-    }
-  }
-
-  /// Extract text from PDF bytes using Syncfusion PDF library
-  Future<String> _extractTextFromPdf(Uint8List bytes) async {
-    final document = PdfDocument(inputBytes: bytes);
-    final extractor = PdfTextExtractor(document);
-    final buffer = StringBuffer();
-
-    for (int i = 0; i < document.pages.count; i++) {
-      buffer.writeln(extractor.extractText(startPageIndex: i, endPageIndex: i));
-    }
-
-    document.dispose();
-    return buffer.toString();
-  }
-
-  /// Format extracted data as readable text
-  String _formatExtractedData(Map<String, dynamic> data) {
-    final buffer = StringBuffer();
-
-    if (data['event_name'] != null && data['event_name'].toString().isNotEmpty) {
-      buffer.writeln('Event: ${data['event_name']}');
-    }
-    if (data['client_name'] != null && data['client_name'].toString().isNotEmpty) {
-      buffer.writeln('Client: ${data['client_name']}');
-    }
-    if (data['date'] != null && data['date'].toString().isNotEmpty) {
-      buffer.writeln('Date: ${data['date']}');
-    }
-    if (data['venue'] != null && data['venue'].toString().isNotEmpty) {
-      buffer.writeln('Venue: ${data['venue']}');
-    }
-    if (data['location'] != null && data['location'].toString().isNotEmpty) {
-      buffer.writeln('Location: ${data['location']}');
-    }
-    if (data['call_time'] != null && data['call_time'].toString().isNotEmpty) {
-      buffer.writeln('Call Time: ${data['call_time']}');
-    }
-    if (data['setup_time'] != null && data['setup_time'].toString().isNotEmpty) {
-      buffer.writeln('Setup Time: ${data['setup_time']}');
-    }
-    if (data['headcount'] != null && data['headcount'].toString().isNotEmpty) {
-      buffer.writeln('Headcount: ${data['headcount']}');
-    }
-    if (data['attire'] != null && data['attire'].toString().isNotEmpty) {
-      buffer.writeln('Attire: ${data['attire']}');
-    }
-
-    // Add roles if present
-    final roles = data['roles'];
-    if (roles != null && roles is List && roles.isNotEmpty) {
-      buffer.writeln('\nStaff Roles:');
-      for (final role in roles) {
-        if (role is Map) {
-          final roleName = role['role_name'] ?? role['role'] ?? '';
-          final count = role['count'] ?? role['quantity'] ?? '';
-          if (roleName.toString().isNotEmpty) {
-            buffer.writeln('- $roleName${count.toString().isNotEmpty ? ' ($count)' : ''}');
-          }
-        }
+    } catch (e) {
+      print('[AIChatScreen] Error extracting from document: $e');
+      if (mounted) {
+        ErrorDisplayService.showError(context, 'Failed to extract from PDF: $e');
       }
     }
-
-    return buffer.toString().trim();
   }
 
   /// Remove an image from the list
   void _removeImage(File imageFile) {
-    setState(() {
-      _selectedImages.remove(imageFile);
-      _imageStatuses.remove(imageFile);
-      _imageErrors.remove(imageFile);
-    });
+    _stateProvider.removeImage(imageFile);
   }
 
   /// Remove a document from the list
   void _removeDocument(File documentFile) {
-    setState(() {
-      _selectedDocuments.remove(documentFile);
-      _documentStatuses.remove(documentFile);
-      _documentErrors.remove(documentFile);
-    });
+    _stateProvider.removeDocument(documentFile);
   }
 
   /// Save extracted shift data as draft
   Future<void> _saveDraftEventFromExtraction() async {
     try {
-      final currentData = _aiChatService.currentEventData;
+      final currentData = _stateProvider.currentEventData;
 
       if (currentData.isEmpty) {
         throw Exception('No shift data to save');
@@ -501,60 +313,32 @@ class _AIChatScreenState extends State<AIChatScreen>
       await _eventService.createEvent(payload);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✓ Shift saved to Pending Shifts'),
-            backgroundColor: Color(0xFF059669),
-            duration: Duration(seconds: 2),
-          ),
+        ErrorDisplayService.showSuccess(
+          context,
+          '✓ Shift saved to Pending Shifts',
         );
 
         // Send confirmation to chat
-        await _aiChatService.sendMessage('✓ Shift saved successfully! You can find it in Pending Shifts.');
-        setState(() {});
+        await _stateProvider.sendMessage('✓ Shift saved successfully! You can find it in Pending Shifts.');
       }
     } catch (e) {
       print('[AIChatScreen] Error saving draft: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to save shift: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        ErrorDisplayService.showError(context, 'Failed to save shift: $e');
       }
     }
   }
 
-  /// Start the confirmation timer with countdown
+  /// Start the confirmation timer with countdown (now handled by provider)
   void _startConfirmationTimer() {
-    _confirmationTimer?.cancel();
-    _confirmationTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-
-      setState(() {
-        _confirmationSeconds--;
-      });
-
-      if (_confirmationSeconds <= 0) {
-        timer.cancel();
-        _handleConfirmationTimeout();
-      }
-    });
+    _stateProvider.showConfirmation(
+      onAutoSave: _autoSaveAfterTimeout,
+    );
   }
 
-  /// Handle confirmation timeout - auto-save
+  /// Handle confirmation timeout - auto-save (now handled by provider timer)
   void _handleConfirmationTimeout() {
-    if (!_showingConfirmation) return;
-
-    setState(() {
-      _showingConfirmation = false;
-    });
-
-    // Auto-save after timeout
+    // This is now handled by the timer manager in the provider
     _autoSaveAfterTimeout();
   }
 
@@ -565,37 +349,28 @@ class _AIChatScreenState extends State<AIChatScreen>
       content: '⏱️ Confirmation timed out. Saving shift automatically...',
     );
 
-    setState(() {
-      _aiChatService.addMessage(autoSaveMsg);
-    });
-
+    _stateProvider.chatService.addMessage(autoSaveMsg);
     await _saveEventToPending();
   }
 
   /// Handle user confirmation - save the event
   Future<void> _handleConfirmation() async {
-    _confirmationTimer?.cancel();
-
-    setState(() {
-      _showingConfirmation = false;
-      _isLoading = true;
-    });
+    _stateProvider.hideConfirmation();
+    _stateProvider.setLoading(true);
 
     await _saveEventToPending();
 
     // Start reset timer (5 seconds after save)
-    _resetTimer = Timer(const Duration(seconds: 5), () {
-      if (mounted) {
-        _resetChatSession();
-      }
-    });
+    _stateProvider.resetConfirmationState(
+      onComplete: _resetChatSession,
+    );
   }
 
   /// Save event to pending
   Future<void> _saveEventToPending() async {
     try {
       final eventData = {
-        ..._aiChatService.currentEventData,
+        ..._stateProvider.currentEventData,
         'status': 'draft',
       };
 
@@ -610,38 +385,22 @@ class _AIChatScreenState extends State<AIChatScreen>
         content: '✅ Shift saved to Pending Shifts!\n\n[LINK:📋 View in Pending]',
       );
 
-      setState(() {
-        _aiChatService.addMessage(successMsg);
-      });
-
+      _stateProvider.chatService.addMessage(successMsg);
       _scrollToBottom(animated: true);
 
     } catch (e) {
       print('[AIChatScreen] ✗ Failed to save shift: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to save shift: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        ErrorDisplayService.showError(context, 'Failed to save shift: $e');
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      _stateProvider.setLoading(false);
     }
   }
 
   /// Handle edit button - continue conversation
   void _handleEdit() {
-    _confirmationTimer?.cancel();
-
-    setState(() {
-      _showingConfirmation = false;
-    });
+    _stateProvider.hideConfirmation();
 
     // Add message indicating user wants to edit
     final editMsg = ChatMessage(
@@ -649,21 +408,14 @@ class _AIChatScreenState extends State<AIChatScreen>
       content: '✏️ Sure! What would you like to change?',
     );
 
-    setState(() {
-      _aiChatService.addMessage(editMsg);
-    });
-
+    _stateProvider.chatService.addMessage(editMsg);
     _scrollToBottom(animated: true);
   }
 
   /// Handle cancel - discard shift
   void _handleCancel() {
-    _confirmationTimer?.cancel();
-
-    setState(() {
-      _showingConfirmation = false;
-      _aiChatService.clearCurrentEventData();
-    });
+    _stateProvider.hideConfirmation();
+    _stateProvider.clearEventData();
 
     // Add cancellation message
     final cancelMsg = ChatMessage(
@@ -671,137 +423,31 @@ class _AIChatScreenState extends State<AIChatScreen>
       content: '❌ Event discarded. Let me know if you need anything else!',
     );
 
-    setState(() {
-      _aiChatService.addMessage(cancelMsg);
-    });
-
+    _stateProvider.chatService.addMessage(cancelMsg);
     _scrollToBottom(animated: true);
   }
 
   /// Reset chat session after save
   void _resetChatSession() {
-    _aiChatService.startNewConversation();
+    _stateProvider.startNewConversation();
     _loadGreeting();
-
-    setState(() {
-      _selectedImages.clear();
-      _selectedDocuments.clear();
-      _imageStatuses.clear();
-      _documentStatuses.clear();
-      _imageErrors.clear();
-      _documentErrors.clear();
-    });
   }
 
-  /// Reset inactivity timer
+  /// Reset inactivity timer (now handled by provider)
   void _resetInactivityTimer() {
-    _inactivityTimer?.cancel();
-
-    if (_showingConfirmation || _aiChatService.currentEventData.isEmpty) {
-      return;
-    }
-
-    _inactivityTimer = Timer(const Duration(minutes: 2), () {
-      if (mounted && _showingConfirmation) {
-        _autoSaveAfterTimeout();
-      }
-    });
-  }
-
-  /// Handle scroll notifications for animations
-  bool _handleScrollNotification(ScrollNotification notification) {
-    // Handle different notification types
-    if (notification is ScrollStartNotification) {
-      // Cancel auto-show timer when user starts scrolling
-      _autoShowTimer?.cancel();
-      return false;
-    }
-
-    if (notification is ScrollEndNotification) {
-      // Start auto-show timer when scrolling ends
-      _autoShowTimer?.cancel();
-      _autoShowTimer = Timer(const Duration(seconds: 15), () {
-        if (!_isInputVisible && mounted) {
-          _showInput();
-        }
-      });
-
-      // Check if at bottom when scroll ends
-      final isAtBottom = _scrollController.position.pixels >=
-          _scrollController.position.maxScrollExtent - 100;
-
-      if (isAtBottom && !_isInputVisible) {
-        _showInput();
-      }
-      return false;
-    }
-
-    // Only process ScrollUpdateNotification
-    if (notification is! ScrollUpdateNotification) return false;
-
-    final scrollDelta = notification.scrollDelta ?? 0;
-
-    // Skip if no actual movement
-    if (scrollDelta.abs() < 5) return false;
-
-    // Check if we're at the bottom of the list
-    final isAtBottom = _scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent - 100;
-
-    // Always show input when at bottom
-    if (isAtBottom) {
-      if (!_isInputVisible) {
-        _showInput();
-      }
-      return false;
-    }
-
-    // Simple direction-based logic with threshold
-    const scrollThreshold = 10.0;
-
-    if (scrollDelta > scrollThreshold && _isInputVisible) {
-      // Scrolling down - hide input
-      _hideInput();
-    } else if (scrollDelta < -scrollThreshold && !_isInputVisible) {
-      // Scrolling up - show input
-      _showInput();
-    }
-
-    return false;
-  }
-
-  void _hideInput() {
-    if (!_isInputVisible) return;
-    setState(() {
-      _isInputVisible = false;
-    });
-    _inputAnimationController.reverse();
-    // Removed haptic feedback to prevent excessive vibration
-  }
-
-  void _showInput() {
-    if (_isInputVisible) return;
-    setState(() {
-      _isInputVisible = true;
-    });
-    _inputAnimationController.forward();
-    // Removed haptic feedback to prevent excessive vibration
+    _stateProvider.resetInactivityTimer();
   }
 
   /// Show batch creation dialog
   Future<void> _showBatchDialog() async {
-    _confirmationTimer?.cancel();
+    _stateProvider.hideConfirmation();
 
-    setState(() {
-      _showingConfirmation = false;
-    });
-
-    await showDialog(
+    await showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
         return BatchEventDialog(
-          templateEventData: _aiChatService.currentEventData,
+          templateEventData: _stateProvider.currentEventData,
           onCreateBatch: _createBatchEvents,
         );
       },
@@ -812,12 +458,10 @@ class _AIChatScreenState extends State<AIChatScreen>
   Future<void> _createBatchEvents(List<DateTime> dates) async {
     if (dates.isEmpty) return;
 
-    setState(() {
-      _isLoading = true;
-    });
+    _stateProvider.setLoading(true);
 
     try {
-      final template = Map<String, dynamic>.from(_aiChatService.currentEventData);
+      final template = Map<String, dynamic>.from(_stateProvider.currentEventData);
 
       // Create events with different dates
       final events = dates.map((date) {
@@ -840,57 +484,41 @@ class _AIChatScreenState extends State<AIChatScreen>
       final successMsg = ChatMessage(
         role: 'assistant',
         content: '✅ Created ${createdEvents.length} recurring events!\n\n'
-            '📅 Dates:\n${dates.map((d) => '• ${_formatDate(d.toIso8601String())}').join('\n')}\n\n'
+            '📅 Dates:\n${dates.map((d) => '• ${EventDataFormatter.formatDate(d.toIso8601String())}').join('\n')}\n\n'
             '[LINK:📋 View in Pending]',
       );
 
-      setState(() {
-        _aiChatService.addMessage(successMsg);
-      });
-
+      _stateProvider.chatService.addMessage(successMsg);
       _scrollToBottom(animated: true);
 
       // Start reset timer (5 seconds after batch save)
-      _resetTimer = Timer(const Duration(seconds: 5), () {
-        if (mounted) {
-          _resetChatSession();
-        }
-      });
+      _stateProvider.resetConfirmationState(
+        onComplete: _resetChatSession,
+      );
 
     } catch (e) {
       print('[AIChatScreen] ✗ Failed to create batch events: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to create recurring events: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        ErrorDisplayService.showError(context, 'Failed to create recurring events: $e');
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      _stateProvider.setLoading(false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final messages = _aiChatService.conversationHistory;
-    final currentData = _aiChatService.currentEventData;
+    final messages = _stateProvider.conversationHistory;
+    final currentData = _stateProvider.currentEventData;
     final hasEventData = currentData.isNotEmpty;
 
-    return NotificationListener<ScrollNotification>(
-      onNotification: _handleScrollNotification,
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
-        body: Stack(
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: Stack(
           children: [
             // Main content with fixed app bar
             CustomScrollView(
-              controller: _scrollController,
+              controller: _stateProvider.scrollController,
               slivers: [
                 // Fixed SliverAppBar (no animations)
                 SliverAppBar(
@@ -940,16 +568,11 @@ class _AIChatScreenState extends State<AIChatScreen>
                       child: PopupMenuButton<String>(
                         onSelected: (value) {
                       setState(() {
-                        _aiChatService.setModelPreference(value);
+                        _stateProvider.chatService.setModelPreference(value);
                       });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Switched to ${value == 'llama' ? 'Llama 3.1 8B' : 'GPT-OSS 20B'}',
-                          ),
-                          duration: const Duration(seconds: 2),
-                          backgroundColor: value == 'llama' ? Colors.purple : Colors.black,
-                        ),
+                      ErrorDisplayService.showInfo(
+                        context,
+                        'Switched to ${value == 'llama' ? 'Llama 3.1 8B' : 'GPT-OSS 20B'}',
                       );
                     },
                     itemBuilder: (context) => [
@@ -960,7 +583,7 @@ class _AIChatScreenState extends State<AIChatScreen>
                             Icon(
                               Icons.bolt,
                               size: 18,
-                              color: _aiChatService.modelPreference == 'llama'
+                              color: _stateProvider.chatService.modelPreference == 'llama'
                                   ? Colors.purple
                                   : Colors.grey,
                             ),
@@ -968,14 +591,14 @@ class _AIChatScreenState extends State<AIChatScreen>
                             Text(
                               'LLAMA (Fast)',
                               style: TextStyle(
-                                fontWeight: _aiChatService.modelPreference == 'llama'
+                                fontWeight: _stateProvider.chatService.modelPreference == 'llama'
                                     ? FontWeight.w600
                                     : FontWeight.normal,
                               ),
                             ),
-                            if (_aiChatService.modelPreference == 'llama')
+                            if (_stateProvider.chatService.modelPreference == 'llama')
                               const SizedBox(width: 8),
-                            if (_aiChatService.modelPreference == 'llama')
+                            if (_stateProvider.chatService.modelPreference == 'llama')
                               const Icon(Icons.check, size: 16, color: Colors.purple),
                           ],
                         ),
@@ -987,7 +610,7 @@ class _AIChatScreenState extends State<AIChatScreen>
                             Icon(
                               Icons.psychology,
                               size: 18,
-                              color: _aiChatService.modelPreference == 'gpt-oss'
+                              color: _stateProvider.chatService.modelPreference == 'gpt-oss'
                                   ? Colors.black
                                   : Colors.grey,
                             ),
@@ -995,14 +618,14 @@ class _AIChatScreenState extends State<AIChatScreen>
                             Text(
                               'GPT-OSS 20B (Powerful)',
                               style: TextStyle(
-                                fontWeight: _aiChatService.modelPreference == 'gpt-oss'
+                                fontWeight: _stateProvider.chatService.modelPreference == 'gpt-oss'
                                     ? FontWeight.w600
                                     : FontWeight.normal,
                               ),
                             ),
-                            if (_aiChatService.modelPreference == 'gpt-oss')
+                            if (_stateProvider.chatService.modelPreference == 'gpt-oss')
                               const SizedBox(width: 8),
-                            if (_aiChatService.modelPreference == 'gpt-oss')
+                            if (_stateProvider.chatService.modelPreference == 'gpt-oss')
                               const Icon(Icons.check, size: 16, color: Colors.black),
                           ],
                         ),
@@ -1011,12 +634,12 @@ class _AIChatScreenState extends State<AIChatScreen>
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: _aiChatService.modelPreference == 'llama'
+                        color: _stateProvider.chatService.modelPreference == 'llama'
                             ? Colors.purple.withValues(alpha: 0.12)
                             : Colors.black.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: _aiChatService.modelPreference == 'llama'
+                          color: _stateProvider.chatService.modelPreference == 'llama'
                               ? Colors.purple.withValues(alpha: 0.3)
                               : Colors.black.withValues(alpha: 0.2),
                           width: 1,
@@ -1026,21 +649,21 @@ class _AIChatScreenState extends State<AIChatScreen>
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            _aiChatService.modelPreference == 'llama'
+                            _stateProvider.chatService.modelPreference == 'llama'
                                 ? Icons.bolt
                                 : Icons.psychology,
                             size: 14,
-                            color: _aiChatService.modelPreference == 'llama'
+                            color: _stateProvider.chatService.modelPreference == 'llama'
                                 ? Colors.purple.shade700
                                 : Colors.black,
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            _aiChatService.modelPreference == 'llama' ? 'LLAMA' : 'GPT-OSS',
+                            _stateProvider.chatService.modelPreference == 'llama' ? 'LLAMA' : 'GPT-OSS',
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
-                              color: _aiChatService.modelPreference == 'llama'
+                              color: _stateProvider.chatService.modelPreference == 'llama'
                                   ? Colors.purple.shade700
                                   : Colors.black,
                             ),
@@ -1049,7 +672,7 @@ class _AIChatScreenState extends State<AIChatScreen>
                           Icon(
                             Icons.arrow_drop_down,
                             size: 16,
-                            color: _aiChatService.modelPreference == 'llama'
+                            color: _stateProvider.chatService.modelPreference == 'llama'
                                 ? Colors.purple.shade700
                                 : Colors.black,
                           ),
@@ -1162,7 +785,7 @@ class _AIChatScreenState extends State<AIChatScreen>
                           left: 16,
                           right: 16,
                           top: 16,
-                          bottom: 120, // Add bottom padding for input area visibility
+                          bottom: 140, // Add bottom padding for input area and chips visibility
                         ),
                         sliver: SliverList(
                           delegate: SliverChildBuilderDelegate(
@@ -1170,37 +793,56 @@ class _AIChatScreenState extends State<AIChatScreen>
                               final message = messages[index];
 
                               // Check if this is a confirmation card
-                              if (message.content == '[CONFIRMATION_CARD]') {
+                              if (message['content'] == '[CONFIRMATION_CARD]') {
                                 return Padding(
                                   padding: const EdgeInsets.only(bottom: 12),
                                   child: EventConfirmationCard(
                                     key: ValueKey('confirmation-$index'),
-                                    eventData: _aiChatService.currentEventData,
+                                    eventData: _stateProvider.currentEventData,
                                     onConfirm: _handleConfirmation,
                                     onEdit: _handleEdit,
                                     onCancel: _handleCancel,
                                     onCreateSeries: _showBatchDialog,
-                                    remainingSeconds: _showingConfirmation ? _confirmationSeconds : null,
+                                    remainingSeconds: _stateProvider.showingConfirmation ? _stateProvider.confirmationSeconds : null,
                                   ),
                                 );
                               }
 
                               // Use animated widget for AI responses
                               final isLastMessage = index == messages.length - 1;
-                              final isAiMessage = message.role == 'assistant';
+                              final isAiMessage = message['role'] == 'assistant';
                               final shouldAnimate = isLastMessage && isAiMessage &&
                                   messages.length > 1; // Only animate if it's a response to user
+
+                              // Scroll to bottom when last message appears
+                              if (isLastMessage && shouldAnimate) {
+                                WidgetsBinding.instance.addPostFrameCallback((_) {
+                                  _scrollToBottom(animated: true);
+                                });
+                              }
+
+                              // Convert Map to ChatMessage object for widget
+                              final chatMessage = ChatMessage(
+                                role: (message['role'] as String?) ?? 'user',
+                                content: (message['content'] as String?) ?? '',
+                              );
 
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 12),
                                 child: AnimatedChatMessageWidget(
                                   key: ValueKey('msg-$index'),
-                                  message: message,
+                                  message: chatMessage,
                                   showTypingAnimation: shouldAnimate,
+                                  onTypingTick: shouldAnimate ? () {
+                                    // Scroll to bottom as AI types each character
+                                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                                      _scrollToBottom(animated: false);
+                                    });
+                                  } : null,
                                   onLinkTap: (linkText) async {
                                     if (linkText == 'Check Pending' || linkText == '📋 View in Pending') {
                                       // Clear conversation and navigate to Pending tab
-                                      _aiChatService.startNewConversation();
+                                      _stateProvider.startNewConversation();
                                       Navigator.pop(context, {'action': 'show_pending'});
                                     }
                                   },
@@ -1215,7 +857,7 @@ class _AIChatScreenState extends State<AIChatScreen>
             ),
 
             // Loading indicator overlay (positioned absolutely)
-            if (_isLoading)
+            if (_stateProvider.isLoading)
               Positioned(
                 bottom: 100,
                 left: 0,
@@ -1246,163 +888,162 @@ class _AIChatScreenState extends State<AIChatScreen>
             ),
               ),
 
-            // Animated input area positioned at bottom
+            // Floating chips layer (positioned over messages)
+            if (!_stateProvider.isLoading && _stateProvider.selectedImages.isEmpty && _stateProvider.selectedDocuments.isEmpty)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 60 + (MediaQuery.of(context).padding.bottom > 0
+                  ? MediaQuery.of(context).padding.bottom
+                  : 8),
+                child: IgnorePointer(
+                  ignoring: false,
+                  child: Builder(
+                    builder: (context) {
+                      final terminology = context.read<TerminologyProvider>().singular;
+                      return Container(
+                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              const Color(0xFFF8FAFC).withOpacity(0.3),
+                              const Color(0xFFF8FAFC).withOpacity(0.6),
+                            ],
+                            stops: const [0.0, 0.5, 1.0],
+                          ),
+                        ),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              _buildSuggestionChip(
+                                '📋 New ${terminology[0].toUpperCase()}${terminology.substring(1)}',
+                                'Help me to create a new $terminology and ask me for confirmation to save',
+                              ),
+                              const SizedBox(width: 8),
+                              _buildSuggestionChip(
+                                '🏢 New Client',
+                                'Add new client',
+                              ),
+                              const SizedBox(width: 8),
+                              _buildSuggestionChip(
+                                '👤 New Role',
+                                'Create new staff role',
+                              ),
+                              const SizedBox(width: 8),
+                              _buildSuggestionChip(
+                                '💵 New Tariff',
+                                'Set up new tariff. Tell me: rate, role, and client.',
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
+                  ),
+                ),
+              ),
+
+            // Fixed input area positioned at bottom
             if (messages.isNotEmpty)
               Positioned(
                 left: 0,
                 right: 0,
                 bottom: 0,
-                child: SlideTransition(
-                  position: _inputSlideAnimation,
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 8), // Added bottom padding
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
-                          blurRadius: 10,
-                          offset: const Offset(0, -2),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Add a visual hint bar when partially hidden
-                        AnimatedContainer(
-                          duration: const Duration(milliseconds: 250),
-                          width: _isInputVisible ? 0 : 30,
-                          height: _isInputVisible ? 0 : 3,
-                          margin: EdgeInsets.only(bottom: _isInputVisible ? 0 : 4),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade300,
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                  // Image preview cards
-                  if (_selectedImages.isNotEmpty)
-                    ..._selectedImages.map((imageFile) {
-                      return ImagePreviewCard(
-                        imageFile: imageFile,
-                        status: _imageStatuses[imageFile] ?? ExtractionStatus.pending,
-                        errorMessage: _imageErrors[imageFile],
-                        onRemove: () => _removeImage(imageFile),
-                      );
-                    }).toList(),
-                  // Document preview cards
-                  if (_selectedDocuments.isNotEmpty)
-                    ..._selectedDocuments.map((documentFile) {
-                      return DocumentPreviewCard(
-                        documentFile: documentFile,
-                        status: _documentStatuses[documentFile] ?? ExtractionStatus.pending,
-                        errorMessage: _documentErrors[documentFile],
-                        onRemove: () => _removeDocument(documentFile),
-                      );
-                    }).toList(),
-
-                  // Quick action suggestion chips (for common manager tasks)
-                  if (!_isLoading && _selectedImages.isEmpty && _selectedDocuments.isEmpty)
-                    Builder(
-                      builder: (context) {
-                        final terminology = context.read<TerminologyProvider>().singular;
-                        return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              children: [
-                                _buildSuggestionChip(
-                                  '📋 New ${terminology[0].toUpperCase()}${terminology.substring(1)}',
-                                  'Help me to create a new $terminology and ask me for confirmation to save',
-                                ),
-                                const SizedBox(width: 8),
-                                _buildSuggestionChip(
-                                  '🏢 New Client',
-                                  'Add new client',
-                                ),
-                                const SizedBox(width: 8),
-                                _buildSuggestionChip(
-                                  '👤 New Role',
-                                  'Create new staff role',
-                                ),
-                                const SizedBox(width: 8),
-                                _buildSuggestionChip(
-                                  '💵 New Tariff',
-                                  'Set up new tariff. Tell me: rate, role, and client.',
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }
-                    ),
-
-                  // Chat input
-                  ChatInputWidget(
-                    key: const ValueKey('chat-input'),
-                    onAttachmentTap: _showImageSourceSelector,
-                    onSendMessage: (message) async {
-                  setState(() {
-                    _isLoading = true;
-                  });
-
-                  try {
-                    // Get user's terminology preference
-                    final terminology = context.read<TerminologyProvider>().plural;
-                    await _aiChatService.sendMessage(message, terminology: terminology);
-
-                    // Show confirmation card if event is complete
-                    if (_aiChatService.eventComplete && _aiChatService.currentEventData.isNotEmpty) {
-                      print('[AIChatScreen] Event complete detected - showing confirmation card...');
-
-                      // Add special marker message for confirmation card
-                      final confirmationMsg = ChatMessage(
-                        role: 'system',
-                        content: '[CONFIRMATION_CARD]',
-                      );
-
-                      setState(() {
-                        _aiChatService.addMessage(confirmationMsg);
-                        _showingConfirmation = true;
-                        _confirmationSeconds = 90; // Reset to 90 seconds
-                      });
-
-                      // Start confirmation timer with countdown
-                      _startConfirmationTimer();
-
-                      // Reset inactivity timer
-                      _resetInactivityTimer();
-                    }
-
-                    // Scroll to bottom after message
-                    _scrollToBottom(animated: true);
-                  } catch (e) {
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Error: ${e.toString()}'),
-                        backgroundColor: Colors.red,
+                child: Container(
+                  padding: EdgeInsets.fromLTRB(
+                    12,
+                    4,
+                    12,
+                    MediaQuery.of(context).padding.bottom > 0
+                      ? MediaQuery.of(context).padding.bottom
+                      : 8, // Bottom padding for safe area
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, -2),
                       ),
-                    );
-                  } finally {
-                    if (mounted) {
-                      setState(() {
-                        _isLoading = false;
-                      });
-                    }
-                  }
-                },
-                isLoading: _isLoading,
-              ),
-                      ],
-                    ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                        // Image preview cards
+                        if (_stateProvider.selectedImages.isNotEmpty)
+                          ..._stateProvider.selectedImages.map((imageFile) {
+                            return ImagePreviewCard(
+                              imageFile: imageFile,
+                              status: _stateProvider.fileProcessingManager.getImageStatus(imageFile) ?? ExtractionStatus.pending,
+                              errorMessage: _stateProvider.fileProcessingManager.getImageError(imageFile),
+                              onRemove: () => _removeImage(imageFile),
+                            );
+                          }),
+                        // Document preview cards
+                        if (_stateProvider.selectedDocuments.isNotEmpty)
+                          ..._stateProvider.selectedDocuments.map((documentFile) {
+                            return DocumentPreviewCard(
+                              documentFile: documentFile,
+                              status: _stateProvider.fileProcessingManager.getDocumentStatus(documentFile) ?? ExtractionStatus.pending,
+                              errorMessage: _stateProvider.fileProcessingManager.getDocumentError(documentFile),
+                              onRemove: () => _removeDocument(documentFile),
+                            );
+                          }),
+
+                        // Chat input
+                        ChatInputWidget(
+                          key: const ValueKey('chat-input'),
+                          onAttachmentTap: _showImageSourceSelector,
+                          onSendMessage: (message) async {
+                            _stateProvider.setLoading(true);
+
+                            try {
+                              // Get user's terminology preference
+                              final terminology = context.read<TerminologyProvider>().plural;
+                              await _stateProvider.chatService.sendMessage(message, terminology: terminology);
+
+                              // Show confirmation card if event is complete
+                              if (_stateProvider.chatService.eventComplete && _stateProvider.currentEventData.isNotEmpty) {
+                                print('[AIChatScreen] Event complete detected - showing confirmation card...');
+
+                                // Add special marker message for confirmation card
+                                final confirmationMsg = ChatMessage(
+                                  role: 'system',
+                                  content: '[CONFIRMATION_CARD]',
+                                );
+
+                                _stateProvider.chatService.addMessage(confirmationMsg);
+
+                                // Start confirmation timer with countdown
+                                _startConfirmationTimer();
+
+                                // Reset inactivity timer
+                                _resetInactivityTimer();
+                              }
+
+                              // Scroll to bottom after message
+                              _scrollToBottom(animated: true);
+                            } catch (e) {
+                              if (!mounted) return;
+                              ErrorDisplayService.showError(context, 'Error: ${e.toString()}');
+                            } finally {
+                              _stateProvider.setLoading(false);
+                            }
+                          },
+                          isLoading: _stateProvider.isLoading,
+                        ),
+                    ],
                   ),
                 ),
               ),
           ],
         ),
-      ),
     );
   }
 
@@ -1524,67 +1165,80 @@ class _AIChatScreenState extends State<AIChatScreen>
 
   /// Build a suggestion chip for quick actions
   Widget _buildSuggestionChip(String label, String query) {
-    return ActionChip(
-      label: Text(label),
-      onPressed: () async {
-        setState(() {
-          _isLoading = true;
-        });
-
-        try {
-          await _aiChatService.sendMessage(query);
-
-          // Show confirmation card if event is complete
-          if (_aiChatService.eventComplete && _aiChatService.currentEventData.isNotEmpty) {
-            print('[AIChatScreen] Event complete detected - showing confirmation card...');
-
-            // Add special marker message for confirmation card
-            final confirmationMsg = ChatMessage(
-              role: 'system',
-              content: '[CONFIRMATION_CARD]',
-            );
-
-            setState(() {
-              _aiChatService.addMessage(confirmationMsg);
-              _showingConfirmation = true;
-              _confirmationSeconds = 90; // Reset to 90 seconds
-            });
-
-            // Start confirmation timer with countdown
-            _startConfirmationTimer();
-
-            // Reset inactivity timer
-            _resetInactivityTimer();
-          }
-
-          // Scroll to bottom after message
-          _scrollToBottom(animated: true);
-        } catch (e) {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error: ${e.toString()}'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        } finally {
-          if (mounted) {
-            setState(() {
-              _isLoading = false;
-            });
-          }
-        }
-      },
-      backgroundColor: Colors.white,
-      side: BorderSide(color: Colors.grey.shade300, width: 1),
-      labelStyle: const TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.w500,
-        color: Color(0xFF475569),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withOpacity(0.7),
+            Colors.white.withOpacity(0.5),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.8),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      elevation: 0,
-      pressElevation: 2,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () async {
+            _stateProvider.setLoading(true);
+
+            try {
+              await _stateProvider.chatService.sendMessage(query);
+
+              // Show confirmation card if event is complete
+              if (_stateProvider.chatService.eventComplete && _stateProvider.currentEventData.isNotEmpty) {
+                print('[AIChatScreen] Event complete detected - showing confirmation card...');
+
+                // Add special marker message for confirmation card
+                final confirmationMsg = ChatMessage(
+                  role: 'system',
+                  content: '[CONFIRMATION_CARD]',
+                );
+
+                _stateProvider.chatService.addMessage(confirmationMsg);
+
+                // Start confirmation timer with countdown
+                _startConfirmationTimer();
+
+                // Reset inactivity timer
+                _resetInactivityTimer();
+              }
+
+              // Scroll to bottom after message
+              _scrollToBottom(animated: true);
+            } catch (e) {
+              if (!mounted) return;
+              ErrorDisplayService.showError(context, 'Error: ${e.toString()}');
+            } finally {
+              _stateProvider.setLoading(false);
+            }
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1F2937),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
