@@ -7961,6 +7961,26 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // AI Chat button - Return to AI Chat screen
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (context) => const AIChatScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.auto_awesome, size: 20),
+              label: const Text('AI Chat'),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF6366F1),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
           FormSection(
             title: AppLocalizations.of(context)!.jobInformation,
                   icon: Icons.event,
