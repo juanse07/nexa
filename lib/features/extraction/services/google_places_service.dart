@@ -10,7 +10,12 @@ class GooglePlacesService {
   static String get _baseUrl => AppConfig.instance.baseUrl;
 
   /// Get place predictions for autocomplete
-  static Future<List<PlacePrediction>> getPlacePredictions(String input) async {
+  /// [userLat] and [userLng] are optional - if provided, results will be biased to user's location
+  static Future<List<PlacePrediction>> getPlacePredictions(
+    String input, {
+    double? userLat,
+    double? userLng,
+  }) async {
     if (input.isEmpty) return [];
 
     // Get auth token
@@ -19,12 +24,14 @@ class GooglePlacesService {
       throw Exception('Not authenticated');
     }
 
-    // Optional geo bias (defaults: Colorado, USA)
-    final biasLat = double.tryParse(
+    // Optional geo bias - use user location if provided, otherwise defaults (Colorado, USA)
+    final biasLat = userLat ??
+        double.tryParse(
           Environment.instance.get('PLACES_BIAS_LAT') ?? '',
         ) ??
         39.7392; // Denver
-    final biasLng = double.tryParse(
+    final biasLng = userLng ??
+        double.tryParse(
           Environment.instance.get('PLACES_BIAS_LNG') ?? '',
         ) ??
         -104.9903;

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 
 import '../services/google_places_service.dart';
 
@@ -32,11 +33,57 @@ class _ModernAddressFieldState extends State<ModernAddressField> {
   final LayerLink _layerLink = LayerLink();
   OverlayEntry? _overlayEntry;
 
+  // User location for biasing search results
+  double? _userLat;
+  double? _userLng;
+
+  @override
+  void initState() {
+    super.initState();
+    _getUserLocation();
+  }
+
   @override
   void dispose() {
     _debounceTimer?.cancel();
     _removeOverlay();
     super.dispose();
+  }
+
+  /// Get user's current location (non-blocking, falls back to Denver if denied)
+  Future<void> _getUserLocation() async {
+    try {
+      // Check if location services are enabled
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      // Check permission
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return;
+      }
+
+      if (permission == LocationPermission.deniedForever) return;
+
+      // Get current position
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 5),
+        ),
+      );
+
+      if (mounted) {
+        setState(() {
+          _userLat = position.latitude;
+          _userLng = position.longitude;
+        });
+      }
+    } catch (e) {
+      // Silently fail - will use default Denver location
+      print('Location access denied or unavailable: $e');
+    }
   }
 
   void _onTextChanged(String value) {
@@ -58,7 +105,12 @@ class _ModernAddressFieldState extends State<ModernAddressField> {
     });
 
     try {
-      final predictions = await GooglePlacesService.getPlacePredictions(query);
+      // Pass user location to bias results, or null to use defaults
+      final predictions = await GooglePlacesService.getPlacePredictions(
+        query,
+        userLat: _userLat,
+        userLng: _userLng,
+      );
       setState(() {
         _predictions = predictions;
         _isLoading = false;
