@@ -1163,11 +1163,11 @@ async function handleGroqRequest(
     return res.status(500).json({ message: 'Groq API key not configured on server' });
   }
 
-  // Use Llama instant model for better performance and cost
-  const groqModel = model || 'llama-3.1-8b-instant';  // Fast Groq text model (as it was before GPT-OSS)
+  // Use Llama tool-use model for function calling support
+  const groqModel = model || 'llama3-groq-8b-8192-tool-use-preview';  // Optimized for function calling (#3 on BFCL)
   const isReasoningModel = false;  // Llama doesn't use reasoning format
 
-  console.log(`[Groq] Manager using Llama model: ${groqModel}`);
+  console.log(`[Groq] Manager using Llama tool-use model: ${groqModel}`);
 
   // Optimize prompt structure for caching: static content first (cached), dynamic last
   const dateContext = getFullSystemContext(timezone);
