@@ -398,7 +398,7 @@ const chatMessageSchema = z.object({
 const AI_TOOLS = [
   {
     name: 'search_addresses',
-    description: 'Search venue addresses from existing events in the database. Use this when users ask about addresses, venues, or locations.',
+    description: 'Look up venue addresses from PAST events already in your database. ONLY use this to find venues from previous shifts/events you already worked. If the user is asking about a new venue or address you don\'t recognize, use search_venue instead.',
     parameters: {
       type: 'object',
       properties: {
@@ -596,13 +596,13 @@ const AI_TOOLS = [
   },
   {
     name: 'search_venue',
-    description: 'Search for event venues using Google Places API. Use this when users ask about finding venues, discovering new locations, or need venue suggestions. This searches ALL venues via Google Places, not just venues from past events. Returns venue names and full addresses.',
+    description: 'Search for ANY venue address using Google Places API. Use this as your PRIMARY tool when users ask for venue addresses, locations, or want to find places. Searches ALL real-world venues (restaurants, hotels, event centers, etc.) and returns full addresses. Use search_addresses ONLY if this fails and you need to check past events.',
     parameters: {
       type: 'object',
       properties: {
         query: {
           type: 'string',
-          description: 'Venue search query - venue type, name, or description (e.g., "ballroom", "hotel", "wedding venue", "conference center", "Red Rocks Amphitheatre")'
+          description: 'Venue search query - venue name, business name, or place type (e.g., "Toyota Arapahoe", "The Ritz", "ballroom", "conference center")'
         },
         location: {
           type: ['string', 'null'],
