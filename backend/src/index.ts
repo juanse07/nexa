@@ -131,6 +131,60 @@ async function createServer() {
     }
   });
 
+  // Admin maintenance: standardize all event dates to Date objects
+  app.post('/api/admin/standardize-dates', async (req, res) => {
+    try {
+      const provided = (req.headers['x-admin-key'] as string) || (req.query.key as string) || '';
+      if (!ENV.adminKey || provided !== ENV.adminKey) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+
+      const allEvents = await EventModel.find({}).lean();
+      let stringDateCount = 0;
+      let dateObjectCount = 0;
+      let nullDateCount = 0;
+      let convertedCount = 0;
+
+      // Analyze current state
+      for (const event of allEvents) {
+        if (event.date == null) {
+          nullDateCount++;
+        } else if (typeof event.date === 'string') {
+          stringDateCount++;
+        } else if (event.date instanceof Date) {
+          dateObjectCount++;
+        }
+      }
+
+      if (stringDateCount === 0) {
+        return res.json({
+          message: 'All dates are already standardized',
+          stats: { stringDates: 0, dateObjects: dateObjectCount, null: nullDateCount }
+        });
+      }
+
+      // Convert string dates to Date objects
+      for (const event of allEvents) {
+        if (event.date != null && typeof event.date === 'string') {
+          const dateObj = new Date(event.date as string);
+          if (!isNaN(dateObj.getTime())) {
+            await EventModel.updateOne({ _id: event._id }, { $set: { date: dateObj } });
+            convertedCount++;
+          }
+        }
+      }
+
+      return res.json({
+        message: `Successfully converted ${convertedCount} dates`,
+        converted: convertedCount,
+        before: { stringDates: stringDateCount, dateObjects: dateObjectCount },
+        after: { stringDates: 0, dateObjects: dateObjectCount + convertedCount }
+      });
+    } catch (err) {
+      return res.status(500).json({ message: 'Failed to standardize dates' });
+    }
+  });
+
   app.get('/', (_req, res) => {
     res.send('Nexa backend is running');
   });

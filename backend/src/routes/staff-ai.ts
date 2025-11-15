@@ -84,6 +84,29 @@ router.get('/ai/staff/system-info', requireAuth, async (req, res) => {
 });
 
 /**
+ * POST /api/ai/staff/reset-limits (ADMIN)
+ * Reset AI message limits for all users (for testing/admin purposes)
+ */
+router.post('/ai/staff/reset-limits', async (req, res) => {
+  try {
+    const result = await UserModel.updateMany(
+      {},
+      { $set: { ai_messages_used_this_month: 0 } }
+    );
+
+    return res.json({
+      success: true,
+      message: `Reset AI message limits for ${result.modifiedCount} users`,
+      matched: result.matchedCount,
+      modified: result.modifiedCount,
+    });
+  } catch (err: any) {
+    console.error('[ai/staff/reset-limits] Error:', err);
+    return res.status(500).json({ message: err.message });
+  }
+});
+
+/**
  * POST /api/ai/staff/transcribe
  * Transcribe audio to text using Groq Whisper API (fast & cheap!)
  * Accepts audio file upload and optional terminology parameter
@@ -993,6 +1016,7 @@ async function executeGetEarningsSummary(
     console.log(`[executeGetEarningsSummary] Getting earnings for userId ${userId}, userKey ${userKey}, range: ${dateRange || 'all'}`);
 
     // Parse date range filter
+    // All dates are stored as Date objects (standardized by migration)
     let dateFilter: any = {};
     const now = new Date();
 
@@ -1000,29 +1024,36 @@ async function executeGetEarningsSummary(
       if (dateRange === 'this_week') {
         const startOfWeek = new Date(now);
         startOfWeek.setDate(now.getDate() - now.getDay());
+        startOfWeek.setHours(0, 0, 0, 0);
         const endOfWeek = new Date(startOfWeek);
         endOfWeek.setDate(startOfWeek.getDate() + 7);
+        endOfWeek.setHours(23, 59, 59, 999);
         dateFilter = { date: { $gte: startOfWeek, $lt: endOfWeek } };
       } else if (dateRange === 'last_week') {
         const startOfLastWeek = new Date(now);
         startOfLastWeek.setDate(now.getDate() - now.getDay() - 7);
+        startOfLastWeek.setHours(0, 0, 0, 0);
         const endOfLastWeek = new Date(startOfLastWeek);
         endOfLastWeek.setDate(startOfLastWeek.getDate() + 7);
+        endOfLastWeek.setHours(23, 59, 59, 999);
         dateFilter = { date: { $gte: startOfLastWeek, $lt: endOfLastWeek } };
       } else if (dateRange === 'this_month') {
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        startOfMonth.setHours(0, 0, 0, 0);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
         dateFilter = { date: { $gte: startOfMonth, $lte: endOfMonth } };
       } else if (dateRange === 'last_month') {
         const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+        startOfLastMonth.setHours(0, 0, 0, 0);
+        const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
         dateFilter = { date: { $gte: startOfLastMonth, $lte: endOfLastMonth } };
       }
     }
 
+    // Use same criteria as context endpoint: all non-cancelled events
     const events = await EventModel.find({
       'accepted_staff.userKey': userKey,
-      status: 'completed',
+      status: { $ne: 'cancelled' },
       ...dateFilter
     })
     .select('date start_time end_time accepted_staff')
@@ -1298,23 +1329,21 @@ async function executePerformanceCurrentMonth(
 
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    startOfMonth.setHours(0, 0, 0, 0);
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
-    // Format dates as ISO strings for MongoDB comparison (shifts store date as string)
-    const startDateStr = startOfMonth.toISOString().split('T')[0];
-    const endDateStr = endOfMonth.toISOString().split('T')[0];
-
-    console.log(`[executePerformanceCurrentMonth] Date range: ${startDateStr} to ${endDateStr}`);
-    console.log(`[executePerformanceCurrentMonth] Query: { 'accepted_staff.userKey': '${userKey}', date: { $gte: '${startDateStr}', $lte: '${endDateStr}' } }`);
+    console.log(`[executePerformanceCurrentMonth] Date range: ${startOfMonth.toISOString()} to ${endOfMonth.toISOString()}`);
 
     // Query shifts for this month where user is in accepted_staff
+    // Use same criteria as earnings section: all non-cancelled events
+    // All dates are stored as Date objects (standardized by migration)
     const events = await EventModel.find({
       'accepted_staff.userKey': userKey,
-      status: 'completed', // Only count completed shifts for performance
-      date: { $gte: startDateStr, $lte: endDateStr }
+      status: { $ne: 'cancelled' },
+      date: { $gte: startOfMonth, $lte: endOfMonth }
     }).lean();
 
-    console.log(`[executePerformanceCurrentMonth] Found ${events.length} completed shifts`);
+    console.log(`[executePerformanceCurrentMonth] Found ${events.length} events in current month`);
 
     // Analyze by role/position
     const positionStats: Record<string, { count: number; hours: number; earnings: number }> = {};
@@ -1402,32 +1431,21 @@ async function executePerformanceLastMonth(
 
     const now = new Date();
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    startOfLastMonth.setHours(0, 0, 0, 0);
     const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
 
-    // Format dates as ISO strings for MongoDB comparison (shifts store date as string)
-    const startDateStr = startOfLastMonth.toISOString().split('T')[0];
-    const endDateStr = endOfLastMonth.toISOString().split('T')[0];
-
-    console.log(`[executePerformanceLastMonth] Date range: ${startDateStr} to ${endDateStr}`);
-    console.log(`[executePerformanceLastMonth] Query: { 'accepted_staff.userKey': '${userKey}', date: { $gte: '${startDateStr}', $lte: '${endDateStr}' } }`);
+    console.log(`[executePerformanceLastMonth] Date range: ${startOfLastMonth.toISOString()} to ${endOfLastMonth.toISOString()}`);
 
     // Query shifts for last month where user is in accepted_staff
+    // Use same criteria as earnings section: all non-cancelled events
+    // All dates are stored as Date objects (standardized by migration)
     const events = await EventModel.find({
       'accepted_staff.userKey': userKey,
-      status: 'completed', // Only count completed shifts for performance
-      date: { $gte: startDateStr, $lte: endDateStr }
+      status: { $ne: 'cancelled' },
+      date: { $gte: startOfLastMonth, $lte: endOfLastMonth }
     }).lean();
 
-    console.log(`[executePerformanceLastMonth] Found ${events.length} completed shifts`);
-
-    // Log first few shift dates for debugging
-    if (events.length > 0) {
-      console.log(`[executePerformanceLastMonth] Sample shift dates:`, events.slice(0, 3).map((e: any) => e.date));
-    }
-
-    // Also check all user shifts regardless of date to see what dates exist
-    const allUserShifts = await EventModel.find({ 'accepted_staff.userKey': userKey }).limit(5).lean();
-    console.log(`[executePerformanceLastMonth] Sample of all user shift dates (for comparison):`, allUserShifts.map((e: any) => e.date));
+    console.log(`[executePerformanceLastMonth] Found ${events.length} events in last month`);
 
     // Analyze by role/position
     const positionStats: Record<string, { count: number; hours: number; earnings: number }> = {};
@@ -1514,21 +1532,21 @@ async function executePerformanceLastYear(
 
     const now = new Date();
     const startOfYear = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+    startOfYear.setHours(0, 0, 0, 0);
+    now.setHours(23, 59, 59, 999);
 
-    // Format dates as ISO strings for MongoDB comparison (shifts store date as string)
-    const startDateStr = startOfYear.toISOString().split('T')[0];
-    const endDateStr = now.toISOString().split('T')[0];
-
-    console.log(`[executePerformanceLastYear] Date range: ${startDateStr} to ${endDateStr}`);
+    console.log(`[executePerformanceLastYear] Date range: ${startOfYear.toISOString()} to ${now.toISOString()}`);
 
     // Query shifts for last 12 months where user is in accepted_staff
+    // Use same criteria as earnings section: all non-cancelled events
+    // All dates are stored as Date objects (standardized by migration)
     const events = await EventModel.find({
       'accepted_staff.userKey': userKey,
-      status: 'completed', // Only count completed shifts for performance
-      date: { $gte: startDateStr, $lte: endDateStr }
+      status: { $ne: 'cancelled' },
+      date: { $gte: startOfYear, $lte: now }
     }).lean();
 
-    console.log(`[executePerformanceLastYear] Found ${events.length} completed shifts`);
+    console.log(`[executePerformanceLastYear] Found ${events.length} events in last 12 months`);
 
     // Analyze by role/position and by month
     const positionStats: Record<string, { count: number; hours: number; earnings: number }> = {};
@@ -1797,14 +1815,13 @@ async function handleStaffGroqRequest(
     return res.status(500).json({ message: 'Groq API key not configured on server' });
   }
 
-  // Use Llama instant model for better performance and cost
-  const groqModel = model || 'llama-3.1-8b-instant';  // Fast Groq text model (as it was before GPT-OSS)
-  const isReasoningModel = false;  // Llama doesn't use reasoning format
+  // Use Llama 3.1 8B Instant for reliable function calling (fast & cost-effective)
+  const groqModel = model || 'llama-3.1-8b-instant';  // Supports parallel tool calling, 560 tokens/sec
+  const isReasoningModel = false;
 
-  console.log(`[Groq] Staff using Llama model: ${groqModel}`);
+  console.log(`[Groq] Staff using model: ${groqModel}`);
 
   // Optimize prompt structure for caching: static content first (cached), dynamic last
-  const dateContext = getFullSystemContext(timezone);
   const formattingInstructions = `
 🌍 LANGUAGE RULE - CRITICAL:
 ALWAYS respond in the SAME LANGUAGE the user is speaking.
@@ -1847,7 +1864,10 @@ How many events to show - IMPORTANT:
 - "this week" / "this month" → Show all events in that period
 - Always include a count in your response like "Here are your next 10 shifts:" or "Your next shift is:"`;
 
-  const systemContent = `${dateContext}\n\n${formattingInstructions}`;
+  const dateContext = getFullSystemContext(timezone);
+
+  // Put static instructions FIRST (cacheable), dynamic date context LAST (not cached)
+  const systemContent = `${formattingInstructions}\n\n${dateContext}`;
 
   // Build messages: system prompt first (cached), then conversation
   const processedMessages: any[] = [];

@@ -599,52 +599,11 @@ Be conversational and friendly. If the user provides multiple pieces of informat
     return buffer.toString();
   }
 
-  /// Build system prompt with current context (smart loading)
+  /// Build system prompt (lightweight, no auto-context injection)
   Future<String> _buildSystemPrompt({
-    String? userMessage,
-    bool skipHeavyLoading = false,
     String? terminology,
   }) async {
     final instructions = await _loadInstructions();
-
-    // Skip heavy loading if we already have cached data
-    if (!skipHeavyLoading) {
-      // Smart context detection
-      Map<String, String?>? contextFilters;
-      if (userMessage != null) {
-        contextFilters = _detectContextNeeds(userMessage);
-      }
-
-      // OPTIMIZATION: Parallelize independent loading operations
-      // All these loads are independent and can run concurrently
-      // This reduces total loading time from ~200-500ms to ~50-100ms
-      print('[ChatEventService] Loading context in parallel...');
-      final startTime = DateTime.now();
-
-      await Future.wait([
-        _loadExistingClients(),
-        _loadExistingEvents(
-          filterByClient: contextFilters?['client'],
-          filterByMonth: contextFilters?['month'],
-        ),
-        _loadExistingTeamMembers(),
-        _loadMembersAvailability(),
-        _loadManagerVenues(),
-      ]);
-
-      final loadDuration = DateTime.now().difference(startTime).inMilliseconds;
-      print('[ChatEventService] Context loaded in ${loadDuration}ms');
-    } else {
-      print('Using cached context data - skipping heavy loading');
-    }
-
-    final clientsList = _existingClientNames.isEmpty
-        ? 'No existing clients in system.'
-        : 'Existing clients: ${_existingClientNames.join(", ")}';
-
-    final eventsContext = _formatEventsForContext();
-    final teamMembersContext = _formatTeamMembersForContext();
-    final venuesContext = _formatVenuesForContext();
 
     // Build terminology instructions
     final terminologyInstructions = terminology != null ? '''
@@ -671,18 +630,17 @@ The user has chosen to use "${terminology}" terminology (not "Jobs", "Shifts", o
     return '''$terminologyInstructions
 
 $instructions
+${_preferredCity != null ? '\n## Manager\'s City\n$_preferredCity' : ''}
 
-## Current Context
-- $clientsList
-${_preferredCity != null ? '- Manager\'s City: $_preferredCity' : ''}
+## Available Context Tools
 
-## Team Members
-$teamMembersContext
+You have access to these functions to get business context when needed:
+- **get_clients_list()** - Get list of all clients
+- **get_events_summary()** - Get upcoming and recent events (can filter by client)
+- **get_team_members()** - Get team members list (can filter by role)
+- **get_venues_history()** - Get venues from past events
 
-## Existing Events
-$eventsContext
-
-$venuesContext
+**IMPORTANT:** Call these functions ONLY when you need the information. Don't call them on every message.
 
 ## Event Updates
 If the user wants to modify an existing event, respond with "EVENT_UPDATE" followed by a JSON object:
@@ -749,16 +707,8 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
     final userMsg = ChatMessage(role: 'user', content: userMessage);
     _conversationHistory.add(userMsg);
 
-    // Only load context on first message or if cache is old
-    final needsFullContext = _conversationHistory.length <= 2 ||
-        (_clientsCacheTime == null ||
-         DateTime.now().difference(_clientsCacheTime!) > const Duration(minutes: 10));
-
-    // Build system prompt with smart context loading based on user message
-    // Skip heavy loading if we already have context cached
+    // Build lightweight system prompt (context loaded on-demand via AI tools)
     final systemPrompt = await _buildSystemPrompt(
-      userMessage: userMessage,
-      skipHeavyLoading: !needsFullContext,
       terminology: terminology,
     );
 
