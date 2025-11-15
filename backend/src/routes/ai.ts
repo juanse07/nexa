@@ -398,7 +398,7 @@ const chatMessageSchema = z.object({
 const AI_TOOLS = [
   {
     name: 'search_addresses',
-    description: 'HYBRID venue/address search - your PRIMARY tool for finding any venue or address. First searches past events in your database, then automatically falls back to Google Places API if nothing found. Use this for any address lookup request.',
+    description: '🔍 PRIMARY SEARCH TOOL - Use this for 95% of venue/address lookups. HYBRID approach: searches your past events database first (fast, shows history), then automatically falls back to Google Places if not found. Examples: "Find Seawell Ballroom", "What\'s the address for The Westin", "Where is client ABC\'s usual venue".',
     parameters: {
       type: 'object',
       properties: {
@@ -531,7 +531,7 @@ const AI_TOOLS = [
   },
   {
     name: 'create_shift',
-    description: 'Create a new staffing shift. IMPORTANT: Managers only care about CALL TIME (when staff should arrive), NOT guest arrival time. Call time is the staff arrival time.',
+    description: 'Create a new event/shift (crear evento/turno). Use when user wants to: create event, make shift, add job, schedule staff, create trabajo, crear evento, agendar personal. IMPORTANT: Managers only care about CALL TIME (when staff should arrive), NOT guest arrival time. Call time is the staff arrival time.',
     parameters: {
       type: 'object',
       properties: {
@@ -596,17 +596,17 @@ const AI_TOOLS = [
   },
   {
     name: 'search_venue',
-    description: 'Direct Google Places API search - use ONLY when you need location-specific searches or want to browse venue types (e.g., "hotels in Boulder", "ballrooms", "conference centers"). For simple address lookups, use search_addresses instead (it includes Google Places as fallback).',
+    description: '🌍 EXPLORATORY SEARCH - Use ONLY for location-based browsing or venue type discovery (NOT for finding specific venues). Examples: "Show me ballrooms in Boulder", "Find hotels near Denver airport", "List conference centers in Colorado Springs". ⚠️ For specific venue lookups like "Find The Westin", use search_addresses instead.',
     parameters: {
       type: 'object',
       properties: {
         query: {
           type: 'string',
-          description: 'Venue search query - venue name, business name, or place type (e.g., "ballroom", "conference center", "hotels")'
+          description: 'Venue TYPE or category to search for (e.g., "ballroom", "conference center", "hotels", "restaurants")'
         },
         location: {
           type: ['string', 'null'],
-          description: 'Optional city or area to search in (e.g., "Denver", "Boulder", "Colorado"). If not provided, uses default Denver area.'
+          description: 'City or area to search in (e.g., "Denver", "Boulder", "Colorado Springs"). If not provided, uses default Denver area.'
         },
         limit: {
           type: ['number', 'null'],
@@ -614,6 +614,65 @@ const AI_TOOLS = [
         }
       },
       required: ['query']
+    }
+  },
+  {
+    name: 'get_clients_list',
+    description: 'Get the list of all clients/companies in the manager\'s account. Use this when the user asks about clients, wants to see all clients, or needs to reference client names.',
+    parameters: {
+      type: 'object',
+      properties: {},
+      required: []
+    }
+  },
+  {
+    name: 'get_events_summary',
+    description: 'Get summary of recent and upcoming events. Use this when user asks about events, schedule, or wants to see what\'s happening. Returns events from the past 30 days and future 60 days.',
+    parameters: {
+      type: 'object',
+      properties: {
+        client_name: {
+          type: ['string', 'null'],
+          description: 'Optional: Filter events by specific client name'
+        },
+        days_past: {
+          type: ['number', 'null'],
+          description: 'Optional: How many days in the past to include (default: 30)'
+        },
+        days_future: {
+          type: ['number', 'null'],
+          description: 'Optional: How many days in the future to include (default: 60)'
+        }
+      },
+      required: []
+    }
+  },
+  {
+    name: 'get_team_members',
+    description: 'Get list of all team members/staff with their roles and current availability status. Use this when user asks about team, staff, or who is available.',
+    parameters: {
+      type: 'object',
+      properties: {
+        role: {
+          type: ['string', 'null'],
+          description: 'Optional: Filter by specific role (e.g., "Server", "Bartender")'
+        }
+      },
+      required: []
+    }
+  },
+  {
+    name: 'get_venues_history',
+    description: 'Get list of venues from past events. Use this when user asks about venues they\'ve used before or wants to see venue history.',
+    parameters: {
+      type: 'object',
+      properties: {
+        limit: {
+          type: ['number', 'null'],
+          description: 'Maximum number of venues to return (default: 20)'
+        }
+      },
+      required: []
     }
   }
 ];
@@ -1011,6 +1070,110 @@ async function executeFunctionCall(
         return summary;
       }
 
+      case 'get_clients_list': {
+        const clients = await ClientModel.find({ managerId })
+          .select('name')
+          .sort({ name: 1 })
+          .lean();
+
+        if (clients.length === 0) {
+          return 'No clients found in your account. You can create clients as needed.';
+        }
+
+        const clientList = clients.map(c => c.name).join(', ');
+        return `You have ${clients.length} client(s): ${clientList}`;
+      }
+
+      case 'get_events_summary': {
+        const { client_name, days_past = 30, days_future = 60 } = functionArgs;
+
+        const filter: any = { managerId };
+        if (client_name) {
+          filter.client_name = new RegExp(client_name, 'i');
+        }
+
+        const today = new Date();
+        const pastDate = new Date(today);
+        pastDate.setDate(pastDate.getDate() - days_past);
+        const futureDate = new Date(today);
+        futureDate.setDate(futureDate.getDate() + days_future);
+
+        filter.date = { $gte: pastDate, $lte: futureDate };
+
+        const events = await EventModel.find(filter)
+          .select('event_name client_name date venue_name city start_time end_time')
+          .sort({ date: 1 })
+          .limit(50)
+          .lean();
+
+        if (events.length === 0) {
+          return `No events found${client_name ? ` for client ${client_name}` : ''} in the specified date range.`;
+        }
+
+        const results = events.map((e: any) => {
+          const dateStr = e.date ? new Date(e.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No date';
+          const timeStr = e.start_time ? `${e.start_time} - ${e.end_time || '?'}` : '';
+          return `${dateStr}: ${e.event_name || 'Unnamed'} (${e.client_name || 'No client'}) at ${e.venue_name || 'TBD'}${timeStr ? `, ${timeStr}` : ''}`;
+        }).join('\n');
+
+        return `Found ${events.length} event(s):\n${results}`;
+      }
+
+      case 'get_team_members': {
+        const { role } = functionArgs;
+
+        const filter: any = { managerId };
+        if (role) {
+          filter.roles = { $elemMatch: { $regex: new RegExp(role, 'i') } };
+        }
+
+        const members = await TeamMemberModel.find(filter)
+          .select('first_name last_name roles email phone')
+          .sort({ last_name: 1, first_name: 1 })
+          .lean();
+
+        if (members.length === 0) {
+          return `No team members found${role ? ` with role "${role}"` : ''}`;
+        }
+
+        const results = members.map((m: any) => {
+          const name = `${m.first_name} ${m.last_name}`;
+          const rolesStr = Array.isArray(m.roles) ? m.roles.join(', ') : 'No roles';
+          return `${name} - ${rolesStr}`;
+        }).join('\n');
+
+        return `Found ${members.length} team member(s):\n${results}`;
+      }
+
+      case 'get_venues_history': {
+        const { limit = 20 } = functionArgs;
+
+        const events = await EventModel.find({ managerId })
+          .select('venue_name venue_address city state')
+          .sort({ date: -1 })
+          .limit(limit)
+          .lean();
+
+        if (events.length === 0) {
+          return 'No venues found in your event history.';
+        }
+
+        // Deduplicate venues by name
+        const venuesMap = new Map();
+        for (const e of events) {
+          if (e.venue_name && !venuesMap.has(e.venue_name)) {
+            venuesMap.set(e.venue_name, e);
+          }
+        }
+
+        const venues = Array.from(venuesMap.values()).slice(0, limit);
+        const results = venues.map(v =>
+          `${v.venue_name} - ${v.venue_address || 'No address'}, ${v.city || '?'}, ${v.state || '?'}`
+        ).join('\n');
+
+        return `Found ${venues.length} venue(s) from your history:\n${results}`;
+      }
+
       default:
         return `Unknown function: ${functionName}`;
     }
@@ -1199,15 +1362,13 @@ async function handleGroqRequest(
     return res.status(500).json({ message: 'Groq API key not configured on server' });
   }
 
-  // Use Llama tool-use model for function calling support
-  const groqModel = model || 'llama3-groq-8b-8192-tool-use-preview';  // Optimized for function calling (#3 on BFCL)
-  const isReasoningModel = false;  // Llama doesn't use reasoning format
+  // Use Llama 3.1 8B Instant for function calling (fast & cost-effective)
+  const groqModel = model || 'llama-3.1-8b-instant';  // Supports parallel tool calling, 560 tokens/sec
+  const isReasoningModel = false;
 
-  console.log(`[Groq] Manager using Llama tool-use model: ${groqModel}`);
+  console.log(`[Groq] Manager using model: ${groqModel}`);
 
   // Optimize prompt structure for caching: static content first (cached), dynamic last
-  const dateContext = getFullSystemContext(timezone);
-
   const languageInstructions = `
 🌍 LANGUAGE RULE - CRITICAL:
 ALWAYS respond in the SAME LANGUAGE the user is speaking.
@@ -1230,7 +1391,10 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
 Example: Instead of showing {"client": "Epicurean"}, say "Client: **Epicurean**"
 `;
 
-  const systemContent = `${dateContext}\n\n${languageInstructions}\n\n${formattingInstructions}`;
+  const dateContext = getFullSystemContext(timezone);
+
+  // Put static instructions FIRST (cacheable), dynamic date context LAST (not cached)
+  const systemContent = `${languageInstructions}\n\n${formattingInstructions}\n\n${dateContext}`;
 
   // Build messages: system prompt first (cached), then conversation
   const processedMessages: any[] = [];
