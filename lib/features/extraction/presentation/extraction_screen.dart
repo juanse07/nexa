@@ -103,7 +103,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   List<Map<String, dynamic>>? _eventsPending;
   List<Map<String, dynamic>>? _eventsAvailable;
   List<Map<String, dynamic>>? _eventsFull;
-  List<Map<String, dynamic>>? _eventsPast;
+  List<Map<String, dynamic>>? _eventsCompleted;
   // Pending drafts (for the old draft section - will be deprecated)
   List<Map<String, dynamic>> _pendingDrafts = const [];
   bool _isPendingLoading = false;
@@ -208,7 +208,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     super.initState();
     _selectedIndex = widget.initialScreenIndex; // Set main screen tab
     _createTabController = TabController(length: 3, vsync: this, initialIndex: widget.initialIndex);
-    _eventsTabController = TabController(length: 3, vsync: this, initialIndex: widget.initialEventsTabIndex);
+    _eventsTabController = TabController(length: 4, vsync: this, initialIndex: widget.initialEventsTabIndex);
     _catalogTabController = TabController(length: 3, vsync: this);
 
     // Initialize animation controllers for header hide/show
@@ -1441,6 +1441,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                     WebTab(text: 'Pending'),
                                     WebTab(text: 'Posted'),
                                     WebTab(text: 'Full'),
+                                    WebTab(text: 'Completed'),
                                   ],
                                   selectedIndex: _eventsTabController.index,
                                   onTabSelected: (index) {
@@ -1650,6 +1651,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               return _eventsInner(_eventsAvailable ?? const []); // Posted tab
             case 2:
               return _eventsInner(_eventsFull ?? const []); // Full tab
+            case 3:
+              return _eventsInner(_eventsCompleted ?? const []); // Completed tab
             default:
               return _eventsInner(_eventsPending ?? const []);
           }
@@ -1661,6 +1664,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               _eventsInner(_eventsPending ?? const []), // Pending tab
               _eventsInner(_eventsAvailable ?? const []), // Posted tab
               _eventsInner(_eventsFull ?? const []), // Full tab
+              _eventsInner(_eventsCompleted ?? const []), // Completed tab
             ],
           );
         }
@@ -2070,7 +2074,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       final pendingCount = _eventsPending?.length ?? 0;
       final availableCount = _eventsAvailable?.length ?? 0;
       final fullCount = _eventsFull?.length ?? 0;
-      final pastCount = _eventsPast?.length ?? 0;
+      final pastCount = _eventsCompleted?.length ?? 0;
       final totalEvents = pendingCount + availableCount + fullCount;
 
       return Container(
@@ -2155,6 +2159,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               WebTab(text: 'Pending'),
                               WebTab(text: 'Posted'),
                               WebTab(text: 'Full'),
+                              WebTab(text: 'Completed'),
                             ],
                             selectedIndex: _eventsTabController.index,
                             onTabSelected: (index) {
@@ -4279,7 +4284,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
   /// Show past events in a bottom sheet
   void _showPastEvents() {
-    final pastEvents = _eventsPast ?? [];
+    final pastEvents = _eventsCompleted ?? [];
 
     showModalBottomSheet<void>(
       context: context,
@@ -4594,17 +4599,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         }
         print('  Status: "$status", isPast: $isPast, hasOpenPositions: ${_hasOpenPositions(e)}');
 
-        // Separate past events
-        if (isPast) {
-          past.add(e);
-          print('  → Classified as: PAST');
-          continue;
-        }
-
         // Tab logic (priority order):
         // 1. Pending = draft events only
-        // 2. Full = fulfilled status (all positions filled) or completed events
-        // 3. Posted = published events (public or private visibility)
+        // 2. Posted = published/confirmed events (accepting staff)
+        // 3. Full = fulfilled status (all positions filled, event upcoming)
+        // 4. Completed = finished events (status completed or past events)
         // Note: Backend now consistently sets 'fulfilled' status when positions are filled
 
         final visibilityType = e['visibilityType']?.toString() ?? 'unknown';
@@ -4615,12 +4614,16 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           // True drafts - not published yet
           pending.add(e);
           print('  → Classified as: PENDING (draft)');
-        } else if (status == 'fulfilled' || status == 'completed') {
-          // Fulfilled events (all positions filled) or completed events (past events)
+        } else if (status == 'completed' || (status == 'cancelled' && isPast)) {
+          // Completed events (auto-completed or manually completed) or cancelled past events
+          past.add(e);
+          print('  → Classified as: COMPLETED (status: $status)');
+        } else if (status == 'fulfilled') {
+          // Fulfilled events (all positions filled, event upcoming)
           full.add(e);
-          print('  → Classified as: FULL (status: $status)');
-        } else if (status == 'published' || status == 'confirmed') {
-          // Published events (both public and private) or confirmed events
+          print('  → Classified as: FULL (fulfilled)');
+        } else if (status == 'published' || status == 'confirmed' || status == 'in_progress') {
+          // Published/confirmed/in-progress events (still accepting staff or event is happening)
           available.add(e);
           if (visibilityType == 'private') {
             print('  → Classified as: POSTED (published - private)');
@@ -4628,7 +4631,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             print('  → Classified as: POSTED (published - public)');
           }
         } else {
-          // Fallback for other statuses (in_progress, cancelled, etc.)
+          // Fallback for other statuses (cancelled upcoming events, etc.)
           pending.add(e);
           print('  → Classified as: PENDING (fallback for status: $status)');
         }
@@ -4663,7 +4666,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         _eventsPending = pending;
         _eventsAvailable = available;
         _eventsFull = full;
-        _eventsPast = past;
+        _eventsCompleted = past;
         _isEventsLoading = false;
       });
     } catch (e) {
@@ -4910,7 +4913,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final List<Map<String, dynamic>> pending = _eventsPending ?? const [];
     final List<Map<String, dynamic>> available = _eventsAvailable ?? const [];
     final List<Map<String, dynamic>> full = _eventsFull ?? const [];
-    final List<Map<String, dynamic>> past = _eventsPast ?? const [];
+    final List<Map<String, dynamic>> past = _eventsCompleted ?? const [];
     return SafeArea(
       child: DefaultTabController(
         length: 3,
