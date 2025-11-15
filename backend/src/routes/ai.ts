@@ -982,6 +982,8 @@ async function executeFunctionCall(
           {
             $set: {
               managerId,
+              clientId: client._id,  // Include in $set for upsert safety
+              roleId: role._id,      // Include in $set for upsert safety
               rate,
               currency,
               updatedAt: new Date()
@@ -1019,27 +1021,30 @@ async function executeFunctionCall(
           return `❌ Missing required fields. Need: client_name, date, call_time (staff arrival), end_time`;
         }
 
+        // Validate roles array is not empty (schema requires at least 1 role)
+        if (!roles || !Array.isArray(roles) || roles.length === 0) {
+          return `❌ At least one role is required. Please specify the roles needed for this shift.`;
+        }
+
         // Auto-generate shift name from client and date
         const eventDate = new Date(date);
-        const eventName = `${client_name} - ${eventDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+        const shiftName = `${client_name} - ${eventDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
 
         // Create event document
         const eventData: any = {
           managerId,
           status: 'draft',
-          event_name: eventName,
+          shift_name: shiftName,  // Use shift_name, not deprecated event_name
           client_name,
           date: eventDate,
           start_time: call_time,  // Call time = start time (when staff arrives)
           end_time,
-          city: 'Denver Metro',  // Default city
-          state: 'CO',           // Default state
-          roles: roles || [],
+          roles: roles,  // Already validated to have at least 1 role
           accepted_staff: [],
           declined_staff: []
         };
 
-        // Add optional fields
+        // Add optional fields (city/state are now truly optional, not hardcoded)
         if (venue_name) eventData.venue_name = venue_name;
         if (venue_address) eventData.venue_address = venue_address;
         if (uniform) eventData.uniform = uniform;
