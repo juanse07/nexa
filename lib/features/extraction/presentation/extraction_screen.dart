@@ -4618,10 +4618,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           // Completed events (auto-completed or manually completed) or cancelled past events
           past.add(e);
           print('  → Classified as: COMPLETED (status: $status)');
-        } else if (status == 'fulfilled') {
-          // Fulfilled events (all positions filled, event upcoming)
+        } else if (status == 'fulfilled' || !_hasOpenPositions(e)) {
+          // Fulfilled events (status = fulfilled OR all positions filled)
+          // Capacity check as fallback for events filled before auto-fulfill was deployed
           full.add(e);
-          print('  → Classified as: FULL (fulfilled)');
+          print('  → Classified as: FULL (${status == 'fulfilled' ? 'fulfilled status' : 'no open positions'})');
         } else if (status == 'published' || status == 'confirmed' || status == 'in_progress') {
           // Published/confirmed/in-progress events (still accepting staff or event is happening)
           available.add(e);
