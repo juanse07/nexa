@@ -3,6 +3,7 @@ import { EventModel } from '../models/event';
 import { UserModel } from '../models/user';
 import { EventChatMessageModel } from '../models/eventChatMessage';
 import { notificationService } from './notificationService';
+import { emitToManager } from '../socket/server';
 
 class NotificationScheduler {
   private tasks: cron.ScheduledTask[] = [];
@@ -49,7 +50,16 @@ class NotificationScheduler {
       })
     );
 
-    console.log('[NotificationScheduler] ✅ Initialized 4 scheduled tasks');
+    // Run daily at midnight to auto-complete past events
+    this.tasks.push(
+      cron.schedule('0 0 * * *', () => {
+        this.autoCompleteEvents().catch(err => {
+          console.error('[NotificationScheduler] Auto-complete events failed:', err);
+        });
+      })
+    );
+
+    console.log('[NotificationScheduler] ✅ Initialized 5 scheduled tasks');
   }
 
   /**
@@ -341,6 +351,69 @@ class NotificationScheduler {
 
     } catch (error) {
       console.error('[NotificationScheduler] autoEnableEventChat error:', error);
+    }
+  }
+
+  /**
+   * Auto-complete events that have passed (runs daily at midnight)
+   */
+  async autoCompleteEvents(): Promise<void> {
+    try {
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+
+      console.log(`[NotificationScheduler] Checking for events to auto-complete (before ${startOfToday.toISOString()})`);
+
+      // Find events from previous days that should be auto-completed
+      const eventsToComplete = await EventModel.find({
+        date: { $lt: startOfToday },
+        status: { $in: ['published', 'confirmed', 'fulfilled', 'in_progress'] },
+        keepOpen: { $ne: true },
+      }).lean();
+
+      console.log(`[NotificationScheduler] Found ${eventsToComplete.length} events to auto-complete`);
+
+      for (const event of eventsToComplete) {
+        try {
+          // Update event status to completed
+          await EventModel.updateOne(
+            { _id: event._id },
+            {
+              $set: {
+                status: 'completed',
+                updatedAt: new Date(),
+              }
+            }
+          );
+
+          console.log(`[NotificationScheduler] ✅ Auto-completed event ${event._id} (${event.event_name || event.shift_name})`);
+
+          // Send immediate notification to manager
+          if (event.managerId) {
+            try {
+              emitToManager(String(event.managerId), 'event:auto-completed', {
+                eventId: String(event._id),
+                eventName: event.event_name || event.shift_name || 'Event',
+                clientName: event.client_name || '',
+                date: event.date,
+                venueName: event.venue_name || '',
+                timestamp: new Date().toISOString(),
+              });
+              console.log(`[NotificationScheduler] 📨 Sent auto-completion notification to manager ${event.managerId}`);
+            } catch (notifErr) {
+              console.error(`[NotificationScheduler] Failed to notify manager for event ${event._id}:`, notifErr);
+            }
+          }
+
+        } catch (err) {
+          console.error(`[NotificationScheduler] Failed to auto-complete event ${event._id}:`, err);
+        }
+      }
+
+      console.log(`[NotificationScheduler] ✅ Auto-completed ${eventsToComplete.length} past events`);
+
+    } catch (error) {
+      console.error('[NotificationScheduler] autoCompleteEvents error:', error);
     }
   }
 

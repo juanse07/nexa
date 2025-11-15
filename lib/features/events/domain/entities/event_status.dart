@@ -1,7 +1,7 @@
 /// Enumeration of possible event statuses in the application.
 ///
 /// The event lifecycle typically flows:
-/// draft -> published -> confirmed -> inProgress -> completed (or cancelled)
+/// draft -> published -> confirmed -> fulfilled -> inProgress -> completed (or cancelled)
 enum EventStatus {
   /// Event is being drafted and not yet published
   draft,
@@ -11,6 +11,9 @@ enum EventStatus {
 
   /// Event is confirmed and scheduled
   confirmed,
+
+  /// Event is fulfilled (all positions filled)
+  fulfilled,
 
   /// Event is currently in progress
   inProgress,
@@ -30,6 +33,8 @@ enum EventStatus {
         return 'Published';
       case EventStatus.confirmed:
         return 'Confirmed';
+      case EventStatus.fulfilled:
+        return 'Fulfilled';
       case EventStatus.inProgress:
         return 'In Progress';
       case EventStatus.completed:
@@ -43,7 +48,8 @@ enum EventStatus {
   bool get isEditable =>
       this == EventStatus.draft ||
       this == EventStatus.published ||
-      this == EventStatus.confirmed;
+      this == EventStatus.confirmed ||
+      this == EventStatus.fulfilled;
 
   /// Returns true if the event is active (not completed or cancelled).
   bool get isActive =>

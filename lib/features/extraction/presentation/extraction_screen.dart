@@ -4603,8 +4603,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
         // Tab logic (priority order):
         // 1. Pending = draft events only
-        // 2. Full = fulfilled or no open positions
+        // 2. Full = fulfilled status (all positions filled) or completed events
         // 3. Posted = published events (public or private visibility)
+        // Note: Backend now consistently sets 'fulfilled' status when positions are filled
 
         final visibilityType = e['visibilityType']?.toString() ?? 'unknown';
 
@@ -4614,12 +4615,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           // True drafts - not published yet
           pending.add(e);
           print('  → Classified as: PENDING (draft)');
-        } else if (status == 'fulfilled' || !_hasOpenPositions(e)) {
-          // Fulfilled or full events
+        } else if (status == 'fulfilled' || status == 'completed') {
+          // Fulfilled events (all positions filled) or completed events (past events)
           full.add(e);
-          print('  → Classified as: FULL (fulfilled or no open positions)');
-        } else if (status == 'published') {
-          // Published events (both public and private)
+          print('  → Classified as: FULL (status: $status)');
+        } else if (status == 'published' || status == 'confirmed') {
+          // Published events (both public and private) or confirmed events
           available.add(e);
           if (visibilityType == 'private') {
             print('  → Classified as: POSTED (published - private)');
@@ -4627,7 +4628,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             print('  → Classified as: POSTED (published - public)');
           }
         } else {
-          // Fallback for other statuses (in_progress, completed, etc.)
+          // Fallback for other statuses (in_progress, cancelled, etc.)
           pending.add(e);
           print('  → Classified as: PENDING (fallback for status: $status)');
         }
@@ -5244,7 +5245,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       crossAxisCount: crossAxisCount,
                       crossAxisSpacing: 16,
                       mainAxisSpacing: 16,
-                      childAspectRatio: 2.5,
+                      childAspectRatio: 1.8,
                     ),
                   ),
                 ),

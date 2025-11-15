@@ -21,6 +21,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   late Map<String, dynamic> event;
   final EventService _eventService = EventService();
   bool _isRemoving = false;
+  bool _isUpdatingKeepOpen = false;
 
   @override
   void initState() {
@@ -599,10 +600,41 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   Widget _buildActionButtons() {
     final privacyStatus = _getPrivacyStatus();
+    final keepOpen = event['keepOpen'] == true;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Keep Open toggle (prevents auto-completion)
+        Card(
+          elevation: 0,
+          color: const Color(0xFF6366F1).withOpacity(0.05),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+            side: BorderSide(
+              color: const Color(0xFF6366F1).withOpacity(0.2),
+              width: 1,
+            ),
+          ),
+          child: SwitchListTile(
+            title: const Text(
+              'Keep Open After Event',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+            subtitle: const Text(
+              'Prevent automatic completion when event date passes',
+              style: TextStyle(fontSize: 12),
+            ),
+            value: keepOpen,
+            onChanged: _isUpdatingKeepOpen ? null : _toggleKeepOpen,
+            activeColor: const Color(0xFF6366F1),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          ),
+        ),
+        const SizedBox(height: 16),
         // Move to Drafts button (always shown for published events)
         ElevatedButton.icon(
           onPressed: _isRemoving ? null : _moveToDrafts,
@@ -769,6 +801,53 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to move to drafts: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _toggleKeepOpen(bool newValue) async {
+    setState(() => _isUpdatingKeepOpen = true);
+
+    try {
+      final eventId = (event['_id'] ?? event['id'] ?? '').toString();
+
+      // Update keepOpen field via API
+      final updatedEvent = await _eventService.updateEvent(eventId, {
+        'keepOpen': newValue,
+      });
+
+      if (!mounted) return;
+
+      // Update local event state
+      setState(() {
+        event = updatedEvent;
+        _isUpdatingKeepOpen = false;
+      });
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            newValue
+                ? 'Event will stay open after completion'
+                : 'Event will auto-complete when past',
+          ),
+          backgroundColor: const Color(0xFF059669),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+      // Notify parent to refresh
+      widget.onEventUpdated?.call();
+    } catch (e) {
+      setState(() => _isUpdatingKeepOpen = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update: ${e.toString()}'),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
         ),

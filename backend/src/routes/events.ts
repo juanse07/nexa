@@ -1875,6 +1875,28 @@ router.post('/events/:id/respond', requireAuth, async (req, res) => {
         console.log(`[respond] Auto-publishing event ${eventId} from draft to published (first staff acceptance)`);
       }
 
+      // Check if event should auto-transition to 'fulfilled' status (all positions filled)
+      if (responseVal === 'accept' && (updatedEvent.status === 'published' || updatedEvent.status === 'draft')) {
+        const { checkIfEventFulfilled } = await import('../utils/eventCapacity');
+        const isFulfilled = checkIfEventFulfilled(updatedEvent);
+
+        if (isFulfilled) {
+          console.log(`[respond] Event ${eventId} is now fulfilled - all positions filled`);
+          updateFields.status = 'fulfilled';
+          updateFields.fulfilledAt = new Date();
+
+          // Emit socket event to manager for fulfilled status
+          if (updatedEvent.managerId) {
+            emitToManager(String(updatedEvent.managerId), 'event:fulfilled', {
+              eventId: String(updatedEvent._id),
+              eventName: updatedEvent.event_name,
+              date: updatedEvent.date,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        }
+      }
+
       await EventModel.updateOne(
         { _id: updatedEvent._id },
         { $set: updateFields, $inc: { version: 1 } }

@@ -59,6 +59,9 @@ export interface EventDocument extends Document {
   publishedBy?: string;
   fulfilledAt?: Date;
 
+  // Auto-completion control
+  keepOpen?: boolean; // If true, prevents automatic status change to 'completed'
+
   // Event visibility type
   // - private: Only invited staff (has audience_user_keys/audience_team_ids)
   // - public: All staff can see (no invitations)
@@ -196,6 +199,9 @@ const EventSchema = new Schema<EventDocument>(
     publishedAt: { type: Date },
     publishedBy: { type: String, trim: true },
     fulfilledAt: { type: Date },
+
+    // Auto-completion control
+    keepOpen: { type: Boolean, default: false },
 
     // Event visibility type
     visibilityType: {
