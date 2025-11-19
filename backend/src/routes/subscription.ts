@@ -3,12 +3,27 @@ import crypto from 'crypto';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/requireAuth';
 import { UserModel } from '../models/user';
+import { ManagerModel } from '../models/manager';
+import { TeamMemberModel } from '../models/teamMember';
+import { EventModel } from '../models/event';
 
 const router = Router();
 
 /**
+ * Helper function to determine which model to use based on JWT token
+ * Returns { Model, isManager }
+ */
+function getUserModel(req: any): { Model: typeof UserModel | typeof ManagerModel; isManager: boolean } {
+  const managerId = req.user?.managerId;
+  return managerId
+    ? { Model: ManagerModel, isManager: true }
+    : { Model: UserModel, isManager: false };
+}
+
+/**
  * GET /api/subscription/status
  * Get current user's subscription status and details
+ * Supports both staff users and managers
  */
 router.get('/subscription/status', requireAuth, async (req, res) => {
   try {
@@ -19,7 +34,9 @@ router.get('/subscription/status', requireAuth, async (req, res) => {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const user = await UserModel.findOne({ provider, subject })
+    const { Model, isManager } = getUserModel(req);
+
+    const user = await Model.findOne({ provider, subject })
       .select('subscription_tier subscription_status subscription_platform subscription_started_at subscription_expires_at')
       .lean();
 
@@ -34,6 +51,7 @@ router.get('/subscription/status', requireAuth, async (req, res) => {
       startedAt: user.subscription_started_at || null,
       expiresAt: user.subscription_expires_at || null,
       isActive: user.subscription_tier === 'pro' && user.subscription_status === 'active',
+      userType: isManager ? 'manager' : 'staff', // Indicate which type of user
     });
   } catch (err: any) {
     console.error('[subscription/status] Error:', err);
@@ -63,14 +81,15 @@ router.get('/subscription/usage', requireAuth, async (req, res) => {
     }
 
     const isFree = user.subscription_tier === 'free';
-    const limit = isFree ? 50 : null; // Pro has unlimited
+    const FREE_TIER_LIMIT = 20; // Changed from 50 to 20 to reduce costs
+    const limit = isFree ? FREE_TIER_LIMIT : null; // Pro has unlimited
 
     return res.json({
       used: user.ai_messages_used_this_month || 0,
       limit: limit,
       resetDate: user.ai_messages_reset_date,
       tier: user.subscription_tier || 'free',
-      percentUsed: isFree ? Math.round(((user.ai_messages_used_this_month || 0) / 50) * 100) : 0,
+      percentUsed: isFree ? Math.round(((user.ai_messages_used_this_month || 0) / FREE_TIER_LIMIT) * 100) : 0,
     });
   } catch (err: any) {
     console.error('[subscription/usage] Error:', err);
@@ -79,8 +98,74 @@ router.get('/subscription/usage', requireAuth, async (req, res) => {
 });
 
 /**
+ * GET /api/subscription/manager/usage
+ * Get manager-specific usage statistics (team size, event count, analytics access)
+ * Used to enforce free tier limits: 25 team members, 10 events/month
+ */
+router.get('/subscription/manager/usage', requireAuth, async (req, res) => {
+  try {
+    const provider = (req as any).user?.provider;
+    const subject = (req as any).user?.sub;
+    const managerId = (req as any).user?.managerId || (req as any).user?._id;
+
+    if (!provider || !subject || !managerId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const manager = await ManagerModel.findOne({ provider, subject })
+      .select('subscription_tier')
+      .lean();
+
+    if (!manager) {
+      return res.status(404).json({ message: 'Manager not found' });
+    }
+
+    const isFree = manager.subscription_tier === 'free' || !manager.subscription_tier;
+
+    // Count team members
+    const teamMemberCount = await TeamMemberModel.countDocuments({ managerId });
+
+    // Count events created this month
+    const now = new Date();
+    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const eventsThisMonth = await EventModel.countDocuments({
+      managerId,
+      createdAt: { $gte: firstDayOfMonth }
+    });
+
+    // Free tier limits
+    const FREE_TEAM_LIMIT = 25;
+    const FREE_EVENT_LIMIT = 10; // events per month
+
+    return res.json({
+      teamMembers: {
+        current: teamMemberCount,
+        limit: isFree ? FREE_TEAM_LIMIT : null, // Pro has unlimited
+        percentUsed: isFree ? Math.round((teamMemberCount / FREE_TEAM_LIMIT) * 100) : 0,
+        canAddMore: isFree ? teamMemberCount < FREE_TEAM_LIMIT : true,
+      },
+      events: {
+        thisMonth: eventsThisMonth,
+        limit: isFree ? FREE_EVENT_LIMIT : null, // Pro has unlimited
+        percentUsed: isFree ? Math.round((eventsThisMonth / FREE_EVENT_LIMIT) * 100) : 0,
+        canCreateMore: isFree ? eventsThisMonth < FREE_EVENT_LIMIT : true,
+      },
+      analytics: {
+        hasAccess: !isFree, // Analytics only for Pro users
+      },
+      tier: manager.subscription_tier || 'free',
+      isPro: !isFree,
+    });
+  } catch (err: any) {
+    console.error('[subscription/manager/usage] Error:', err);
+    return res.status(500).json({ message: 'Failed to get manager usage statistics' });
+  }
+});
+
+/**
  * POST /api/subscription/link-user
  * Link Qonversion user ID to backend user
+ * Supports both staff users and managers
  */
 const linkUserSchema = z.object({
   qonversionUserId: z.string().min(1),
@@ -96,8 +181,9 @@ router.post('/subscription/link-user', requireAuth, async (req, res) => {
     }
 
     const validated = linkUserSchema.parse(req.body);
+    const { Model, isManager } = getUserModel(req);
 
-    const user = await UserModel.findOneAndUpdate(
+    const user = await Model.findOneAndUpdate(
       { provider, subject },
       { qonversion_user_id: validated.qonversionUserId },
       { new: true }
@@ -107,7 +193,7 @@ router.post('/subscription/link-user', requireAuth, async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    console.log(`[subscription/link-user] Linked Qonversion user ${validated.qonversionUserId} to ${provider}:${subject}`);
+    console.log(`[subscription/link-user] Linked Qonversion user ${validated.qonversionUserId} to ${isManager ? 'manager' : 'staff'} ${provider}:${subject}`);
 
     return res.json({ success: true, qonversionUserId: validated.qonversionUserId });
   } catch (err: any) {
@@ -123,6 +209,7 @@ router.post('/subscription/link-user', requireAuth, async (req, res) => {
  * POST /api/subscription/sync
  * Manually sync subscription status from Qonversion
  * (In production, this would call Qonversion API to fetch latest status)
+ * Supports both staff users and managers
  */
 router.post('/subscription/sync', requireAuth, async (req, res) => {
   try {
@@ -133,9 +220,11 @@ router.post('/subscription/sync', requireAuth, async (req, res) => {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
+    const { Model, isManager } = getUserModel(req);
+
     // TODO: In production, call Qonversion API to fetch subscription status
     // For now, just return current status
-    const user = await UserModel.findOne({ provider, subject })
+    const user = await Model.findOne({ provider, subject })
       .select('subscription_tier subscription_status qonversion_user_id')
       .lean();
 
@@ -143,7 +232,7 @@ router.post('/subscription/sync', requireAuth, async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    console.log(`[subscription/sync] Sync requested for ${provider}:${subject}`);
+    console.log(`[subscription/sync] Sync requested for ${isManager ? 'manager' : 'staff'} ${provider}:${subject}`);
 
     return res.json({
       success: true,
@@ -238,6 +327,7 @@ function verifyWebhookSignature(payload: any, signature: string, secret: string)
 
 /**
  * Handle subscription activation (started, renewed, trial started/converted)
+ * Tries both UserModel and ManagerModel
  */
 async function handleSubscriptionActivation(event: any) {
   try {
@@ -246,17 +336,29 @@ async function handleSubscriptionActivation(event: any) {
       ? new Date(event.expiration_date * 1000)
       : null;
 
-    const updateResult = await UserModel.findOneAndUpdate(
+    const updateData = {
+      subscription_tier: 'pro' as const,
+      subscription_status: (event.type.includes('trial') ? 'trial' : 'active') as const,
+      subscription_started_at: new Date(),
+      subscription_expires_at: expirationDate,
+      subscription_platform: event.environment?.toLowerCase() || null,
+    };
+
+    // Try staff user first
+    let updateResult = await UserModel.findOneAndUpdate(
       { qonversion_user_id: qonversionUserId },
-      {
-        subscription_tier: 'pro',
-        subscription_status: event.type.includes('trial') ? 'trial' : 'active',
-        subscription_started_at: new Date(),
-        subscription_expires_at: expirationDate,
-        subscription_platform: event.environment?.toLowerCase() || null,
-      },
+      updateData,
       { new: true }
     );
+
+    // If not found, try manager
+    if (!updateResult) {
+      updateResult = await ManagerModel.findOneAndUpdate(
+        { qonversion_user_id: qonversionUserId },
+        updateData,
+        { new: true }
+      );
+    }
 
     if (updateResult) {
       console.log('[handleSubscriptionActivation] Activated pro subscription for Qonversion user:', qonversionUserId);
@@ -271,20 +373,33 @@ async function handleSubscriptionActivation(event: any) {
 
 /**
  * Handle subscription deactivation (expired, cancelled)
+ * Tries both UserModel and ManagerModel
  */
 async function handleSubscriptionDeactivation(event: any) {
   try {
     const qonversionUserId = event.uid;
 
-    const updateResult = await UserModel.findOneAndUpdate(
+    const updateData = {
+      subscription_tier: 'free' as const,
+      subscription_status: (event.type.includes('cancelled') ? 'cancelled' : 'expired') as const,
+      subscription_expires_at: new Date(),
+    };
+
+    // Try staff user first
+    let updateResult = await UserModel.findOneAndUpdate(
       { qonversion_user_id: qonversionUserId },
-      {
-        subscription_tier: 'free',
-        subscription_status: event.type.includes('cancelled') ? 'cancelled' : 'expired',
-        subscription_expires_at: new Date(),
-      },
+      updateData,
       { new: true }
     );
+
+    // If not found, try manager
+    if (!updateResult) {
+      updateResult = await ManagerModel.findOneAndUpdate(
+        { qonversion_user_id: qonversionUserId },
+        updateData,
+        { new: true }
+      );
+    }
 
     if (updateResult) {
       console.log('[handleSubscriptionDeactivation] Deactivated subscription for Qonversion user:', qonversionUserId);
@@ -299,20 +414,33 @@ async function handleSubscriptionDeactivation(event: any) {
 
 /**
  * Handle subscription refund
+ * Tries both UserModel and ManagerModel
  */
 async function handleRefund(event: any) {
   try {
     const qonversionUserId = event.uid;
 
-    const updateResult = await UserModel.findOneAndUpdate(
+    const updateData = {
+      subscription_tier: 'free' as const,
+      subscription_status: 'cancelled' as const,
+      subscription_expires_at: new Date(),
+    };
+
+    // Try staff user first
+    let updateResult = await UserModel.findOneAndUpdate(
       { qonversion_user_id: qonversionUserId },
-      {
-        subscription_tier: 'free',
-        subscription_status: 'cancelled',
-        subscription_expires_at: new Date(),
-      },
+      updateData,
       { new: true }
     );
+
+    // If not found, try manager
+    if (!updateResult) {
+      updateResult = await ManagerModel.findOneAndUpdate(
+        { qonversion_user_id: qonversionUserId },
+        updateData,
+        { new: true }
+      );
+    }
 
     if (updateResult) {
       console.log('[handleRefund] Processed refund for Qonversion user:', qonversionUserId);
@@ -327,6 +455,7 @@ async function handleRefund(event: any) {
 
 /**
  * Handle subscription product change (upgrade/downgrade)
+ * Tries both UserModel and ManagerModel
  */
 async function handleProductChange(event: any) {
   try {
@@ -335,13 +464,25 @@ async function handleProductChange(event: any) {
       ? new Date(event.expiration_date * 1000)
       : null;
 
-    const updateResult = await UserModel.findOneAndUpdate(
+    const updateData = {
+      subscription_expires_at: expirationDate,
+    };
+
+    // Try staff user first
+    let updateResult = await UserModel.findOneAndUpdate(
       { qonversion_user_id: qonversionUserId },
-      {
-        subscription_expires_at: expirationDate,
-      },
+      updateData,
       { new: true }
     );
+
+    // If not found, try manager
+    if (!updateResult) {
+      updateResult = await ManagerModel.findOneAndUpdate(
+        { qonversion_user_id: qonversionUserId },
+        updateData,
+        { new: true }
+      );
+    }
 
     if (updateResult) {
       console.log('[handleProductChange] Updated subscription for Qonversion user:', qonversionUserId);

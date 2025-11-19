@@ -533,7 +533,7 @@ router.get('/ai/staff/context', requireAuth, async (req, res) => {
     // Get team info (manager contact, company name, etc.)
     // TODO: Add Company/Team model
     const teamInfo = {
-      companyName: 'Nexa Staffing',
+      companyName: 'Tie Staffing',
       supportEmail: 'support@nexastaffing.com',
       supportPhone: '(555) 123-4567',
     };
@@ -1746,9 +1746,9 @@ router.post('/ai/staff/chat/message', requireAuth, async (req, res) => {
         console.log(`[ai/staff/chat/message] Reset message counter for user ${userId}, next reset: ${nextMonth.toISOString()}`);
       }
 
-      // Check message limit (50 for free tier)
+      // Check message limit (20 for free tier - changed from 50 to reduce costs)
       const messagesUsed = mutableUser.ai_messages_used_this_month || 0;
-      const messageLimit = 50;
+      const messageLimit = 20;
 
       if (messagesUsed >= messageLimit) {
         console.log(`[ai/staff/chat/message] User ${userId} hit message limit (${messagesUsed}/${messageLimit})`);

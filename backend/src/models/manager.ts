@@ -26,6 +26,14 @@ export interface ManagerDocument extends Document {
     lastActive: Date;
   }>;
 
+  // Subscription fields
+  subscription_tier?: 'free' | 'pro';
+  subscription_status?: 'active' | 'trial' | 'expired' | 'cancelled' | 'grace_period';
+  subscription_platform?: 'ios' | 'android' | 'web' | null;
+  qonversion_user_id?: string;
+  subscription_started_at?: Date;
+  subscription_expires_at?: Date;
+
   // Personalized venue discovery
   preferredCity?: string; // DEPRECATED: Use cities array instead. Kept for backward compatibility
   cities?: Array<{
@@ -72,6 +80,22 @@ const ManagerSchema = new Schema<ManagerDocument>(
       lastActive: { type: Date, default: Date.now },
     }],
 
+    // Subscription fields
+    subscription_tier: { type: String, enum: ['free', 'pro'], default: 'free' },
+    subscription_status: {
+      type: String,
+      enum: ['active', 'trial', 'expired', 'cancelled', 'grace_period'],
+      default: 'active'
+    },
+    subscription_platform: {
+      type: String,
+      enum: ['ios', 'android', 'web', null],
+      default: null
+    },
+    qonversion_user_id: { type: String, sparse: true },
+    subscription_started_at: { type: Date, default: null },
+    subscription_expires_at: { type: Date, default: null },
+
     // Personalized venue discovery
     preferredCity: { type: String, trim: true }, // DEPRECATED: kept for backward compatibility
     cities: [{
@@ -92,6 +116,7 @@ const ManagerSchema = new Schema<ManagerDocument>(
 
 ManagerSchema.index({ provider: 1, subject: 1 }, { unique: true });
 ManagerSchema.index({ app_id: 1 }, { unique: false, sparse: true });
+ManagerSchema.index({ qonversion_user_id: 1 }, { unique: false, sparse: true });
 
 export const ManagerModel: Model<ManagerDocument> =
   mongoose.models.Manager || mongoose.model<ManagerDocument>('Manager', ManagerSchema);
