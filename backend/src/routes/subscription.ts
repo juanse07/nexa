@@ -36,7 +36,7 @@ router.get('/subscription/status', requireAuth, async (req, res) => {
 
     const { Model, isManager } = getUserModel(req);
 
-    const user = await Model.findOne({ provider, subject })
+    const user = await (Model as any).findOne({ provider, subject })
       .select('subscription_tier subscription_status subscription_platform subscription_started_at subscription_expires_at')
       .lean();
 
@@ -183,7 +183,7 @@ router.post('/subscription/link-user', requireAuth, async (req, res) => {
     const validated = linkUserSchema.parse(req.body);
     const { Model, isManager } = getUserModel(req);
 
-    const user = await Model.findOneAndUpdate(
+    const user = await (Model as any).findOneAndUpdate(
       { provider, subject },
       { qonversion_user_id: validated.qonversionUserId },
       { new: true }
@@ -224,7 +224,7 @@ router.post('/subscription/sync', requireAuth, async (req, res) => {
 
     // TODO: In production, call Qonversion API to fetch subscription status
     // For now, just return current status
-    const user = await Model.findOne({ provider, subject })
+    const user = await (Model as any).findOne({ provider, subject })
       .select('subscription_tier subscription_status qonversion_user_id')
       .lean();
 
@@ -336,9 +336,10 @@ async function handleSubscriptionActivation(event: any) {
       ? new Date(event.expiration_date * 1000)
       : null;
 
+    const subscriptionStatus = event.type.includes('trial') ? 'trial' : 'active';
     const updateData = {
       subscription_tier: 'pro' as const,
-      subscription_status: (event.type.includes('trial') ? 'trial' : 'active') as const,
+      subscription_status: subscriptionStatus as 'trial' | 'active',
       subscription_started_at: new Date(),
       subscription_expires_at: expirationDate,
       subscription_platform: event.environment?.toLowerCase() || null,
@@ -379,9 +380,10 @@ async function handleSubscriptionDeactivation(event: any) {
   try {
     const qonversionUserId = event.uid;
 
+    const subscriptionStatus = event.type.includes('cancelled') ? 'cancelled' : 'expired';
     const updateData = {
       subscription_tier: 'free' as const,
-      subscription_status: (event.type.includes('cancelled') ? 'cancelled' : 'expired') as const,
+      subscription_status: subscriptionStatus as 'cancelled' | 'expired',
       subscription_expires_at: new Date(),
     };
 
