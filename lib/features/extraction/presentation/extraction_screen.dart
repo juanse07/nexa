@@ -44,6 +44,7 @@ import '../widgets/event_data_preview_card.dart';
 import '../../extraction/widgets/chat_message_widget.dart';
 import '../../extraction/widgets/chat_input_widget.dart';
 import '../../extraction/widgets/event_confirmation_card.dart';
+import 'widgets/extraction_widgets.dart';
 import 'mixins/event_data_mixin.dart';
 import 'pending_publish_screen.dart';
 import 'pending_edit_screen.dart';
@@ -194,8 +195,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         icon: const Icon(Icons.refresh, size: 18),
         label: Text(label),
         style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xFF6366F1),
-          side: const BorderSide(color: Color(0xFF6366F1)),
+          foregroundColor: ExColors.techBlue,
+          side: const BorderSide(color: ExColors.techBlue),
           visualDensity: VisualDensity.compact,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         ),
@@ -658,13 +659,13 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     vertical: 14,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
+                    color: ExColors.backgroundLight,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: Colors.grey.shade300),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.business, color: Color(0xFF6366F1)),
+                      const Icon(Icons.business, color: ExColors.techBlue),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
@@ -793,7 +794,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(AppLocalizations.of(context)!.pleaseSelectDate),
-          backgroundColor: const Color(0xFFEF4444),
+          backgroundColor: ExColors.error,
         ),
       );
       return;
@@ -844,7 +845,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Details captured. Tap 'Save to Database' to persist."),
-          backgroundColor: Color(0xFF059669),
+          backgroundColor: ExColors.successDark,
         ),
       );
     }
@@ -867,14 +868,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                Color(0xFFF8F9FA),
-                Color(0xFFFFFFFF),
+                ExColors.backgroundGrey,
+                ExColors.backgroundWhite,
               ],
             ),
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
             boxShadow: [
               BoxShadow(
-                color: Color(0x1A000000),
+                color: ExColors.shadowBlack,
                 blurRadius: 24,
                 offset: Offset(0, -4),
               ),
@@ -902,8 +903,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
                           colors: [
-                            Color(0xFF7C3AED),
-                            Color(0xFF6366F1),
+                            ExColors.yellow,
+                            ExColors.techBlue,
                           ],
                         ),
                         borderRadius: BorderRadius.circular(12),
@@ -924,7 +925,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFF0F172A),
+                              color: ExColors.textPrimary,
                             ),
                           ),
                           Text(
@@ -944,7 +945,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF10B981).withOpacity(0.1),
+                          color: ExColors.success.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Row(
@@ -953,7 +954,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                             Icon(
                               Icons.check_circle,
                               size: 14,
-                              color: Color(0xFF10B981),
+                              color: ExColors.success,
                             ),
                             SizedBox(width: 4),
                             Text(
@@ -961,7 +962,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w500,
-                                color: Color(0xFF10B981),
+                                color: ExColors.success,
                               ),
                             ),
                           ],
@@ -1020,7 +1021,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: const Color(0xFF6366F1).withOpacity(0.1),
+                            color: ExColors.info.withOpacity(0.1),
                             width: 1,
                           ),
                           boxShadow: [
@@ -1044,8 +1045,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                   decoration: BoxDecoration(
                                     gradient: const LinearGradient(
                                       colors: [
-                                        Color(0xFF8B5CF6),
-                                        Color(0xFF6366F1),
+                                        ExColors.yellow,
+                                        ExColors.techBlue,
                                       ],
                                     ),
                                     borderRadius: BorderRadius.circular(8),
@@ -1066,7 +1067,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               displayValue,
                               style: const TextStyle(
                                 fontSize: 15,
-                                color: Color(0xFF0F172A),
+                                color: ExColors.textPrimary,
                                 height: 1.5,
                               ),
                             ),
@@ -1134,12 +1135,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(AppLocalizations.of(context)!.jobSavedToPending),
-                          backgroundColor: const Color(0xFF059669),
+                          backgroundColor: ExColors.successDark,
                         ),
                       );
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6366F1),
+                      backgroundColor: ExColors.techBlue,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
@@ -1390,7 +1391,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                 _createTabController.animateTo(index);
                               });
                             },
-                            selectedColor: const Color(0xFF7C3AED),
+                            selectedColor: ExColors.yellow, // Yellow
                           )
                         : TabBar(
                             controller: _createTabController,
@@ -1399,9 +1400,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               Tab(icon: Icon(Icons.auto_awesome), text: AppLocalizations.of(context)!.aiChat),
                               Tab(icon: Icon(Icons.edit), text: AppLocalizations.of(context)!.manualEntry),
                             ],
-                            labelColor: const Color(0xFF7C3AED),
+                            labelColor: ExColors.yellow, // Yellow
                             unselectedLabelColor: Colors.grey,
-                            indicatorColor: const Color(0xFF7C3AED),
+                            indicatorColor: ExColors.yellow, // Yellow
                           ),
                   ),
                 ),
@@ -1449,7 +1450,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                       _eventsTabController.animateTo(index);
                                     });
                                   },
-                                  selectedColor: const Color(0xFF7C3AED),
+                                  selectedColor: ExColors.techBlue, // Yellow
                                 )
                               : TabBar(
                                   controller: _eventsTabController,
@@ -1458,9 +1459,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                     Tab(text: 'Posted'),
                                     Tab(text: 'Full'),
                                   ],
-                                  labelColor: const Color(0xFF7C3AED),
+                                  labelColor: ExColors.techBlue, // Yellow
                                   unselectedLabelColor: Colors.grey,
-                                  indicatorColor: const Color(0xFF7C3AED),
+                                  indicatorColor: ExColors.yellow, // Yellow
                                 ),
                         ),
                         // Past Events button
@@ -1469,7 +1470,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           icon: const Icon(Icons.history, size: 18),
                           label: const Text('Past'),
                           style: TextButton.styleFrom(
-                            foregroundColor: const Color(0xFF6B7280),
+                            foregroundColor: ExColors.textSecondary,
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           ),
                         ),
@@ -1604,7 +1605,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                 _catalogTabController.animateTo(index);
                               });
                             },
-                            selectedColor: const Color(0xFF7C3AED),
+                            selectedColor: ExColors.yellow, // Yellow
                           )
                         : TabBar(
                             controller: _catalogTabController,
@@ -1613,9 +1614,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               Tab(text: 'Roles'),
                               Tab(text: 'Tariffs'),
                             ],
-                            labelColor: const Color(0xFF7C3AED),
+                            labelColor: ExColors.yellow, // Yellow
                             unselectedLabelColor: Colors.grey,
-                            indicatorColor: const Color(0xFF7C3AED),
+                            indicatorColor: ExColors.yellow, // Yellow
                           ),
                   ),
                 ),
@@ -1695,7 +1696,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   elevation: 4,
                   child: const Icon(
                     Icons.add,
-                    color: Color(0xFF7C3AED),
+                    color: ExColors.yellow,
                     size: 28,
                   ),
                 ),
@@ -1727,7 +1728,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final statusBarHeight = MediaQuery.of(context).padding.top;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: ExColors.backgroundLight,
       body: RefreshIndicator(
         onRefresh: () async {
           // Only refresh events when on Events tab
@@ -1737,7 +1738,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           // Could add refresh logic for other tabs here if needed
         },
         // Customize colors to match app theme
-        color: const Color(0xFF6366F1),
+        color: ExColors.techBlue,
         backgroundColor: Colors.white,
         child: NotificationListener<ScrollNotification>(
           onNotification: (notification) {
@@ -1786,11 +1787,15 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     builder: (context, child) {
                       return Container(
                         decoration: const BoxDecoration(
-                          // Keep original gradient for all tabs
+                          // Navy dominant gradient with subtle ocean blue accent
                           gradient: LinearGradient(
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
-                            colors: [Color(0xFF7C3AED), Color(0xFF6D28D9)],
+                            colors: [
+                              ExColors.navySpaceCadet, // Navy (dominant)
+                              ExColors.navySpaceCadet, // Navy extended
+                              ExColors.oceanBlue, // Ocean blue (subtle accent)
+                            ],
                           ),
                           boxShadow: [
                             BoxShadow(
@@ -1824,9 +1829,17 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                             child: Text(
                                               _getAppBarTitle(),
                                               style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 18,
-                                                fontWeight: FontWeight.w600,
+                                                color: ExColors.yellow,
+                                                fontSize: 24,
+                                                fontWeight: FontWeight.w800,
+                                                letterSpacing: 0.5,
+                                                shadows: [
+                                                  Shadow(
+                                                    color: Colors.black26,
+                                                    offset: Offset(0, 2),
+                                                    blurRadius: 4,
+                                                  ),
+                                                ],
                                               ),
                                             ),
                                           ),
@@ -1907,7 +1920,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           offset: const Offset(0, 4),
                         ),
                         BoxShadow(
-                          color: const Color(0xFF7C3AED).withOpacity(0.1),
+                          color: ExColors.yellow.withOpacity(0.1),
                           blurRadius: 20,
                           offset: const Offset(0, 8),
                         ),
@@ -1923,11 +1936,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               width: 28,
                               height: 28,
                               decoration: BoxDecoration(
-                                color: const Color(0xFF6B7280),
+                                color: ExColors.textSecondary,
                                 shape: BoxShape.circle,
                                 boxShadow: [
                                   BoxShadow(
-                                    color: const Color(0xFF6B7280).withOpacity(0.3),
+                                    color: ExColors.textSecondary.withOpacity(0.3),
                                     blurRadius: 8,
                                     offset: const Offset(0, 2),
                                   ),
@@ -1952,7 +1965,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                           style: const TextStyle(
                                             fontSize: 15,
                                             fontWeight: FontWeight.w600,
-                                            color: Color(0xFF6B7280),
+                                            color: ExColors.textSecondary,
                                             letterSpacing: -0.2,
                                           ),
                                         ),
@@ -2058,9 +2071,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     //               Tab(icon: Icon(Icons.auto_awesome), text: AppLocalizations.of(context)!.aiChat),
     //               Tab(icon: Icon(Icons.edit), text: AppLocalizations.of(context)!.manualEntry),
     //             ],
-    //             labelColor: const Color(0xFF7C3AED),
+    //             labelColor: ExColors.yellow,
     //             unselectedLabelColor: Colors.grey,
-    //             indicatorColor: const Color(0xFF7C3AED),
+    //             indicatorColor: ExColors.yellow,
     //           ),
     //         ),
     //       ],
@@ -2094,12 +2107,17 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           children: [
             Container(
               padding: const EdgeInsets.all(16),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF06B6D4), Color(0xFF14B8A6)], // Turquoise gradient
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+              decoration: BoxDecoration(
+                gradient: ExtractionTheme.header,
+                // gradient: LinearGradient(
+                //   colors: [
+                //     Color(0x3874d6), // Navy (Space cadet)
+                //     ExColors.oceanBlue, // Ocean blue
+                //     ExColors.techBlue, // Lighter blue
+                //   ],
+                //   begin: Alignment.topLeft,
+                //   end: Alignment.bottomRight,
+                // ),
                 borderRadius: BorderRadius.only(
                   topLeft: Radius.circular(16),
                   topRight: Radius.circular(16),
@@ -2113,7 +2131,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       color: Colors.white.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.event_note, color: Colors.white, size: 24),
+                    child: const Icon(Icons.event_note, color: ExColors.yellow, size: 24), // Yellow icon
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -2167,7 +2185,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                 _eventsTabController.animateTo(index);
                               });
                             },
-                            selectedColor: const Color(0xFF7C3AED),
+                            selectedColor: ExColors.techBlue, // Yellow
                           )
                         : TabBar(
                             controller: _eventsTabController,
@@ -2176,9 +2194,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               Tab(text: 'Posted'),
                               Tab(text: 'Full'),
                             ],
-                            labelColor: const Color(0xFF7C3AED),
+                            labelColor: ExColors.techBlue, // Yellow
                             unselectedLabelColor: Colors.grey,
-                            indicatorColor: const Color(0xFF7C3AED),
+                            indicatorColor: ExColors.techBlue, // Yellow
                           ),
                   ),
                   // Past Events button
@@ -2187,7 +2205,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     icon: const Icon(Icons.history, size: 18),
                     label: const Text('Past'),
                     style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFF6B7280),
+                      foregroundColor: ExColors.textSecondary,
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     ),
                   ),
@@ -2224,7 +2242,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               padding: const EdgeInsets.all(16),
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)], // Coral gradient
+                  colors: [ExColors.coralRed, ExColors.coralOrange], // Coral gradient
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -2291,7 +2309,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           _catalogTabController.animateTo(index);
                         });
                       },
-                      selectedColor: const Color(0xFF7C3AED),
+                      selectedColor: ExColors.yellow, // Yellow
                     )
                   : TabBar(
                       controller: _catalogTabController,
@@ -2300,9 +2318,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         Tab(text: 'Roles'),
                         Tab(text: 'Tariffs'),
                       ],
-                      labelColor: const Color(0xFF7C3AED),
+                      labelColor: ExColors.yellow, // Yellow
                       unselectedLabelColor: Colors.grey,
-                      indicatorColor: const Color(0xFF7C3AED),
+                      indicatorColor: ExColors.yellow, // Yellow
                     ),
             ),
           ],
@@ -2315,7 +2333,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
   Widget _buildDesktopLayout(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: ExColors.backgroundLight,
       body: Stack(
         children: [
           Row(
@@ -2361,7 +2379,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     ),
                   );
                 },
-                backgroundColor: const Color(0xFF7C3AED),
+                backgroundColor: ExColors.yellow,
                 elevation: 8,
                 icon: const Icon(Icons.add_rounded, color: Colors.white),
                 label: Text(
@@ -2383,11 +2401,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     return Container(
       width: 240,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF7A3AFB), Color(0xFF5B27D8)],
-        ),
+        gradient: ExtractionTheme.header,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.1),
@@ -2537,7 +2551,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF0F172A),
+                      color: ExColors.textPrimary,
                       letterSpacing: -0.5,
                     ),
                   ),
@@ -2796,7 +2810,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 Tab(icon: Icon(Icons.cloud_upload), text: AppLocalizations.of(context)!.multiUpload),
                 Tab(icon: Icon(Icons.chat), text: AppLocalizations.of(context)!.aiChat),
               ],
-              labelColor: Color(0xFF6366F1),
+              labelColor: ExColors.techBlue,
               unselectedLabelColor: Colors.grey,
             ),
             Expanded(
@@ -2829,7 +2843,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 subtitle:
                     'Upload multiple PDFs or images and save each as a pending draft',
                 icon: Icons.cloud_upload,
-                gradientColors: const [Color(0xFF10B981), Color(0xFF3B82F6)],
+                gradientColors: const [ExColors.info, ExColors.techBlue], // Teal to blue
               ),
               const SizedBox(height: 16),
               Wrap(
@@ -2843,7 +2857,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     icon: const Icon(Icons.folder_open),
                     label: Text(AppLocalizations.of(context)!.selectFiles),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6366F1),
+                      backgroundColor: ExColors.techBlue,
                       foregroundColor: Colors.white,
                     ),
                   ),
@@ -2855,7 +2869,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       icon: const Icon(Icons.add),
                       label: const Text('Add More'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF6366F1),
+                        backgroundColor: ExColors.techBlue,
                         foregroundColor: Colors.white,
                       ),
                     ),
@@ -2867,7 +2881,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       icon: const Icon(Icons.done_all),
                       label: const Text('Confirm All'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF059669),
+                        backgroundColor: ExColors.successDark,
                         foregroundColor: Colors.white,
                       ),
                     ),
@@ -2907,10 +2921,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           ? Icons.error
                           : Icons.hourglass_bottom,
                       color: data != null
-                          ? const Color(0xFF059669)
+                          ? ExColors.successDark
                           : status == 'error'
-                          ? const Color(0xFFDC2626)
-                          : const Color(0xFF6366F1),
+                          ? ExColors.errorDark
+                          : ExColors.techBlue,
                     ),
                     title: Text(name),
                     subtitle: Text(subtitle),
@@ -2926,7 +2940,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         IconButton(
                           icon: const Icon(
                             Icons.delete_outline,
-                            color: Color(0xFFDC2626),
+                            color: ExColors.errorDark,
                           ),
                           onPressed: () {
                             setState(() {
@@ -3175,8 +3189,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         SnackBar(
           content: Text(errorMsg),
           backgroundColor: e.toString().contains('don\'t have any team members')
-            ? const Color(0xFF6366F1) // Blue for info
-            : const Color(0xFFDC2626), // Red for errors
+            ? ExColors.techBlue // Blue for info
+            : ExColors.errorDark, // Red for errors
         ),
       );
     }
@@ -3212,7 +3226,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           height: 170.0,
           safeAreaPadding: MediaQuery.of(context).padding.top,
           child: Material(
-            color: const Color(0xFFF8FAFC),
+            color: ExColors.backgroundLight,
             elevation: 0,
             child: Column(
               children: [
@@ -3411,13 +3425,13 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   Widget _buildSectionHeader(String title, int count) {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      color: const Color(0xFFF8FAFC),
+      color: ExColors.backgroundLight,
       child: Text(
         '$title ($count)',
         style: const TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w600,
-          color: Color(0xFF6B7280),
+          color: ExColors.textSecondary,
           letterSpacing: 0.5,
         ),
       ),
@@ -3600,7 +3614,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     ElevatedButton.icon(
                       onPressed: _loadFirstUsersPage,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF6366F1),
+                        backgroundColor: ExColors.techBlue,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 16,
@@ -3685,7 +3699,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 icon: const Icon(Icons.group_add),
                 label: const Text('Go to Teams'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6366F1),
+                  backgroundColor: ExColors.techBlue,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 ),
@@ -3880,7 +3894,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       actionText: isLoading ? 'Processing...' : 'Choose 1 File',
                       onPressed: _pickAndProcessFile,
                       isLoading: isLoading,
-                      color: const Color(0xFF6366F1),
+                      color: ExColors.techBlue,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -3892,7 +3906,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       actionText: _isBulkProcessing ? 'Processing...' : 'Choose Multiple Files',
                       onPressed: () => _pickAndProcessMultipleFiles(append: false),
                       isLoading: _isBulkProcessing,
-                      color: const Color(0xFF8B5CF6),
+                      color: ExColors.yellow,
                     ),
                   ),
                 ],
@@ -3931,7 +3945,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               icon: const Icon(Icons.done_all, size: 18),
                               label: const Text('Confirm All'),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF059669),
+                                backgroundColor: ExColors.successDark,
                                 foregroundColor: Colors.white,
                               ),
                             ),
@@ -3957,7 +3971,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                             dense: true,
                             leading: Icon(
                               data != null ? Icons.check_circle : status == 'error' ? Icons.error : Icons.hourglass_bottom,
-                              color: data != null ? const Color(0xFF059669) : status == 'error' ? const Color(0xFFDC2626) : const Color(0xFF6366F1),
+                              color: data != null ? ExColors.successDark : status == 'error' ? ExColors.errorDark : ExColors.techBlue,
                               size: 20,
                             ),
                             title: Text(name, style: const TextStyle(fontSize: 13)),
@@ -4106,7 +4120,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('Saved to Pending'),
-                            backgroundColor: Color(0xFF059669),
+                            backgroundColor: ExColors.successDark,
                           ),
                         );
                         await _draftService.clearDraft();
@@ -4129,7 +4143,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     icon: const Icon(Icons.save, size: 18),
                     label: Text(AppLocalizations.of(context)!.saveToPending),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6366F1),
+                      backgroundColor: ExColors.techBlue,
                       foregroundColor: Colors.white,
                     ),
                   ),
@@ -4460,12 +4474,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   Color _getPrivacyColor(String privacyStatus) {
     switch (privacyStatus) {
       case 'private':
-        return const Color(0xFF6366F1); // Indigo
+        return ExColors.techBlue; // Indigo
       case 'public':
-        return const Color(0xFF059669); // Green
+        return ExColors.successDark; // Green
       case 'private_public':
       case 'mix': // Legacy fallback
-        return const Color(0xFFF59E0B); // Amber/Orange
+        return ExColors.capacityMedium; // Amber/Orange
       default:
         return Colors.grey;
     }
@@ -4478,11 +4492,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final percentage = (filled / total) * 100;
 
     if (percentage >= 90) {
-      return const Color(0xFFDC2626); // Red
+      return ExColors.errorDark; // Red
     } else if (percentage >= 50) {
-      return const Color(0xFFF59E0B); // Orange
+      return ExColors.capacityMedium; // Orange
     } else {
-      return const Color(0xFF059669); // Green
+      return ExColors.successDark; // Green
     }
   }
 
@@ -4872,7 +4886,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Client created'),
-                backgroundColor: Color(0xFF059669),
+                backgroundColor: ExColors.successDark,
               ),
             );
           }).catchError((e) {
@@ -4880,7 +4894,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('Error creating client: $e'),
-                backgroundColor: const Color(0xFFDC2626),
+                backgroundColor: ExColors.errorDark,
               ),
             );
           });
@@ -4892,7 +4906,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Role created'),
-                backgroundColor: Color(0xFF059669),
+                backgroundColor: ExColors.successDark,
               ),
             );
           }).catchError((e) {
@@ -4900,7 +4914,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('Error creating role: $e'),
-                backgroundColor: const Color(0xFFDC2626),
+                backgroundColor: ExColors.errorDark,
               ),
             );
           });
@@ -4931,7 +4945,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         Tab(text: AppLocalizations.of(context)!.upcoming),
                         Tab(text: AppLocalizations.of(context)!.past),
                       ],
-                      labelColor: Color(0xFF6366F1),
+                      labelColor: ExColors.techBlue,
                       unselectedLabelColor: Colors.grey,
                     ),
                   ),
@@ -4989,7 +5003,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
     return RefreshIndicator(
       onRefresh: _loadEvents,
-      color: const Color(0xFF6366F1),
+      color: ExColors.techBlue,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final double width = constraints.maxWidth;
@@ -5050,12 +5064,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       Container(
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF6366F1).withOpacity(0.1),
+                          color: ExColors.info.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Icon(
                           Icons.event_available_outlined,
-                          color: const Color(0xFF6366F1),
+                          color: ExColors.techBlue,
                           size: 48,
                         ),
                       ),
@@ -5063,7 +5077,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       Text(
                         'No Past Events',
                         style: TextStyle(
-                          color: const Color(0xFF0F172A),
+                          color: ExColors.textPrimary,
                           fontWeight: FontWeight.w700,
                           fontSize: 20,
                           letterSpacing: -0.5,
@@ -5132,7 +5146,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       children: [
                         const Icon(
                           Icons.calendar_month,
-                          color: Color(0xFF6B7280),
+                          color: ExColors.textSecondary,
                           size: 20,
                         ),
                         const SizedBox(width: 8),
@@ -5141,7 +5155,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
-                            color: Color(0xFF0F172A),
+                            color: ExColors.textPrimary,
                           ),
                         ),
                       ],
@@ -5186,7 +5200,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final sortedItems = [...items]..sort(_compareEventsAscending);
     return RefreshIndicator(
       onRefresh: _loadEvents,
-      color: const Color(0xFF6366F1),
+      color: ExColors.techBlue,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final double width = constraints.maxWidth;
@@ -5297,12 +5311,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       Container(
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF6366F1).withOpacity(0.1),
+                          color: ExColors.info.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Icon(
                           Icons.event_available_outlined,
-                          color: const Color(0xFF6366F1),
+                          color: ExColors.techBlue,
                           size: 48,
                         ),
                       ),
@@ -5310,7 +5324,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       Text(
                         'No Events',
                         style: TextStyle(
-                          color: const Color(0xFF0F172A),
+                          color: ExColors.textPrimary,
                           fontWeight: FontWeight.w700,
                           fontSize: 20,
                           letterSpacing: -0.5,
@@ -5380,7 +5394,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   Widget _pendingInner() {
     return RefreshIndicator(
       onRefresh: _loadPendingDrafts,
-      color: const Color(0xFF6366F1),
+      color: ExColors.techBlue,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(20),
@@ -5444,7 +5458,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                   color: status == 'fulfilled'
-                    ? const Color(0xFF059669)
+                    ? ExColors.successDark
                     : Colors.grey.shade200,
                   width: status == 'fulfilled' ? 2 : 1,
                 ),
@@ -5454,12 +5468,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     ? Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF059669).withValues(alpha: 0.1),
+                          color: ExColors.successDark.withValues(alpha: 0.1),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
                           Icons.check_circle,
-                          color: Color(0xFF059669),
+                          color: ExColors.successDark,
                           size: 24,
                         ),
                       )
@@ -5473,7 +5487,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF059669),
+                          color: ExColors.successDark,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Text(
@@ -5531,7 +5545,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       child: const Text('Publish'),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.delete, color: Color(0xFFDC2626)),
+                      icon: const Icon(Icons.delete, color: ExColors.errorDark),
                       onPressed: () async {
                         final id = (d['id'] ?? d['_id'] ?? '').toString();
                         if (id.isEmpty) return;
@@ -5584,7 +5598,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final List<Map<String, dynamic>> items = _clients ?? const [];
     return RefreshIndicator(
       onRefresh: _loadClients,
-      color: const Color(0xFF6366F1),
+      color: ExColors.techBlue,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(20),
@@ -5613,7 +5627,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('Client created'),
-                          backgroundColor: Color(0xFF059669),
+                          backgroundColor: ExColors.successDark,
                         ),
                       );
                     } catch (e) {
@@ -5621,7 +5635,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text('Failed to create client: $e'),
-                          backgroundColor: const Color(0xFFDC2626),
+                          backgroundColor: ExColors.errorDark,
                         ),
                       );
                     }
@@ -5629,7 +5643,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   icon: const Icon(Icons.add),
                   label: const Text('Add Client'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6366F1),
+                    backgroundColor: ExColors.techBlue,
                     foregroundColor: Colors.white,
                   ),
                 ),
@@ -5652,7 +5666,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final List<Map<String, dynamic>> items = _clients ?? const [];
     return RefreshIndicator(
       onRefresh: _loadClients,
-      color: const Color(0xFF6366F1),
+      color: ExColors.techBlue,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(
@@ -5730,7 +5744,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final items = _roles ?? const [];
     return RefreshIndicator(
       onRefresh: _loadRoles,
-      color: const Color(0xFF6366F1),
+      color: ExColors.techBlue,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(
@@ -5816,7 +5830,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         await _loadRoles();
         await _loadTariffs();
       },
-      color: const Color(0xFF6366F1),
+      color: ExColors.techBlue,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(
@@ -5985,7 +5999,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 Tab(text: 'Roles'),
                 Tab(text: 'Tariffs'),
               ],
-              labelColor: Color(0xFF6366F1),
+              labelColor: ExColors.techBlue,
               unselectedLabelColor: Colors.grey,
             ),
             Expanded(
@@ -6045,7 +6059,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         await _loadRoles();
         await _loadTariffs();
       },
-      color: const Color(0xFF6366F1),
+      color: ExColors.techBlue,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.all(ResponsiveLayout.getHorizontalPadding(context)),
@@ -6059,7 +6073,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   style: TextStyle(
                     fontSize: isWeb ? 24 : 20,
                     fontWeight: FontWeight.bold,
-                    color: const Color(0xFF1F2937),
+                    color: ExColors.charcoal,
                   ),
                 ),
               ),
@@ -6076,7 +6090,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               ElevatedButton.icon(
                 onPressed: () => _showCreateTariffDialog(),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF059669),
+                  backgroundColor: ExColors.successDark,
                   foregroundColor: Colors.white,
                   padding: EdgeInsets.symmetric(
                     horizontal: isWeb ? 24 : 16,
@@ -6102,7 +6116,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
+              border: Border.all(color: ExColors.borderGrey),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.04),
@@ -6120,12 +6134,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF6366F1).withOpacity(0.1),
+                        color: ExColors.info.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Icon(
                         Icons.filter_list,
-                        color: Color(0xFF6366F1),
+                        color: ExColors.techBlue,
                         size: 20,
                       ),
                     ),
@@ -6139,7 +6153,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFF1F2937),
+                              color: ExColors.charcoal,
                             ),
                           ),
                           const SizedBox(height: 2),
@@ -6166,7 +6180,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         icon: const Icon(Icons.clear, size: 16),
                         label: const Text('Clear'),
                         style: TextButton.styleFrom(
-                          foregroundColor: const Color(0xFFDC2626),
+                          foregroundColor: ExColors.errorDark,
                           visualDensity: VisualDensity.compact,
                         ),
                       ),
@@ -6211,7 +6225,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 filled: true,
-                                fillColor: const Color(0xFFF9FAFB),
+                                fillColor: ExColors.formFillLight,
                                 contentPadding: const EdgeInsets.symmetric(
                                   horizontal: 16,
                                   vertical: 16,
@@ -6253,7 +6267,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 filled: true,
-                                fillColor: const Color(0xFFF9FAFB),
+                                fillColor: ExColors.formFillLight,
                                 contentPadding: const EdgeInsets.symmetric(
                                   horizontal: 16,
                                   vertical: 16,
@@ -6294,7 +6308,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               filled: true,
-                              fillColor: const Color(0xFFF9FAFB),
+                              fillColor: ExColors.formFillLight,
                               contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 16,
                                 vertical: 12,
@@ -6334,7 +6348,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               filled: true,
-                              fillColor: const Color(0xFFF9FAFB),
+                              fillColor: ExColors.formFillLight,
                               contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 16,
                                 vertical: 12,
@@ -6373,7 +6387,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF6366F1).withOpacity(0.1),
+                      color: ExColors.info.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -6381,7 +6395,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF6366F1),
+                        color: ExColors.techBlue,
                       ),
                     ),
                   ),
@@ -6399,13 +6413,13 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     Container(
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF3F4F6),
+                        color: ExColors.formFillGrey,
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
                         Icons.attach_money,
                         size: 64,
-                        color: Color(0xFF9CA3AF),
+                        color: ExColors.greyMedium,
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -6414,7 +6428,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF6B7280),
+                        color: ExColors.textSecondary,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -6478,7 +6492,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: ExColors.borderGrey),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.03),
@@ -6497,12 +6511,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF059669).withOpacity(0.1),
+                    color: ExColors.successDark.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Icon(
                     Icons.attach_money,
-                    color: Color(0xFF059669),
+                    color: ExColors.successDark,
                     size: 22,
                   ),
                 ),
@@ -6516,7 +6530,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFF1F2937),
+                          color: ExColors.charcoal,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -6543,7 +6557,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF6366F1).withOpacity(0.1),
+                    color: ExColors.info.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -6551,14 +6565,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF6366F1),
+                      color: ExColors.techBlue,
                     ),
                   ),
                 ),
                 const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.edit_outlined),
-                  color: const Color(0xFF6366F1),
+                  color: ExColors.techBlue,
                   iconSize: 20,
                   tooltip: 'Edit',
                   padding: const EdgeInsets.all(8),
@@ -6573,7 +6587,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 const SizedBox(width: 4),
                 IconButton(
                   icon: const Icon(Icons.delete_outline),
-                  color: const Color(0xFFDC2626),
+                  color: ExColors.errorDark,
                   iconSize: 20,
                   tooltip: 'Delete',
                   padding: const EdgeInsets.all(8),
@@ -6596,7 +6610,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please add clients and roles first'),
-          backgroundColor: Color(0xFFDC2626),
+          backgroundColor: ExColors.errorDark,
         ),
       );
       return;
@@ -6616,12 +6630,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF059669).withOpacity(0.1),
+                  color: ExColors.successDark.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(
                   Icons.add_circle_outline,
-                  color: Color(0xFF059669),
+                  color: ExColors.successDark,
                   size: 24,
                 ),
               ),
@@ -6649,7 +6663,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         borderRadius: BorderRadius.circular(12),
                       ),
                       filled: true,
-                      fillColor: const Color(0xFFF9FAFB),
+                      fillColor: ExColors.formFillLight,
                     ),
                     items: clients
                         .map(
@@ -6674,7 +6688,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         borderRadius: BorderRadius.circular(12),
                       ),
                       filled: true,
-                      fillColor: const Color(0xFFF9FAFB),
+                      fillColor: ExColors.formFillLight,
                     ),
                     items: roles
                         .map(
@@ -6702,7 +6716,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         borderRadius: BorderRadius.circular(12),
                       ),
                       filled: true,
-                      fillColor: const Color(0xFFF9FAFB),
+                      fillColor: ExColors.formFillLight,
                     ),
                     validator: (v) {
                       if (v == null || v.isEmpty) return 'Required';
@@ -6727,7 +6741,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 }
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF059669),
+                backgroundColor: ExColors.successDark,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 24,
@@ -6762,7 +6776,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Tariff created successfully'),
-            backgroundColor: Color(0xFF059669),
+            backgroundColor: ExColors.successDark,
           ),
         );
       } catch (e) {
@@ -6770,7 +6784,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to create tariff: $e'),
-            backgroundColor: const Color(0xFFDC2626),
+            backgroundColor: ExColors.errorDark,
           ),
         );
       }
@@ -6815,12 +6829,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: const Color(0xFF6366F1).withOpacity(0.1),
+                color: ExColors.info.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(
                 Icons.edit_outlined,
-                color: Color(0xFF6366F1),
+                color: ExColors.techBlue,
                 size: 24,
               ),
             ),
@@ -6842,7 +6856,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF3F4F6),
+                    color: ExColors.formFillGrey,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Column(
@@ -6853,7 +6867,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           const Icon(
                             Icons.business,
                             size: 18,
-                            color: Color(0xFF6B7280),
+                            color: ExColors.textSecondary,
                           ),
                           const SizedBox(width: 8),
                           Expanded(
@@ -6862,7 +6876,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               style: const TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w600,
-                                color: Color(0xFF1F2937),
+                                color: ExColors.charcoal,
                               ),
                             ),
                           ),
@@ -6874,7 +6888,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           const Icon(
                             Icons.work_outline,
                             size: 18,
-                            color: Color(0xFF6B7280),
+                            color: ExColors.textSecondary,
                           ),
                           const SizedBox(width: 8),
                           Expanded(
@@ -6883,7 +6897,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               style: const TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w600,
-                                color: Color(0xFF1F2937),
+                                color: ExColors.charcoal,
                               ),
                             ),
                           ),
@@ -6933,7 +6947,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF6366F1),
+              backgroundColor: ExColors.techBlue,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               shape: RoundedRectangleBorder(
@@ -6962,7 +6976,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Tariff updated successfully'),
-            backgroundColor: Color(0xFF059669),
+            backgroundColor: ExColors.successDark,
           ),
         );
       } catch (e) {
@@ -6970,7 +6984,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to update tariff: $e'),
-            backgroundColor: const Color(0xFFDC2626),
+            backgroundColor: ExColors.errorDark,
           ),
         );
       }
@@ -6986,12 +7000,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: const Color(0xFFDC2626).withOpacity(0.1),
+                color: ExColors.errorDark.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(
                 Icons.warning_outlined,
-                color: Color(0xFFDC2626),
+                color: ExColors.errorDark,
                 size: 24,
               ),
             ),
@@ -7011,7 +7025,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           ElevatedButton.icon(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFDC2626),
+              backgroundColor: ExColors.errorDark,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               shape: RoundedRectangleBorder(
@@ -7033,7 +7047,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Tariff deleted successfully'),
-            backgroundColor: Color(0xFF059669),
+            backgroundColor: ExColors.successDark,
           ),
         );
       } catch (e) {
@@ -7041,7 +7055,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to delete tariff: $e'),
-            backgroundColor: const Color(0xFFDC2626),
+            backgroundColor: ExColors.errorDark,
           ),
         );
       }
@@ -7103,7 +7117,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final items = _roles ?? const [];
     return RefreshIndicator(
       onRefresh: _loadRoles,
-      color: const Color(0xFF6366F1),
+      color: ExColors.techBlue,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(20),
@@ -7134,7 +7148,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text('Failed to create role: $e'),
-                        backgroundColor: const Color(0xFFDC2626),
+                        backgroundColor: ExColors.errorDark,
                       ),
                     );
                   }
@@ -7142,7 +7156,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 icon: const Icon(Icons.add),
                 label: const Text('Add Role'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6366F1),
+                  backgroundColor: ExColors.techBlue,
                   foregroundColor: Colors.white,
                 ),
               ),
@@ -7173,7 +7187,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       ),
       child: ListTile(
         title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
-        leading: const Icon(Icons.assignment_ind, color: Color(0xFF6366F1)),
+        leading: const Icon(Icons.assignment_ind, color: ExColors.techBlue),
         trailing: PopupMenuButton<String>(
           onSelected: (value) async {
             if (value == 'rename') {
@@ -7191,7 +7205,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text('Failed to rename: $e'),
-                    backgroundColor: const Color(0xFFDC2626),
+                    backgroundColor: ExColors.errorDark,
                   ),
                 );
               }
@@ -7206,7 +7220,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text('Failed to delete: $e'),
-                    backgroundColor: const Color(0xFFDC2626),
+                    backgroundColor: ExColors.errorDark,
                   ),
                 );
               }
@@ -7261,7 +7275,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       ),
       child: ListTile(
         title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
-        leading: const Icon(Icons.business, color: Color(0xFF6366F1)),
+        leading: const Icon(Icons.business, color: ExColors.techBlue),
         trailing: PopupMenuButton<String>(
           onSelected: (value) async {
             if (value == 'rename') {
@@ -7275,7 +7289,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text('Failed to rename: $e'),
-                    backgroundColor: const Color(0xFFDC2626),
+                    backgroundColor: ExColors.errorDark,
                   ),
                 );
               }
@@ -7290,7 +7304,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text('Failed to delete: $e'),
-                    backgroundColor: const Color(0xFFDC2626),
+                    backgroundColor: ExColors.errorDark,
                   ),
                 );
               }
@@ -7431,7 +7445,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF059669),
+              backgroundColor: ExColors.successDark,
             ),
             child: const Text('Make Public'),
           ),
@@ -7470,7 +7484,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('$clientName is now public!'),
-          backgroundColor: const Color(0xFF059669),
+          backgroundColor: ExColors.successDark,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -7536,8 +7550,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final String startTime = (e['start_time'] ?? '').toString();
 
     final statusColor = isUpcoming
-        ? const Color(0xFF6366F1)
-        : const Color(0xFF94A3B8);
+        ? ExColors.lavender
+        : ExColors.slateGray;
 
     return GestureDetector(
       onTap: () async {
@@ -7595,7 +7609,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF0F172A),
+                      color: ExColors.textPrimary,
                       letterSpacing: -0.2,
                       height: 1.2,
                     ),
@@ -7721,10 +7735,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF059669).withValues(alpha: 0.1),
+                                  color: ExColors.successDark.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: const Color(0xFF059669).withValues(alpha: 0.3),
+                                    color: ExColors.successDark.withValues(alpha: 0.3),
                                     width: 1,
                                   ),
                                 ),
@@ -7734,7 +7748,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                     Icon(
                                       Icons.public,
                                       size: 12,
-                                      color: Color(0xFF059669),
+                                      color: ExColors.successDark,
                                     ),
                                     SizedBox(width: 4),
                                     Text(
@@ -7742,7 +7756,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                       style: TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.w600,
-                                        color: Color(0xFF059669),
+                                        color: ExColors.successDark,
                                         height: 1.2,
                                       ),
                                     ),
@@ -7792,7 +7806,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           child: Icon(
                             Icons.directions,
                             size: 20,
-                            color: const Color(0xFF6366F1),
+                            color: ExColors.lavender,
                           ),
                         ),
                       ),
@@ -7863,15 +7877,15 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                             icon: const Icon(Icons.campaign, size: 18),
                             label: const Text('Publish'),
                             style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF6366F1),
-                              side: const BorderSide(color: Color(0xFF6366F1)),
+                              foregroundColor: ExColors.lavender,
+                              side: const BorderSide(color: ExColors.lavender),
                               padding: const EdgeInsets.symmetric(vertical: 8),
                             ),
                           ),
                         ),
                         const SizedBox(width: 8),
                         IconButton(
-                          icon: const Icon(Icons.delete, color: Color(0xFFDC2626), size: 20),
+                          icon: const Icon(Icons.delete, color: ExColors.errorDark, size: 20),
                           onPressed: () async {
                             final eventId = (e['_id'] ?? e['id'] ?? '').toString();
                             if (eventId.isEmpty) return;
@@ -7889,7 +7903,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                   ),
                                   TextButton(
                                     onPressed: () => Navigator.pop(context, true),
-                                    child: const Text('Delete', style: TextStyle(color: Color(0xFFDC2626))),
+                                    child: const Text('Delete', style: TextStyle(color: ExColors.errorDark)),
                                   ),
                                 ],
                               ),
@@ -7980,7 +7994,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               icon: const Icon(Icons.auto_awesome, size: 20),
               label: const Text('AI Chat'),
               style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFF6366F1),
+                foregroundColor: ExColors.techBlue,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               ),
             ),
@@ -8013,7 +8027,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         icon: const Icon(Icons.business),
                         label: const Text('Pick from Clients'),
                         style: TextButton.styleFrom(
-                          foregroundColor: const Color(0xFF6366F1),
+                          foregroundColor: ExColors.techBlue,
                         ),
                       ),
                     ),
@@ -8129,7 +8143,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                 ),
                               ],
                             ),
-                            backgroundColor: const Color(0xFF059669),
+                            backgroundColor: ExColors.successDark,
                             behavior: SnackBarBehavior.floating,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -8210,7 +8224,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF059669),
+                    backgroundColor: ExColors.successDark,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 32,
@@ -8245,7 +8259,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text('Saved to Pending'),
-                                  backgroundColor: Color(0xFF059669),
+                                  backgroundColor: ExColors.successDark,
                                 ),
                               );
                               await _draftService.clearDraft();
@@ -8268,7 +8282,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     icon: const Icon(Icons.save, size: 18),
                     label: Text(AppLocalizations.of(context)!.saveToPending),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6366F1),
+                      backgroundColor: ExColors.techBlue,
                       foregroundColor: Colors.white,
                     ),
                   ),
@@ -8397,14 +8411,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(
-                                colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)],
+                                colors: [ExColors.yellow, ExColors.pink],
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                               ),
                               borderRadius: BorderRadius.circular(24),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFF8B5CF6).withValues(alpha: 0.4),
+                                  color: ExColors.yellow.withValues(alpha: 0.4),
                                   blurRadius: 12,
                                   offset: const Offset(0, 4),
                                 ),
@@ -8450,13 +8464,13 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               Container(
                                 padding: const EdgeInsets.all(20),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
+                                  color: ExColors.yellow.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(60),
                                 ),
                                 child: const Icon(
                                   Icons.chat_bubble_outline,
                                   size: 60,
-                                  color: Color(0xFF8B5CF6),
+                                  color: ExColors.yellow,
                                 ),
                               ),
                               const SizedBox(height: 20),
@@ -8487,16 +8501,16 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                     borderRadius: BorderRadius.circular(30),
                                     gradient: const LinearGradient(
                                       colors: [
-                                        Color(0xFF7C3AED), // Light purple
-                                        Color(0xFF6366F1), // Medium purple
-                                        Color(0xFF4F46E5), // Darker purple
+                                        ExColors.yellow, // Light purple
+                                        ExColors.techBlue, // Medium purple
+                                        ExColors.indigoPurple, // Darker purple
                                       ],
                                       begin: Alignment.topLeft,
                                       end: Alignment.bottomRight,
                                     ),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: const Color(0xFF7C3AED).withOpacity(0.4),
+                                        color: ExColors.yellow.withOpacity(0.4),
                                         blurRadius: 20,
                                         offset: const Offset(0, 10),
                                         spreadRadius: 0,
@@ -9002,7 +9016,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF1E293B),
+              color: ExColors.slate,
             ),
           ),
           const SizedBox(height: 8),
@@ -9011,7 +9025,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
+                color: ExColors.formFillSlate,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -9020,7 +9034,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     width: 8,
                     height: 8,
                     decoration: const BoxDecoration(
-                      color: Color(0xFF6366F1),
+                      color: ExColors.techBlue,
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -9054,7 +9068,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF1E293B),
+              color: ExColors.slate,
             ),
           ),
           const SizedBox(height: 8),
@@ -9084,12 +9098,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFF0F9FF),
+                color: ExColors.formFillCyan,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.person, color: Color(0xFF0EA5E9), size: 18),
+                  const Icon(Icons.person, color: ExColors.skyBlue, size: 18),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -9203,7 +9217,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Please enter a valid email address'),
-              backgroundColor: Color(0xFFDC2626),
+              backgroundColor: ExColors.errorDark,
             ),
           );
           return;
@@ -9222,7 +9236,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Event saved to database'),
-          backgroundColor: Color(0xFF059669),
+          backgroundColor: ExColors.successDark,
         ),
       );
       // Clear draft after successful save
@@ -9232,7 +9246,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to save: $e'),
-          backgroundColor: const Color(0xFFDC2626),
+          backgroundColor: ExColors.errorDark,
         ),
       );
     }
@@ -9304,7 +9318,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text('Failed to create client: $e'),
-                          backgroundColor: const Color(0xFFDC2626),
+                          backgroundColor: ExColors.errorDark,
                         ),
                       );
                     }
@@ -9344,7 +9358,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             const Text(
               ' *',
               style: TextStyle(
-                color: Color(0xFFEF4444),
+                color: ExColors.error,
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
               ),
@@ -9363,10 +9377,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 return Theme(
                   data: Theme.of(context).copyWith(
                     colorScheme: const ColorScheme.light(
-                      primary: Color(0xFF6366F1),
+                      primary: ExColors.techBlue,
                       onPrimary: Colors.white,
                       surface: Colors.white,
-                      onSurface: Color(0xFF0F172A),
+                      onSurface: ExColors.textPrimary,
                     ),
                     dialogTheme: DialogThemeData(backgroundColor: Colors.white),
                   ),
@@ -9390,7 +9404,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: _selectedDate != null
-                    ? const Color(0xFF6366F1).withValues(alpha: 0.3)
+                    ? ExColors.techBlue.withValues(alpha: 0.3)
                     : Colors.grey.shade300,
                 width: 1.5,
               ),
@@ -9407,13 +9421,13 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF6366F1).withValues(alpha: 0.1),
+                    color: ExColors.techBlue.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(
                     Icons.calendar_today,
                     size: 20,
-                    color: Color(0xFF6366F1),
+                    color: ExColors.techBlue,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -9426,7 +9440,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
                       color: _selectedDate != null
-                          ? const Color(0xFF0F172A)
+                          ? ExColors.textPrimary
                           : Colors.grey.shade500,
                     ),
                   ),
@@ -9478,10 +9492,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 return Theme(
                   data: Theme.of(context).copyWith(
                     colorScheme: const ColorScheme.light(
-                      primary: Color(0xFF6366F1),
+                      primary: ExColors.techBlue,
                       onPrimary: Colors.white,
                       surface: Colors.white,
-                      onSurface: Color(0xFF0F172A),
+                      onSurface: ExColors.textPrimary,
                     ),
                     dialogTheme: DialogThemeData(backgroundColor: Colors.white),
                   ),
@@ -9501,7 +9515,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: selectedTime != null
-                    ? const Color(0xFF6366F1).withValues(alpha: 0.3)
+                    ? ExColors.techBlue.withValues(alpha: 0.3)
                     : Colors.grey.shade300,
                 width: 1.5,
               ),
@@ -9518,10 +9532,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF6366F1).withValues(alpha: 0.1),
+                    color: ExColors.techBlue.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(icon, size: 20, color: const Color(0xFF6366F1)),
+                  child: Icon(icon, size: 20, color: ExColors.techBlue),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -9533,7 +9547,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
                       color: selectedTime != null
-                          ? const Color(0xFF0F172A)
+                          ? ExColors.textPrimary
                           : Colors.grey.shade500,
                     ),
                   ),

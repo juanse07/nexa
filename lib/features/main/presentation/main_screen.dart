@@ -9,6 +9,7 @@ import '../../../services/terminology_provider.dart';
 import '../../extraction/presentation/extraction_screen.dart';
 import '../../chat/presentation/conversations_screen.dart';
 import '../../users/presentation/pages/settings_page.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 class MainScreen extends StatefulWidget {
   final int initialIndex;
@@ -251,10 +252,9 @@ class _MainScreenState extends State<MainScreen>
   Widget _buildBottomNavigationBar() {
     return Container(
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [Color(0xFF7A3AFB), Color(0xFF5B27D8)],
+        color: AppColors.formFillSlate, // Light grey background
+        border: Border(
+          top: BorderSide(color: AppColors.border, width: 1),
         ),
       ),
       child: SafeArea(
@@ -292,14 +292,14 @@ class _MainScreenState extends State<MainScreen>
           children: [
             Icon(
               icon,
-              color: isSelected ? Colors.white : Colors.white.withOpacity(0.7),
+              color: isSelected ? AppColors.techBlue : AppColors.primaryPurple, // Tech blue selected, Navy unselected
               size: 28, // Larger icons for better visibility
             ),
             const SizedBox(height: 2),
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? Colors.white : Colors.white.withOpacity(0.8),
+                color: isSelected ? AppColors.techBlue : const Color(0xFF64748B), // Tech blue selected, Slate grey unselected
                 fontSize: 10, // Optimized for 48px height
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                 letterSpacing: 0.2,
@@ -313,7 +313,7 @@ class _MainScreenState extends State<MainScreen>
 
   Widget _buildDesktopLayout() {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.surfaceLight,
       body: Row(
         children: [
           // Navigation Rail
@@ -337,7 +337,7 @@ class _MainScreenState extends State<MainScreen>
         gradient: const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFF7A3AFB), Color(0xFF5B27D8)],
+          colors: [AppColors.purple, AppColors.purpleDark],
         ),
         boxShadow: [
           BoxShadow(
