@@ -1458,21 +1458,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                     Tab(text: 'Pending'),
                                     Tab(text: 'Posted'),
                                     Tab(text: 'Full'),
+                                    Tab(text: 'Completed'),
                                   ],
-                                  labelColor: ExColors.techBlue, // Yellow
+                                  labelColor: ExColors.techBlue,
                                   unselectedLabelColor: Colors.grey,
-                                  indicatorColor: ExColors.yellow, // Yellow
+                                  indicatorColor: ExColors.yellow,
+                                  isScrollable: true,
+                                  tabAlignment: TabAlignment.start,
                                 ),
-                        ),
-                        // Past Events button
-                        TextButton.icon(
-                          onPressed: _showPastEvents,
-                          icon: const Icon(Icons.history, size: 18),
-                          label: const Text('Past'),
-                          style: TextButton.styleFrom(
-                            foregroundColor: ExColors.textSecondary,
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          ),
                         ),
                       ],
                     ),
@@ -2193,21 +2186,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               Tab(text: 'Pending'),
                               Tab(text: 'Posted'),
                               Tab(text: 'Full'),
+                              Tab(text: 'Completed'),
                             ],
-                            labelColor: ExColors.techBlue, // Yellow
+                            labelColor: ExColors.techBlue,
                             unselectedLabelColor: Colors.grey,
-                            indicatorColor: ExColors.techBlue, // Yellow
+                            indicatorColor: ExColors.techBlue,
+                            isScrollable: true,
+                            tabAlignment: TabAlignment.start,
                           ),
-                  ),
-                  // Past Events button
-                  TextButton.icon(
-                    onPressed: _showPastEvents,
-                    icon: const Icon(Icons.history, size: 18),
-                    label: const Text('Past'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: ExColors.textSecondary,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    ),
                   ),
                 ],
               ),

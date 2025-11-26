@@ -1407,9 +1407,17 @@ router.get('/events', requireAuth, async (req, res) => {
       console.log('[GET /events] Manager found (direct lookup):', manager ? `Yes (ID: ${manager._id})` : 'No');
 
       if (!manager && !explicitAudienceKey) {
-        console.log('[GET /events] Trying resolveManagerForRequest fallback');
-        manager = await resolveManagerForRequest(req as any);
-        console.log('[GET /events] Manager found (fallback):', manager ? `Yes (ID: ${manager._id})` : 'No');
+        // Try fallback only if user has managerId in JWT (manager app user)
+        // Staff users won't have managerId, so this will safely return null
+        try {
+          console.log('[GET /events] Trying resolveManagerForRequest fallback');
+          manager = await resolveManagerForRequest(req as any);
+          console.log('[GET /events] Manager found (fallback):', manager ? `Yes (ID: ${manager._id})` : 'No');
+        } catch (err) {
+          // Expected for staff users - they don't have managerId in JWT
+          console.log('[GET /events] Not a manager, continuing as staff user');
+          manager = null;
+        }
       }
 
       if (manager && !explicitAudienceKey) {
