@@ -4658,10 +4658,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       full.sort(ascByDate);
       past.sort((a, b) => ascByDate(b, a)); // most recent first
 
-      final List<Map<String, dynamic>> sorted = [
+      // IMPORTANT: Include ALL events (including completed) so delta sync
+      // can properly merge changes. Previously completed events were excluded
+      // which caused them to disappear after delta sync.
+      final List<Map<String, dynamic>> allEvents = [
         ...pending,
         ...available,
         ...full,
+        ...past,
       ];
 
       // Debug: Log the filtered counts
@@ -4674,7 +4678,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       }
 
       setState(() {
-        _events = sorted;
+        _events = allEvents;
         _eventsPending = pending;
         _eventsAvailable = available;
         _eventsFull = full;
