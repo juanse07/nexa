@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 /// Custom clipper for beautiful curved appbar shape with smooth elliptical bottom-right corner
 class AppBarClipper extends CustomClipper<Path> {
@@ -71,8 +72,9 @@ class CustomSliverAppBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final defaultGradientColors = gradientColors ?? [
-      const Color(0xFF7A3AFB),
-      const Color(0xFF5B27D8),
+      AppColors.primaryPurple, // Navy (Pantone 2767 C)
+      AppColors.oceanBlue, // Ocean blue
+      AppColors.textTertiary, // Lighter tech blue
     ];
 
     return SliverAppBar(
@@ -99,8 +101,8 @@ class CustomSliverAppBar extends StatelessWidget {
               child: Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
                     colors: defaultGradientColors,
                   ),
                 ),
@@ -119,7 +121,7 @@ class CustomSliverAppBar extends StatelessWidget {
                       height: 180,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: const Color(0xFF9D7EF0).withOpacity(0.15),
+                        color: AppColors.yellow.withOpacity(0.20), // Yellow decorative icon
                       ),
                     ),
                   ),
@@ -131,7 +133,7 @@ class CustomSliverAppBar extends StatelessWidget {
                       height: 120,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: const Color(0xFF8B5CF6).withOpacity(0.12),
+                        color: AppColors.techBlue.withOpacity(0.12),
                       ),
                     ),
                   ),

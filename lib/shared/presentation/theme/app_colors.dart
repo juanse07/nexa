@@ -9,14 +9,20 @@ class AppColors {
   AppColors._();
 
   // Primary Colors
-  /// Primary brand color - Indigo
-  static const Color primaryIndigo = Color(0xFF6366F1);
+  /// Primary brand color - Yellow/Gold
+  static const Color primaryIndigo = Color(0xFFFFC107);
 
-  /// Primary brand color - Purple (alternate)
-  static const Color primaryPurple = Color(0xFF430172);
+  /// Primary brand color - Navy Blue (alternate)
+  static const Color primaryPurple = Color(0xFF2C3E50);
 
-  /// Secondary purple for accents
-  static const Color secondaryPurple = Color(0xFF8B5CF6);
+  /// Secondary blue for accents
+  static const Color secondaryPurple = Color(0xFF3B82F6);
+
+  /// Teal/Cyan for info, status, and secondary elements
+  static const Color tealInfo = Color(0xFF00BCD4);
+
+  /// Teal light variant for backgrounds
+  static const Color tealLight = Color(0xFF26C6DA);
 
   // Surface Colors
   /// Light surface background
@@ -95,6 +101,9 @@ class AppColors {
   /// Dark border color
   static const Color borderDark = Color(0xFF94A3B8);
 
+  /// Border grey (slightly different shade)
+  static const Color borderGrey = Color(0xFFE5E7EB);
+
   // Background Colors
   /// White background
   static const Color backgroundWhite = Color(0xFFFFFFFF);
@@ -118,9 +127,69 @@ class AppColors {
   /// White overlay with 50% opacity
   static const Color overlayWhite = Color(0x80FFFFFF);
 
+  // Extended Colors (from features)
+  /// Purple accent color
+  static const Color purple = Color(0xFF7A3AFB);
+
+  /// Dark purple variant
+  static const Color purpleDark = Color(0xFF5B27D8);
+
+  /// Indigo purple
+  static const Color indigoPurple = Color(0xFF4F46E5);
+
+  /// Pink accent
+  static const Color pink = Color(0xFFEC4899);
+
+  /// Coral red
+  static const Color coralRed = Color(0xFFFF6B6B);
+
+  /// Coral orange
+  static const Color coralOrange = Color(0xFFFF8E53);
+
+  /// Navy space cadet
+  static const Color navySpaceCadet = Color(0xFF212C4A);
+
+  /// Ocean blue
+  static const Color oceanBlue = Color(0xFF1E3A8A);
+
+  /// Tech blue (alias for secondaryPurple)
+  static const Color techBlue = secondaryPurple;
+
+  /// Charcoal gray
+  static const Color charcoal = Color(0xFF1F2937);
+
+  /// Slate
+  static const Color slate = Color(0xFF1E293B);
+
+  /// Slate gray
+  static const Color slateGray = Color(0xFF94A3B8);
+
+  /// Medium gray
+  static const Color greyMedium = Color(0xFF9CA3AF);
+
+  /// Yellow (alias for primaryIndigo)
+  static const Color yellow = primaryIndigo;
+
+  // Form Colors
+  /// Form fill light
+  static const Color formFillLight = Color(0xFFF9FAFB);
+
+  /// Form fill grey
+  static const Color formFillGrey = Color(0xFFF3F4F6);
+
+  /// Form fill slate
+  static const Color formFillSlate = Color(0xFFF1F5F9);
+
+  /// Form fill cyan
+  static const Color formFillCyan = Color(0xFFF0F9FF);
+
+  // Shadow & Overlay
+  /// Shadow black
+  static const Color shadowBlack = Color(0x1A000000);
+
   // Icon Colors
   /// Primary icon color
-  static const Color iconPrimary = Color(0xFF6366F1);
+  static const Color iconPrimary = Color(0xFFFFC107);
 
   /// Success icon color
   static const Color iconSuccess = Color(0xFF059669);
@@ -136,10 +205,10 @@ class AppColors {
 
   // Gradient Colors
   /// Primary gradient start
-  static const Color gradientPrimaryStart = Color(0xFF6366F1);
+  static const Color gradientPrimaryStart = Color(0xFFFFC107);
 
   /// Primary gradient end
-  static const Color gradientPrimaryEnd = Color(0xFF8B5CF6);
+  static const Color gradientPrimaryEnd = Color(0xFF3B82F6);
 
   /// Success gradient start
   static const Color gradientSuccessStart = Color(0xFF059669);

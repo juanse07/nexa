@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 class StatsCard extends StatelessWidget {
   final String title;
@@ -25,7 +26,7 @@ class StatsCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12), // Smaller radius
         boxShadow: [
           BoxShadow(
-            color: const Color(0x1A000000), // 10% black - subtle shadow
+            color: AppColors.shadowBlack, // 10% black - subtle shadow
             blurRadius: 15,
             spreadRadius: 0,
             offset: const Offset(0, 4),
@@ -42,7 +43,7 @@ class StatsCard extends StatelessWidget {
                 padding: const EdgeInsets.all(4), // EXTREME padding
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [Color(0xFF9CA3AF), Color(0xFF6B7280)],
+                    colors: [AppColors.greyMedium, AppColors.textMuted],
                   ),
                   borderRadius: BorderRadius.circular(6),
                 ),
@@ -73,7 +74,7 @@ class StatsCard extends StatelessWidget {
           Text(
             value,
             style: const TextStyle(
-              color: Color(0xFF1F2937), // Dark grey text
+              color: AppColors.charcoal, // Dark grey text
               fontSize: 14, // EXTREME reduction
               fontWeight: FontWeight.bold,
               letterSpacing: 0,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:nexa/l10n/app_localizations.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 /// Simple event invitation card matching Available Roles design
 class EventInvitationCard extends StatelessWidget {
@@ -66,8 +67,8 @@ class EventInvitationCard extends StatelessWidget {
                   height: 8,
                   decoration: BoxDecoration(
                     color: isAccepted
-                        ? const Color(0xFF10B981)
-                        : const Color(0xFF7C3AED), // Purple for invitations
+                        ? AppColors.successLight
+                        : AppColors.yellow, // Purple for invitations
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -78,7 +79,7 @@ class EventInvitationCard extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF1F2937),
+                      color: AppColors.charcoal,
                     ),
                   ),
                 ),
@@ -87,8 +88,8 @@ class EventInvitationCard extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: isAccepted
-                        ? const Color(0xFF10B981)
-                        : const Color(0xFF7C3AED), // Purple for invitations
+                        ? AppColors.successLight
+                        : AppColors.yellow, // Purple for invitations
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
@@ -122,7 +123,7 @@ class EventInvitationCard extends StatelessWidget {
                   const Icon(
                     Icons.location_on_outlined,
                     size: 16,
-                    color: Color(0xFF6B7280),
+                    color: AppColors.textMuted,
                   ),
                   const SizedBox(width: 6),
                   Expanded(
@@ -130,7 +131,7 @@ class EventInvitationCard extends StatelessWidget {
                       venueName!,
                       style: const TextStyle(
                         fontSize: 14,
-                        color: Color(0xFF6B7280),
+                        color: AppColors.textMuted,
                       ),
                     ),
                   ),
@@ -145,7 +146,7 @@ class EventInvitationCard extends StatelessWidget {
                 const Icon(
                   Icons.calendar_today_outlined,
                   size: 16,
-                  color: Color(0xFF6B7280),
+                  color: AppColors.textMuted,
                 ),
                 const SizedBox(width: 6),
                 Expanded(
@@ -153,7 +154,7 @@ class EventInvitationCard extends StatelessWidget {
                     '${DateFormat('EEE. MMM d').format(startDate)} · ${DateFormat('h:mm a').format(startDate)} — ${DateFormat('h:mm a').format(endDate)} ${startDate.timeZoneName}',
                     style: const TextStyle(
                       fontSize: 14,
-                      color: Color(0xFF6B7280),
+                      color: AppColors.textMuted,
                     ),
                   ),
                 ),
@@ -167,7 +168,7 @@ class EventInvitationCard extends StatelessWidget {
                 const Icon(
                   Icons.event_outlined,
                   size: 16,
-                  color: Color(0xFF6B7280),
+                  color: AppColors.textMuted,
                 ),
                 const SizedBox(width: 6),
                 Expanded(
@@ -175,7 +176,7 @@ class EventInvitationCard extends StatelessWidget {
                     AppLocalizations.of(context)!.jobFor(clientName),
                     style: const TextStyle(
                       fontSize: 14,
-                      color: Color(0xFF6B7280),
+                      color: AppColors.textMuted,
                     ),
                   ),
                 ),
@@ -191,9 +192,9 @@ class EventInvitationCard extends StatelessWidget {
                     child: OutlinedButton(
                       onPressed: onAccept,
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF059669),
+                        foregroundColor: AppColors.success,
                         side: const BorderSide(
-                          color: Color(0xFF059669),
+                          color: AppColors.success,
                           width: 1.5,
                         ),
                         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -215,7 +216,7 @@ class EventInvitationCard extends StatelessWidget {
                     child: OutlinedButton(
                       onPressed: onDecline,
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF6B7280),
+                        foregroundColor: AppColors.textMuted,
                         side: const BorderSide(
                           color: Color(0xFFD1D5DB),
                           width: 1.5,
@@ -244,14 +245,14 @@ class EventInvitationCard extends StatelessWidget {
                   Icon(
                     Icons.schedule,
                     size: 16,
-                    color: Color(0xFF6B7280),
+                    color: AppColors.textMuted,
                   ),
                   SizedBox(width: 6),
                   Text(
                     'Waiting for response...',
                     style: TextStyle(
                       fontSize: 12,
-                      color: Color(0xFF6B7280),
+                      color: AppColors.textMuted,
                       fontStyle: FontStyle.italic,
                     ),
                   ),
@@ -263,7 +264,7 @@ class EventInvitationCard extends StatelessWidget {
                 'on ${DateFormat('MMM d').format(respondedAt!)} at ${DateFormat('h:mm a').format(respondedAt!)}',
                 style: const TextStyle(
                   fontSize: 12,
-                  color: Color(0xFF6B7280),
+                  color: AppColors.textMuted,
                   fontStyle: FontStyle.italic,
                 ),
               ),

@@ -4,6 +4,16 @@ import 'package:dio/dio.dart';
 import 'package:nexa/core/network/api_client.dart';
 import 'package:nexa/core/network/socket_manager.dart';
 import 'package:nexa/core/di/injection.dart';
+import 'package:nexa/features/subscription/data/services/subscription_service.dart';
+
+/// Exception thrown when subscription limit is reached
+class SubscriptionLimitException implements Exception {
+  const SubscriptionLimitException(this.message);
+  final String message;
+
+  @override
+  String toString() => 'SubscriptionLimitException: $message';
+}
 
 /// Result of fetching events with delta sync support
 class EventFetchResult {
@@ -31,11 +41,14 @@ class EventFetchResult {
 }
 
 class EventService {
-  EventService() : _apiClient = getIt<ApiClient>() {
+  EventService()
+      : _apiClient = getIt<ApiClient>(),
+        _subscriptionService = getIt<SubscriptionService>() {
     _setupSocketListeners();
   }
 
   final ApiClient _apiClient;
+  final SubscriptionService _subscriptionService;
   String? _lastSyncTimestamp;
 
   // Stream controllers for event status changes
@@ -172,6 +185,14 @@ class EventService {
   }
 
   Future<Map<String, dynamic>> createEvent(Map<String, dynamic> event) async {
+    // Check subscription limits (free tier: 10 events/month max)
+    final canCreate = await _subscriptionService.canCreateEvent();
+    if (!canCreate) {
+      throw const SubscriptionLimitException(
+        'You have reached the free tier limit of 10 events per month. Upgrade to Pro for unlimited events.',
+      );
+    }
+
     try {
       final response = await _apiClient.post(
         '/events',
@@ -197,6 +218,14 @@ class EventService {
   Future<List<Map<String, dynamic>>> createBatchEvents(
     List<Map<String, dynamic>> events,
   ) async {
+    // Check subscription limits (free tier: 10 events/month max)
+    final canCreate = await _subscriptionService.canCreateEvent();
+    if (!canCreate) {
+      throw const SubscriptionLimitException(
+        'You have reached the free tier limit of 10 events per month. Upgrade to Pro for unlimited events.',
+      );
+    }
+
     try {
       print('[EventService.createBatchEvents] Creating ${events.length} events...');
 

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../services/google_places_service.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 class ModernAddressField extends StatefulWidget {
   final TextEditingController controller;
@@ -130,7 +131,7 @@ class _ModernAddressFieldState extends State<ModernAddressField> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Address search failed: ${e.toString()}'),
-            backgroundColor: const Color(0xFFDC2626),
+            backgroundColor: AppColors.errorDark,
           ),
         );
       }
@@ -207,14 +208,14 @@ class _ModernAddressFieldState extends State<ModernAddressField> {
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
                               color: const Color(
-                                0xFF6366F1,
+                                0xFF3B82F6,
                               ).withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: const Icon(
                               Icons.place,
                               size: 16,
-                              color: Color(0xFF6366F1),
+                              color: AppColors.techBlue,
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -227,7 +228,7 @@ class _ModernAddressFieldState extends State<ModernAddressField> {
                                   style: const TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
-                                    color: Color(0xFF0F172A),
+                                    color: AppColors.textDark,
                                   ),
                                 ),
                                 if (prediction.secondaryText.isNotEmpty) ...[
@@ -301,13 +302,13 @@ class _ModernAddressFieldState extends State<ModernAddressField> {
                 margin: const EdgeInsets.all(12),
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF6366F1).withValues(alpha: 0.1),
+                  color: AppColors.techBlue.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
                   widget.icon,
                   size: 20,
-                  color: const Color(0xFF6366F1),
+                  color: AppColors.techBlue,
                 ),
               ),
               suffixIcon: _isLoading
@@ -318,7 +319,7 @@ class _ModernAddressFieldState extends State<ModernAddressField> {
                       child: const CircularProgressIndicator(
                         strokeWidth: 2,
                         valueColor: AlwaysStoppedAnimation<Color>(
-                          Color(0xFF6366F1),
+                          AppColors.techBlue,
                         ),
                       ),
                     )
@@ -345,7 +346,7 @@ class _ModernAddressFieldState extends State<ModernAddressField> {
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
                 borderSide: const BorderSide(
-                  color: Color(0xFF6366F1),
+                  color: AppColors.techBlue,
                   width: 2,
                 ),
               ),
@@ -357,7 +358,7 @@ class _ModernAddressFieldState extends State<ModernAddressField> {
             style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w500,
-              color: Color(0xFF0F172A),
+              color: AppColors.textDark,
             ),
           ),
         ],

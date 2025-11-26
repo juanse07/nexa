@@ -11,6 +11,7 @@ import '../../../features/auth/data/services/auth_service.dart';
 import '../../../features/auth/presentation/pages/login_page.dart';
 import '../../main/presentation/main_screen.dart';
 import 'package:get_it/get_it.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 class CatalogScreen extends StatefulWidget {
   const CatalogScreen({super.key});
@@ -195,14 +196,14 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
     if (isDesktop) {
       return Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
+        backgroundColor: AppColors.surfaceLight,
         appBar: AppBar(
           title: SectionNavigationDropdown(
             selectedSection: 'Catalog',
             onNavigate: _handleNavigationDropdown,
             isFixed: true,
           ),
-          backgroundColor: const Color(0xFF7C3AED),
+          backgroundColor: AppColors.yellow,
           elevation: 0,
           actions: [
             _buildProfileMenu(context),
@@ -221,7 +222,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
     final statusBarHeight = MediaQuery.of(context).padding.top;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.surfaceLight,
       body: AnnotatedRegion<SystemUiOverlayStyle>(
         value: const SystemUiOverlayStyle(
           statusBarColor: Colors.transparent,
@@ -241,7 +242,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
               collapsedHeight: 0,
               // When expanded, show status bar + toolbar
               expandedHeight: statusBarHeight + 56,
-              backgroundColor: const Color(0xFF7C3AED),
+              backgroundColor: AppColors.yellow,
               elevation: 2,
               shadowColor: Colors.black.withOpacity(0.2),
               // This is critical - always draw the safe area background
@@ -255,7 +256,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                       gradient: LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
-                        colors: [Color(0xFF7C3AED), Color(0xFF6D28D9)],
+                        colors: [AppColors.yellow, AppColors.primaryPurple],
                       ),
                     ),
                     child: Column(

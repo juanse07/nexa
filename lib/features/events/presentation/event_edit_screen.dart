@@ -4,6 +4,7 @@ import '../../extraction/services/event_service.dart';
 import '../../extraction/services/roles_service.dart';
 import '../../extraction/widgets/modern_address_field.dart';
 import '../../extraction/services/google_places_service.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 class EventEditScreen extends StatefulWidget {
   final Map<String, dynamic> event;
@@ -250,7 +251,7 @@ class _EventEditScreenState extends State<EventEditScreen> {
             ElevatedButton(
               onPressed: () => Navigator.of(ctx).pop(true),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF059669),
+                backgroundColor: AppColors.success,
               ),
               child: const Text('OK'),
             ),
@@ -280,7 +281,7 @@ class _EventEditScreenState extends State<EventEditScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Edit Event'),
-        backgroundColor: const Color(0xFF6366F1),
+        backgroundColor: AppColors.techBlue,
         foregroundColor: Colors.white,
         actions: [
           Padding(
@@ -453,7 +454,7 @@ class _EventEditScreenState extends State<EventEditScreen> {
               ElevatedButton(
                 onPressed: _isSaving ? null : _saveEvent,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6366F1),
+                  backgroundColor: AppColors.techBlue,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
@@ -481,14 +482,14 @@ class _EventEditScreenState extends State<EventEditScreen> {
   Widget _buildSectionTitle(String title, IconData icon) {
     return Row(
       children: [
-        Icon(icon, size: 20, color: const Color(0xFF6366F1)),
+        Icon(icon, size: 20, color: AppColors.techBlue),
         const SizedBox(width: 8),
         Text(
           title,
           style: const TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w700,
-            color: Color(0xFF0F172A),
+            color: AppColors.textDark,
           ),
         ),
       ],
@@ -509,7 +510,7 @@ class _EventEditScreenState extends State<EventEditScreen> {
       maxLines: maxLines,
       decoration: InputDecoration(
         labelText: label,
-        prefixIcon: Icon(icon, color: const Color(0xFF6366F1)),
+        prefixIcon: Icon(icon, color: AppColors.techBlue),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
         ),
@@ -519,7 +520,7 @@ class _EventEditScreenState extends State<EventEditScreen> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF6366F1), width: 2),
+          borderSide: const BorderSide(color: AppColors.techBlue, width: 2),
         ),
       ),
       validator: isRequired
@@ -545,10 +546,10 @@ class _EventEditScreenState extends State<EventEditScreen> {
             return Theme(
               data: Theme.of(context).copyWith(
                 colorScheme: const ColorScheme.light(
-                  primary: Color(0xFF6366F1),
+                  primary: AppColors.techBlue,
                   onPrimary: Colors.white,
                   surface: Colors.white,
-                  onSurface: Color(0xFF0F172A),
+                  onSurface: AppColors.textDark,
                 ),
               ),
               child: child!,
@@ -566,7 +567,7 @@ class _EventEditScreenState extends State<EventEditScreen> {
       child: InputDecorator(
         decoration: InputDecoration(
           labelText: 'Date',
-          prefixIcon: const Icon(Icons.calendar_today, color: Color(0xFF6366F1)),
+          prefixIcon: const Icon(Icons.calendar_today, color: AppColors.techBlue),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -601,10 +602,10 @@ class _EventEditScreenState extends State<EventEditScreen> {
             return Theme(
               data: Theme.of(context).copyWith(
                 colorScheme: const ColorScheme.light(
-                  primary: Color(0xFF6366F1),
+                  primary: AppColors.techBlue,
                   onPrimary: Colors.white,
                   surface: Colors.white,
-                  onSurface: Color(0xFF0F172A),
+                  onSurface: AppColors.textDark,
                 ),
               ),
               child: child!,
@@ -625,7 +626,7 @@ class _EventEditScreenState extends State<EventEditScreen> {
       child: InputDecorator(
         decoration: InputDecoration(
           labelText: label,
-          prefixIcon: const Icon(Icons.access_time, color: Color(0xFF6366F1)),
+          prefixIcon: const Icon(Icons.access_time, color: AppColors.techBlue),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
           ),

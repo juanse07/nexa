@@ -59,7 +59,7 @@ class NexaApp extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (_) => TerminologyProvider(),
       child: MaterialApp(
-        title: 'Nexa',
+        title: 'Tie Manager',
         debugShowCheckedModeBanner: false,
 
       // Localization configuration

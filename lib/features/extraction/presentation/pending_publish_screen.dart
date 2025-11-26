@@ -13,6 +13,7 @@ import '../../teams/data/services/teams_service.dart';
 import '../../teams/presentation/pages/teams_management_page.dart';
 import '../../chat/data/services/chat_service.dart';
 import 'package:nexa/core/network/socket_manager.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 class PendingPublishScreen extends StatefulWidget {
   final Map<String, dynamic> draft;
@@ -812,8 +813,8 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                         ),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16),
-                          side: const BorderSide(color: Color(0xFF6366F1), width: 2),
-                          foregroundColor: const Color(0xFF6366F1),
+                          side: const BorderSide(color: AppColors.techBlue, width: 2),
+                          foregroundColor: AppColors.techBlue,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -842,7 +843,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                         ),
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16),
-                          backgroundColor: const Color(0xFF6366F1),
+                          backgroundColor: AppColors.techBlue,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),

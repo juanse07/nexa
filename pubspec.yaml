@@ -86,6 +86,9 @@ dependencies:
   share_plus: ^7.2.2
   record: 5.0.0
 
+  # Subscription Management
+  # qonversion_flutter: ^6.1.0  # TEMPORARILY DISABLED - Re-enable when ready
+
   # Logging
   logger: ^2.5.0
 
@@ -144,13 +147,13 @@ flutter_launcher_icons:
   android: true
   ios: true
   # iOS
-  image_path_ios: assets/logo.png
-  remove_alpha_ios: true
-  background_color_ios: "#430172"
+  image_path_ios: assets/logo_icon_square.png
+  remove_alpha_ios: false
+  background_color_ios: "#2C3E50"
   # Android
-  image_path_android: assets/logo_padded_small.png
-  adaptive_icon_background: "#430172"
-  adaptive_icon_foreground: assets/logo_padded_small.png
+  image_path_android: assets/logo_icon_square.png
+  adaptive_icon_background: "#2C3E50"
+  adaptive_icon_foreground: assets/appbar_logo.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

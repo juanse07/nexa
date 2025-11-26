@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:nexa/l10n/app_localizations.dart';
 import 'event_edit_screen.dart';
 import '../../extraction/services/event_service.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 class EventDetailScreen extends StatefulWidget {
   final Map<String, dynamic> event;
@@ -66,13 +67,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         : const [];
 
     final statusColor = isUpcoming
-        ? const Color(0xFF059669)
-        : const Color(0xFF6B7280);
+        ? AppColors.success
+        : AppColors.textMuted;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(title),
-        backgroundColor: const Color(0xFF6366F1),
+        backgroundColor: AppColors.techBlue,
         foregroundColor: Colors.white,
         actions: [
           // Only show edit for upcoming events
@@ -97,8 +98,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    const Color(0xFF6366F1).withOpacity(0.08),
-                    const Color(0xFF8B5CF6).withOpacity(0.05),
+                    AppColors.techBlue.withOpacity(0.08),
+                    AppColors.yellow.withOpacity(0.05),
                   ],
                 ),
                 borderRadius: BorderRadius.circular(16),
@@ -111,7 +112,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     style: const TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF0F172A),
+                      color: AppColors.textDark,
                     ),
                   ),
                   if (subtitle.isNotEmpty) ...[
@@ -189,7 +190,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF0F172A),
+                  color: AppColors.textDark,
                 ),
               ),
               const SizedBox(height: 12),
@@ -218,13 +219,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     color: const Color(0xFFFEF3C7),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: const Color(0xFFF59E0B).withOpacity(0.2),
+                      color: AppColors.warning.withOpacity(0.2),
                       width: 1,
                     ),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.work, color: Color(0xFFF59E0B), size: 20),
+                      const Icon(Icons.work, color: AppColors.warning, size: 20),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
@@ -264,7 +265,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF0F172A),
+                  color: AppColors.textDark,
                 ),
               ),
               const SizedBox(height: 12),
@@ -301,10 +302,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   margin: const EdgeInsets.only(bottom: 8),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF0F9FF),
+                    color: AppColors.formFillCyan,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: const Color(0xFF0EA5E9).withOpacity(0.2),
+                      color: AppColors.info.withOpacity(0.2),
                       width: 1,
                     ),
                   ),
@@ -313,14 +314,14 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       // Profile Avatar (smaller)
                       CircleAvatar(
                         radius: 18,
-                        backgroundColor: const Color(0xFF0EA5E9).withOpacity(0.1),
+                        backgroundColor: AppColors.info.withOpacity(0.1),
                         backgroundImage: pictureUrl != null && pictureUrl.isNotEmpty
                             ? NetworkImage(pictureUrl)
                             : null,
                         child: pictureUrl == null || pictureUrl.isEmpty
                             ? const Icon(
                                 Icons.person,
-                                color: Color(0xFF0EA5E9),
+                                color: AppColors.info,
                                 size: 18,
                               )
                             : null,
@@ -368,7 +369,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF059669).withOpacity(0.1),
+                            color: AppColors.success.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
@@ -376,7 +377,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                             style: const TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFF059669),
+                              color: AppColors.success,
                             ),
                           ),
                         ),
@@ -391,13 +392,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                             child: Container(
                               padding: const EdgeInsets.all(6),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFDC2626).withOpacity(0.1),
+                                color: AppColors.errorDark.withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: const Icon(
                                 Icons.person_remove_outlined,
                                 size: 16,
-                                color: Color(0xFFDC2626),
+                                color: AppColors.errorDark,
                               ),
                             ),
                           ),
@@ -417,7 +418,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF0F172A),
+                  color: AppColors.textDark,
                 ),
               ),
               const SizedBox(height: 12),
@@ -482,7 +483,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFDC2626),
+              backgroundColor: AppColors.errorDark,
             ),
             child: const Text('Remove'),
           ),
@@ -525,7 +526,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 20, color: const Color(0xFF6366F1)),
+          Icon(icon, size: 20, color: AppColors.techBlue),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -545,7 +546,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
-                    color: Color(0xFF0F172A),
+                    color: AppColors.textDark,
                   ),
                 ),
               ],
@@ -608,11 +609,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         // Keep Open toggle (prevents auto-completion)
         Card(
           elevation: 0,
-          color: const Color(0xFF6366F1).withOpacity(0.05),
+          color: AppColors.techBlue.withOpacity(0.05),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
             side: BorderSide(
-              color: const Color(0xFF6366F1).withOpacity(0.2),
+              color: AppColors.techBlue.withOpacity(0.2),
               width: 1,
             ),
           ),
@@ -630,7 +631,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             ),
             value: keepOpen,
             onChanged: _isUpdatingKeepOpen ? null : _toggleKeepOpen,
-            activeColor: const Color(0xFF6366F1),
+            activeColor: AppColors.techBlue,
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           ),
         ),
@@ -641,7 +642,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           icon: const Icon(Icons.undo, size: 18),
           label: const Text('Move to Drafts'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFF59E0B),
+            backgroundColor: AppColors.warning,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
             shape: RoundedRectangleBorder(
@@ -657,8 +658,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             icon: const Icon(Icons.groups, size: 20),
             label: const Text('Open to All Staff'),
             style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFF0EA5E9),
-              side: const BorderSide(color: Color(0xFF0EA5E9), width: 2),
+              foregroundColor: AppColors.info,
+              side: const BorderSide(color: AppColors.info, width: 2),
               padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
@@ -723,12 +724,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   Color _getPrivacyColor(String privacyStatus) {
     switch (privacyStatus) {
       case 'private':
-        return const Color(0xFF6366F1); // Indigo
+        return AppColors.techBlue; // Indigo
       case 'public':
-        return const Color(0xFF059669); // Green
+        return AppColors.success; // Green
       case 'private_public':
       case 'mix': // Legacy fallback
-        return const Color(0xFFF59E0B); // Amber/Orange
+        return AppColors.warning; // Amber/Orange
       default:
         return Colors.grey;
     }
@@ -763,7 +764,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFF59E0B),
+              backgroundColor: AppColors.warning,
             ),
             child: const Text('Move to Drafts'),
           ),
@@ -787,7 +788,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('$clientName moved to drafts!'),
-          backgroundColor: const Color(0xFF059669),
+          backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -835,7 +836,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 ? 'Event will stay open after completion'
                 : 'Event will auto-complete when past',
           ),
-          backgroundColor: const Color(0xFF059669),
+          backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -876,8 +877,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           OutlinedButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFF0EA5E9),
-              side: const BorderSide(color: Color(0xFF0EA5E9), width: 2),
+              foregroundColor: AppColors.info,
+              side: const BorderSide(color: AppColors.info, width: 2),
             ),
             child: const Text('Open to All'),
           ),
@@ -904,7 +905,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('$clientName is now open to all staff!'),
-          backgroundColor: const Color(0xFF0EA5E9),
+          backgroundColor: AppColors.info,
           behavior: SnackBarBehavior.floating,
         ),
       );

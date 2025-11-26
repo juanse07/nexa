@@ -1035,13 +1035,13 @@ router.post('/teams/:teamId/invites/create-link', inviteCreateLimiter, requireAu
       ? `Expires: ${expiresAt.toLocaleDateString()}`
       : 'Never expires';
 
-    const shareableMessage = `Join my team on Nexa! 🎉
+    const shareableMessage = `Join my team on Tie! 🎉
 
 Already have the app?
 Tap: ${deepLink}
 
 Don't have it yet?
-1. Download Nexa from your app store
+1. Download Tie from your app store
 2. Enter code: ${shortCode}
 
 ${expiryText}`;

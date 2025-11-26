@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/draft_service.dart';
 import '../../services/event_service.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 /// Mixin providing shared event data management functionality
 /// for extraction screen tabs
@@ -43,7 +44,7 @@ mixin EventDataMixin<T extends StatefulWidget> on State<T> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: backgroundColor ?? const Color(0xFF059669),
+        backgroundColor: backgroundColor ?? AppColors.success,
       ),
     );
   }
@@ -54,7 +55,7 @@ mixin EventDataMixin<T extends StatefulWidget> on State<T> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: const Color(0xFFEF4444),
+        backgroundColor: AppColors.error,
       ),
     );
   }

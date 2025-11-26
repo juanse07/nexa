@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 class ExpandableFab extends StatefulWidget {
   const ExpandableFab({super.key});
@@ -17,10 +18,10 @@ class _ExpandableFabState extends State<ExpandableFab>
   bool _isExpanded = false;
 
   final List<FabAction> _actions = [
-    FabAction(icon: Icons.camera_alt, label: 'Scan', color: const Color(0xFF6366F1)),
-    FabAction(icon: Icons.chat_bubble, label: 'AI Chat', color: const Color(0xFF8B5CF6)),
-    FabAction(icon: Icons.calendar_today, label: 'Event', color: const Color(0xFF7C3AED)),
-    FabAction(icon: Icons.upload_file, label: 'Upload', color: const Color(0xFF6366F1)),
+    FabAction(icon: Icons.camera_alt, label: 'Scan', color: AppColors.techBlue),
+    FabAction(icon: Icons.chat_bubble, label: 'AI Chat', color: AppColors.yellow),
+    FabAction(icon: Icons.calendar_today, label: 'Event', color: AppColors.yellow),
+    FabAction(icon: Icons.upload_file, label: 'Upload', color: AppColors.techBlue),
   ];
 
   @override
@@ -90,7 +91,7 @@ class _ExpandableFabState extends State<ExpandableFab>
               angle: _rotationAnimation.value,
               child: FloatingActionButton(
                 onPressed: _toggleExpanded,
-                backgroundColor: const Color(0xFF7C3AED),
+                backgroundColor: AppColors.yellow,
                 elevation: 8,
                 child: Container(
                   width: 56,
@@ -99,12 +100,12 @@ class _ExpandableFabState extends State<ExpandableFab>
                     gradient: const LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: [Color(0xFF7C3AED), Color(0xFF6366F1)],
+                      colors: [AppColors.yellow, AppColors.techBlue],
                     ),
                     shape: BoxShape.circle,
                     boxShadow: const [
                       BoxShadow(
-                        color: Color(0x4D7C3AED), // 30% purple
+                        color: Color(0x4DFFC107), // 30% purple
                         blurRadius: 20,
                         offset: Offset(0, 10),
                       ),
@@ -155,7 +156,7 @@ class _ExpandableFabState extends State<ExpandableFab>
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: const [
                           BoxShadow(
-                            color: Color(0x1A000000), // 10% black
+                            color: AppColors.shadowBlack, // 10% black
                             blurRadius: 10,
                             offset: Offset(0, 4),
                           ),
@@ -166,7 +167,7 @@ class _ExpandableFabState extends State<ExpandableFab>
                         style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF0F172A),
+                          color: AppColors.textDark,
                         ),
                       ),
                     ),

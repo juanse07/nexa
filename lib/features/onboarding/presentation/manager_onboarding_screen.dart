@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../cities/data/models/city.dart';
 import '../data/services/onboarding_service.dart';
 import 'widgets/multi_city_picker.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 /// Manager onboarding screen with city selection and venue discovery
 class ManagerOnboardingScreen extends StatefulWidget {
@@ -161,13 +162,13 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: Colors.purple.withOpacity(0.1),
+              color: const Color(0xFFFFF9E5),
               shape: BoxShape.circle,
             ),
             child: const Icon(
               Icons.location_city,
               size: 80,
-              color: Colors.purple,
+              color: AppColors.yellow,
             ),
           ),
           const SizedBox(height: 32),
@@ -200,7 +201,7 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
               },
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: Colors.purple,
+                backgroundColor: AppColors.yellow,
               ),
               child: const Text(
                 'Get Started',
@@ -289,7 +290,7 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
                   : null,
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: Colors.purple,
+                backgroundColor: AppColors.yellow,
               ),
               child: const Text(
                 'Continue',
@@ -323,7 +324,7 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
           children: [
             const CircularProgressIndicator(
               strokeWidth: 3,
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.purple),
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.yellow),
             ),
             const SizedBox(height: 32),
             Text(
@@ -417,7 +418,7 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
               onPressed: _finishOnboarding,
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: Colors.purple,
+                backgroundColor: AppColors.yellow,
               ),
               child: const Text(
                 'Start Using Nexa',

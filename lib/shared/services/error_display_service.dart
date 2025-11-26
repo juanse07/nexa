@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 /// Message severity levels for consistent styling
 enum MessageSeverity {
@@ -28,7 +29,7 @@ class ErrorDisplayService {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: const Color(0xFF059669), // Green
+        backgroundColor: AppColors.success, // Green
         duration: duration,
       ),
     );

@@ -3,6 +3,7 @@ import 'package:nexa/l10n/app_localizations.dart';
 import 'package:intl/intl.dart';
 
 import '../../../extraction/services/event_service.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 /// Elegant dialog for selecting and sending event invitations
 class SendEventInvitationDialog extends StatefulWidget {
@@ -166,7 +167,7 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
               padding: const EdgeInsets.all(24),
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                  colors: [AppColors.techBlue, AppColors.yellow],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -370,7 +371,7 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
               // Client name as main title
               Row(
                 children: [
-                  const Icon(Icons.business, size: 18, color: Color(0xFF6366F1)),
+                  const Icon(Icons.business, size: 18, color: AppColors.techBlue),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -378,7 +379,7 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF6366F1),
+                        color: AppColors.techBlue,
                       ),
                     ),
                   ),
@@ -390,14 +391,14 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
                 children: [
                   // Venue
                   if (venueName != null) ...[
-                    const Icon(Icons.location_on, size: 14, color: Color(0xFF059669)),
+                    const Icon(Icons.location_on, size: 14, color: AppColors.success),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
                         venueName,
                         style: const TextStyle(
                           fontSize: 14,
-                          color: Color(0xFF059669),
+                          color: AppColors.success,
                           fontWeight: FontWeight.w500,
                         ),
                         overflow: TextOverflow.ellipsis,
@@ -421,27 +422,27 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
               // Date and time - always show
               Row(
                 children: [
-                  const Icon(Icons.calendar_today, size: 14, color: Color(0xFF8B5CF6)),
+                  const Icon(Icons.calendar_today, size: 14, color: AppColors.yellow),
                   const SizedBox(width: 4),
                   if (startDate != null) ...[
                     Text(
                       DateFormat('MMM d, yyyy').format(startDate),
                       style: const TextStyle(
                         fontSize: 14,
-                        color: Color(0xFF8B5CF6),
+                        color: AppColors.yellow,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                     // Only show time if we have a time component
                     if (hasTimeComponent) ...[
                       const SizedBox(width: 16),
-                      const Icon(Icons.access_time, size: 14, color: Color(0xFF8B5CF6)),
+                      const Icon(Icons.access_time, size: 14, color: AppColors.yellow),
                       const SizedBox(width: 4),
                       Text(
                         DateFormat('h:mm a').format(startDate),
                         style: const TextStyle(
                           fontSize: 14,
-                          color: Color(0xFF8B5CF6),
+                          color: AppColors.yellow,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -567,7 +568,7 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
                   : const Icon(Icons.send),
               label: Text(_sending ? 'Sending...' : 'Send Invitation'),
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF6366F1),
+                backgroundColor: AppColors.techBlue,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 minimumSize: const Size(double.infinity, 50),
                 shape: RoundedRectangleBorder(
@@ -612,12 +613,12 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: isSelected ? const Color(0xFF6366F1) : Colors.grey.shade200,
+          color: isSelected ? AppColors.techBlue : Colors.grey.shade200,
           width: isSelected ? 2 : 1,
         ),
       ),
       elevation: 0,
-      color: isSelected ? const Color(0xFF6366F1).withOpacity(0.05) : null,
+      color: isSelected ? AppColors.techBlue.withOpacity(0.05) : null,
       child: InkWell(
         onTap: () => setState(() => _selectedRoleId = roleId),
         borderRadius: BorderRadius.circular(12),
@@ -630,13 +631,13 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
                 height: 40,
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? const Color(0xFF6366F1)
-                      : const Color(0xFF6366F1).withOpacity(0.1),
+                      ? AppColors.techBlue
+                      : AppColors.tealInfo.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
                   Icons.badge,
-                  color: isSelected ? Colors.white : const Color(0xFF6366F1),
+                  color: isSelected ? Colors.white : AppColors.techBlue,
                   size: 20,
                 ),
               ),
@@ -650,7 +651,7 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        color: isSelected ? const Color(0xFF6366F1) : null,
+                        color: isSelected ? AppColors.techBlue : null,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -667,7 +668,7 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
               if (isSelected)
                 const Icon(
                   Icons.check_circle,
-                  color: Color(0xFF6366F1),
+                  color: AppColors.techBlue,
                   size: 24,
                 ),
             ],

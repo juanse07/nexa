@@ -3,6 +3,7 @@ import 'package:nexa/l10n/app_localizations.dart';
 import '../../../extraction/services/event_service.dart';
 import '../../../events/presentation/event_detail_screen.dart';
 import '../../../../core/widgets/custom_sliver_app_bar.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 class UserEventsScreen extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -133,7 +134,7 @@ class _UserEventsScreenState extends State<UserEventsScreen> {
                 icon: const Icon(Icons.refresh),
                 label: const Text('Retry'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6366F1),
+                  backgroundColor: AppColors.techBlue,
                   foregroundColor: Colors.white,
                 ),
               ),
@@ -252,7 +253,7 @@ class _UserEventsScreenState extends State<UserEventsScreen> {
               children: [
                 const Icon(
                   Icons.upcoming,
-                  color: Color(0xFF059669),
+                  color: AppColors.success,
                   size: 20,
                 ),
                 const SizedBox(width: 8),
@@ -261,7 +262,7 @@ class _UserEventsScreenState extends State<UserEventsScreen> {
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF0F172A),
+                    color: AppColors.textDark,
                   ),
                 ),
               ],
@@ -301,7 +302,7 @@ class _UserEventsScreenState extends State<UserEventsScreen> {
                 children: [
                   const Icon(
                     Icons.history,
-                    color: Color(0xFF6B7280),
+                    color: AppColors.textMuted,
                     size: 20,
                   ),
                   const SizedBox(width: 8),
@@ -310,7 +311,7 @@ class _UserEventsScreenState extends State<UserEventsScreen> {
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF0F172A),
+                      color: AppColors.textDark,
                     ),
                   ),
                 ],
@@ -344,7 +345,7 @@ class _UserEventsScreenState extends State<UserEventsScreen> {
       }
     }
 
-    final statusColor = isUpcoming ? const Color(0xFF059669) : const Color(0xFF6B7280);
+    final statusColor = isUpcoming ? AppColors.success : AppColors.textMuted;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -382,7 +383,7 @@ class _UserEventsScreenState extends State<UserEventsScreen> {
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF0F172A),
+                        color: AppColors.textDark,
                       ),
                     ),
                   ),
@@ -435,7 +436,7 @@ class _UserEventsScreenState extends State<UserEventsScreen> {
                     color: const Color(0xFFFEF3C7),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: const Color(0xFFF59E0B).withOpacity(0.2),
+                      color: AppColors.warning.withOpacity(0.2),
                       width: 1,
                     ),
                   ),
@@ -445,7 +446,7 @@ class _UserEventsScreenState extends State<UserEventsScreen> {
                       const Icon(
                         Icons.work_outline,
                         size: 14,
-                        color: Color(0xFFF59E0B),
+                        color: AppColors.warning,
                       ),
                       const SizedBox(width: 6),
                       Text(
@@ -453,7 +454,7 @@ class _UserEventsScreenState extends State<UserEventsScreen> {
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFFF59E0B),
+                          color: AppColors.warning,
                         ),
                       ),
                     ],

@@ -3,6 +3,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get_it/get_it.dart';
 import 'package:nexa/core/network/api_client.dart';
 import 'package:nexa/features/users/data/services/manager_service.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 class ManagerProfilePage extends StatefulWidget {
   const ManagerProfilePage({super.key});
@@ -151,7 +152,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
     final url = _pictureCtrl.text.trim();
     return CircleAvatar(
       radius: 48,
-      backgroundColor: const Color(0xFF430172),
+      backgroundColor: AppColors.primaryPurple,
       backgroundImage: url.isNotEmpty ? NetworkImage(url) : null,
       child: url.isEmpty
           ? const Icon(Icons.person, color: Colors.white, size: 48)

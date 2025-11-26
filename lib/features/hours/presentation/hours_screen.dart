@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 class HoursScreen extends StatelessWidget {
   const HoursScreen({super.key});
@@ -6,10 +7,10 @@ class HoursScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.surfaceLight,
       appBar: AppBar(
         title: const Text('Hours'),
-        backgroundColor: const Color(0xFF7A3AFB),
+        backgroundColor: AppColors.purple,
         elevation: 0,
       ),
       body: const Center(

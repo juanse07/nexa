@@ -307,7 +307,7 @@ router.post('/test', authenticateToken, async (req: Request, res: Response) => {
     const data = validation.success ? validation.data : {};
 
     const title = data.title || '🔔 Test Notification';
-    const body = data.body || 'This is a test notification from Nexa!';
+    const body = data.body || 'This is a test notification from Tie!';
     const type = data.type || 'system';
 
     console.log('[TEST NOTIF] Sending notification with:', { title, body, type, userId, userType });

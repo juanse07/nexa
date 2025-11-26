@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 class HeaderCard extends StatelessWidget {
   final String title;
@@ -143,7 +144,7 @@ class LoadingIndicator extends StatelessWidget {
     return Column(
       children: [
         const CircularProgressIndicator(
-          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF6366F1)),
+          valueColor: AlwaysStoppedAnimation<Color>(AppColors.techBlue),
         ),
         const SizedBox(height: 16),
         Text(text, style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
@@ -161,18 +162,18 @@ class ErrorBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFFEF2F2),
+        color: AppColors.surfaceRed,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFFECACA)),
+        border: Border.all(color: AppColors.errorBorder),
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline, color: Color(0xFFEF4444), size: 20),
+          const Icon(Icons.error_outline, color: AppColors.error, size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(color: Color(0xFFEF4444), fontSize: 14),
+              style: const TextStyle(color: AppColors.error, fontSize: 14),
             ),
           ),
         ],
@@ -196,7 +197,7 @@ class InfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = accentColor ?? const Color(0xFF6366F1);
+    final color = accentColor ?? AppColors.techBlue;
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -257,7 +258,7 @@ class InfoCard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
-                      color: const Color(0xFF0F172A),
+                      color: AppColors.textDark,
                       letterSpacing: -0.5,
                     ),
                   ),
@@ -290,12 +291,12 @@ class DetailRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = iconColor ?? const Color(0xFF6366F1);
+    final color = iconColor ?? AppColors.techBlue;
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFFAFAFA),
+        color: AppColors.surfaceWhite,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.grey.shade200, width: 1),
       ),
@@ -330,7 +331,7 @@ class DetailRow extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF0F172A),
+                    color: AppColors.textDark,
                     letterSpacing: -0.2,
                   ),
                 ),
@@ -358,7 +359,7 @@ class FormSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = accentColor ?? const Color(0xFF059669);
+    final color = accentColor ?? AppColors.success;
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -419,7 +420,7 @@ class FormSection extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
-                      color: const Color(0xFF0F172A),
+                      color: AppColors.textDark,
                       letterSpacing: -0.5,
                     ),
                   ),
@@ -477,7 +478,7 @@ class LabeledTextField extends StatelessWidget {
       decoration: InputDecoration(
         labelText: label + (isRequired ? ' *' : ''),
         hintText: placeholder,
-        prefixIcon: Icon(icon, color: const Color(0xFF059669)),
+        prefixIcon: Icon(icon, color: AppColors.success),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: Colors.grey.shade300),
@@ -488,18 +489,18 @@ class LabeledTextField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF059669), width: 2),
+          borderSide: const BorderSide(color: AppColors.success, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFEF4444), width: 2),
+          borderSide: const BorderSide(color: AppColors.error, width: 2),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFEF4444), width: 2),
+          borderSide: const BorderSide(color: AppColors.error, width: 2),
         ),
         filled: true,
-        fillColor: const Color(0xFFF8FAFC),
+        fillColor: AppColors.surfaceLight,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 16,
@@ -556,7 +557,7 @@ class _CompactInfoCardState extends State<CompactInfoCard>
 
   @override
   Widget build(BuildContext context) {
-    final accentColor = widget.color ?? const Color(0xFF6366F1);
+    final accentColor = widget.color ?? AppColors.techBlue;
     return GestureDetector(
       onTapDown: (_) => _controller.forward(),
       onTapUp: (_) => _controller.reverse(),
@@ -620,7 +621,7 @@ class _CompactInfoCardState extends State<CompactInfoCard>
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF0F172A),
+                      color: AppColors.textDark,
                       letterSpacing: -0.5,
                     ),
                     maxLines: 2,
@@ -716,7 +717,7 @@ class StatusCard extends StatelessWidget {
             style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
-              color: Color(0xFF0F172A),
+              color: AppColors.textDark,
               letterSpacing: -0.3,
             ),
             maxLines: 1,
@@ -763,7 +764,7 @@ class ActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accentColor = color ?? const Color(0xFF6366F1);
+    final accentColor = color ?? AppColors.techBlue;
     final screenWidth = MediaQuery.of(context).size.width;
 
     // Show compact version on mobile (hide decorative elements, keep button)
@@ -838,7 +839,7 @@ class ActionCard extends StatelessWidget {
             style: const TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w700,
-              color: Color(0xFF0F172A),
+              color: AppColors.textDark,
               letterSpacing: -0.5,
             ),
           ),
@@ -885,6 +886,69 @@ class ActionCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Empty state widget with icon and text
+class EmptyStateWidget extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color? iconColor;
+
+  const EmptyStateWidget({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.iconColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = iconColor ?? Colors.grey.shade400;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Icon(
+                icon,
+                size: 48,
+                color: color,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade700,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w400,
+                color: Colors.grey.shade500,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }

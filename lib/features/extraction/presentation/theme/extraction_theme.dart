@@ -85,7 +85,7 @@ class ExtractionTheme {
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: [
-      // Color(0xFF212C4A), // Navy (tiny edge)
+      // Color(0xFF212C4A), // Navy (tiny edge)ßß
       Color(0xFF1E3A8A), // Ocean Blue (small)
       Color(0xFF00838F), // Dark teal
       Color(0xFF00BCD4), // Medium teal (dominant)

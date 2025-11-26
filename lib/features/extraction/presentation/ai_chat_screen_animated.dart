@@ -21,6 +21,7 @@ import '../widgets/image_preview_card.dart';
 import '../widgets/document_preview_card.dart';
 import '../widgets/event_confirmation_card.dart';
 import '../widgets/batch_event_dialog.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 // This is a preview of the animated build method structure for ai_chat_screen.dart
 // Copy the relevant parts back to the main file
@@ -40,7 +41,7 @@ class AnimatedBuildMethodPreview extends StatelessWidget {
         return false;
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
+        backgroundColor: AppColors.surfaceLight,
         body: Stack(
           children: [
             // Main content with floating app bar
@@ -58,13 +59,13 @@ class AnimatedBuildMethodPreview extends StatelessWidget {
                   title: const Text(
                     'AI Chat',
                     style: TextStyle(
-                      color: Color(0xFF1F2937),
+                      color: AppColors.charcoal,
                       fontSize: 24,
                       fontWeight: FontWeight.w700,
                       letterSpacing: -0.5,
                     ),
                   ),
-                  iconTheme: const IconThemeData(color: Color(0xFF1F2937)),
+                  iconTheme: const IconThemeData(color: AppColors.charcoal),
                 ),
 
                 // Info banner with AI provider toggle

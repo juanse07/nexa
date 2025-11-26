@@ -8,6 +8,7 @@ import '../../auth/data/services/auth_service.dart';
 import '../../cities/data/models/city.dart';
 import '../data/models/venue.dart';
 import 'venue_form_screen.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 /// Tabbed venue screen with one tab per city
 class TabbedVenueScreen extends StatefulWidget {
@@ -313,7 +314,7 @@ class _TabbedVenueScreenState extends State<TabbedVenueScreen>
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
                       color: city.isTourist
-                          ? Colors.purple.withOpacity(0.1)
+                          ? AppColors.yellow.withOpacity(0.1)
                           : Colors.blue.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -322,7 +323,7 @@ class _TabbedVenueScreenState extends State<TabbedVenueScreen>
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: city.isTourist ? Colors.purple[700] : Colors.blue[700],
+                        color: city.isTourist ? AppColors.primaryPurple : Colors.blue[700],
                       ),
                     ),
                   ),

@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:flutter_markdown/flutter_markdown.dart';
 
 import '../services/chat_event_service.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 /// Animated widget to display a single chat message bubble with typing effects
 class AnimatedChatMessageWidget extends StatefulWidget {
@@ -226,9 +227,9 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
                         gradient: isUser
                             ? const LinearGradient(
                                 colors: [
-                                  Color(0xFF7C3AED),
-                                  Color(0xFF6366F1),
-                                  Color(0xFF4F46E5),
+                                  AppColors.yellow,
+                                  AppColors.techBlue,
+                                  AppColors.indigoPurple,
                                 ],
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
@@ -244,7 +245,7 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
                         boxShadow: [
                           BoxShadow(
                             color: isUser
-                                ? const Color(0xFF7C3AED).withValues(alpha: 0.3)
+                                ? AppColors.yellow.withValues(alpha: 0.3)
                                 : Colors.black.withValues(alpha: 0.08),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
@@ -315,7 +316,7 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
                     width: 8,
                     height: 8,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF6366F1),
+                      color: AppColors.techBlue,
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -340,11 +341,11 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
           end: Alignment.bottomRight,
           colors: _isTyping
             ? [const Color(0xFF9061FC), const Color(0xFF7343E9)]
-            : [const Color(0xFF7A3AFB), const Color(0xFF5B27D8)],
+            : [AppColors.purple, AppColors.purpleDark],
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF7A3AFB).withValues(alpha: _isTyping ? 0.5 : 0.3),
+            color: AppColors.purple.withValues(alpha: _isTyping ? 0.5 : 0.3),
             blurRadius: _isTyping ? 10 : 6,
             offset: const Offset(0, 2),
           ),
@@ -375,7 +376,7 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
       width: 32,
       height: 32,
       decoration: BoxDecoration(
-        color: const Color(0xFF6366F1),
+        color: AppColors.techBlue,
         borderRadius: BorderRadius.circular(16),
       ),
       child: widget.userProfilePicture != null && widget.userProfilePicture!.isNotEmpty
@@ -446,24 +447,24 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
         data: content,
         styleSheet: MarkdownStyleSheet(
           p: TextStyle(
-            color: isUser ? Colors.white : const Color(0xFF0F172A),
+            color: isUser ? Colors.white : AppColors.textDark,
             fontSize: 15,
             height: 1.4,
           ),
           strong: TextStyle(
-            color: isUser ? Colors.white : const Color(0xFF0F172A),
+            color: isUser ? Colors.white : AppColors.textDark,
             fontSize: 15,
             height: 1.4,
             fontWeight: FontWeight.bold,
           ),
           em: TextStyle(
-            color: isUser ? Colors.white : const Color(0xFF0F172A),
+            color: isUser ? Colors.white : AppColors.textDark,
             fontSize: 15,
             height: 1.4,
             fontStyle: FontStyle.italic,
           ),
           listBullet: TextStyle(
-            color: isUser ? Colors.white : const Color(0xFF0F172A),
+            color: isUser ? Colors.white : AppColors.textDark,
           ),
         ),
       );
@@ -491,13 +492,13 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
                       (_shimmerAnimation.value + 0.5).clamp(0.0, 1.0),
                     ],
                     colors: const [
-                      Color(0xFF0F172A), // Dark base
-                      Color(0xFF6366F1), // Indigo
-                      Color(0xFF8B5CF6), // Purple
-                      Color(0xFFEC4899), // Pink highlight peak
-                      Color(0xFF8B5CF6), // Purple
-                      Color(0xFF6366F1), // Indigo
-                      Color(0xFF0F172A), // Dark base
+                      AppColors.textDark, // Dark base
+                      AppColors.techBlue, // Indigo
+                      AppColors.yellow, // Purple
+                      AppColors.pink, // Pink highlight peak
+                      AppColors.yellow, // Purple
+                      AppColors.techBlue, // Indigo
+                      AppColors.textDark, // Dark base
                     ],
                   ).createShader(bounds);
                 },
@@ -525,11 +526,11 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
                           (_shimmerAnimation.value + 0.4).clamp(0.0, 1.0),
                         ],
                         colors: const [
-                          Color(0xFF0F172A),
-                          Color(0xFF8B5CF6), // Soft violet
+                          AppColors.textDark,
+                          AppColors.yellow, // Soft violet
                           Color(0xFFC084FC), // Bright purple
-                          Color(0xFF8B5CF6), // Soft violet
-                          Color(0xFF0F172A),
+                          AppColors.yellow, // Soft violet
+                          AppColors.textDark,
                         ],
                       ).createShader(bounds);
                     },
@@ -553,13 +554,13 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
                         (_shimmerAnimation.value + 0.5).clamp(0.0, 1.0),
                       ],
                       colors: const [
-                        Color(0xFF0F172A), // Dark base
-                        Color(0xFF6366F1), // Indigo
-                        Color(0xFF8B5CF6), // Purple
-                        Color(0xFFEC4899), // Pink highlight peak
-                        Color(0xFF8B5CF6), // Purple
-                        Color(0xFF6366F1), // Indigo
-                        Color(0xFF0F172A), // Dark base
+                        AppColors.textDark, // Dark base
+                        AppColors.techBlue, // Indigo
+                        AppColors.yellow, // Purple
+                        AppColors.pink, // Pink highlight peak
+                        AppColors.yellow, // Purple
+                        AppColors.techBlue, // Indigo
+                        AppColors.textDark, // Dark base
                       ],
                     ).createShader(bounds);
                   },
@@ -587,7 +588,7 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
           Text(
             beforeLink,
             style: TextStyle(
-              color: isUser ? Colors.white : const Color(0xFF0F172A),
+              color: isUser ? Colors.white : AppColors.textDark,
               fontSize: 15,
               height: 1.4,
             ),
@@ -597,7 +598,7 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
           child: Text(
             linkText,
             style: TextStyle(
-              color: isUser ? Colors.white : const Color(0xFF3B82F6),
+              color: isUser ? Colors.white : AppColors.techBlue,
               fontSize: 15,
               height: 1.4,
               decoration: TextDecoration.underline,
@@ -609,7 +610,7 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
           Text(
             afterLink,
             style: TextStyle(
-              color: isUser ? Colors.white : const Color(0xFF0F172A),
+              color: isUser ? Colors.white : AppColors.textDark,
               fontSize: 15,
               height: 1.4,
             ),

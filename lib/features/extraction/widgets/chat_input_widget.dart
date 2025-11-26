@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../../services/terminology_provider.dart';
 import '../services/audio_transcription_service.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 /// Widget for chat input with text field, attachment, microphone, and send button
 class ChatInputWidget extends StatefulWidget {
@@ -244,7 +245,7 @@ class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProv
                   borderRadius: BorderRadius.circular(24),
                   border: _isRecording
                       ? Border.all(
-                          color: Color(0xFFFF6B6B),
+                          color: AppColors.coralRed,
                           width: 2,
                         )
                       : Border.all(
@@ -254,7 +255,7 @@ class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProv
                   boxShadow: [
                     BoxShadow(
                       color: _isRecording
-                          ? Color(0xFFFF6B6B).withOpacity(0.2)
+                          ? AppColors.coralRed.withOpacity(0.2)
                           : Colors.black.withValues(alpha: 0.08),
                       blurRadius: _isRecording ? 12 : 8,
                       offset: const Offset(0, 1),
@@ -336,7 +337,7 @@ class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProv
                       alignment: Alignment.center,
                       child: const Icon(
                         Icons.keyboard_hide,
-                        color: Color(0xFF4F46E5),
+                        color: AppColors.indigoPurple,
                         size: 20,
                       ),
                     ),
@@ -356,7 +357,7 @@ class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProv
                         gradient: _isRecording
                             ? LinearGradient(
                                 colors: [
-                                  Color(0xFFFF6B6B),  // Bright coral red
+                                  AppColors.coralRed,  // Bright coral red
                                   Color(0xFFFF8787),  // Light coral
                                 ],
                                 begin: Alignment.topLeft,
@@ -383,7 +384,7 @@ class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProv
                         boxShadow: _isRecording
                             ? [
                                 BoxShadow(
-                                  color: Color(0xFFFF6B6B).withOpacity(0.5 * _pulseAnimation.value),
+                                  color: AppColors.coralRed.withOpacity(0.5 * _pulseAnimation.value),
                                   blurRadius: 20 * _pulseAnimation.value,
                                   spreadRadius: 6 * _pulseAnimation.value,
                                 ),
@@ -434,9 +435,9 @@ class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProv
                 gradient: _hasText && !widget.isLoading
                     ? const LinearGradient(
                         colors: [
-                          Color(0xFF7C3AED), // Light purple
-                          Color(0xFF6366F1), // Medium purple
-                          Color(0xFF4F46E5), // Darker purple
+                          AppColors.yellow, // Light purple
+                          AppColors.techBlue, // Medium purple
+                          AppColors.indigoPurple, // Darker purple
                         ],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,

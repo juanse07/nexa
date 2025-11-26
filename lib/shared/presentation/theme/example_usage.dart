@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:nexa/shared/presentation/theme/theme.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 /// Example file demonstrating proper usage of the Nexa theme system.
 ///

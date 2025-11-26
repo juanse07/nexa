@@ -186,7 +186,7 @@ async function createServer() {
   });
 
   app.get('/', (_req, res) => {
-    res.send('Nexa backend is running');
+    res.send('Tie backend is running');
   });
 
   // Health check route

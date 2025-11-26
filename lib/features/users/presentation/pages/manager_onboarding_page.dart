@@ -15,7 +15,9 @@ import 'package:nexa/features/users/presentation/pages/manager_profile_page.dart
 import 'package:nexa/features/teams/data/services/teams_service.dart';
 import 'package:nexa/core/network/socket_manager.dart';
 import 'package:nexa/services/notification_service.dart';
+import 'package:nexa/features/subscription/data/services/subscription_service.dart';
 import 'package:nexa/features/onboarding/presentation/venue_onboarding_gate.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 class ManagerOnboardingGate extends StatefulWidget {
   const ManagerOnboardingGate({super.key});
@@ -30,6 +32,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
   final ClientsService _clientsService = ClientsService();
   final RolesService _rolesService = RolesService();
   final TariffsService _tariffsService = TariffsService();
+  late final SubscriptionService _subscriptionService;
 
   final TextEditingController _teamNameCtrl = TextEditingController();
   final TextEditingController _teamDescCtrl = TextEditingController();
@@ -54,6 +57,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
     final api = GetIt.I<ApiClient>();
     final storage = GetIt.I<FlutterSecureStorage>();
     _managerService = ManagerService(api, storage);
+    _subscriptionService = GetIt.I<SubscriptionService>();
     _refresh();
   }
 
@@ -79,7 +83,22 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
       SocketManager.instance.registerManager(profile.id);
 
       // Initialize notifications after successful authentication
-      await NotificationService().initialize();
+      print('[ONBOARDING GATE] Initializing notifications...');
+      try {
+        await NotificationService().initialize();
+        print('[ONBOARDING GATE] ✅ Notifications initialized successfully');
+      } catch (e) {
+        print('[ONBOARDING GATE] ❌ Failed to initialize notifications: $e');
+      }
+
+      // Initialize subscription service (Qonversion)
+      print('[ONBOARDING GATE] Initializing subscription...');
+      try {
+        await _subscriptionService.initialize();
+        print('[ONBOARDING GATE] ✅ Subscription initialized successfully');
+      } catch (e) {
+        print('[ONBOARDING GATE] ❌ Failed to initialize subscription: $e');
+      }
 
       final teams = await _teamsService.fetchTeams();
       final clients = await _clientsService.fetchClients();
@@ -499,13 +518,13 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
     return Chip(
       avatar: Icon(
         completed ? Icons.check_circle : Icons.radio_button_unchecked,
-        color: completed ? const Color(0xFF059669) : Colors.grey,
+        color: completed ? AppColors.success : Colors.grey,
         size: 18,
       ),
       label: Text(label),
       backgroundColor: completed
           ? const Color(0xFFE8F5E9)
-          : const Color(0xFFF3F4F6),
+          : AppColors.formFillGrey,
     );
   }
 
@@ -809,7 +828,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
                 ),
                 Icon(
                   completed ? Icons.check_circle : Icons.radio_button_unchecked,
-                  color: completed ? const Color(0xFF059669) : Colors.grey,
+                  color: completed ? AppColors.success : Colors.grey,
                 ),
               ],
             ),

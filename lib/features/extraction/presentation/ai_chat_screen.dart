@@ -28,6 +28,7 @@ import '../widgets/batch_event_dialog.dart';
 import 'extraction_screen.dart';
 import '../../main/presentation/main_screen.dart';
 import 'dart:async';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 class AIChatScreen extends StatefulWidget {
   final bool startNewConversation;
@@ -514,7 +515,7 @@ class _AIChatScreenState extends State<AIChatScreen>
     final hasEventData = currentData.isNotEmpty;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.surfaceLight,
       body: Stack(
           children: [
             // Main content with fixed app bar
@@ -531,7 +532,7 @@ class _AIChatScreenState extends State<AIChatScreen>
                   toolbarHeight: 56.0,
                   automaticallyImplyLeading: false,
                   leading: IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Color(0xFF1F2937)),
+                    icon: const Icon(Icons.arrow_back, color: AppColors.charcoal),
                     onPressed: () {
                       // Navigate back to Jobs section (Pending tab)
                       Navigator.of(context).pushAndRemoveUntil(
@@ -545,7 +546,7 @@ class _AIChatScreenState extends State<AIChatScreen>
                   title: const Text(
                     'AI Chat',
                     style: TextStyle(
-                      color: Color(0xFF1F2937),
+                      color: AppColors.charcoal,
                       fontSize: 20,
                       fontWeight: FontWeight.w600,
                       letterSpacing: -0.3,
@@ -554,7 +555,7 @@ class _AIChatScreenState extends State<AIChatScreen>
                   actions: [
                     // Manual Entry button (structured form)
                     IconButton(
-                      icon: const Icon(Icons.edit_note, color: Color(0xFF10B981), size: 24),
+                      icon: const Icon(Icons.edit_note, color: AppColors.successLight, size: 24),
                       tooltip: 'Manual Entry',
                       onPressed: () {
                         // Navigate to ExtractionScreen with uncommented dashboard
@@ -744,7 +745,7 @@ class _AIChatScreenState extends State<AIChatScreen>
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)],
+                  colors: [AppColors.yellow, AppColors.pink],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -918,8 +919,8 @@ class _AIChatScreenState extends State<AIChatScreen>
                             end: Alignment.bottomCenter,
                             colors: [
                               Colors.transparent,
-                              const Color(0xFFF8FAFC).withOpacity(0.3),
-                              const Color(0xFFF8FAFC).withOpacity(0.6),
+                              AppColors.surfaceLight.withOpacity(0.3),
+                              AppColors.surfaceLight.withOpacity(0.6),
                             ],
                             stops: const [0.0, 0.5, 1.0],
                           ),
@@ -1242,7 +1243,7 @@ class _AIChatScreenState extends State<AIChatScreen>
               style: const TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF1F2937),
+                color: AppColors.charcoal,
               ),
             ),
           ),

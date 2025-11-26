@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/widgets/custom_sliver_app_bar.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 class ExtractionScreen extends StatefulWidget {
   final int initialIndex;
@@ -34,7 +35,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.surfaceLight,
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) {
           return [
@@ -118,7 +119,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           decoration: BoxDecoration(
             gradient: isSelected
                 ? const LinearGradient(
-                    colors: [Color(0xFF7C3AED), Color(0xFF6366F1)],
+                    colors: [AppColors.yellow, AppColors.techBlue],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   )
@@ -128,7 +129,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             boxShadow: isSelected
                 ? [
                     BoxShadow(
-                      color: const Color(0xFF7C3AED).withOpacity(0.3),
+                      color: AppColors.yellow.withOpacity(0.3),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -185,12 +186,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               padding: const EdgeInsets.all(32),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF7C3AED), Color(0xFF6366F1)],
+                  colors: [AppColors.yellow, AppColors.techBlue],
                 ),
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF7C3AED).withOpacity(0.3),
+                    color: AppColors.yellow.withOpacity(0.3),
                     blurRadius: 20,
                     offset: const Offset(0, 10),
                   ),
@@ -208,7 +209,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF0F172A),
+                color: AppColors.textDark,
               ),
             ),
             const SizedBox(height: 8),

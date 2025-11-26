@@ -12,6 +12,7 @@ import 'dialogs/send_event_invitation_dialog.dart';
 import '../../../features/extraction/services/event_service.dart';
 import '../../../features/extraction/services/roles_service.dart';
 import '../../../features/users/presentation/pages/user_events_screen.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
@@ -539,14 +540,14 @@ class _ChatScreenState extends State<ChatScreen> {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                Color(0xFF7C3AED), // Purple 600
-                Color(0xFF6366F1), // Indigo 500
-                Color(0xFF8B5CF6), // Purple 500
+                AppColors.yellow, // Purple 600
+                AppColors.techBlue, // Indigo 500
+                AppColors.yellow, // Purple 500
               ],
             ),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF7C3AED).withOpacity(0.3),
+                color: AppColors.yellow.withOpacity(0.3),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
@@ -623,7 +624,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                 style: const TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w700,
-                                  color: Color(0xFF7C3AED),
+                                  color: AppColors.yellow,
                                   letterSpacing: 0.5,
                                 ),
                               )
@@ -661,11 +662,11 @@ class _ChatScreenState extends State<ChatScreen> {
                                   height: 7,
                                   margin: const EdgeInsets.only(right: 6, top: 2),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF10B981),
+                                    color: AppColors.successLight,
                                     shape: BoxShape.circle,
                                     boxShadow: [
                                       BoxShadow(
-                                        color: const Color(0xFF10B981).withOpacity(0.5),
+                                        color: AppColors.successLight.withOpacity(0.5),
                                         blurRadius: 4,
                                         spreadRadius: 1,
                                       ),
@@ -744,14 +745,14 @@ class _ChatScreenState extends State<ChatScreen> {
                             padding: const EdgeInsets.symmetric(vertical: 4),
                             child: Row(
                               children: [
-                                Icon(Icons.event_rounded, color: Color(0xFF7C3AED), size: 22),
+                                Icon(Icons.event_rounded, color: AppColors.yellow, size: 22),
                                 SizedBox(width: 14),
                                 Text(
                                   AppLocalizations.of(context)!.viewJobs,
                                   style: TextStyle(
                                     fontSize: 15,
                                     fontWeight: FontWeight.w500,
-                                    color: Color(0xFF1F2937),
+                                    color: AppColors.charcoal,
                                   ),
                                 ),
                               ],
@@ -773,7 +774,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                         : Icons.star_border_rounded,
                                     color: _isFavorite(widget.targetId, role)
                                         ? const Color(0xFFFBBF24)
-                                        : const Color(0xFF9CA3AF),
+                                        : AppColors.greyMedium,
                                     size: 22,
                                   ),
                                   const SizedBox(width: 14),
@@ -783,7 +784,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                       style: const TextStyle(
                                         fontSize: 15,
                                         fontWeight: FontWeight.w500,
-                                        color: Color(0xFF1F2937),
+                                        color: AppColors.charcoal,
                                       ),
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -887,7 +888,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (_loading && _messages.isEmpty) {
       return const Center(
         child: CircularProgressIndicator(
-          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF7C3AED)),
+          valueColor: AlwaysStoppedAnimation<Color>(AppColors.yellow),
         ),
       );
     }
@@ -941,7 +942,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF7C3AED).withOpacity(0.85),
+                    color: AppColors.yellow.withOpacity(0.85),
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
@@ -1188,7 +1189,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
-                      icon: const Icon(Icons.add, color: Color(0xFF6366F1), size: 24),
+                      icon: const Icon(Icons.add, color: AppColors.techBlue, size: 24),
                       onPressed: _showSendInvitationDialog,
                       tooltip: 'Send Event Invitation',
                     ),
@@ -1222,9 +1223,9 @@ class _ChatScreenState extends State<ChatScreen> {
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [
-                          Color(0xFF7C3AED), // Light purple
-                          Color(0xFF6366F1), // Medium purple
-                          Color(0xFF4F46E5), // Darker purple
+                          AppColors.yellow, // Light purple
+                          AppColors.techBlue, // Medium purple
+                          AppColors.indigoPurple, // Darker purple
                         ],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
@@ -1385,9 +1386,9 @@ class _MessageBubble extends StatelessWidget {
                       gradient: isMe
                           ? const LinearGradient(
                               colors: [
-                                Color(0xFF7C3AED), // Light purple
-                                Color(0xFF6366F1), // Medium purple
-                                Color(0xFF4F46E5), // Darker purple
+                                AppColors.yellow, // Light purple
+                                AppColors.techBlue, // Medium purple
+                                AppColors.indigoPurple, // Darker purple
                               ],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
@@ -1403,7 +1404,7 @@ class _MessageBubble extends StatelessWidget {
                       boxShadow: [
                         BoxShadow(
                           color: isMe
-                              ? const Color(0xFF7C3AED).withValues(alpha: 0.3)
+                              ? AppColors.yellow.withValues(alpha: 0.3)
                               : Colors.black.withValues(alpha: 0.08),
                           blurRadius: 8,
                           offset: const Offset(0, 2),

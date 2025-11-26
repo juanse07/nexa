@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 /// A reusable navigation dropdown widget that can be used across different screens
 /// Supports both fixed and scroll-responsive modes
@@ -50,7 +51,7 @@ class SectionNavigationDropdown extends StatelessWidget {
             color: iconColor,
             size: isFixed || isScrolled ? 20 : 24,
           ),
-          dropdownColor: const Color(0xFF7C3AED),
+          dropdownColor: AppColors.yellow,
           style: TextStyle(
             color: textColor,
             fontSize: fontSize,

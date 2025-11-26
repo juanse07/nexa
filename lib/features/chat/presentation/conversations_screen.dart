@@ -5,6 +5,7 @@ import '../data/services/chat_service.dart';
 import '../domain/entities/conversation.dart';
 import 'chat_screen.dart';
 import '../../extraction/presentation/ai_chat_screen.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 class ConversationsScreen extends StatefulWidget {
   const ConversationsScreen({super.key});
@@ -57,20 +58,20 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.surfaceLight,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         title: const Text(
           'Chats',
           style: TextStyle(
-            color: Color(0xFF1F2937),
+            color: AppColors.charcoal,
             fontSize: 24,
             fontWeight: FontWeight.w700,
             letterSpacing: -0.5,
           ),
         ),
-        iconTheme: const IconThemeData(color: Color(0xFF1F2937)),
+        iconTheme: const IconThemeData(color: AppColors.charcoal),
       ),
       body: _buildBody(),
     );
@@ -339,8 +340,8 @@ class _AIChatTile extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              const Color(0xFF7A3AFB).withOpacity(0.08),
-              const Color(0xFF5B27D8).withOpacity(0.08),
+              AppColors.purple.withOpacity(0.08),
+              AppColors.purpleDark.withOpacity(0.08),
             ],
           ),
         ),
@@ -355,11 +356,11 @@ class _AIChatTile extends StatelessWidget {
                 gradient: const LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [Color(0xFF7A3AFB), Color(0xFF5B27D8)],
+                  colors: [AppColors.purple, AppColors.purpleDark],
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF7A3AFB).withOpacity(0.3),
+                    color: AppColors.purple.withOpacity(0.3),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -432,7 +433,7 @@ class _AIChatTile extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFF1F2937),
+                          color: AppColors.charcoal,
                         ),
                       ),
                       const SizedBox(width: 6),
@@ -440,7 +441,7 @@ class _AIChatTile extends StatelessWidget {
                       Icon(
                         Icons.push_pin,
                         size: 16,
-                        color: const Color(0xFF7A3AFB).withOpacity(0.7),
+                        color: AppColors.purple.withOpacity(0.7),
                       ),
                     ],
                   ),
@@ -449,7 +450,7 @@ class _AIChatTile extends StatelessWidget {
                     'Create events, manage jobs, and get instant help',
                     style: TextStyle(
                       fontSize: 14,
-                      color: Color(0xFF6B7280),
+                      color: AppColors.textMuted,
                       fontWeight: FontWeight.w500,
                     ),
                     maxLines: 2,

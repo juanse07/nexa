@@ -8,7 +8,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:nexa/l10n/app_localizations.dart';
+import 'package:nexa/services/terminology_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:get_it/get_it.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -41,6 +43,8 @@ import '../widgets/upload_container.dart';
 import '../widgets/event_data_preview_card.dart';
 import '../../extraction/widgets/chat_message_widget.dart';
 import '../../extraction/widgets/chat_input_widget.dart';
+import '../../extraction/widgets/event_confirmation_card.dart';
+import 'widgets/extraction_widgets.dart';
 import 'mixins/event_data_mixin.dart';
 import 'pending_publish_screen.dart';
 import 'pending_edit_screen.dart';
@@ -66,6 +70,7 @@ class ExtractionScreen extends StatefulWidget {
   final int initialScreenIndex; // For main screen tabs (Post a Job=0, Events=1, etc.)
   final int initialEventsTabIndex; // For Events sub-tabs (Pending=0, Upcoming=1, Past=2)
   final ScrollController? scrollController; // Optional scroll controller for syncing with main screen
+  final bool hideNavigationRail; // Hide navigation rail when used inside MainScreen
 
   const ExtractionScreen({
     super.key,
@@ -73,6 +78,7 @@ class ExtractionScreen extends StatefulWidget {
     this.initialScreenIndex = 0,
     this.initialEventsTabIndex = 0,
     this.scrollController,
+    this.hideNavigationRail = false,
   });
 
   @override
@@ -98,7 +104,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   List<Map<String, dynamic>>? _eventsPending;
   List<Map<String, dynamic>>? _eventsAvailable;
   List<Map<String, dynamic>>? _eventsFull;
-  List<Map<String, dynamic>>? _eventsPast;
+  List<Map<String, dynamic>>? _eventsCompleted;
   // Pending drafts (for the old draft section - will be deprecated)
   List<Map<String, dynamic>> _pendingDrafts = const [];
   bool _isPendingLoading = false;
@@ -189,8 +195,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         icon: const Icon(Icons.refresh, size: 18),
         label: Text(label),
         style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xFF6366F1),
-          side: const BorderSide(color: Color(0xFF6366F1)),
+          foregroundColor: const Color(0xFF3B82F6),
+          side: const BorderSide(color: Color(0xFF3B82F6)),
           visualDensity: VisualDensity.compact,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         ),
@@ -203,7 +209,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     super.initState();
     _selectedIndex = widget.initialScreenIndex; // Set main screen tab
     _createTabController = TabController(length: 3, vsync: this, initialIndex: widget.initialIndex);
-    _eventsTabController = TabController(length: 3, vsync: this, initialIndex: widget.initialEventsTabIndex);
+    _eventsTabController = TabController(length: 4, vsync: this, initialIndex: widget.initialEventsTabIndex);
     _catalogTabController = TabController(length: 3, vsync: this);
 
     // Initialize animation controllers for header hide/show
@@ -275,7 +281,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     _socketSubscription = SocketManager.instance.events.listen((event) {
       if (!mounted) return;
       if (event.event.startsWith('event:')) {
-        _loadEvents();
+        // Use delta sync for real-time updates (don't show loading indicator)
+        print('[Socket] Event update received: ${event.event}');
+        _loadEvents(showLoading: false);
         _loadPendingDrafts();
       } else if (event.event.startsWith('team:')) {
         _loadClients();
@@ -288,9 +296,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     // Add scroll listener for AI Chat header hide/show
     _aiChatScrollController.addListener(_handleAIChatScroll);
 
-    // Start timer for real-time updates
+    // Start timer for periodic delta sync (every 1 minute)
     _updateTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
       if (mounted) {
+        print('[Timer] Periodic delta sync');
+        // Use delta sync to fetch any changes (don't show loading indicator)
+        _loadEvents(showLoading: false);
         setState(() {
           // This will trigger a rebuild and update the time display
         });
@@ -362,6 +373,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   void _handleScroll(ScrollNotification notification) {
+    // Skip header animation for catalog tab - always show header
+    if (_selectedIndex == 4) {
+      if (!_isHeaderVisible) {
+        _showHeader();
+      }
+      return;
+    }
+
     // Only handle scroll updates from the main scrollable
     if (notification is! ScrollUpdateNotification) return;
 
@@ -471,7 +490,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     if (d == null) return;
     setState(() {
       structuredData = d;
-      _eventNameController.text = (d['event_name'] ?? '').toString();
+      _eventNameController.text = (d['shift_name'] ?? '').toString();
       _clientNameController.text = (d['client_name'] ?? '').toString();
       _dateController.text = (d['date'] ?? '').toString();
       _startTimeController.text = (d['start_time'] ?? '').toString();
@@ -646,7 +665,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.business, color: Color(0xFF6366F1)),
+                      const Icon(Icons.business, color: Color(0xFF3B82F6)),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
@@ -783,7 +802,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
     if (_formKey.currentState!.validate()) {
       final manualData = {
-        'event_name': _eventNameController.text.trim(),
+        'shift_name': _eventNameController.text.trim(),
         'client_name': _clientNameController.text.trim(),
         'date': _dateController.text.trim(),
         'start_time': _startTimeController.text.trim(),
@@ -884,8 +903,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
                           colors: [
-                            Color(0xFF7C3AED),
-                            Color(0xFF6366F1),
+                            Color(0xFFFFC107),
+                            Color(0xFF3B82F6),
                           ],
                         ),
                         borderRadius: BorderRadius.circular(12),
@@ -1002,7 +1021,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: const Color(0xFF6366F1).withOpacity(0.1),
+                            color: const Color(0xFF00BCD4).withOpacity(0.1),
                             width: 1,
                           ),
                           boxShadow: [
@@ -1026,8 +1045,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                   decoration: BoxDecoration(
                                     gradient: const LinearGradient(
                                       colors: [
-                                        Color(0xFF8B5CF6),
-                                        Color(0xFF6366F1),
+                                        Color(0xFFFFC107),
+                                        Color(0xFF3B82F6),
                                       ],
                                     ),
                                     borderRadius: BorderRadius.circular(8),
@@ -1121,7 +1140,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       );
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6366F1),
+                      backgroundColor: const Color(0xFF3B82F6),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
@@ -1170,14 +1189,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       case 0: // Post a Job tab
         if (structuredData != null && structuredData!.isNotEmpty) {
           final eventName =
-              structuredData!['event_name']?.toString() ?? 'Untitled Event';
+              structuredData!['shift_name']?.toString() ?? 'Untitled Event';
           return eventName.length > 20
               ? '${eventName.substring(0, 20)}...'
               : eventName;
         }
         return greeting;
       case 1: // Events tab
-        return 'Jobs';
+        return context.read<TerminologyProvider>().plural;
       case 2: // Chat tab
         return "Chat";
       case 3: // Hours tab
@@ -1190,20 +1209,26 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   String _getCurrentSectionName() {
+    final terminology = context.read<TerminologyProvider>().plural;
     switch (_selectedIndex) {
       case 0:
-        return 'Jobs'; // Create is treated as part of Jobs
+        return terminology; // Create is treated as part of Jobs
       case 1:
-        return 'Jobs';
+        return terminology;
       case 4:
         return 'Catalog';
       default:
-        return 'Jobs';
+        return terminology;
     }
   }
 
   Future<void> _handleNavigationDropdown(String section) async {
     HapticFeedback.lightImpact();
+    final terminology = context.read<TerminologyProvider>().plural;
+
+    if (section == terminology) {
+      section = 'Jobs'; // Normalize to 'Jobs' for logic purposes
+    }
 
     switch (section) {
       case 'Jobs':
@@ -1366,7 +1391,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                 _createTabController.animateTo(index);
                               });
                             },
-                            selectedColor: const Color(0xFF7C3AED),
+                            selectedColor: const Color(0xFFFFC107), // Yellow
                           )
                         : TabBar(
                             controller: _createTabController,
@@ -1375,9 +1400,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               Tab(icon: Icon(Icons.auto_awesome), text: AppLocalizations.of(context)!.aiChat),
                               Tab(icon: Icon(Icons.edit), text: AppLocalizations.of(context)!.manualEntry),
                             ],
-                            labelColor: const Color(0xFF7C3AED),
+                            labelColor: const Color(0xFFFFC107), // Yellow
                             unselectedLabelColor: Colors.grey,
-                            indicatorColor: const Color(0xFF7C3AED),
+                            indicatorColor: const Color(0xFFFFC107), // Yellow
                           ),
                   ),
                 ),
@@ -1385,8 +1410,78 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             ),
           ),
         ];
-      case 1: // Events tab - no pinned headers (tabs are in fixed header)
-        return [];
+      case 1: // Events tab - pin the tab navigation
+        return [
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: PinnedHeaderDelegate(
+              height: 56.0,
+              safeAreaPadding: topPadding,
+              child: Container(
+                color: Colors.white,
+                child: SafeArea(
+                  top: false,
+                  bottom: false,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: kIsWeb
+                              ? WebTabNavigation(
+                                  tabs: const [
+                                    WebTab(text: 'Pending'),
+                                    WebTab(text: 'Posted'),
+                                    WebTab(text: 'Full'),
+                                    WebTab(text: 'Completed'),
+                                  ],
+                                  selectedIndex: _eventsTabController.index,
+                                  onTabSelected: (index) {
+                                    setState(() {
+                                      _eventsTabController.animateTo(index);
+                                    });
+                                  },
+                                  selectedColor: const Color(0xFFFFC107), // Yellow
+                                )
+                              : TabBar(
+                                  controller: _eventsTabController,
+                                  tabs: const [
+                                    Tab(text: 'Pending'),
+                                    Tab(text: 'Posted'),
+                                    Tab(text: 'Full'),
+                                  ],
+                                  labelColor: const Color(0xFFFFC107), // Yellow
+                                  unselectedLabelColor: Colors.grey,
+                                  indicatorColor: const Color(0xFFFFC107), // Yellow
+                                ),
+                        ),
+                        // Past Events button
+                        TextButton.icon(
+                          onPressed: _showPastEvents,
+                          icon: const Icon(Icons.history, size: 18),
+                          label: const Text('Past'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: const Color(0xFF6B7280),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ];
       case 2: // Chat tab - pin the search bar
         return [
           SliverPersistentHeader(
@@ -1474,8 +1569,61 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         ];
       case 3: // Hours tab - no pinned header needed
         return [];
-      case 4: // Catalog tab - no pinned headers (tabs are in fixed header)
-        return [];
+      case 4: // Catalog tab - pin the tab navigation
+        return [
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: PinnedHeaderDelegate(
+              height: 56.0,
+              safeAreaPadding: topPadding,
+              child: Container(
+                color: Colors.white,
+                child: SafeArea(
+                  top: false,
+                  bottom: false,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: kIsWeb
+                        ? WebTabNavigation(
+                            tabs: const [
+                              WebTab(text: 'Clients'),
+                              WebTab(text: 'Roles'),
+                              WebTab(text: 'Tariffs'),
+                            ],
+                            selectedIndex: _catalogTabController.index,
+                            onTabSelected: (index) {
+                              setState(() {
+                                _catalogTabController.animateTo(index);
+                              });
+                            },
+                            selectedColor: const Color(0xFFFFC107), // Yellow
+                          )
+                        : TabBar(
+                            controller: _catalogTabController,
+                            tabs: const [
+                              Tab(text: 'Clients'),
+                              Tab(text: 'Roles'),
+                              Tab(text: 'Tariffs'),
+                            ],
+                            labelColor: const Color(0xFFFFC107), // Yellow
+                            unselectedLabelColor: Colors.grey,
+                            indicatorColor: const Color(0xFFFFC107), // Yellow
+                          ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ];
       default:
         return [];
     }
@@ -1493,23 +1641,71 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           ],
         );
       case 1: // Events tab
-        return TabBarView(
-          controller: _eventsTabController,
-          children: [
-            _eventsInner(_eventsPending ?? const []), // Pending tab
-            _eventsInner(_eventsAvailable ?? const []), // Posted tab
-            _eventsInner(_eventsFull ?? const []), // Full tab
-          ],
-        );
+        // For desktop/web, render events directly based on selected tab index
+        // This avoids nested scrollable conflicts with NestedScrollView
+        if (kIsWeb || ResponsiveLayout.shouldUseDesktopLayout(context)) {
+          // Directly return the content for the selected tab
+          switch (_eventsTabController.index) {
+            case 0:
+              return _eventsInner(_eventsPending ?? const []); // Pending tab
+            case 1:
+              return _eventsInner(_eventsAvailable ?? const []); // Posted tab
+            case 2:
+              return _eventsInner(_eventsFull ?? const []); // Full tab
+            case 3:
+              return _eventsInner(_eventsCompleted ?? const []); // Completed tab
+            default:
+              return _eventsInner(_eventsPending ?? const []);
+          }
+        } else {
+          // For mobile, use TabBarView for swipe gestures
+          return TabBarView(
+            controller: _eventsTabController,
+            children: [
+              _eventsInner(_eventsPending ?? const []), // Pending tab
+              _eventsInner(_eventsAvailable ?? const []), // Posted tab
+              _eventsInner(_eventsFull ?? const []), // Full tab
+              _eventsInner(_eventsCompleted ?? const []), // Completed tab
+            ],
+          );
+        }
       case 2: // Chat tab
         return _buildChatContent();
       case 3: // Hours tab
         return const HoursApprovalListScreen();
       case 4: // Catalog tab
-        return TabBarView(
-          controller: _catalogTabController,
-          children: [_buildClientsTab(), _buildRolesTab(), _buildTariffsTab()],
-        );
+        // For web/desktop, render catalog directly with TabBarView
+        if (kIsWeb || ResponsiveLayout.shouldUseDesktopLayout(context)) {
+          return Stack(
+            children: [
+              TabBarView(
+                controller: _catalogTabController,
+                children: [
+                  _buildClientsInner(),
+                  _buildRolesInner(),
+                  _buildTariffsInner(),
+                ],
+              ),
+              // Floating Action Button for adding items
+              Positioned(
+                bottom: 120,
+                right: 20,
+                child: FloatingActionButton(
+                  onPressed: _showAddItemDialog,
+                  backgroundColor: Colors.white.withOpacity(0.9),
+                  elevation: 4,
+                  child: const Icon(
+                    Icons.add,
+                    color: Color(0xFFFFC107),
+                    size: 28,
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
+        // Mobile uses slivers
+        return Container();
       default:
         return Container();
     }
@@ -1533,35 +1729,49 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      body: NotificationListener<ScrollNotification>(
-        onNotification: (notification) {
-          _handleScroll(notification);
-          return false;
+      body: RefreshIndicator(
+        onRefresh: () async {
+          // Only refresh events when on Events tab
+          if (_selectedIndex == 1) {
+            await _refreshEvents();
+          }
+          // Could add refresh logic for other tabs here if needed
         },
-        child: Stack(
-          children: [
-            // Main scrollable content - Full screen
-            CustomScrollView(
-              controller: _mainScrollController,
-              slivers: [
+        // Customize colors to match app theme
+        color: const Color(0xFF3B82F6),
+        backgroundColor: Colors.white,
+        child: NotificationListener<ScrollNotification>(
+          onNotification: (notification) {
+            _handleScroll(notification);
+            return false;
+          },
+          child: Stack(
+            children: [
+              // Main scrollable content - Full screen
+              CustomScrollView(
+                controller: _mainScrollController,
+                slivers: [
                 // Top padding to show first card below header initially
-                SliverToBoxAdapter(
-                  child: SizedBox(
-                    height: statusBarHeight + 200, // Dynamic based on device + header height
+                // Only add padding for tabs that use sliver content (not Catalog which uses TabBarView)
+                if (_selectedIndex != 4)
+                  SliverToBoxAdapter(
+                    child: SizedBox(
+                      height: statusBarHeight + 200, // Dynamic based on device + header height
+                    ),
                   ),
-                ),
                 ..._buildSliverContent(),
-                // Add bottom padding for last card
-                const SliverToBoxAdapter(
-                  child: SizedBox(
-                    height: 100, // Bottom padding for scrolling past bottom bar
+                // Add bottom padding for last card (only for tabs with sliver content)
+                if (_selectedIndex != 4)
+                  const SliverToBoxAdapter(
+                    child: SizedBox(
+                      height: 100, // Bottom padding for scrolling past bottom bar
+                    ),
                   ),
-                ),
               ],
             ),
 
-            // Animated app bar (overlaid) - Facebook style with persistent safe area
-            Positioned(
+              // Animated app bar (overlaid) - Facebook style with persistent safe area
+              Positioned(
               top: 0,
               left: 0,
               right: 0,
@@ -1576,12 +1786,16 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     animation: _headerAnimation,
                     builder: (context, child) {
                       return Container(
-                        // Keep background color extended into safe area (Facebook style)
                         decoration: const BoxDecoration(
+                          // Navy to ocean blue to lighter blue gradient
                           gradient: LinearGradient(
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
-                            colors: [Color(0xFF7C3AED), Color(0xFF6D28D9)],
+                            colors: [
+                              Color(0xFF212C4A), // Navy (Pantone 2767 C)
+                              Color(0xFF1E3A8A), // Ocean blue
+                              Color(0xFF3B82F6), // Lighter tech blue
+                            ],
                           ),
                           boxShadow: [
                             BoxShadow(
@@ -1698,7 +1912,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           offset: const Offset(0, 4),
                         ),
                         BoxShadow(
-                          color: const Color(0xFF7C3AED).withOpacity(0.1),
+                          color: const Color(0xFFFFC107).withOpacity(0.1),
                           blurRadius: 20,
                           offset: const Offset(0, 8),
                         ),
@@ -1714,15 +1928,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               width: 28,
                               height: 28,
                               decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [Color(0xFF7C3AED), Color(0xFF6D28D9)],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
+                                color: const Color(0xFF6B7280),
                                 shape: BoxShape.circle,
                                 boxShadow: [
                                   BoxShadow(
-                                    color: const Color(0xFF7C3AED).withOpacity(0.3),
+                                    color: const Color(0xFF6B7280).withOpacity(0.3),
                                     blurRadius: 8,
                                     offset: const Offset(0, 2),
                                   ),
@@ -1740,14 +1950,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               child: _isJobChipExpanded
                                   ? Row(
                                       mainAxisSize: MainAxisSize.min,
-                                      children: const [
-                                        SizedBox(width: 8),
+                                      children: [
+                                        const SizedBox(width: 8),
                                         Text(
-                                          'New Job',
-                                          style: TextStyle(
+                                          'New ${context.read<TerminologyProvider>().singular}',
+                                          style: const TextStyle(
                                             fontSize: 15,
                                             fontWeight: FontWeight.w600,
-                                            color: Color(0xFF374151),
+                                            color: Color(0xFF6B7280),
                                             letterSpacing: -0.2,
                                           ),
                                         ),
@@ -1762,7 +1972,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   ),
                 ),
               ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1852,9 +2063,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     //               Tab(icon: Icon(Icons.auto_awesome), text: AppLocalizations.of(context)!.aiChat),
     //               Tab(icon: Icon(Icons.edit), text: AppLocalizations.of(context)!.manualEntry),
     //             ],
-    //             labelColor: const Color(0xFF7C3AED),
+    //             labelColor: const Color(0xFFFFC107),
     //             unselectedLabelColor: Colors.grey,
-    //             indicatorColor: const Color(0xFF7C3AED),
+    //             indicatorColor: const Color(0xFFFFC107),
     //           ),
     //         ),
     //       ],
@@ -1868,7 +2079,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       final pendingCount = _eventsPending?.length ?? 0;
       final availableCount = _eventsAvailable?.length ?? 0;
       final fullCount = _eventsFull?.length ?? 0;
-      final pastCount = _eventsPast?.length ?? 0;
+      final pastCount = _eventsCompleted?.length ?? 0;
       final totalEvents = pendingCount + availableCount + fullCount;
 
       return Container(
@@ -1890,7 +2101,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               padding: const EdgeInsets.all(16),
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xFF06B6D4), Color(0xFF14B8A6)], // Turquoise gradient
+                  colors: [
+                    Color(0xFF212C4A), // Navy (Space cadet)
+                    Color(0xFF1E3A8A), // Ocean blue
+                    Color(0xFF3B82F6), // Lighter blue
+                  ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -1907,16 +2122,16 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       color: Colors.white.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.event_note, color: Colors.white, size: 24),
+                    child: const Icon(Icons.event_note, color: Color(0xFFFFC107), size: 24), // Yellow icon
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Events Management',
-                          style: TextStyle(
+                        Text(
+                          '${context.read<TerminologyProvider>().plural} Management',
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 18,
                             fontWeight: FontWeight.w600,
@@ -1953,6 +2168,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               WebTab(text: 'Pending'),
                               WebTab(text: 'Posted'),
                               WebTab(text: 'Full'),
+                              WebTab(text: 'Completed'),
                             ],
                             selectedIndex: _eventsTabController.index,
                             onTabSelected: (index) {
@@ -1960,7 +2176,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                 _eventsTabController.animateTo(index);
                               });
                             },
-                            selectedColor: const Color(0xFF7C3AED),
+                            selectedColor: const Color(0xFFFFC107), // Yellow
                           )
                         : TabBar(
                             controller: _eventsTabController,
@@ -1969,9 +2185,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               Tab(text: 'Posted'),
                               Tab(text: 'Full'),
                             ],
-                            labelColor: const Color(0xFF7C3AED),
+                            labelColor: const Color(0xFFFFC107), // Yellow
                             unselectedLabelColor: Colors.grey,
-                            indicatorColor: const Color(0xFF7C3AED),
+                            indicatorColor: const Color(0xFFFFC107), // Yellow
                           ),
                   ),
                   // Past Events button
@@ -2084,7 +2300,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           _catalogTabController.animateTo(index);
                         });
                       },
-                      selectedColor: const Color(0xFF7C3AED),
+                      selectedColor: const Color(0xFFFFC107), // Yellow
                     )
                   : TabBar(
                       controller: _catalogTabController,
@@ -2093,9 +2309,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         Tab(text: 'Roles'),
                         Tab(text: 'Tariffs'),
                       ],
-                      labelColor: const Color(0xFF7C3AED),
+                      labelColor: const Color(0xFFFFC107), // Yellow
                       unselectedLabelColor: Colors.grey,
-                      indicatorColor: const Color(0xFF7C3AED),
+                      indicatorColor: const Color(0xFFFFC107), // Yellow
                     ),
             ),
           ],
@@ -2109,22 +2325,64 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   Widget _buildDesktopLayout(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      body: Row(
+      body: Stack(
         children: [
-          // Navigation Rail
-          _buildNavigationRail(context),
-          // Content
-          Expanded(
-            child: ResponsiveContainer(
-              maxWidth: 1600,
-              child: NestedScrollView(
-                headerSliverBuilder: (context, innerBoxIsScrolled) {
-                  return [..._buildPinnedHeaders()];
+          Row(
+            children: [
+              // Navigation Rail - hide when used inside MainScreen
+              if (!widget.hideNavigationRail)
+                _buildNavigationRail(context),
+              // Content
+              Expanded(
+                child: Column(
+                  children: [
+                    // Desktop app bar - only show when navigation rail is hidden (used inside MainScreen)
+                    if (widget.hideNavigationRail)
+                      _buildDesktopAppBar(context),
+                    // Main content
+                    Expanded(
+                      child: ResponsiveContainer(
+                        maxWidth: 1600,
+                        child: NestedScrollView(
+                          headerSliverBuilder: (context, innerBoxIsScrolled) {
+                            return [..._buildPinnedHeaders()];
+                          },
+                          body: _buildBody(),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          // Floating "New Job" button for Jobs tab
+          if (_selectedIndex == 1)
+            Positioned(
+              bottom: 40,
+              right: 40,
+              child: FloatingActionButton.extended(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const AIChatScreen(),
+                    ),
+                  );
                 },
-                body: _buildBody(),
+                backgroundColor: const Color(0xFFFFC107),
+                elevation: 8,
+                icon: const Icon(Icons.add_rounded, color: Colors.white),
+                label: Text(
+                  'New ${context.read<TerminologyProvider>().singular}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -2547,7 +2805,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 Tab(icon: Icon(Icons.cloud_upload), text: AppLocalizations.of(context)!.multiUpload),
                 Tab(icon: Icon(Icons.chat), text: AppLocalizations.of(context)!.aiChat),
               ],
-              labelColor: Color(0xFF6366F1),
+              labelColor: Color(0xFF3B82F6),
               unselectedLabelColor: Colors.grey,
             ),
             Expanded(
@@ -2580,7 +2838,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 subtitle:
                     'Upload multiple PDFs or images and save each as a pending draft',
                 icon: Icons.cloud_upload,
-                gradientColors: const [Color(0xFF10B981), Color(0xFF3B82F6)],
+                gradientColors: const [Color(0xFF00BCD4), Color(0xFF3B82F6)], // Teal to blue
               ),
               const SizedBox(height: 16),
               Wrap(
@@ -2594,7 +2852,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     icon: const Icon(Icons.folder_open),
                     label: Text(AppLocalizations.of(context)!.selectFiles),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6366F1),
+                      backgroundColor: const Color(0xFF3B82F6),
                       foregroundColor: Colors.white,
                     ),
                   ),
@@ -2606,7 +2864,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       icon: const Icon(Icons.add),
                       label: const Text('Add More'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF6366F1),
+                        backgroundColor: const Color(0xFF3B82F6),
                         foregroundColor: Colors.white,
                       ),
                     ),
@@ -2661,7 +2919,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           ? const Color(0xFF059669)
                           : status == 'error'
                           ? const Color(0xFFDC2626)
-                          : const Color(0xFF6366F1),
+                          : const Color(0xFF3B82F6),
                     ),
                     title: Text(name),
                     subtitle: Text(subtitle),
@@ -2699,7 +2957,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
   String _summarizeEvent(Map<String, dynamic> data) {
     final client = (data['client_name'] ?? '').toString();
-    final name = (data['event_name'] ?? data['venue_name'] ?? 'Untitled')
+    final name = (data['shift_name'] ?? data['venue_name'] ?? 'Untitled')
         .toString();
     final date = (data['date'] ?? '').toString();
     return [
@@ -2926,7 +3184,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         SnackBar(
           content: Text(errorMsg),
           backgroundColor: e.toString().contains('don\'t have any team members')
-            ? const Color(0xFF6366F1) // Blue for info
+            ? const Color(0xFF3B82F6) // Blue for info
             : const Color(0xFFDC2626), // Red for errors
         ),
       );
@@ -3351,7 +3609,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     ElevatedButton.icon(
                       onPressed: _loadFirstUsersPage,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF6366F1),
+                        backgroundColor: const Color(0xFF3B82F6),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 16,
@@ -3436,7 +3694,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 icon: const Icon(Icons.group_add),
                 label: const Text('Go to Teams'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6366F1),
+                  backgroundColor: const Color(0xFF3B82F6),
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 ),
@@ -3631,7 +3889,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       actionText: isLoading ? 'Processing...' : 'Choose 1 File',
                       onPressed: _pickAndProcessFile,
                       isLoading: isLoading,
-                      color: const Color(0xFF6366F1),
+                      color: const Color(0xFF3B82F6),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -3643,7 +3901,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       actionText: _isBulkProcessing ? 'Processing...' : 'Choose Multiple Files',
                       onPressed: () => _pickAndProcessMultipleFiles(append: false),
                       isLoading: _isBulkProcessing,
-                      color: const Color(0xFF8B5CF6),
+                      color: const Color(0xFFFFC107),
                     ),
                   ),
                 ],
@@ -3708,7 +3966,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                             dense: true,
                             leading: Icon(
                               data != null ? Icons.check_circle : status == 'error' ? Icons.error : Icons.hourglass_bottom,
-                              color: data != null ? const Color(0xFF059669) : status == 'error' ? const Color(0xFFDC2626) : const Color(0xFF6366F1),
+                              color: data != null ? const Color(0xFF059669) : status == 'error' ? const Color(0xFFDC2626) : const Color(0xFF3B82F6),
                               size: 20,
                             ),
                             title: Text(name, style: const TextStyle(fontSize: 13)),
@@ -3880,7 +4138,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     icon: const Icon(Icons.save, size: 18),
                     label: Text(AppLocalizations.of(context)!.saveToPending),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6366F1),
+                      backgroundColor: const Color(0xFF3B82F6),
                       foregroundColor: Colors.white,
                     ),
                   ),
@@ -4003,16 +4261,16 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final DateTime? aDate = _eventDateTime(a);
     final DateTime? bDate = _eventDateTime(b);
     if (aDate == null && bDate == null) {
-      return (a['event_name'] ?? '').toString().compareTo(
-        (b['event_name'] ?? '').toString(),
+      return (a['shift_name'] ?? '').toString().compareTo(
+        (b['shift_name'] ?? '').toString(),
       );
     }
     if (aDate == null) return 1;
     if (bDate == null) return -1;
     final cmp = aDate.compareTo(bDate);
     if (cmp != 0) return cmp;
-    return (a['event_name'] ?? '').toString().compareTo(
-      (b['event_name'] ?? '').toString(),
+    return (a['shift_name'] ?? '').toString().compareTo(
+      (b['shift_name'] ?? '').toString(),
     );
   }
 
@@ -4020,22 +4278,22 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final DateTime? aDate = _eventDateTime(a);
     final DateTime? bDate = _eventDateTime(b);
     if (aDate == null && bDate == null) {
-      return (a['event_name'] ?? '').toString().compareTo(
-        (b['event_name'] ?? '').toString(),
+      return (a['shift_name'] ?? '').toString().compareTo(
+        (b['shift_name'] ?? '').toString(),
       );
     }
     if (aDate == null) return 1;
     if (bDate == null) return -1;
     final cmp = bDate.compareTo(aDate);
     if (cmp != 0) return cmp;
-    return (a['event_name'] ?? '').toString().compareTo(
-      (b['event_name'] ?? '').toString(),
+    return (a['shift_name'] ?? '').toString().compareTo(
+      (b['shift_name'] ?? '').toString(),
     );
   }
 
   /// Show past events in a bottom sheet
   void _showPastEvents() {
-    final pastEvents = _eventsPast ?? [];
+    final pastEvents = _eventsCompleted ?? [];
 
     showModalBottomSheet<void>(
       context: context,
@@ -4113,7 +4371,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         padding: const EdgeInsets.all(20),
                         itemCount: pastEvents.length,
                         itemBuilder: (context, index) {
-                          return _buildEventCard(pastEvents[index], showMargin: true);
+                          return EventCardWidget(
+                            event: pastEvents[index],
+                            showMargin: true,
+                            onEventUpdated: () => _loadEvents(),
+                            onEventDeleted: () => _deleteEvent(pastEvents[index]),
+                            onOpenMaps: _openGoogleMaps,
+                            onShareEvent: _shareEvent,
+                          );
                         },
                       ),
               ),
@@ -4211,7 +4476,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   Color _getPrivacyColor(String privacyStatus) {
     switch (privacyStatus) {
       case 'private':
-        return const Color(0xFF6366F1); // Indigo
+        return const Color(0xFF3B82F6); // Indigo
       case 'public':
         return const Color(0xFF059669); // Green
       case 'private_public':
@@ -4237,15 +4502,73 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     }
   }
 
-  Future<void> _loadEvents() async {
-    setState(() {
-      _isEventsLoading = true;
-      _eventsError = null;
-    });
+  /// Merges delta changes into existing events list
+  /// Returns a new list with updates applied
+  List<Map<String, dynamic>> _mergeDeltaEvents(
+    List<Map<String, dynamic>> existing,
+    List<Map<String, dynamic>> changes,
+  ) {
+    // Create a map for quick lookup by event ID
+    final Map<String, Map<String, dynamic>> eventMap = {};
+
+    // Add all existing events to the map
+    for (final event in existing) {
+      final id = (event['_id'] ?? event['id'])?.toString();
+      if (id != null) {
+        eventMap[id] = event;
+      }
+    }
+
+    // Apply changes (updates or new events)
+    for (final change in changes) {
+      final id = (change['_id'] ?? change['id'])?.toString();
+      if (id != null) {
+        eventMap[id] = change; // Replace existing or add new
+        print('[_mergeDeltaEvents] Updated/added event: $id');
+      }
+    }
+
+    // Convert back to list
+    return eventMap.values.toList();
+  }
+
+  /// Refreshes events with a full sync (forces complete reload)
+  Future<void> _refreshEvents() async {
+    print('[_refreshEvents] Force full sync');
+    _eventService.clearLastSyncTimestamp();
+    await _loadEvents();
+  }
+
+  /// Loads events with delta sync support for efficient updates
+  Future<void> _loadEvents({bool showLoading = true}) async {
+    if (showLoading) {
+      setState(() {
+        _isEventsLoading = true;
+        _eventsError = null;
+      });
+    }
     try {
       print('[_loadEvents] Fetching events with userKey: $_viewerUserKey');
-      final items = await _eventService.fetchEvents(userKey: _viewerUserKey);
-      print('[_loadEvents] Received ${items.length} events from API');
+
+      // Use delta sync to only fetch changes
+      final result = await _eventService.fetchEventsWithSync(
+        userKey: _viewerUserKey,
+        useDeltaSync: true,
+      );
+
+      print('[_loadEvents] Received: $result');
+
+      List<Map<String, dynamic>> items;
+
+      if (result.isDeltaSync && _events != null) {
+        // Merge delta changes into existing events
+        print('[_loadEvents] Merging ${result.events.length} delta changes');
+        items = _mergeDeltaEvents(_events!, result.events);
+      } else {
+        // Full sync - replace everything
+        print('[_loadEvents] Full sync with ${result.events.length} events');
+        items = result.events;
+      }
 
       // Helper: Parse date from event
       DateTime? parseDate(Map<String, dynamic> e) {
@@ -4269,7 +4592,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       for (final e in items) {
         final status = (e['status'] ?? 'draft').toString();
         final d = parseDate(e);
-        final eventName = (e['event_name'] ?? e['client_name'] ?? 'Unknown').toString();
+        final eventName = (e['shift_name'] ?? e['client_name'] ?? 'Unknown').toString();
         final eventId = (e['_id'] ?? e['id'] ?? 'unknown').toString();
 
         // Check if event is past (FIXED: normalize both dates to midnight to avoid timezone issues)
@@ -4292,20 +4615,13 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         }
         print('  Status: "$status", isPast: $isPast, hasOpenPositions: ${_hasOpenPositions(e)}');
 
-        // Separate past events
-        if (isPast) {
-          past.add(e);
-          print('  → Classified as: PAST');
-          continue;
-        }
-
         // Tab logic (priority order):
         // 1. Pending = draft events only
-        // 2. Full = fulfilled or no open positions
-        // 3. Posted = published events (public or private visibility)
+        // 2. Posted = published/confirmed events (accepting staff)
+        // 3. Full = fulfilled status (all positions filled, event upcoming)
+        // 4. Completed = finished events (status completed or past events)
+        // Note: Backend now consistently sets 'fulfilled' status when positions are filled
 
-        final eventId = e['_id'] ?? e['id'] ?? 'unknown';
-        final eventName = e['title'] ?? e['event_name'] ?? e['venue_name'] ?? 'Untitled';
         final visibilityType = e['visibilityType']?.toString() ?? 'unknown';
 
         print('[EVENT CATEGORIZE] Event: $eventId ($eventName) | Status: $status | Visibility: $visibilityType');
@@ -4314,12 +4630,17 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           // True drafts - not published yet
           pending.add(e);
           print('  → Classified as: PENDING (draft)');
+        } else if (status == 'completed' || (status == 'cancelled' && isPast)) {
+          // Completed events (auto-completed or manually completed) or cancelled past events
+          past.add(e);
+          print('  → Classified as: COMPLETED (status: $status)');
         } else if (status == 'fulfilled' || !_hasOpenPositions(e)) {
-          // Fulfilled or full events
+          // Fulfilled events (status = fulfilled OR all positions filled)
+          // Capacity check as fallback for events filled before auto-fulfill was deployed
           full.add(e);
-          print('  → Classified as: FULL (fulfilled or no open positions)');
-        } else if (status == 'published') {
-          // Published events (both public and private)
+          print('  → Classified as: FULL (${status == 'fulfilled' ? 'fulfilled status' : 'no open positions'})');
+        } else if (status == 'published' || status == 'confirmed' || status == 'in_progress') {
+          // Published/confirmed/in-progress events (still accepting staff or event is happening)
           available.add(e);
           if (visibilityType == 'private') {
             print('  → Classified as: POSTED (published - private)');
@@ -4327,7 +4648,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             print('  → Classified as: POSTED (published - public)');
           }
         } else {
-          // Fallback for other statuses (in_progress, completed, etc.)
+          // Fallback for other statuses (cancelled upcoming events, etc.)
           pending.add(e);
           print('  → Classified as: PENDING (fallback for status: $status)');
         }
@@ -4362,7 +4683,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         _eventsPending = pending;
         _eventsAvailable = available;
         _eventsFull = full;
-        _eventsPast = past;
+        _eventsCompleted = past;
         _isEventsLoading = false;
       });
     } catch (e) {
@@ -4402,7 +4723,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             child: Padding(
               padding: const EdgeInsets.all(32),
               child: Text(
-                'No events found',
+                'No ${context.read<TerminologyProvider>().plural.toLowerCase()} found',
                 style: TextStyle(
                   fontSize: 16,
                   color: Colors.grey[600],
@@ -4419,7 +4740,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         delegate: SliverChildBuilderDelegate(
           (context, index) {
             final event = currentTabEvents[index];
-            return _buildEventCard(event);
+            return EventCardWidget(
+              event: event,
+              showMargin: false,
+              onEventUpdated: () => _loadEvents(),
+              onEventDeleted: () => _deleteEvent(event),
+              onOpenMaps: _openGoogleMaps,
+              onShareEvent: _shareEvent,
+            );
           },
           childCount: currentTabEvents.length,
         ),
@@ -4503,15 +4831,105 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   List<Widget> _buildCatalogSlivers() {
-    // Tabs are in the floating header, just return content
     return [
+      // Top padding to position catalog content below floating header
+      SliverToBoxAdapter(
+        child: SizedBox(height: 240), // Extra space to move cards down more
+      ),
       SliverFillRemaining(
-        child: TabBarView(
-          controller: _catalogTabController,
-          children: [_buildClientsTab(), _buildRolesTab(), _buildTariffsTab()],
+        child: Stack(
+          children: [
+            TabBarView(
+              controller: _catalogTabController,
+              children: [_buildClientsInner(), _buildRolesInner(), _buildTariffsInner()],
+            ),
+            // Floating Action Button further up, white background (turned off look)
+            Positioned(
+              bottom: 120,
+              right: 20,
+              child: FloatingActionButton(
+                onPressed: _showAddItemDialog,
+                backgroundColor: Colors.white.withOpacity(0.8), // Semi-transparent white background
+                elevation: 2,
+                child: const Icon(
+                  Icons.add,
+                  color: Colors.grey, // Grey icon
+                  size: 24,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     ];
+  }
+
+  void _showAddItemDialog() {
+    // Determine which tab is currently active
+    final int currentIndex = _catalogTabController.index;
+    String title = '';
+    String hintText = '';
+
+    switch (currentIndex) {
+      case 0: // Clients tab
+        title = 'New Client';
+        hintText = 'Client name';
+        break;
+      case 1: // Roles tab
+        title = 'New Role';
+        hintText = 'Role name';
+        break;
+      case 2: // Tariffs tab
+        _showCreateTariffDialog();
+        return;
+    }
+
+    _promptNewNamedItem(title, hintText).then((name) {
+      if (name == null) return;
+
+      switch (currentIndex) {
+        case 0: // Clients
+          _clientsService.createClient(name).then((_) {
+            _loadClients();
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Client created'),
+                backgroundColor: Color(0xFF059669),
+              ),
+            );
+          }).catchError((e) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error creating client: $e'),
+                backgroundColor: const Color(0xFFDC2626),
+              ),
+            );
+          });
+          break;
+        case 1: // Roles
+          _rolesService.createRole(name).then((_) {
+            _loadRoles();
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Role created'),
+                backgroundColor: Color(0xFF059669),
+              ),
+            );
+          }).catchError((e) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error creating role: $e'),
+                backgroundColor: const Color(0xFFDC2626),
+              ),
+            );
+          });
+          break;
+      }
+    });
   }
 
   Widget _buildEventsTab() {
@@ -4519,7 +4937,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final List<Map<String, dynamic>> pending = _eventsPending ?? const [];
     final List<Map<String, dynamic>> available = _eventsAvailable ?? const [];
     final List<Map<String, dynamic>> full = _eventsFull ?? const [];
-    final List<Map<String, dynamic>> past = _eventsPast ?? const [];
+    final List<Map<String, dynamic>> past = _eventsCompleted ?? const [];
     return SafeArea(
       child: DefaultTabController(
         length: 3,
@@ -4536,7 +4954,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         Tab(text: AppLocalizations.of(context)!.upcoming),
                         Tab(text: AppLocalizations.of(context)!.past),
                       ],
-                      labelColor: Color(0xFF6366F1),
+                      labelColor: Color(0xFF3B82F6),
                       unselectedLabelColor: Colors.grey,
                     ),
                   ),
@@ -4594,7 +5012,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
     return RefreshIndicator(
       onRefresh: _loadEvents,
-      color: const Color(0xFF6366F1),
+      color: const Color(0xFF3B82F6),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final double width = constraints.maxWidth;
@@ -4655,12 +5073,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       Container(
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF6366F1).withOpacity(0.1),
+                          color: const Color(0xFF00BCD4).withOpacity(0.1),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Icon(
                           Icons.event_available_outlined,
-                          color: const Color(0xFF6366F1),
+                          color: const Color(0xFF3B82F6),
                           size: 48,
                         ),
                       ),
@@ -4766,8 +5184,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           childAspectRatio: 2.5,
                         ),
                         itemCount: eventsInMonth.length,
-                        itemBuilder: (context, index) =>
-                            _buildEventCard(eventsInMonth[index]),
+                        itemBuilder: (context, index) => EventCardWidget(
+                          event: eventsInMonth[index],
+                          showMargin: false,
+                          onEventUpdated: () => _loadEvents(),
+                          onEventDeleted: () => _deleteEvent(eventsInMonth[index]),
+                          onOpenMaps: _openGoogleMaps,
+                          onShareEvent: _shareEvent,
+                        ),
                       ),
                     ];
                   }
@@ -4775,7 +5199,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   return [
                     header,
                     ...eventsInMonth.map(
-                      (event) => _buildEventCard(event, showMargin: true),
+                      (event) => EventCardWidget(
+                        event: event,
+                        showMargin: true,
+                        onEventUpdated: () => _loadEvents(),
+                        onEventDeleted: () => _deleteEvent(event),
+                        onOpenMaps: _openGoogleMaps,
+                        onShareEvent: _shareEvent,
+                      ),
                     ),
                   ];
                 }),
@@ -4791,7 +5222,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final sortedItems = [...items]..sort(_compareEventsAscending);
     return RefreshIndicator(
       onRefresh: _loadEvents,
-      color: const Color(0xFF6366F1),
+      color: const Color(0xFF3B82F6),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final double width = constraints.maxWidth;
@@ -4847,14 +5278,21 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   padding: const EdgeInsets.all(20),
                   sliver: SliverGrid(
                     delegate: SliverChildBuilderDelegate(
-                      (context, index) => _buildEventCard(sortedItems[index]),
+                      (context, index) => EventCardWidget(
+                        event: sortedItems[index],
+                        showMargin: false,
+                        onEventUpdated: () => _loadEvents(),
+                        onEventDeleted: () => _deleteEvent(sortedItems[index]),
+                        onOpenMaps: _openGoogleMaps,
+                        onShareEvent: _shareEvent,
+                      ),
                       childCount: sortedItems.length,
                     ),
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: crossAxisCount,
                       crossAxisSpacing: 16,
                       mainAxisSpacing: 16,
-                      childAspectRatio: 2.5,
+                      childAspectRatio: 1.8,
                     ),
                   ),
                 ),
@@ -4902,12 +5340,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       Container(
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF6366F1).withOpacity(0.1),
+                          color: const Color(0xFF00BCD4).withOpacity(0.1),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Icon(
                           Icons.event_available_outlined,
-                          color: const Color(0xFF6366F1),
+                          color: const Color(0xFF3B82F6),
                           size: 48,
                         ),
                       ),
@@ -4945,7 +5383,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               if (sortedItems.isNotEmpty)
                 Column(
                   children: sortedItems
-                      .map((item) => _buildEventCard(item, showMargin: true))
+                      .map((item) => EventCardWidget(
+                            event: item,
+                            showMargin: true,
+                            onEventUpdated: () => _loadEvents(),
+                            onEventDeleted: () => _deleteEvent(item),
+                            onOpenMaps: _openGoogleMaps,
+                            onShareEvent: _shareEvent,
+                          ))
                       .toList(),
                 ),
             ],
@@ -4985,7 +5430,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   Widget _pendingInner() {
     return RefreshIndicator(
       onRefresh: _loadPendingDrafts,
-      color: const Color(0xFF6366F1),
+      color: const Color(0xFF3B82F6),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(20),
@@ -5033,7 +5478,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             // Backend events have data at top level (not wrapped in 'data' field)
             final client = (d['client_name'] ?? '').toString();
             final name =
-                (d['event_name'] ?? d['venue_name'] ?? 'Untitled')
+                (d['shift_name'] ?? d['venue_name'] ?? 'Untitled')
                     .toString();
             final dateRaw = (d['date'] ?? '').toString();
             final dateFormatted = dateRaw.isNotEmpty
@@ -5187,13 +5632,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
   Widget _buildClientsTab() {
     final List<Map<String, dynamic>> items = _clients ?? const [];
-    return SafeArea(
-      child: RefreshIndicator(
-        onRefresh: _loadClients,
-        color: const Color(0xFF6366F1),
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(20),
+    return RefreshIndicator(
+      onRefresh: _loadClients,
+      color: const Color(0xFF3B82F6),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(20),
           children: [
             if (kIsWeb)
               Align(
@@ -5235,7 +5679,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   icon: const Icon(Icons.add),
                   label: const Text('Add Client'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6366F1),
+                    backgroundColor: const Color(0xFF3B82F6),
                     foregroundColor: Colors.white,
                   ),
                 ),
@@ -5251,6 +5695,330 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             ...items.map((c) => _clientListTile(c)),
           ],
         ),
+      );
+  }
+
+  Widget _buildClientsInner() {
+    final List<Map<String, dynamic>> items = _clients ?? const [];
+    return RefreshIndicator(
+      onRefresh: _loadClients,
+      color: const Color(0xFF3B82F6),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(
+          top: 36,    // Add top padding so buttons aren't hidden behind header
+          left: 20,
+          right: 20,
+          bottom: 20,
+        ),
+        children: [
+          if (kIsWeb)
+            Align(
+              alignment: Alignment.centerRight,
+              child: _maybeWebRefreshButton(
+                onPressed: _loadClients,
+                label: 'Refresh clients',
+                padding: const EdgeInsets.only(top: 12),
+              ),
+            ),
+          if (kIsWeb) const SizedBox(height: 4),
+          if (_isClientsLoading && items.isEmpty)
+            const Center(child: LoadingIndicator(text: 'Loading clients...')),
+          if (_clientsError != null) ...[
+            ErrorBanner(message: _clientsError!),
+            const SizedBox(height: 12),
+          ],
+          if (!_isClientsLoading && items.isEmpty && _clientsError == null)
+            Container(
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.grey.shade100, width: 1),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 20,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.business_outlined,
+                    size: 48,
+                    color: Colors.grey.shade400,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No clients yet',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Add your first client to get started',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey.shade500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ...items.map((c) => _clientListTile(c)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRolesInner() {
+    final items = _roles ?? const [];
+    return RefreshIndicator(
+      onRefresh: _loadRoles,
+      color: const Color(0xFF3B82F6),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(
+          top: 36,    // Add top padding so buttons aren't hidden behind header
+          left: 20,
+          right: 20,
+          bottom: 20,
+        ),
+        children: [
+          if (kIsWeb)
+            Align(
+              alignment: Alignment.centerRight,
+              child: _maybeWebRefreshButton(
+                onPressed: _loadRoles,
+                label: 'Refresh roles',
+                padding: const EdgeInsets.only(top: 12),
+              ),
+            ),
+          if (kIsWeb) const SizedBox(height: 4),
+          if (_isRolesLoading && items.isEmpty)
+            const Center(child: LoadingIndicator(text: 'Loading roles...')),
+          if (_rolesError != null) ...[
+            ErrorBanner(message: _rolesError!),
+            const SizedBox(height: 12),
+          ],
+          if (!_isRolesLoading && items.isEmpty && _rolesError == null)
+            Container(
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.grey.shade100, width: 1),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 20,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.work_outline,
+                    size: 48,
+                    color: Colors.grey.shade400,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No roles yet',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Add your first role to get started',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey.shade500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ...items.map((r) => _roleListTile(r)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTariffsInner() {
+    final clients = _clients ?? const [];
+    final roles = _roles ?? const [];
+    final tariffs = _tariffs ?? const [];
+    final isWeb = ResponsiveLayout.shouldUseDesktopLayout(context);
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        await _loadClients();
+        await _loadRoles();
+        await _loadTariffs();
+      },
+      color: const Color(0xFF3B82F6),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(
+          top: 36,    // Add top padding so buttons aren't hidden behind header
+          left: 20,
+          right: 20,
+          bottom: 20,
+        ),
+        children: [
+          if (kIsWeb)
+            Align(
+              alignment: Alignment.centerRight,
+              child: _maybeWebRefreshButton(
+                onPressed: () async {
+                  await _loadClients();
+                  await _loadRoles();
+                  await _loadTariffs();
+                },
+                label: 'Refresh tariffs',
+                padding: const EdgeInsets.only(top: 12),
+              ),
+            ),
+          if (kIsWeb) const SizedBox(height: 4),
+          // Client and Role Filters
+          Padding(
+            padding: const EdgeInsets.only(top: 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+              DropdownButtonFormField<String>(
+                value: _selectedClientIdForTariffs,
+                hint: const Text('All Clients'),
+                items: [
+                  const DropdownMenuItem(
+                    value: null,
+                    child: Text('All Clients'),
+                  ),
+                  ...clients.map(
+                    (c) => DropdownMenuItem(
+                      value: c['id']?.toString(),
+                      child: Text(c['name']?.toString() ?? 'Unnamed Client'),
+                    ),
+                  ),
+                ],
+                onChanged: (value) {
+                  setState(() {
+                    _selectedClientIdForTariffs = value;
+                  });
+                  _loadTariffs();
+                },
+                decoration: const InputDecoration(
+                  labelText: 'Client',
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                ),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: _selectedRoleIdForTariffs,
+                hint: const Text('All Roles'),
+                items: [
+                  const DropdownMenuItem(
+                    value: null,
+                    child: Text('All Roles'),
+                  ),
+                  ...roles.map(
+                    (r) => DropdownMenuItem(
+                      value: r['id']?.toString(),
+                      child: Text(r['name']?.toString() ?? 'Unnamed Role'),
+                    ),
+                  ),
+                ],
+                onChanged: (value) {
+                  setState(() {
+                    _selectedRoleIdForTariffs = value;
+                  });
+                  _loadTariffs();
+                },
+                decoration: const InputDecoration(
+                  labelText: 'Role',
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                ),
+              ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (_isTariffsLoading && tariffs.isEmpty)
+            const Center(child: LoadingIndicator(text: 'Loading tariffs...')),
+          if (_tariffsError != null) ...[
+            ErrorBanner(message: _tariffsError!),
+            const SizedBox(height: 12),
+          ],
+          if (!_isTariffsLoading && tariffs.isEmpty && _tariffsError == null)
+            Container(
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.grey.shade100, width: 1),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 20,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.attach_money,
+                    size: 48,
+                    color: Colors.grey.shade400,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No tariffs yet',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Create your first tariff to set pricing',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey.shade500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (tariffs.isNotEmpty)
+            isWeb
+                ? GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: ResponsiveLayout.getGridColumns(context),
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
+                      childAspectRatio: 2.5,
+                    ),
+                    itemCount: tariffs.length,
+                    itemBuilder: (context, index) => _tariffTile(tariffs[index]),
+                  )
+                : Column(children: tariffs.map((t) => _tariffTile(t)).toList()),
+        ],
       ),
     );
   }
@@ -5267,7 +6035,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 Tab(text: 'Roles'),
                 Tab(text: 'Tariffs'),
               ],
-              labelColor: Color(0xFF6366F1),
+              labelColor: Color(0xFF3B82F6),
               unselectedLabelColor: Colors.grey,
             ),
             Expanded(
@@ -5327,7 +6095,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         await _loadRoles();
         await _loadTariffs();
       },
-      color: const Color(0xFF6366F1),
+      color: const Color(0xFF3B82F6),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.all(ResponsiveLayout.getHorizontalPadding(context)),
@@ -5402,12 +6170,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF6366F1).withOpacity(0.1),
+                        color: const Color(0xFF00BCD4).withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Icon(
                         Icons.filter_list,
-                        color: Color(0xFF6366F1),
+                        color: Color(0xFF3B82F6),
                         size: 20,
                       ),
                     ),
@@ -5655,7 +6423,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF6366F1).withOpacity(0.1),
+                      color: const Color(0xFF00BCD4).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -5663,7 +6431,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF6366F1),
+                        color: Color(0xFF3B82F6),
                       ),
                     ),
                   ),
@@ -5825,7 +6593,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF6366F1).withOpacity(0.1),
+                    color: const Color(0xFF00BCD4).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -5833,14 +6601,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF6366F1),
+                      color: Color(0xFF3B82F6),
                     ),
                   ),
                 ),
                 const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.edit_outlined),
-                  color: const Color(0xFF6366F1),
+                  color: const Color(0xFF3B82F6),
                   iconSize: 20,
                   tooltip: 'Edit',
                   padding: const EdgeInsets.all(8),
@@ -6097,12 +6865,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: const Color(0xFF6366F1).withOpacity(0.1),
+                color: const Color(0xFF00BCD4).withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(
                 Icons.edit_outlined,
-                color: Color(0xFF6366F1),
+                color: Color(0xFF3B82F6),
                 size: 24,
               ),
             ),
@@ -6215,7 +6983,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF6366F1),
+              backgroundColor: const Color(0xFF3B82F6),
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               shape: RoundedRectangleBorder(
@@ -6385,7 +7153,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final items = _roles ?? const [];
     return RefreshIndicator(
       onRefresh: _loadRoles,
-      color: const Color(0xFF6366F1),
+      color: const Color(0xFF3B82F6),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(20),
@@ -6424,7 +7192,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 icon: const Icon(Icons.add),
                 label: const Text('Add Role'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6366F1),
+                  backgroundColor: const Color(0xFF3B82F6),
                   foregroundColor: Colors.white,
                 ),
               ),
@@ -6455,7 +7223,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       ),
       child: ListTile(
         title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
-        leading: const Icon(Icons.assignment_ind, color: Color(0xFF6366F1)),
+        leading: const Icon(Icons.assignment_ind, color: Color(0xFF3B82F6)),
         trailing: PopupMenuButton<String>(
           onSelected: (value) async {
             if (value == 'rename') {
@@ -6543,7 +7311,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       ),
       child: ListTile(
         title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
-        leading: const Icon(Icons.business, color: Color(0xFF6366F1)),
+        leading: const Icon(Icons.business, color: Color(0xFF3B82F6)),
         trailing: PopupMenuButton<String>(
           onSelected: (value) async {
             if (value == 'rename') {
@@ -6772,6 +7540,28 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     }
   }
 
+  /// Delete event helper for EventCardWidget
+  Future<void> _deleteEvent(Map<String, dynamic> event) async {
+    try {
+      final eventId = (event['_id'] ?? event['id'] ?? '').toString();
+      await _eventService.deleteEvent(eventId);
+      await _loadEvents();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Event deleted')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to delete: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // ===== OLD EVENT CARD CODE - TO BE DELETED =====
   Widget _buildEventCard(Map<String, dynamic> e, {bool showMargin = false}) {
     // Extract essential data
     final String clientName = (e['client_name'] ?? 'Client').toString();
@@ -6818,7 +7608,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final String startTime = (e['start_time'] ?? '').toString();
 
     final statusColor = isUpcoming
-        ? const Color(0xFF6366F1)
+        ? const Color(0xFF3B82F6)
         : const Color(0xFF94A3B8);
 
     return GestureDetector(
@@ -7074,7 +7864,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           child: Icon(
                             Icons.directions,
                             size: 20,
-                            color: const Color(0xFF6366F1),
+                            color: const Color(0xFF3B82F6),
                           ),
                         ),
                       ),
@@ -7145,8 +7935,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                             icon: const Icon(Icons.campaign, size: 18),
                             label: const Text('Publish'),
                             style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF6366F1),
-                              side: const BorderSide(color: Color(0xFF6366F1)),
+                              foregroundColor: const Color(0xFF3B82F6),
+                              side: const BorderSide(color: Color(0xFF3B82F6)),
                               padding: const EdgeInsets.symmetric(vertical: 8),
                             ),
                           ),
@@ -7248,6 +8038,26 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // AI Chat button - Return to AI Chat screen
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (context) => const AIChatScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.auto_awesome, size: 20),
+              label: const Text('AI Chat'),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF3B82F6),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
           FormSection(
             title: AppLocalizations.of(context)!.jobInformation,
                   icon: Icons.event,
@@ -7275,7 +8085,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         icon: const Icon(Icons.business),
                         label: const Text('Pick from Clients'),
                         style: TextButton.styleFrom(
-                          foregroundColor: const Color(0xFF6366F1),
+                          foregroundColor: const Color(0xFF3B82F6),
                         ),
                       ),
                     ),
@@ -7530,7 +8340,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     icon: const Icon(Icons.save, size: 18),
                     label: Text(AppLocalizations.of(context)!.saveToPending),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6366F1),
+                      backgroundColor: const Color(0xFF3B82F6),
                       foregroundColor: Colors.white,
                     ),
                   ),
@@ -7659,14 +8469,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(
-                                colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)],
+                                colors: [Color(0xFFFFC107), Color(0xFFEC4899)],
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                               ),
                               borderRadius: BorderRadius.circular(24),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFF8B5CF6).withValues(alpha: 0.4),
+                                  color: const Color(0xFFFFC107).withValues(alpha: 0.4),
                                   blurRadius: 12,
                                   offset: const Offset(0, 4),
                                 ),
@@ -7712,13 +8522,13 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               Container(
                                 padding: const EdgeInsets.all(20),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
+                                  color: const Color(0xFFFFC107).withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(60),
                                 ),
                                 child: const Icon(
                                   Icons.chat_bubble_outline,
                                   size: 60,
-                                  color: Color(0xFF8B5CF6),
+                                  color: Color(0xFFFFC107),
                                 ),
                               ),
                               const SizedBox(height: 20),
@@ -7749,8 +8559,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                     borderRadius: BorderRadius.circular(30),
                                     gradient: const LinearGradient(
                                       colors: [
-                                        Color(0xFF7C3AED), // Light purple
-                                        Color(0xFF6366F1), // Medium purple
+                                        Color(0xFFFFC107), // Light purple
+                                        Color(0xFF3B82F6), // Medium purple
                                         Color(0xFF4F46E5), // Darker purple
                                       ],
                                       begin: Alignment.topLeft,
@@ -7758,7 +8568,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                     ),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: const Color(0xFF7C3AED).withOpacity(0.4),
+                                        color: const Color(0xFFFFC107).withOpacity(0.4),
                                         blurRadius: 20,
                                         offset: const Offset(0, 10),
                                         spreadRadius: 0,
@@ -7875,6 +8685,42 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         ),
         // Show pending update previews
         _buildUpdatePreviewCards(),
+        // Show event confirmation card when event is complete
+        if (_aiChatService.eventComplete && _aiChatService.currentEventData.isNotEmpty)
+          EventConfirmationCard(
+            eventData: _aiChatService.currentEventData,
+            onConfirm: () async {
+              // Save event to drafts
+              final currentData = Map<String, dynamic>.from(_aiChatService.currentEventData);
+              setState(() {
+                structuredData = currentData;
+                extractedText = 'AI Chat extracted data';
+                errorMessage = null;
+                _lastStructuredFromUpload = false;
+              });
+
+              _draftService.saveDraft(currentData);
+              await _loadPendingDrafts();
+
+              _showSuccessBanner(context, 'Event created and saved to pending!');
+
+              // Clear the event data and start a new conversation
+              _aiChatService.clearCurrentEventData();
+              _aiChatService.startNewConversation();
+
+              setState(() {});
+            },
+            onEdit: () {
+              // User can continue chatting to edit the event
+              _showSuccessBanner(context, 'Continue chatting to make changes!');
+            },
+            onCancel: () {
+              // Clear the current event and start over
+              _aiChatService.clearCurrentEventData();
+              _aiChatService.startNewConversation();
+              setState(() {});
+            },
+          ),
         // Only show input widget when conversation has started
         ColoredBox(
           color: Colors.transparent,
@@ -7962,33 +8808,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 }
               }
 
-              // Check if event creation is complete - auto-save it
-              if (_aiChatService.eventComplete && _aiChatService.currentEventData.isNotEmpty) {
-                print('[ExtractionScreen] Event complete detected - auto-saving...');
-                try {
-                  final currentData = Map<String, dynamic>.from(_aiChatService.currentEventData);
-
-                  setState(() {
-                    structuredData = currentData;
-                    extractedText = 'AI Chat extracted data';
-                    errorMessage = null;
-                    _lastStructuredFromUpload = false;
-                  });
-
-                  _draftService.saveDraft(currentData);
-                  await _loadPendingDrafts();
-
-                  if (mounted) {
-                    _showSuccessBanner(context, 'Event created and saved to pending!');
-                  }
-
-                  print('[ExtractionScreen] ✓ Event auto-saved successfully');
-                } catch (e) {
-                  print('[ExtractionScreen] ✗ Failed to auto-save event: $e');
-                }
-              }
-
-              // Scroll to bottom after message
+              // Scroll to bottom after message (or show confirmation card if event is complete)
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (_aiChatScrollController.hasClients) {
                   _aiChatScrollController.animateTo(
@@ -8062,7 +8882,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             orElse: () => {},
           );
           if (existingEvent.isNotEmpty) {
-            final nameRaw = existingEvent['event_name'] ?? existingEvent['name'];
+            final nameRaw = existingEvent['shift_name'] ?? existingEvent['name'];
             eventName = nameRaw?.toString() ?? 'Event';
           }
 
@@ -8199,10 +9019,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (data['event_name'] != null)
+        if (data['shift_name'] != null)
           DetailRow(
-            label: AppLocalizations.of(context)!.job,
-            value: data['event_name'].toString(),
+            label: AppLocalizations.of(context)!.shift,
+            value: data['shift_name'].toString(),
             icon: Icons.celebration,
           ),
         if (data['client_name'] != null)
@@ -8272,7 +9092,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     width: 8,
                     height: 8,
                     decoration: const BoxDecoration(
-                      color: Color(0xFF6366F1),
+                      color: Color(0xFF3B82F6),
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -8615,7 +9435,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 return Theme(
                   data: Theme.of(context).copyWith(
                     colorScheme: const ColorScheme.light(
-                      primary: Color(0xFF6366F1),
+                      primary: Color(0xFF3B82F6),
                       onPrimary: Colors.white,
                       surface: Colors.white,
                       onSurface: Color(0xFF0F172A),
@@ -8642,7 +9462,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: _selectedDate != null
-                    ? const Color(0xFF6366F1).withValues(alpha: 0.3)
+                    ? const Color(0xFF3B82F6).withValues(alpha: 0.3)
                     : Colors.grey.shade300,
                 width: 1.5,
               ),
@@ -8659,13 +9479,13 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF6366F1).withValues(alpha: 0.1),
+                    color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(
                     Icons.calendar_today,
                     size: 20,
-                    color: Color(0xFF6366F1),
+                    color: Color(0xFF3B82F6),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -8730,7 +9550,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 return Theme(
                   data: Theme.of(context).copyWith(
                     colorScheme: const ColorScheme.light(
-                      primary: Color(0xFF6366F1),
+                      primary: Color(0xFF3B82F6),
                       onPrimary: Colors.white,
                       surface: Colors.white,
                       onSurface: Color(0xFF0F172A),
@@ -8753,7 +9573,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: selectedTime != null
-                    ? const Color(0xFF6366F1).withValues(alpha: 0.3)
+                    ? const Color(0xFF3B82F6).withValues(alpha: 0.3)
                     : Colors.grey.shade300,
                 width: 1.5,
               ),
@@ -8770,10 +9590,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF6366F1).withValues(alpha: 0.1),
+                    color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(icon, size: 20, color: const Color(0xFF6366F1)),
+                  child: Icon(icon, size: 20, color: const Color(0xFF3B82F6)),
                 ),
                 const SizedBox(width: 12),
                 Expanded(

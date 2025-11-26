@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:nexa/l10n/app_localizations.dart';
 
 import '../services/event_service.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 class PendingEditScreen extends StatefulWidget {
   final Map<String, dynamic> draft;
@@ -100,7 +101,7 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Draft updated'),
-          backgroundColor: Color(0xFF059669),
+          backgroundColor: AppColors.success,
         ),
       );
     } catch (e) {
@@ -108,7 +109,7 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to save: $e'),
-          backgroundColor: const Color(0xFFDC2626),
+          backgroundColor: AppColors.errorDark,
         ),
       );
     } finally {
@@ -173,7 +174,7 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
               icon: const Icon(Icons.save),
               label: const Text('Save Changes'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6366F1),
+                backgroundColor: AppColors.techBlue,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
@@ -192,7 +193,7 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
         style: const TextStyle(
           fontSize: 13,
           fontWeight: FontWeight.w700,
-          color: Color(0xFF6B7280),
+          color: AppColors.textMuted,
         ),
       ),
     );
@@ -209,7 +210,7 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
           prefixIcon: icon != null ? Icon(icon, size: 20) : null,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           filled: true,
-          fillColor: const Color(0xFFF9FAFB),
+          fillColor: AppColors.formFillLight,
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         ),
       ),

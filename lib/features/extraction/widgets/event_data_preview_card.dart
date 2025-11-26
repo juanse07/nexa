@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:nexa/l10n/app_localizations.dart';
 import 'package:nexa/shared/ui/widgets.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 /// Reusable card for displaying extracted event data with optional date/time adjustment
 class EventDataPreviewCard extends StatelessWidget {
@@ -45,7 +46,7 @@ class EventDataPreviewCard extends StatelessWidget {
               icon: const Icon(Icons.save, size: 18),
               label: Text(AppLocalizations.of(context)!.saveToPending),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6366F1),
+                backgroundColor: AppColors.techBlue,
                 foregroundColor: Colors.white,
               ),
             ),

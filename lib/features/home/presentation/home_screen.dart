@@ -10,6 +10,7 @@ import '../../hours_approval/presentation/hours_approval_list_screen.dart';
 import '../../chat/presentation/conversations_screen.dart';
 import '../data/services/home_stats_service.dart';
 import '../../../../services/terminology_provider.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -39,15 +40,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       icon: Icons.chat_bubble_outline,
       title: 'Chat',
       description: 'send jobs through the chat',
-      color: const Color(0xFF6366F1),
-      accentColor: const Color(0xFF8B5CF6),
+      color: AppColors.techBlue,
+      accentColor: AppColors.yellow,
       index: 3, // Chat screen index in MainScreen (ConversationsScreen)
     ),
     FeatureItem(
       icon: Icons.auto_awesome,
       title: 'AI Chat',
       description: 'create, update, ask questions ',
-      color: const Color(0xFFEC4899), // Pink
+      color: AppColors.pink, // Pink
       accentColor: const Color(0xFFF472B6),
       index: -2, // Special index for AI Chat screen
       isAI: true,
@@ -56,7 +57,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       icon: Icons.calendar_today,
       title: 'Jobs',
       description: 'Manage your created cards',
-      color: const Color(0xFF8B5CF6), // Purple
+      color: AppColors.yellow, // Purple
       accentColor: const Color(0xFFA78BFA),
       index: 2, // Jobs/Events tab in MainScreen
     ),
@@ -64,7 +65,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       icon: Icons.group_outlined,
       title: 'Teams',
       description: 'invite people to Join',
-      color: const Color(0xFF10B981), // Green
+      color: AppColors.successLight, // Green
       accentColor: const Color(0xFF34D399),
       index: -3, // Special index for Teams Management page
     ),
@@ -72,7 +73,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       icon: Icons.access_time,
       title: 'Hours',
       description: 'Trackteam work hours',
-      color: const Color(0xFFF59E0B), // Orange
+      color: AppColors.warning, // Orange
       accentColor: const Color(0xFFFBBF24),
       index: -4, // Special index for Hours screen
     ),
@@ -80,8 +81,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       icon: Icons.inventory_2_outlined,
       title: 'Catalog',
       description: 'create clients, roles, and tariffs',
-      color: const Color(0xFF6366F1), // Blue
-      accentColor: const Color(0xFF818CF8),
+      color: AppColors.techBlue, // Blue
+      accentColor: const Color(0xFF60A5FA),
       index: 4, // Catalog screen index in MainScreen
     ),
   ];
@@ -332,7 +333,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.surfaceLight,
       body: SafeArea(
         top: false, // Allow AppBar to go under status bar
         bottom: false, // Handle bottom padding manually
@@ -389,11 +390,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: [
-                        Color(0xFF7C3AED),
-                        Color(0xFF6366F1),
-                        Color(0xFF8B5CF6),
+                        AppColors.navySpaceCadet, // Navy (Pantone 2767 C)
+                        AppColors.oceanBlue, // Ocean blue
+                        AppColors.techBlue, // Lighter tech blue
                       ],
-                      stops: [0.0, 0.5, 1.0],
                     ),
                   ),
                 ),
@@ -408,7 +408,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   height: 120,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.white.withAlpha(20), // Fixed opacity
+                    color: AppColors.yellow.withAlpha(51), // Yellow decorative icon (20% opacity)
                   ),
                 ),
               ),
@@ -420,7 +420,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   height: 80,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.white.withAlpha(15), // Fixed opacity
+                    color: AppColors.yellow.withAlpha(38), // Yellow decorative icon (15% opacity)
                   ),
                 ),
               ),
@@ -495,7 +495,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                         color: Colors.white,
                                         size: 24,
                                       ),
-                                      dropdownColor: const Color(0xFF7C3AED),
+                                      dropdownColor: AppColors.yellow,
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 16,
@@ -647,7 +647,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             color: Colors.white,
                             size: 20,
                           ),
-                          dropdownColor: const Color(0xFF7C3AED),
+                          dropdownColor: AppColors.yellow,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 13,
@@ -792,7 +792,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           title: 'Jobs',
                           value: _upcomingJobsCount.toString(),
                           icon: Icons.work_outline,
-                          color: const Color(0xFF6366F1),
+                          color: AppColors.techBlue,
                           subtitle: 'Upcoming',
                         ),
                       ),
@@ -803,7 +803,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           title: 'Team Members',
                           value: _teamMembersCount.toString(),
                           icon: Icons.people_outline,
-                          color: const Color(0xFF8B5CF6),
+                          color: AppColors.yellow,
                           subtitle: _teamName,
                         ),
                       ),
@@ -814,7 +814,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           title: 'Hours',
                           value: _weekHours.toString(),
                           icon: Icons.access_time,
-                          color: const Color(0xFFF59E0B),
+                          color: AppColors.warning,
                           subtitle: 'This Week',
                         ),
                       ),
@@ -869,7 +869,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             borderRadius: BorderRadius.circular(20),
             boxShadow: const [
               BoxShadow(
-                color: Color(0x1A7C3AED), // 10% purple
+                color: Color(0x1AFFC107), // 10% purple
                 blurRadius: 10,
                 offset: Offset(0, 5),
               ),
@@ -882,7 +882,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)],
+                    colors: [AppColors.coralRed, AppColors.coralOrange],
                   ),
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -898,7 +898,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 style: const TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF0F172A),
+                  color: AppColors.textDark,
                 ),
               ),
             ],
@@ -1100,7 +1100,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF0F172A),
+                color: AppColors.textDark,
                 letterSpacing: -0.3,
               ),
             ),
@@ -1142,7 +1142,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [
-                  Color(0x1A7C3AED), // 10% purple
+                  Color(0x1AFFC107), // 10% purple
                   Color(0x1A6366F1), // 10% purple
                 ],
               ),
@@ -1150,7 +1150,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             ),
             child: Icon(
               activity['icon'] as IconData,
-              color: const Color(0xFF7C3AED),
+              color: AppColors.yellow,
               size: 20,
             ),
           ),
@@ -1164,7 +1164,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF0F172A),
+                    color: AppColors.textDark,
                   ),
                 ),
                 const SizedBox(height: 4),

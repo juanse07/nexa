@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:nexa/l10n/app_localizations.dart';
 import 'package:nexa/features/hours_approval/presentation/hours_approval_screen.dart';
 import 'package:nexa/features/extraction/services/event_service.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 /// Hours Approval List Screen
 /// Shows all completed events that need hours approval
@@ -86,7 +87,7 @@ class _HoursApprovalListScreenState extends State<HoursApprovalListScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.surfaceLight,
       body: RefreshIndicator(
         onRefresh: _loadEvents,
         child: _isLoading
@@ -205,7 +206,7 @@ class _HoursApprovalListScreenState extends State<HoursApprovalListScreen> {
             'Hours Approval',
             style: theme.textTheme.headlineMedium?.copyWith(
               fontWeight: FontWeight.bold,
-              color: const Color(0xFF430172),
+              color: AppColors.primaryPurple,
             ),
           ),
           const SizedBox(height: 8),

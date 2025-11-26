@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:get_it/get_it.dart';
 import 'package:nexa/features/teams/data/services/teams_service.dart';
 import 'package:nexa/features/extraction/services/users_service.dart';
 import 'package:nexa/features/chat/presentation/chat_screen.dart';
 import 'package:nexa/features/teams/presentation/widgets/create_invite_link_dialog.dart';
+import 'package:nexa/features/subscription/data/services/subscription_service.dart';
+import 'package:nexa/features/subscription/presentation/pages/subscription_paywall_page.dart';
 
 class TeamDetailPage extends StatefulWidget {
   const TeamDetailPage({
@@ -21,6 +24,7 @@ class TeamDetailPage extends StatefulWidget {
 class _TeamDetailPageState extends State<TeamDetailPage> {
   final TeamsService _teamsService = TeamsService();
   final UsersService _usersService = UsersService();
+  final SubscriptionService _subscriptionService = GetIt.instance<SubscriptionService>();
 
   bool _loading = true;
   String? _error;
@@ -426,6 +430,25 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
         ),
       );
       return;
+    }
+
+    // Check subscription limits (free tier: 25 team members max)
+    final canAdd = await _subscriptionService.canAddTeamMember();
+    if (!canAdd) {
+      if (!mounted) return;
+
+      // Show paywall
+      final upgraded = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const SubscriptionPaywallPage(),
+        ),
+      );
+
+      // If user didn't upgrade, return
+      if (upgraded != true) {
+        return;
+      }
     }
 
     setState(() => _addingMember = true);
