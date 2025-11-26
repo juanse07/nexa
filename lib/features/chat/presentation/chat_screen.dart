@@ -540,14 +540,16 @@ class _ChatScreenState extends State<ChatScreen> {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                AppColors.yellow, // Purple 600
-                AppColors.techBlue, // Indigo 500
-                AppColors.yellow, // Purple 500
+                Color(0xFF1E3A8A), // Ocean Blue
+                Color(0xFF00838F), // Dark teal
+                Color(0xFF00BCD4), // Medium teal
+                Color(0xFF26C6DA), // Light teal
               ],
+              stops: [0.05, 0.35, 0.75, 1.0],
             ),
             boxShadow: [
               BoxShadow(
-                color: AppColors.yellow.withOpacity(0.3),
+                color: AppColors.tealInfo.withOpacity(0.3),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
@@ -1223,9 +1225,8 @@ class _ChatScreenState extends State<ChatScreen> {
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [
-                          AppColors.yellow, // Light purple
-                          AppColors.techBlue, // Medium purple
-                          AppColors.indigoPurple, // Darker purple
+                          Color(0xFF00BCD4), // Teal
+                          Color(0xFF00838F), // Dark teal
                         ],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
@@ -1252,7 +1253,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                   strokeWidth: 2,
                                 ),
                               )
-                            : const Icon(Icons.send, color: Color(0xFFB8860B), size: 22),
+                            : const Icon(Icons.send, color: Colors.white, size: 22),
                         onPressed: _sending ? null : _sendMessage,
                       ),
                     ),
@@ -1386,9 +1387,8 @@ class _MessageBubble extends StatelessWidget {
                       gradient: isMe
                           ? const LinearGradient(
                               colors: [
-                                AppColors.yellow, // Light purple
-                                AppColors.techBlue, // Medium purple
-                                AppColors.indigoPurple, // Darker purple
+                                Color(0xFF26C6DA), // Light teal
+                                Color(0xFF00BCD4), // Medium teal
                               ],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
@@ -1404,7 +1404,7 @@ class _MessageBubble extends StatelessWidget {
                       boxShadow: [
                         BoxShadow(
                           color: isMe
-                              ? AppColors.yellow.withValues(alpha: 0.3)
+                              ? AppColors.tealInfo.withValues(alpha: 0.3)
                               : Colors.black.withValues(alpha: 0.08),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
