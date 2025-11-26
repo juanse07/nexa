@@ -4708,6 +4708,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final List<Map<String, dynamic>> pending = _eventsPending ?? const [];
     final List<Map<String, dynamic>> available = _eventsAvailable ?? const [];
     final List<Map<String, dynamic>> full = _eventsFull ?? const [];
+    final List<Map<String, dynamic>> completed = _eventsCompleted ?? const [];
 
     // Return the current tab's content directly as slivers
     List<Map<String, dynamic>> currentTabEvents;
@@ -4721,8 +4722,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       case 2:
         currentTabEvents = full;
         break;
+      case 3:
+        currentTabEvents = completed;
+        break;
       default:
-        currentTabEvents = [];
+        currentTabEvents = pending;
     }
 
     // Build event cards as individual slivers for proper scrolling
