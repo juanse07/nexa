@@ -1636,16 +1636,21 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       case 1: // Events tab
         // For desktop/web, render events directly based on selected tab index
         // This avoids nested scrollable conflicts with NestedScrollView
+        print('[RENDER] Events tab - controller index: ${_eventsTabController.index}, Completed items: ${_eventsCompleted?.length ?? 0}');
         if (kIsWeb || ResponsiveLayout.shouldUseDesktopLayout(context)) {
           // Directly return the content for the selected tab
           switch (_eventsTabController.index) {
             case 0:
+              print('[RENDER] Showing PENDING: ${_eventsPending?.length ?? 0} items');
               return _eventsInner(_eventsPending ?? const []); // Pending tab
             case 1:
+              print('[RENDER] Showing POSTED: ${_eventsAvailable?.length ?? 0} items');
               return _eventsInner(_eventsAvailable ?? const []); // Posted tab
             case 2:
+              print('[RENDER] Showing FULL: ${_eventsFull?.length ?? 0} items');
               return _eventsInner(_eventsFull ?? const []); // Full tab
             case 3:
+              print('[RENDER] Showing COMPLETED: ${_eventsCompleted?.length ?? 0} items');
               return _eventsInner(_eventsCompleted ?? const []); // Completed tab
             default:
               return _eventsInner(_eventsPending ?? const []);
