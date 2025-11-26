@@ -1383,7 +1383,7 @@ class _MessageBubble extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     decoration: BoxDecoration(
                       color: isMe
-                          ? const Color(0xFF3B82F6).withOpacity(0.15) // Light transparent blue
+                          ? const Color(0xFFDBEAFE) // Light blue - solid for readability
                           : Colors.white,
                       borderRadius: BorderRadius.only(
                         topLeft: const Radius.circular(20),
@@ -1392,7 +1392,7 @@ class _MessageBubble extends StatelessWidget {
                         bottomRight: Radius.circular(isMe ? 4 : 20),
                       ),
                       border: isMe
-                          ? Border.all(color: const Color(0xFF3B82F6).withOpacity(0.3), width: 1)
+                          ? Border.all(color: const Color(0xFF93C5FD), width: 1) // Soft blue border
                           : null,
                       boxShadow: [
                         BoxShadow(
