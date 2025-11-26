@@ -4610,19 +4610,21 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
         print('[EVENT CATEGORIZE] Event: $eventId ($eventName) | Status: $status | Visibility: $visibilityType');
 
+        // Check if event is full (either by status or capacity)
+        final isFull = status == 'fulfilled' || !_hasOpenPositions(e);
+
         if (status == 'draft') {
           // True drafts - not published yet
           pending.add(e);
           print('  → Classified as: PENDING (draft)');
-        } else if (status == 'completed' || (status == 'cancelled' && isPast)) {
-          // Completed events (auto-completed or manually completed) or cancelled past events
+        } else if (status == 'completed' || (status == 'cancelled' && isPast) || (isFull && isPast)) {
+          // Completed = status 'completed' OR cancelled past events OR full events that are past due
           past.add(e);
-          print('  → Classified as: COMPLETED (status: $status)');
-        } else if (status == 'fulfilled' || !_hasOpenPositions(e)) {
-          // Fulfilled events (status = fulfilled OR all positions filled)
-          // Capacity check as fallback for events filled before auto-fulfill was deployed
+          print('  → Classified as: COMPLETED (status: $status, isFull: $isFull, isPast: $isPast)');
+        } else if (isFull) {
+          // Full events that are NOT past (upcoming full events)
           full.add(e);
-          print('  → Classified as: FULL (${status == 'fulfilled' ? 'fulfilled status' : 'no open positions'})');
+          print('  → Classified as: FULL (upcoming full event)');
         } else if (status == 'published' || status == 'confirmed' || status == 'in_progress') {
           // Published/confirmed/in-progress events (still accepting staff or event is happening)
           available.add(e);
