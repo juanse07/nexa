@@ -4620,24 +4620,32 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           // True drafts - not published yet
           pending.add(e);
           print('  → Classified as: PENDING (draft)');
-        } else if (status == 'completed' || (status == 'cancelled' && isPast) || (isFull && isPast)) {
-          // Completed = status 'completed' OR cancelled past events OR full events that are past due
+        } else if (isFull && isPast) {
+          // Completed = ONLY events that are both full AND past due
+          // Events must have all positions filled to be considered "completed"
           past.add(e);
-          print('  → Classified as: COMPLETED (status: $status, isFull: $isFull, isPast: $isPast)');
+          print('  → Classified as: COMPLETED (isFull: $isFull, isPast: $isPast)');
         } else if (isFull) {
           // Full events that are NOT past (upcoming full events)
           full.add(e);
           print('  → Classified as: FULL (upcoming full event)');
-        } else if (status == 'published' || status == 'confirmed' || status == 'in_progress') {
-          // Published/confirmed/in-progress events (still accepting staff or event is happening)
+        } else if (status == 'published' || status == 'confirmed' || status == 'in_progress' || status == 'completed') {
+          // Published/confirmed/in-progress/completed events that are NOT full
+          // If completed but not full, show in Posted since they were active events
           available.add(e);
-          if (visibilityType == 'private') {
+          if (status == 'completed') {
+            print('  → Classified as: POSTED (completed but not full - needs attention)');
+          } else if (visibilityType == 'private') {
             print('  → Classified as: POSTED (published - private)');
           } else {
             print('  → Classified as: POSTED (published - public)');
           }
+        } else if (status == 'cancelled') {
+          // Cancelled events go to Pending (as historical record)
+          pending.add(e);
+          print('  → Classified as: PENDING (cancelled event)');
         } else {
-          // Fallback for other statuses (cancelled upcoming events, etc.)
+          // Fallback for other statuses
           pending.add(e);
           print('  → Classified as: PENDING (fallback for status: $status)');
         }
