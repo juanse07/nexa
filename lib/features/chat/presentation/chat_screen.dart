@@ -541,15 +541,13 @@ class _ChatScreenState extends State<ChatScreen> {
               end: Alignment.bottomRight,
               colors: [
                 Color(0xFF1E3A8A), // Ocean Blue
-                Color(0xFF00838F), // Dark teal
-                Color(0xFF00BCD4), // Medium teal
-                Color(0xFF26C6DA), // Light teal
+                Color(0xFF2C3E50), // Navy
+                Color(0xFF3B82F6), // Tech Blue
               ],
-              stops: [0.05, 0.35, 0.75, 1.0],
             ),
             boxShadow: [
               BoxShadow(
-                color: AppColors.tealInfo.withOpacity(0.3),
+                color: AppColors.oceanBlue.withOpacity(0.3),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
@@ -1225,8 +1223,8 @@ class _ChatScreenState extends State<ChatScreen> {
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [
-                          Color(0xFF00BCD4), // Teal
-                          Color(0xFF00838F), // Dark teal
+                          Color(0xFF3B82F6), // Tech Blue
+                          Color(0xFF1E3A8A), // Ocean Blue
                         ],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
@@ -1384,27 +1382,22 @@ class _MessageBubble extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     decoration: BoxDecoration(
-                      gradient: isMe
-                          ? const LinearGradient(
-                              colors: [
-                                Color(0xFF26C6DA), // Light teal
-                                Color(0xFF00BCD4), // Medium teal
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            )
-                          : null,
-                      color: isMe ? null : Colors.white,
+                      color: isMe
+                          ? const Color(0xFF3B82F6).withOpacity(0.15) // Light transparent blue
+                          : Colors.white,
                       borderRadius: BorderRadius.only(
                         topLeft: const Radius.circular(20),
                         topRight: const Radius.circular(20),
                         bottomLeft: Radius.circular(isMe ? 20 : 4),
                         bottomRight: Radius.circular(isMe ? 4 : 20),
                       ),
+                      border: isMe
+                          ? Border.all(color: const Color(0xFF3B82F6).withOpacity(0.3), width: 1)
+                          : null,
                       boxShadow: [
                         BoxShadow(
                           color: isMe
-                              ? AppColors.tealInfo.withValues(alpha: 0.3)
+                              ? AppColors.techBlue.withValues(alpha: 0.15)
                               : Colors.black.withValues(alpha: 0.08),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
