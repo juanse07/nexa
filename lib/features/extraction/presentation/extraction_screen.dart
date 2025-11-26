@@ -4611,11 +4611,6 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
         final visibilityType = e['visibilityType']?.toString() ?? 'unknown';
 
-        print('[EVENT CATEGORIZE] Event: $eventId ($eventName) | Status: $status | Visibility: $visibilityType');
-
-        // Check if event is full (either by status or capacity)
-        final isFull = status == 'fulfilled' || !_hasOpenPositions(e);
-
         if (status == 'draft') {
           // True drafts - not published yet
           pending.add(e);
