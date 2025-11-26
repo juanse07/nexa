@@ -4661,6 +4661,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
       // Debug: Log the filtered counts
       print('[EVENTS DEBUG] Filtered: ${pending.length} pending, ${available.length} posted, ${full.length} full, ${past.length} past');
+      if (full.isNotEmpty) {
+        print('[EVENTS DEBUG] Full events: ${full.map((e) => e['name']).toList()}');
+      }
+      if (past.isNotEmpty) {
+        print('[EVENTS DEBUG] Completed events: ${past.map((e) => e['name']).toList()}');
+      }
 
       setState(() {
         _events = sorted;
@@ -4670,6 +4676,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         _eventsCompleted = past;
         _isEventsLoading = false;
       });
+
+      print('[EVENTS STATE] After setState - Full: ${_eventsFull?.length ?? 0}, Completed: ${_eventsCompleted?.length ?? 0}');
     } catch (e) {
       setState(() {
         _eventsError = e.toString();
