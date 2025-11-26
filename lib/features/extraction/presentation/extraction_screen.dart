@@ -4677,7 +4677,16 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         _isEventsLoading = false;
       });
 
-      print('[EVENTS STATE] After setState - Full: ${_eventsFull?.length ?? 0}, Completed: ${_eventsCompleted?.length ?? 0}');
+      print('');
+      print('╔════════════════════════════════════════════════════════════════╗');
+      print('║                    EVENTS CATEGORIZATION SUMMARY               ║');
+      print('╠════════════════════════════════════════════════════════════════╣');
+      print('║ PENDING (${pending.length}): ${pending.map((e) => e['shift_name'] ?? e['client_name']).toList()}');
+      print('║ POSTED (${available.length}): ${available.map((e) => e['shift_name'] ?? e['client_name']).toList()}');
+      print('║ FULL (${full.length}): ${full.map((e) => e['shift_name'] ?? e['client_name']).toList()}');
+      print('║ COMPLETED (${past.length}): ${past.map((e) => e['shift_name'] ?? e['client_name']).toList()}');
+      print('╚════════════════════════════════════════════════════════════════╝');
+      print('');
     } catch (e) {
       setState(() {
         _eventsError = e.toString();
