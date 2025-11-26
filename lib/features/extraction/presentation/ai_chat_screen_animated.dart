@@ -79,7 +79,7 @@ class AnimatedBuildMethodPreview extends StatelessWidget {
                         end: Alignment.bottomRight,
                         colors: [
                           Colors.blue.shade50,
-                          Colors.purple.shade50,
+                          Colors.cyan.shade50,
                         ],
                       ),
                       border: Border(

@@ -337,7 +337,7 @@ class _MainScreenState extends State<MainScreen>
         gradient: const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [AppColors.purple, AppColors.purpleDark],
+          colors: [AppColors.tealInfo, AppColors.oceanBlue],
         ),
         boxShadow: [
           BoxShadow(

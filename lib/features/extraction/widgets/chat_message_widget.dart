@@ -39,11 +39,11 @@ class ChatMessageWidget extends StatelessWidget {
                 gradient: const LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [AppColors.purple, AppColors.purpleDark],
+                  colors: [AppColors.tealInfo, AppColors.oceanBlue],
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.purple.withOpacity(0.3),
+                    color: AppColors.tealInfo.withOpacity(0.3),
                     blurRadius: 6,
                     offset: const Offset(0, 2),
                   ),

@@ -340,12 +340,12 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: _isTyping
-            ? [const Color(0xFF9061FC), const Color(0xFF7343E9)]
-            : [AppColors.purple, AppColors.purpleDark],
+            ? [const Color(0xFF26C6DA), const Color(0xFF00838F)]
+            : [AppColors.tealInfo, AppColors.oceanBlue],
         ),
         boxShadow: [
           BoxShadow(
-            color: AppColors.purple.withValues(alpha: _isTyping ? 0.5 : 0.3),
+            color: AppColors.tealInfo.withValues(alpha: _isTyping ? 0.5 : 0.3),
             blurRadius: _isTyping ? 10 : 6,
             offset: const Offset(0, 2),
           ),

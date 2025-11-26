@@ -340,8 +340,8 @@ class _AIChatTile extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              AppColors.purple.withOpacity(0.08),
-              AppColors.purpleDark.withOpacity(0.08),
+              AppColors.tealInfo.withOpacity(0.08),
+              AppColors.oceanBlue.withOpacity(0.08),
             ],
           ),
         ),
@@ -356,11 +356,11 @@ class _AIChatTile extends StatelessWidget {
                 gradient: const LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [AppColors.purple, AppColors.purpleDark],
+                  colors: [AppColors.tealInfo, AppColors.oceanBlue],
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.purple.withOpacity(0.3),
+                    color: AppColors.tealInfo.withOpacity(0.3),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -441,7 +441,7 @@ class _AIChatTile extends StatelessWidget {
                       Icon(
                         Icons.push_pin,
                         size: 16,
-                        color: AppColors.purple.withOpacity(0.7),
+                        color: AppColors.tealInfo.withOpacity(0.7),
                       ),
                     ],
                   ),

@@ -10,7 +10,7 @@ class ChatListScreen extends StatelessWidget {
       backgroundColor: AppColors.surfaceLight,
       appBar: AppBar(
         title: const Text('Chats'),
-        backgroundColor: AppColors.purple,
+        backgroundColor: AppColors.tealInfo,
         elevation: 0,
       ),
       body: const Center(

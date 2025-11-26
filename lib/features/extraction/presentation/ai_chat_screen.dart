@@ -594,7 +594,7 @@ class _AIChatScreenState extends State<AIChatScreen>
                               Icons.bolt,
                               size: 18,
                               color: _stateProvider.chatService.modelPreference == 'llama'
-                                  ? Colors.purple
+                                  ? AppColors.tealInfo
                                   : Colors.grey,
                             ),
                             const SizedBox(width: 8),
@@ -609,7 +609,7 @@ class _AIChatScreenState extends State<AIChatScreen>
                             if (_stateProvider.chatService.modelPreference == 'llama')
                               const SizedBox(width: 8),
                             if (_stateProvider.chatService.modelPreference == 'llama')
-                              const Icon(Icons.check, size: 16, color: Colors.purple),
+                              const Icon(Icons.check, size: 16, color: AppColors.tealInfo),
                           ],
                         ),
                       ),
@@ -645,12 +645,12 @@ class _AIChatScreenState extends State<AIChatScreen>
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
                         color: _stateProvider.chatService.modelPreference == 'llama'
-                            ? Colors.purple.withValues(alpha: 0.12)
+                            ? AppColors.tealInfo.withValues(alpha: 0.12)
                             : Colors.black.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: _stateProvider.chatService.modelPreference == 'llama'
-                              ? Colors.purple.withValues(alpha: 0.3)
+                              ? AppColors.tealInfo.withValues(alpha: 0.3)
                               : Colors.black.withValues(alpha: 0.2),
                           width: 1,
                         ),
@@ -664,7 +664,7 @@ class _AIChatScreenState extends State<AIChatScreen>
                                 : Icons.psychology,
                             size: 14,
                             color: _stateProvider.chatService.modelPreference == 'llama'
-                                ? Colors.purple.shade700
+                                ? AppColors.oceanBlue
                                 : Colors.black,
                           ),
                           const SizedBox(width: 6),
@@ -674,7 +674,7 @@ class _AIChatScreenState extends State<AIChatScreen>
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
                               color: _stateProvider.chatService.modelPreference == 'llama'
-                                  ? Colors.purple.shade700
+                                  ? AppColors.oceanBlue
                                   : Colors.black,
                             ),
                           ),
@@ -683,7 +683,7 @@ class _AIChatScreenState extends State<AIChatScreen>
                             Icons.arrow_drop_down,
                             size: 16,
                             color: _stateProvider.chatService.modelPreference == 'llama'
-                                ? Colors.purple.shade700
+                                ? AppColors.oceanBlue
                                 : Colors.black,
                           ),
                         ],
