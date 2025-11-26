@@ -4597,7 +4597,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           print('  Event date normalized: ${DateTime(d.year, d.month, d.day)}');
           print('  Today date normalized: ${DateTime(now.year, now.month, now.day)}');
         }
-        print('  Status: "$status", isPast: $isPast, hasOpenPositions: ${_hasOpenPositions(e)}');
+        final hasOpenPos = _hasOpenPositions(e);
+        final isFull = status == 'fulfilled' || !hasOpenPos;
+        print('  Status: "$status", isPast: $isPast, hasOpenPositions: $hasOpenPos, isFull: $isFull');
+        print('  → Will go to: ${status == 'draft' ? 'PENDING' : (status == 'completed' || (status == 'cancelled' && isPast) || (isFull && isPast)) ? 'COMPLETED' : isFull ? 'FULL' : 'POSTED'}');
 
         // Tab logic (priority order):
         // 1. Pending = draft events only
