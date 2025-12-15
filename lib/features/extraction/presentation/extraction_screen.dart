@@ -44,6 +44,7 @@ import '../widgets/event_data_preview_card.dart';
 import '../../extraction/widgets/chat_message_widget.dart';
 import '../../extraction/widgets/chat_input_widget.dart';
 import '../../extraction/widgets/event_confirmation_card.dart';
+import '../widgets/batch_event_dialog.dart';
 import 'widgets/extraction_widgets.dart';
 import 'mixins/event_data_mixin.dart';
 import 'pending_publish_screen.dart';
@@ -139,6 +140,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   final _contactEmailController = TextEditingController();
   final _headcountController = TextEditingController();
   final _notesController = TextEditingController();
+
+  // Role count controllers for manual entry
+  final Map<String, TextEditingController> _roleCountControllers = {};
 
   late final ExtractionService _extractionService;
   late final EventService _eventService;
@@ -367,6 +371,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     _contactEmailController.dispose();
     _headcountController.dispose();
     _notesController.dispose();
+    for (final controller in _roleCountControllers.values) {
+      controller.dispose();
+    }
     _updateTimer?.cancel();
     _socketSubscription?.cancel();
     super.dispose();
@@ -848,6 +855,206 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           backgroundColor: ExColors.successDark,
         ),
       );
+    }
+  }
+
+  /// Build manual entry data from form fields
+  Map<String, dynamic>? _buildManualEntryData() {
+    // Custom validation for date picker
+    if (_selectedDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.pleaseSelectDate),
+          backgroundColor: ExColors.error,
+        ),
+      );
+      return null;
+    }
+
+    if (!_formKey.currentState!.validate()) {
+      return null;
+    }
+
+    final manualData = <String, dynamic>{
+      'event_name': _eventNameController.text.trim(),
+      'client_name': _clientNameController.text.trim(),
+      'date': _selectedDate!.toIso8601String(),
+      'start_time': _startTimeController.text.trim(),
+      'end_time': _endTimeController.text.trim(),
+      'venue_name': _venueNameController.text.trim(),
+      'venue_address': _venueAddressController.text.trim(),
+      'city': _cityController.text.trim(),
+      'state': _stateController.text.trim(),
+      'country': 'USA',
+      if (_selectedVenuePlace != null) ...{
+        'venue_latitude': _selectedVenuePlace!.latitude,
+        'venue_longitude': _selectedVenuePlace!.longitude,
+        'google_maps_url':
+            'https://www.google.com/maps/search/?api=1&query='
+            '${Uri.encodeComponent(_selectedVenuePlace!.formattedAddress.isNotEmpty ? _selectedVenuePlace!.formattedAddress : '${_selectedVenuePlace!.latitude},${_selectedVenuePlace!.longitude}')}'
+            '&query_place_id=${Uri.encodeComponent(_selectedVenuePlace!.placeId)}',
+      },
+      'contact_name': _contactNameController.text.trim(),
+      'contact_phone': _contactPhoneController.text.trim(),
+      'contact_email': _contactEmailController.text.trim(),
+      'headcount_total': int.tryParse(_headcountController.text.trim()),
+      'notes': _notesController.text.trim(),
+      'status': 'draft',
+    };
+
+    // Build roles array from role count controllers
+    final roles = <Map<String, dynamic>>[];
+    for (final entry in _roleCountControllers.entries) {
+      final count = int.tryParse(entry.value.text.trim()) ?? 0;
+      if (count > 0) {
+        roles.add({'role': entry.key, 'count': count});
+      }
+    }
+    if (roles.isNotEmpty) {
+      manualData['roles'] = roles;
+    }
+
+    manualData.removeWhere(
+      (key, value) =>
+          value == null || value == '' || (value is int && value == 0),
+    );
+
+    return manualData;
+  }
+
+  /// Save manual entry directly to pending (single step)
+  Future<void> _saveManualEntryToPending() async {
+    final payload = _buildManualEntryData();
+    if (payload == null) return;
+
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      await _eventService.createEvent(payload);
+      if (!mounted) return;
+
+      _showSuccessBanner(context, 'Saved to Pending!');
+      _clearManualEntryForm();
+      await _loadEvents();
+
+      // Navigate to Events tab to show the new event
+      setState(() {
+        _selectedIndex = 1; // Events tab
+        _eventsTabController.animateTo(0); // Pending subtab
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to save: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  /// Show batch dialog for manual entry recurring series
+  Future<void> _showManualEntryBatchDialog() async {
+    final templateData = _buildManualEntryData();
+    if (templateData == null) return;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return BatchEventDialog(
+          templateEventData: templateData,
+          onCreateBatch: _createManualEntryBatchEvents,
+        );
+      },
+    );
+  }
+
+  /// Create multiple events from manual entry with different dates
+  Future<void> _createManualEntryBatchEvents(List<DateTime> dates) async {
+    if (dates.isEmpty) return;
+
+    final template = _buildManualEntryData();
+    if (template == null) return;
+
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      // Create events with different dates
+      final events = dates.map((date) {
+        return {
+          ...template,
+          'date': date.toIso8601String(),
+          'status': 'draft',
+        };
+      }).toList();
+
+      print('[ExtractionScreen] Creating manual entry batch with ${events.length} events...');
+
+      final createdEvents = await _eventService.createBatchEvents(events);
+
+      print('[ExtractionScreen] ✓ Created ${createdEvents.length} events');
+
+      // Show success message
+      _showSuccessBanner(context, 'Created ${createdEvents.length} recurring events!');
+      _clearManualEntryForm();
+      await _loadEvents();
+
+      // Navigate to Events tab
+      setState(() {
+        _selectedIndex = 1; // Events tab
+        _eventsTabController.animateTo(0); // Pending subtab
+      });
+
+    } catch (e) {
+      print('[ExtractionScreen] ✗ Failed to create batch events: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to create recurring events: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  /// Clear the manual entry form
+  void _clearManualEntryForm() {
+    _eventNameController.clear();
+    _clientNameController.clear();
+    _dateController.clear();
+    _startTimeController.clear();
+    _endTimeController.clear();
+    _venueNameController.clear();
+    _venueAddressController.clear();
+    _cityController.clear();
+    _stateController.clear();
+    _contactNameController.clear();
+    _contactPhoneController.clear();
+    _contactEmailController.clear();
+    _headcountController.clear();
+    _notesController.clear();
+    _selectedDate = null;
+    _selectedStartTime = null;
+    _selectedEndTime = null;
+    _selectedVenuePlace = null;
+    structuredData = null;
+    // Reset role count controllers to 0
+    for (final controller in _roleCountControllers.values) {
+      controller.text = '0';
     }
   }
 
@@ -7128,6 +7335,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       setState(() {
         _roles = items;
         _isRolesLoading = false;
+
+        // Initialize role count controllers for manual entry form
+        for (final role in items) {
+          final roleName = (role['name'] ?? '').toString();
+          if (roleName.isNotEmpty && !_roleCountControllers.containsKey(roleName)) {
+            _roleCountControllers[roleName] = TextEditingController(text: '0');
+          }
+        }
       });
     } catch (e) {
       setState(() {
@@ -8239,13 +8454,83 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     ),
                   ],
                 ),
+                const SizedBox(height: 20),
+                // Staff Roles Section
+                FormSection(
+                  title: 'Staff Roles Required',
+                  icon: Icons.badge,
+                  children: [
+                    if (_isRolesLoading)
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(16),
+                          child: CircularProgressIndicator(),
+                        ),
+                      )
+                    else if (_roleCountControllers.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          children: [
+                            Icon(Icons.info_outline, color: Colors.grey.shade400, size: 32),
+                            const SizedBox(height: 8),
+                            Text(
+                              'No roles defined yet. Add roles in the Catalog tab.',
+                              style: TextStyle(color: Colors.grey.shade600),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      ..._roleCountControllers.entries.map((entry) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                flex: 3,
+                                child: Text(
+                                  entry.key,
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              SizedBox(
+                                width: 80,
+                                child: TextFormField(
+                                  controller: entry.value,
+                                  keyboardType: TextInputType.number,
+                                  textAlign: TextAlign.center,
+                                  decoration: InputDecoration(
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    hintText: '0',
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                  ],
+                ),
                 const SizedBox(height: 24),
+                // Primary action: Save directly to Pending
                 ElevatedButton.icon(
-                  onPressed: _submitManualEntry,
-                  icon: const Icon(Icons.save, size: 20),
+                  onPressed: _saveManualEntryToPending,
+                  icon: const Icon(Icons.check, size: 20),
                   label: Text(
-                    AppLocalizations.of(context)!.saveJobDetails,
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                    AppLocalizations.of(context)!.saveToPending,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: ExColors.successDark,
@@ -8261,54 +8546,13 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   ),
                 ),
                 const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: ElevatedButton.icon(
-                    onPressed: structuredData == null
-                        ? null
-                        : () async {
-                            final Map<String, dynamic> payload =
-                                Map<String, dynamic>.from(structuredData!);
-                            final selClient = _clientNameController.text.trim();
-                            if (selClient.isNotEmpty) {
-                              payload['client_name'] = selClient;
-                            }
-
-                            // Save to backend as draft
-                            try {
-                              payload['status'] = 'draft';
-                              await _eventService.createEvent(payload);
-                              if (!mounted) return;
-
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Saved to Pending'),
-                                  backgroundColor: ExColors.successDark,
-                                ),
-                              );
-                              await _draftService.clearDraft();
-                              await _loadEvents();
-                              // Navigate to Events tab to show the new event
-                              setState(() {
-                                _selectedIndex = 1; // Events tab
-                                _eventsTabController.animateTo(0); // Pending subtab
-                              });
-                            } catch (e) {
-                              if (!mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Failed to save: $e'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                            }
-                          },
-                    icon: const Icon(Icons.save, size: 18),
-                    label: Text(AppLocalizations.of(context)!.saveToPending),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: ExColors.techBlue,
-                      foregroundColor: Colors.white,
-                    ),
+                // Secondary action: Create recurring series
+                TextButton.icon(
+                  onPressed: _showManualEntryBatchDialog,
+                  icon: const Icon(Icons.calendar_month, size: 18),
+                  label: const Text('Create Recurring Series'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: ExColors.techBlue,
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -8686,6 +8930,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               _aiChatService.startNewConversation();
               setState(() {});
             },
+            onCreateSeries: _showBatchDialog,
           ),
         // Only show input widget when conversation has started
         ColoredBox(
@@ -9605,6 +9850,78 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       'December',
     ];
     return months[month - 1];
+  }
+
+  /// Show batch creation dialog for recurring events
+  Future<void> _showBatchDialog() async {
+    final currentData = _aiChatService.currentEventData;
+    if (currentData.isEmpty) return;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return BatchEventDialog(
+          templateEventData: currentData,
+          onCreateBatch: _createBatchEvents,
+        );
+      },
+    );
+  }
+
+  /// Create multiple events with different dates
+  Future<void> _createBatchEvents(List<DateTime> dates) async {
+    if (dates.isEmpty) return;
+
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      final template = Map<String, dynamic>.from(_aiChatService.currentEventData);
+
+      // Create events with different dates
+      final events = dates.map((date) {
+        return {
+          ...template,
+          'date': date.toIso8601String(),
+          'status': 'draft',
+        };
+      }).toList();
+
+      print('[ExtractionScreen] Creating batch with ${events.length} events...');
+
+      final createdEvents = await _eventService.createBatchEvents(events);
+
+      print('[ExtractionScreen] ✓ Created ${createdEvents.length} events');
+
+      // Show success message
+      _showSuccessBanner(context, 'Created ${createdEvents.length} recurring events!');
+
+      // Clear the event data and start a new conversation
+      _aiChatService.clearCurrentEventData();
+      _aiChatService.startNewConversation();
+
+      // Reload pending drafts to show new events
+      await _loadPendingDrafts();
+
+      setState(() {});
+
+    } catch (e) {
+      print('[ExtractionScreen] ✗ Failed to create batch events: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to create recurring events: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
+    }
   }
 
   /// Show a beautiful translucent success banner

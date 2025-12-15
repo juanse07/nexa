@@ -363,7 +363,7 @@ router.post('/events', requireAuth, async (req, res) => {
 });
 
 // Batch create multiple events
-router.post('/batch', requireAuth, async (req, res) => {
+router.post('/events/batch', requireAuth, async (req, res) => {
   try {
     const manager = await resolveManagerForRequest(req as any);
     const managerId = manager._id as mongoose.Types.ObjectId;

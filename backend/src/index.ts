@@ -28,6 +28,7 @@ import teamsRouter from './routes/teams';
 import invitesRouter from './routes/invites';
 import notificationsRouter from './routes/notifications';
 import eventChatRouter from './routes/eventChat';
+import privacyRouter from './routes/privacy';
 import { notificationScheduler } from './services/notificationScheduler';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
@@ -96,6 +97,9 @@ async function createServer() {
   app.use('/api', staffAiRouter);
   app.use('/api', subscriptionRouter);
   app.use('/api', placesRouter);
+
+  // Privacy and legal pages (served at root, not under /api)
+  app.use(privacyRouter);
 
   // Admin maintenance: recompute role_stats for all events
   app.post('/api/admin/recompute-role-stats', async (req, res) => {

@@ -69,19 +69,24 @@ class _EventConfirmationCardState extends State<EventConfirmationCard>
     return time;
   }
 
+  // Navy blue theme colors
+  static const Color _navyBlue = Color(0xFF1E3A5F);
+  static const Color _navyBlueLight = Color(0xFF2A4A6F);
+  static const Color _accentYellow = Color(0xFFFFC107);
+
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            Theme.of(context).colorScheme.primary,
-            Theme.of(context).colorScheme.primary.withOpacity(0.8),
+            _navyBlue,
+            _navyBlueLight,
           ],
         ),
-        borderRadius: const BorderRadius.only(
+        borderRadius: BorderRadius.only(
           topLeft: Radius.circular(16),
           topRight: Radius.circular(16),
         ),
@@ -91,12 +96,12 @@ class _EventConfirmationCardState extends State<EventConfirmationCard>
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: _accentYellow,
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Icon(
               Icons.check_circle_outline,
-              color: Colors.white,
+              color: _navyBlue,
               size: 24,
             ),
           ),
@@ -117,7 +122,7 @@ class _EventConfirmationCardState extends State<EventConfirmationCard>
                   Text(
                     'Auto-save in ${widget.remainingSeconds}s',
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.9),
+                      color: _accentYellow.withOpacity(0.9),
                       fontSize: 12,
                     ),
                   ),
@@ -128,13 +133,13 @@ class _EventConfirmationCardState extends State<EventConfirmationCard>
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: Colors.orange,
+                color: _accentYellow,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
                 '${widget.remainingSeconds}',
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: _navyBlue,
                   fontWeight: FontWeight.bold,
                   fontSize: 12,
                 ),
@@ -232,7 +237,7 @@ class _EventConfirmationCardState extends State<EventConfirmationCard>
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+        color: _navyBlue.withOpacity(0.08),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -240,7 +245,7 @@ class _EventConfirmationCardState extends State<EventConfirmationCard>
           Icon(
             icon,
             size: 20,
-            color: Theme.of(context).colorScheme.primary,
+            color: _navyBlue,
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -311,10 +316,10 @@ class _EventConfirmationCardState extends State<EventConfirmationCard>
               padding: const EdgeInsets.all(12),
               child: Row(
                 children: [
-                  Icon(
+                  const Icon(
                     Icons.badge_outlined,
                     size: 20,
-                    color: Theme.of(context).colorScheme.primary,
+                    color: _navyBlue,
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -332,14 +337,14 @@ class _EventConfirmationCardState extends State<EventConfirmationCard>
                       vertical: 2,
                     ),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                      color: _accentYellow.withOpacity(0.3),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
                       '$totalRoles total',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 12,
-                        color: Theme.of(context).colorScheme.primary,
+                        color: _navyBlue,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -384,16 +389,16 @@ class _EventConfirmationCardState extends State<EventConfirmationCard>
                           width: 32,
                           height: 32,
                           decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                            color: _navyBlue.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: Center(
                             child: Text(
                               '$count',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.bold,
-                                color: Theme.of(context).colorScheme.primary,
+                                color: _navyBlue,
                               ),
                             ),
                           ),
@@ -447,6 +452,8 @@ class _EventConfirmationCardState extends State<EventConfirmationCard>
                   label: const Text('Edit'),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 12),
+                    foregroundColor: _navyBlue,
+                    side: const BorderSide(color: _navyBlue),
                   ),
                 ),
               ),
@@ -483,7 +490,7 @@ class _EventConfirmationCardState extends State<EventConfirmationCard>
               icon: const Icon(Icons.calendar_month, size: 18),
               label: const Text('Create Recurring Series'),
               style: TextButton.styleFrom(
-                foregroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: _navyBlue,
               ),
             ),
           ],
