@@ -15,6 +15,7 @@ import { AvailabilityModel } from '../models/availability';
 import { ManagerModel } from '../models/manager';
 import { RoleModel } from '../models/role';
 import { TariffModel } from '../models/tariff';
+import { VenueModel } from '../models/venue';
 
 const router = Router();
 
@@ -197,10 +198,12 @@ router.get('/ai/manager/context', requireAuth, async (req, res) => {
         name: manager.name || 'Manager',
         preferredCity: (manager as any).preferredCity
       },
-      venues: ((manager as any).venueList || []).map((venue: any) => ({
+      venues: (await VenueModel.find({ managerId }).lean()).map((venue: any) => ({
+        id: String(venue._id),
         name: venue.name,
         address: venue.address,
         city: venue.city,
+        state: venue.state,
         source: venue.source || 'ai'
       })),
       clients: clients.map((client: any) => ({
@@ -240,7 +243,7 @@ router.get('/ai/manager/context', requireAuth, async (req, res) => {
         totalClients: clients.length,
         totalEvents: events.length,
         totalTeamMembers: teamMembers.length,
-        totalVenues: ((manager as any).venueList || []).length,
+        totalVenues: await VenueModel.countDocuments({ managerId }),
         upcomingEvents: events.filter((e: any) => new Date(e.date) >= new Date()).length,
         pastEvents: events.filter((e: any) => new Date(e.date) < new Date()).length
       }
@@ -541,15 +544,15 @@ const AI_TOOLS = [
         },
         date: {
           type: 'string',
-          description: 'Shift date in ISO format (YYYY-MM-DD)'
+          description: 'Shift date - convert user input to ISO format YYYY-MM-DD (e.g., "February 3" → "2025-02-03"). Use current year if not specified.'
         },
         call_time: {
           type: 'string',
-          description: 'CALL TIME - when staff should ARRIVE (e.g., "17:00" or "5:00 PM"). This is what managers care about.'
+          description: 'CALL TIME - when staff should ARRIVE. Convert to 24h format (e.g., "4pm" → "16:00", "4 de la tarde" → "16:00")'
         },
         end_time: {
           type: 'string',
-          description: 'When staff shift ENDS (e.g., "23:00" or "11:00 PM")'
+          description: 'When shift ENDS. Convert to 24h format (e.g., "11pm" → "23:00", "11 de la noche" → "23:00")'
         },
         venue_name: {
           type: ['string', 'null'],
@@ -1367,8 +1370,8 @@ async function handleGroqRequest(
     return res.status(500).json({ message: 'Groq API key not configured on server' });
   }
 
-  // Use Llama 3.1 8B Instant for function calling (fast & cost-effective)
-  const groqModel = model || 'llama-3.1-8b-instant';  // Supports parallel tool calling, 560 tokens/sec
+  // Use GPT-OSS-20B for function calling (131K context, OpenAI-compatible tools)
+  const groqModel = model || 'openai/gpt-oss-20b';  // 20B params, 131K context, 65K max output
   const isReasoningModel = false;
 
   console.log(`[Groq] Manager using model: ${groqModel}`);
@@ -1394,6 +1397,16 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
    - Tables for comparisons (when appropriate)
 6. If you need to confirm details, present them conversationally, NOT as JSON
 Example: Instead of showing {"client": "Epicurean"}, say "Client: **Epicurean**"
+
+📅 DATE & TIME HANDLING - CRITICAL:
+- **NEVER ask the user to provide dates in a specific format** - this is YOUR job
+- Accept ANY natural language date: "February 3", "3 de febrero", "next Friday", "tomorrow", "Jan 15th", "el 15 de enero"
+- YOU must automatically convert to ISO format (YYYY-MM-DD) when calling functions
+- Use the current year from system context unless the user specifies a different year
+- Example: User says "February 3" in 2025 → you use "2025-02-03" in function calls
+- If the date is ambiguous (missing month or day), ask for that specific info, NOT the format
+- Same for times: accept "4pm", "4 de la tarde", "16:00", "4 in the afternoon" → convert to "16:00" internally
+- **NEVER mention YYYY-MM-DD or any technical format to the user**
 `;
 
   const dateContext = getFullSystemContext(timezone);
@@ -1894,89 +1907,72 @@ YOU MUST RETURN AT LEAST ${minVenues} VENUES. Prioritize the most popular and la
     const duplicatesRemoved = rawVenues.length - validatedVenues.length;
     console.log(`[discover-venues] Found ${validatedVenues.length} unique AI venues (removed ${duplicatesRemoved} duplicates from AI response)`);
 
-    // Smart merge for multi-city support:
-    // 1. Keep ALL venues from OTHER cities (preserve other cities' venues)
-    const existingVenues = manager.venueList || [];
-    const venuesFromOtherCities = existingVenues.filter((v: any) =>
-      v.cityName && v.cityName !== city
-    );
+    // Save to new venues collection instead of embedded venueList
+    try {
+      // 1. Get existing manual/places venues for this city (to avoid duplicates)
+      const existingManualVenues = await VenueModel.find({
+        managerId: manager._id,
+        city: { $regex: new RegExp(`^${metroArea}$`, 'i') },
+        source: { $in: ['manual', 'places'] }
+      }).lean();
 
-    // 2. Keep manual venues from THIS city
-    const manualVenuesThisCity = existingVenues
-      .filter((v: any) => v.cityName === city && v.source === 'manual');
+      const manualNames = new Set(existingManualVenues.map(v => v.name.toLowerCase().trim()));
+      console.log(`[discover-venues] Found ${existingManualVenues.length} existing manual/places venues for ${metroArea}`);
 
-    console.log(`[discover-venues] Preserving ${venuesFromOtherCities.length} venues from other cities`);
-    console.log(`[discover-venues] Preserving ${manualVenuesThisCity.length} manual venues from ${city}`);
+      // 2. Delete existing AI venues for this city (will be replaced)
+      const deleteResult = await VenueModel.deleteMany({
+        managerId: manager._id,
+        city: { $regex: new RegExp(`^${metroArea}$`, 'i') },
+        source: 'ai'
+      });
+      console.log(`[discover-venues] Deleted ${deleteResult.deletedCount} existing AI venues for ${metroArea}`);
 
-    // 3. Add new AI venues for THIS city
-    const aiVenues = validatedVenues.map(v => ({ ...v, source: 'ai' as const }));
+      // 3. Filter out AI venues that duplicate existing manual venues
+      const uniqueAIVenues = validatedVenues.filter(v =>
+        !manualNames.has(v.name.toLowerCase().trim())
+      );
+      console.log(`[discover-venues] Adding ${uniqueAIVenues.length} unique AI venues (${validatedVenues.length - uniqueAIVenues.length} duplicates of manual venues skipped)`);
 
-    // 4. Remove duplicate AI venues (case-insensitive name match)
-    const manualNames = new Set(manualVenuesThisCity.map((v: any) => v.name.toLowerCase().trim()));
-    const uniqueAIVenues = aiVenues.filter((v: any) => !manualNames.has(v.name.toLowerCase().trim()));
-    console.log(`[discover-venues] Adding ${uniqueAIVenues.length} unique AI venues for ${city} (${aiVenues.length - uniqueAIVenues.length} duplicates removed)`);
+      // 4. Bulk insert new AI venues
+      if (uniqueAIVenues.length > 0) {
+        const venueDocs = uniqueAIVenues.map(v => ({
+          managerId: manager._id,
+          name: v.name,
+          normalizedName: v.name.toLowerCase().trim(),
+          address: v.address,
+          city: v.city || metroArea,
+          state: state || undefined,
+          source: 'ai' as const,
+        }));
 
-    // 5. Combine all venues: other cities + this city's manual + this city's AI
-    const finalVenues = [
-      ...venuesFromOtherCities,
-      ...manualVenuesThisCity,
-      ...uniqueAIVenues
-    ];
-
-    console.log(`[discover-venues] Total venues after update: ${finalVenues.length} (${venuesFromOtherCities.length} from other cities, ${manualVenuesThisCity.length} manual + ${uniqueAIVenues.length} AI from ${city})`);
-
-    // Save with retry logic for version conflicts
-    let retries = 3;
-    let saved = false;
-    let lastError: any = null;
-
-    while (retries > 0 && !saved) {
-      try {
-        // Refresh manager document to get latest version
-        const freshManager = await ManagerModel.findOne({
-          provider: (req as any).authUser.provider,
-          subject: (req as any).authUser.sub,
-        });
-
-        if (!freshManager) {
-          return res.status(404).json({ message: 'Manager not found' });
-        }
-
-        // Update only venueList and timestamp (NOT preferredCity - it's deprecated)
-        freshManager.venueList = finalVenues;
-        freshManager.venueListUpdatedAt = new Date();
-        await freshManager.save();
-
-        saved = true;
-        console.log(`[discover-venues] Successfully saved venues`);
-      } catch (saveError: any) {
-        lastError = saveError;
-        if (saveError.name === 'VersionError' && retries > 1) {
-          console.log(`[discover-venues] Version conflict, retrying... (${retries - 1} retries left)`);
-          retries--;
-          // Wait a bit before retrying (exponential backoff)
-          await new Promise(resolve => setTimeout(resolve, 100 * (4 - retries)));
-        } else {
-          retries = 0;
-        }
+        await VenueModel.insertMany(venueDocs, { ordered: false });
+        console.log(`[discover-venues] Successfully inserted ${uniqueAIVenues.length} AI venues to collection`);
       }
-    }
 
-    if (!saved) {
-      console.error('[discover-venues] Failed to save after retries:', lastError);
+      // 5. Get total venue count for this manager
+      const totalVenueCount = await VenueModel.countDocuments({ managerId: manager._id });
+      console.log(`[discover-venues] Total venues in collection for manager: ${totalVenueCount}`);
+
+      return res.json({
+        success: true,
+        city,
+        venueCount: uniqueAIVenues.length,
+        venues: uniqueAIVenues.map(v => ({
+          name: v.name,
+          address: v.address,
+          city: v.city || metroArea,
+          source: 'ai'
+        })),
+        updatedAt: new Date(),
+      });
+
+    } catch (saveError: any) {
+      console.error('[discover-venues] Failed to save venues:', saveError);
       return res.status(500).json({
-        message: 'Failed to save venues due to concurrent updates. Please try again.',
-        error: lastError?.message
+        message: 'Failed to save venues to database',
+        error: saveError?.message
       });
     }
-
-    return res.json({
-      success: true,
-      city,
-      venueCount: validatedVenues.length,
-      venues: validatedVenues,
-      updatedAt: manager.venueListUpdatedAt,
-    });
 
   } catch (error: any) {
     console.error('[discover-venues] Error:', error);

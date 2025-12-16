@@ -360,11 +360,11 @@ OUTPUT RULES - CRITICAL:
 - JUST the actual message content, nothing else
 - The output should be ready to send as-is without any editing`;
 
-    // Call Groq with llama-3.1-8b-instant (fast & cheap)
+    // Call Groq with GPT-OSS-20B (131K context, 65K output)
     const response = await axios.post(
       'https://api.groq.com/openai/v1/chat/completions',
       {
-        model: 'llama-3.1-8b-instant',
+        model: 'openai/gpt-oss-20b',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
@@ -399,7 +399,7 @@ OUTPUT RULES - CRITICAL:
       const translationResponse = await axios.post(
         'https://api.groq.com/openai/v1/chat/completions',
         {
-          model: 'llama-3.1-8b-instant',
+          model: 'openai/gpt-oss-20b',
           messages: [
             {
               role: 'system',
@@ -1815,8 +1815,8 @@ async function handleStaffGroqRequest(
     return res.status(500).json({ message: 'Groq API key not configured on server' });
   }
 
-  // Use Llama 3.1 8B Instant for reliable function calling (fast & cost-effective)
-  const groqModel = model || 'llama-3.1-8b-instant';  // Supports parallel tool calling, 560 tokens/sec
+  // Use GPT-OSS-20B for function calling (131K context, OpenAI-compatible tools)
+  const groqModel = model || 'openai/gpt-oss-20b';  // 20B params, 131K context, 65K max output
   const isReasoningModel = false;
 
   console.log(`[Groq] Staff using model: ${groqModel}`);
