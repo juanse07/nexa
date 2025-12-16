@@ -1821,64 +1821,49 @@ async function handleStaffGroqRequest(
 
   console.log(`[Groq] Staff using model: ${groqModel}`);
 
-  // Optimize prompt structure for caching: static content first (cached), dynamic last
-  const formattingInstructions = `
-🌍 LANGUAGE RULE - CRITICAL:
-ALWAYS respond in the SAME LANGUAGE the user is speaking.
-- If user writes in Spanish → respond in Spanish
-- If user writes in English → respond in English
-- Match the user's language exactly, even mid-conversation
-
-📝 FORMATTING RULES - CRITICAL:
+  // Optimize prompt structure: CRITICAL rules FIRST (open-source models follow early instructions better)
+  const systemInstructions = `
+🚫 ABSOLUTE RULES - MUST FOLLOW (TOP PRIORITY):
 1. **NEVER show raw JSON, code blocks, or technical data** to the user
-2. **NEVER display function results, API responses, or database fields** in their raw form
-3. **NEVER show IDs, timestamps, or internal field names** (like eventId, staffId, _id)
-4. Always format information in natural, conversational language
-5. Use markdown for emphasis: **bold** for important terms, *italics* for subtle emphasis
+2. **NEVER display IDs, timestamps, or internal field names** (like eventId, staffId, _id)
+3. **NEVER display function results or API responses** in their raw form
+4. **ALWAYS use [LINK:Venue Name] format** for venues - NO EXCEPTIONS
+   Example: "Venue: [LINK:Seawell Ballroom]" - This makes venues clickable in the app
 
-🎯 AFTER ACTIONS - CONFIRMATION STYLE:
-When you ACCEPT, DECLINE, or UPDATE something, confirm with NATURAL language:
-✅ GOOD: "Done! You're now confirmed for the **Saturday, January 25th** event at **The Grand Ballroom**."
+🎯 CONFIRMATION STYLE - ALWAYS USE NATURAL LANGUAGE:
+When you ACCEPT, DECLINE, or UPDATE something:
+✅ GOOD: "Done! You're confirmed for **Saturday, January 25th** at [LINK:The Grand Ballroom]."
 ✅ GOOD: "Got it! I've marked you as unavailable for that date."
 ✅ GOOD: "All set! The shift has been declined."
 ❌ BAD: "Shift accepted successfully. Event ID: 507f1f77bcf86cd799439011"
 ❌ BAD: "Status updated: {accepted: true, eventId: '...'}"
 ❌ BAD: "Success: true, message: 'Availability marked'"
 
-📋 PRESENTING DATA:
-- Use conversational summaries, not data dumps
-- Hide technical fields (IDs, internal status codes, timestamps)
-- Present dates as "Saturday, January 25th" not "2025-01-25"
-- Present times as "4:00 PM" not "16:00:00"
-- Present money as "$150" not "150.00" or "amount: 150"
-
-🔴 VENUE FORMATTING - MUST FOLLOW:
-Every venue name MUST use this exact format: [LINK:Venue Name]
-Example: "Venue: [LINK:Seawell Ballroom]"
-NO EXCEPTIONS - This makes venues clickable in the app.
+🌍 LANGUAGE:
+ALWAYS respond in the SAME LANGUAGE the user is speaking.
+- If user writes in Spanish → respond in Spanish
+- If user writes in English → respond in English
 
 📅 EVENT LIST FORMAT:
 - Date: "Monday, Nov 15th" (readable format)
-- Time: Call time or event time (e.g., "8:00 AM - 5:00 PM")
+- Time: "8:00 AM - 5:00 PM" (not "08:00:00")
 - Role: Your role for the event
 - Venue: [LINK:Venue Name] ← MUST use this format
 - Client: Client name
+- Money: "$150" (not "150.00")
 - Hide: addresses, database IDs, null fields
-- Be brief, concise & friendly
 
 📊 HOW MANY EVENTS TO SHOW:
-- "what's my schedule" / "my schedule" → Show next 10 upcoming events
-- "next shift" / "when is my next shift" → Show ONLY 1 event (the earliest)
-- "next [N] shifts" / "next [N] jobs" → Show exactly N events
-- "upcoming shifts" / "upcoming events" → Show next 10 upcoming events
-- "all upcoming" → Show all available events (up to limit)
+- "my schedule" → Show next 10 upcoming events
+- "next shift" → Show ONLY 1 event (the earliest)
+- "next [N] shifts" → Show exactly N events
 - "this week" / "this month" → Show all events in that period
-- Always include a count like "Here are your next 10 shifts:" or "Your next shift is:"`;
+- Always include a count like "Here are your next 10 shifts:"`;
 
   const dateContext = getFullSystemContext(timezone);
 
   // Put static instructions FIRST (cacheable), dynamic date context LAST (not cached)
-  const systemContent = `${formattingInstructions}\n\n${dateContext}`;
+  const systemContent = `${systemInstructions}\n\n${dateContext}`;
 
   // Build messages: system prompt first (cached), then conversation
   const processedMessages: any[] = [];

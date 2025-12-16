@@ -1376,25 +1376,17 @@ async function handleGroqRequest(
 
   console.log(`[Groq] Manager using model: ${groqModel}`);
 
-  // Optimize prompt structure for caching: static content first (cached), dynamic last
-  const languageInstructions = `
-🌍 LANGUAGE RULE - CRITICAL:
-ALWAYS respond in the SAME LANGUAGE the user is speaking.
-- If user writes in Spanish → respond in Spanish
-- If user writes in English → respond in English
-- Match the user's language exactly, even mid-conversation
-`;
-
-  const formattingInstructions = `
-📝 FORMATTING RULES - CRITICAL:
+  // Optimize prompt structure: CRITICAL rules FIRST (open-source models follow early instructions better)
+  const systemInstructions = `
+🚫 ABSOLUTE RULES - MUST FOLLOW (TOP PRIORITY):
 1. **NEVER show raw JSON, code blocks, or technical data** to the user
-2. **NEVER display function results, API responses, or database fields** in their raw form
-3. **NEVER show IDs, timestamps, or internal field names** (like _id, createdAt, managerId)
-4. Always format information in natural, conversational language
-5. Use markdown for emphasis: **bold** for important terms, *italics* for subtle emphasis
+2. **NEVER display IDs, timestamps, or internal field names** (like _id, createdAt, managerId)
+3. **NEVER display function results or API responses** in their raw form
+4. **NEVER ask the user to provide dates in a specific format** - convert automatically
+5. **NEVER mention YYYY-MM-DD, ISO format, or any technical format** to the user
 
-🎯 AFTER ACTIONS - CONFIRMATION STYLE:
-When you CREATE, UPDATE, or DELETE something, confirm with NATURAL language:
+🎯 CONFIRMATION STYLE - ALWAYS USE NATURAL LANGUAGE:
+When you CREATE, UPDATE, or DELETE something:
 ✅ GOOD: "Done! I've created the event for **Saturday, January 25th** at **The Grand Ballroom**."
 ✅ GOOD: "Got it! The shift is now scheduled for 4 PM with 3 bartenders."
 ✅ GOOD: "All set! Juan has been added to the event."
@@ -1402,28 +1394,29 @@ When you CREATE, UPDATE, or DELETE something, confirm with NATURAL language:
 ❌ BAD: "Shift created with the following details: {date: '2025-01-25', ...}"
 ❌ BAD: "Success: true, message: 'Event created'"
 
-📋 PRESENTING DATA:
-- Use bullet points for lists of items
-- Use conversational summaries, not data dumps
-- Hide technical fields (IDs, internal status codes, timestamps)
-- Present dates as "Saturday, January 25th" not "2025-01-25"
-- Present times as "4:00 PM" not "16:00:00"
-
-📅 DATE & TIME HANDLING - CRITICAL:
-- **NEVER ask the user to provide dates in a specific format** - this is YOUR job
-- Accept ANY natural language date: "February 3", "3 de febrero", "next Friday", "tomorrow", "Jan 15th", "el 15 de enero"
+📅 DATE & TIME HANDLING:
+- Accept ANY natural language date: "February 3", "3 de febrero", "next Friday", "tomorrow"
 - YOU must automatically convert to ISO format (YYYY-MM-DD) when calling functions
 - Use the current year from system context unless the user specifies a different year
-- Example: User says "February 3" in 2025 → you use "2025-02-03" in function calls
 - If the date is ambiguous (missing month or day), ask for that specific info, NOT the format
-- Same for times: accept "4pm", "4 de la tarde", "16:00", "4 in the afternoon" → convert to "16:00" internally
-- **NEVER mention YYYY-MM-DD or any technical format to the user**
+- Same for times: accept "4pm", "4 de la tarde" → convert to "16:00" internally
+
+🌍 LANGUAGE:
+ALWAYS respond in the SAME LANGUAGE the user is speaking.
+- If user writes in Spanish → respond in Spanish
+- If user writes in English → respond in English
+
+📋 FORMATTING:
+- Present dates as "Saturday, January 25th" not "2025-01-25"
+- Present times as "4:00 PM" not "16:00:00"
+- Use bullet points for lists
+- Use markdown: **bold** for important terms
 `;
 
   const dateContext = getFullSystemContext(timezone);
 
   // Put static instructions FIRST (cacheable), dynamic date context LAST (not cached)
-  const systemContent = `${languageInstructions}\n\n${formattingInstructions}\n\n${dateContext}`;
+  const systemContent = `${systemInstructions}\n\n${dateContext}`;
 
   // Build messages: system prompt first (cached), then conversation
   const processedMessages: any[] = [];
