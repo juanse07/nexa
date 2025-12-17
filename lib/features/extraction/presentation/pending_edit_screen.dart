@@ -41,6 +41,9 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
   TimeOfDay? _startTime;
   TimeOfDay? _endTime;
 
+  // Roles list - each role has 'role' (name) and 'count' (positions needed)
+  List<Map<String, dynamic>> _roles = [];
+
   bool _saving = false;
 
   @override
@@ -64,6 +67,18 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
     // Parse existing times
     _startTime = _parseTime(d['start_time']?.toString());
     _endTime = _parseTime(d['end_time']?.toString());
+
+    // Parse existing roles
+    final rolesData = d['roles'];
+    if (rolesData is List) {
+      _roles = rolesData.map((r) {
+        return {
+          'role': (r['role'] ?? r['name'] ?? '').toString(),
+          'count': (r['count'] ?? r['headcount'] ?? 1) as int,
+          'call_time': r['call_time']?.toString(),
+        };
+      }).toList();
+    }
   }
 
   DateTime? _parseDate(String? dateStr) {
@@ -137,6 +152,14 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
         'contact_phone': _contactPhoneCtrl.text.trim(),
         'contact_email': _contactEmailCtrl.text.trim(),
         'notes': _notesCtrl.text.trim(),
+        // Include roles with updated counts
+        if (_roles.isNotEmpty) 'roles': _roles.where((r) =>
+          r['role']?.toString().isNotEmpty == true && (r['count'] as int?) != null && (r['count'] as int) > 0
+        ).map((r) => {
+          'role': r['role'],
+          'count': r['count'],
+          if (r['call_time'] != null) 'call_time': r['call_time'],
+        }).toList(),
       };
 
       await _eventService.updateEvent(widget.draftId, updates);
@@ -369,6 +392,14 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
             ),
 
             const SizedBox(height: 28),
+
+            // Positions Section (Roles)
+            if (_roles.isNotEmpty) ...[
+              _sectionHeader('Positions'),
+              const SizedBox(height: 12),
+              _buildRolesEditor(),
+              const SizedBox(height: 28),
+            ],
 
             // Notes Section
             _sectionHeader('Notes'),
@@ -670,5 +701,120 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
         ),
       ],
     );
+  }
+
+  /// Build the roles editor with +/- buttons for each position
+  Widget _buildRolesEditor() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade300, width: 1.5),
+      ),
+      child: Column(
+        children: [
+          for (int i = 0; i < _roles.length; i++) ...[
+            if (i > 0) Divider(height: 1, color: Colors.grey.shade200),
+            _buildRoleRow(i),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRoleRow(int index) {
+    final role = _roles[index];
+    final roleName = role['role']?.toString() ?? 'Position';
+    final count = (role['count'] as int?) ?? 1;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          // Role icon
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.techBlue.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.person_outline,
+              size: 20,
+              color: AppColors.techBlue,
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Role name
+          Expanded(
+            child: Text(
+              roleName,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textDark,
+              ),
+            ),
+          ),
+          // Count controls
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Minus button
+                IconButton(
+                  onPressed: count > 1 ? () => _updateRoleCount(index, count - 1) : null,
+                  icon: Icon(
+                    Icons.remove_circle_outline,
+                    color: count > 1 ? AppColors.errorDark : Colors.grey.shade400,
+                  ),
+                  padding: const EdgeInsets.all(8),
+                  constraints: const BoxConstraints(),
+                  splashRadius: 20,
+                ),
+                // Count display
+                Container(
+                  constraints: const BoxConstraints(minWidth: 40),
+                  alignment: Alignment.center,
+                  child: Text(
+                    count.toString(),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                ),
+                // Plus button
+                IconButton(
+                  onPressed: () => _updateRoleCount(index, count + 1),
+                  icon: const Icon(
+                    Icons.add_circle_outline,
+                    color: AppColors.success,
+                  ),
+                  padding: const EdgeInsets.all(8),
+                  constraints: const BoxConstraints(),
+                  splashRadius: 20,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _updateRoleCount(int index, int newCount) {
+    if (newCount < 1) return;
+    setState(() {
+      _roles[index] = {
+        ..._roles[index],
+        'count': newCount,
+      };
+    });
   }
 }
