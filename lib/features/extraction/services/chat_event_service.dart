@@ -627,10 +627,34 @@ The user has chosen to use "${terminology}" terminology (not "Jobs", "Shifts", o
 **IMPORTANT**: The markdown instructions below may say "shift" - IGNORE that and use "${terminology.toLowerCase()}" instead!
 ''' : '';
 
+    // Build current event context if we're editing
+    final currentEventContext = _currentEventData.isNotEmpty ? '''
+
+## 🔄 EDITING MODE - Current Event Data
+
+You are currently helping the user EDIT an existing event. Here is the COMPLETE current data:
+
+```json
+${jsonEncode(_currentEventData)}
+```
+
+**CRITICAL EDITING RULES:**
+1. When the user requests changes, MERGE their changes with the existing data above
+2. Your EVENT_COMPLETE response MUST include ALL fields - both unchanged AND changed
+3. DO NOT lose any existing data - only update the fields the user mentions
+4. If user says "change the date to Jan 15", keep ALL other fields and only update the date
+
+**Example:** If user says "change the start time to 2pm":
+- Keep: client_name, date, venue_name, roles, etc. (everything above)
+- Change: start_time to "14:00"
+- Return: Complete JSON with ALL fields, not just start_time
+''' : '';
+
     return '''$terminologyInstructions
 
 $instructions
 ${_preferredCity != null ? '\n## Manager\'s City\n$_preferredCity' : ''}
+$currentEventContext
 
 ## Available Context Tools
 
