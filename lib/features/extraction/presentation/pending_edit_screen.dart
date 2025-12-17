@@ -10,11 +10,13 @@ import 'package:nexa/shared/presentation/theme/app_colors.dart';
 class PendingEditScreen extends StatefulWidget {
   final Map<String, dynamic> draft;
   final String draftId;
+  final String? title; // Optional custom title
 
   const PendingEditScreen({
     super.key,
     required this.draft,
     required this.draftId,
+    this.title,
   });
 
   @override
@@ -142,8 +144,8 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
       if (!mounted) return;
       Navigator.of(context).pop(true);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Draft updated'),
+        SnackBar(
+          content: Text(widget.draft['status'] == 'draft' ? 'Draft updated' : 'Event updated'),
           backgroundColor: AppColors.success,
         ),
       );
@@ -239,9 +241,9 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
         backgroundColor: AppColors.navySpaceCadet,
         foregroundColor: Colors.white,
         elevation: 0,
-        title: const Text(
-          'Edit Draft',
-          style: TextStyle(fontWeight: FontWeight.w600),
+        title: Text(
+          widget.title ?? (widget.draft['status'] == 'draft' ? 'Edit Draft' : 'Edit Event'),
+          style: const TextStyle(fontWeight: FontWeight.w600),
         ),
         actions: [
           TextButton(

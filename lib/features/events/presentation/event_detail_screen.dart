@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:nexa/l10n/app_localizations.dart';
-import 'event_edit_screen.dart';
 import '../../extraction/services/event_service.dart';
 import '../../extraction/presentation/pending_publish_screen.dart';
 import '../../extraction/presentation/pending_edit_screen.dart';
@@ -457,14 +456,14 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   }
 
   Future<void> _showEditDialog() async {
-    print('DEBUG: Event detail - passing event to edit screen');
-    print('DEBUG: Event _id: ${event['_id']}');
-    print('DEBUG: Event id: ${event['id']}');
-    print('DEBUG: Event keys: ${event.keys.toList()}');
+    final eventId = (event['_id'] ?? event['id'] ?? '').toString();
 
     final result = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) => EventEditScreen(event: event),
+        builder: (_) => PendingEditScreen(
+          draft: event,
+          draftId: eventId,
+        ),
       ),
     );
 
