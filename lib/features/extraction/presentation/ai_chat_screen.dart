@@ -55,6 +55,10 @@ class _AIChatScreenState extends State<AIChatScreen>
   late AnimationController _inputAnimationController;
   late Animation<Offset> _inputSlideAnimation;
 
+  // Scroll-based chips visibility
+  bool _showChips = true;
+  double _lastScrollOffset = 0;
+
   @override
   void initState() {
     super.initState();
@@ -91,6 +95,9 @@ class _AIChatScreenState extends State<AIChatScreen>
 
     // Listen to provider changes
     _stateProvider.addListener(_onProviderStateChanged);
+
+    // Listen to scroll for chips visibility
+    _stateProvider.scrollController.addListener(_onScroll);
   }
 
   /// Handle provider state changes
@@ -100,8 +107,27 @@ class _AIChatScreenState extends State<AIChatScreen>
     });
   }
 
+  /// Handle scroll to hide/show chips bar
+  void _onScroll() {
+    if (!_stateProvider.scrollController.hasClients) return;
+
+    final currentOffset = _stateProvider.scrollController.offset;
+    final scrollingDown = currentOffset > _lastScrollOffset;
+    final scrollingUp = currentOffset < _lastScrollOffset;
+
+    if ((currentOffset - _lastScrollOffset).abs() > 10) {
+      if (scrollingDown && _showChips && currentOffset > 50) {
+        setState(() => _showChips = false);
+      } else if (scrollingUp && !_showChips) {
+        setState(() => _showChips = true);
+      }
+      _lastScrollOffset = currentOffset;
+    }
+  }
+
   @override
   void dispose() {
+    _stateProvider.scrollController.removeListener(_onScroll);
     _stateProvider.removeListener(_onProviderStateChanged);
     _stateProvider.dispose(); // Disposes timers, file manager, scroll controller
     _inputAnimationController.dispose();
@@ -898,7 +924,7 @@ class _AIChatScreenState extends State<AIChatScreen>
             ),
               ),
 
-            // Floating chips layer (positioned over messages)
+            // Floating chips layer (positioned over messages, hides on scroll)
             if (!_stateProvider.isLoading && _stateProvider.selectedImages.isEmpty && _stateProvider.selectedDocuments.isEmpty)
               Positioned(
                 left: 0,
@@ -906,53 +932,61 @@ class _AIChatScreenState extends State<AIChatScreen>
                 bottom: 60 + (MediaQuery.of(context).padding.bottom > 0
                   ? MediaQuery.of(context).padding.bottom
                   : 8),
-                child: IgnorePointer(
-                  ignoring: false,
-                  child: Builder(
-                    builder: (context) {
-                      final terminology = context.read<TerminologyProvider>().singular;
-                      return Container(
-                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.transparent,
-                              AppColors.surfaceLight.withOpacity(0.3),
-                              AppColors.surfaceLight.withOpacity(0.6),
-                            ],
-                            stops: const [0.0, 0.5, 1.0],
-                          ),
-                        ),
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              _buildSuggestionChip(
-                                '📋 New ${terminology[0].toUpperCase()}${terminology.substring(1)}',
-                                'Help me to create a new $terminology and ask me for confirmation to save',
+                child: AnimatedSlide(
+                  duration: const Duration(milliseconds: 200),
+                  offset: _showChips ? Offset.zero : const Offset(0, 1),
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 200),
+                    opacity: _showChips ? 1.0 : 0.0,
+                    child: IgnorePointer(
+                      ignoring: !_showChips,
+                      child: Builder(
+                        builder: (context) {
+                          final terminology = context.read<TerminologyProvider>().singular;
+                          return Container(
+                            padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.transparent,
+                                  AppColors.surfaceLight.withOpacity(0.3),
+                                  AppColors.surfaceLight.withOpacity(0.6),
+                                ],
+                                stops: const [0.0, 0.5, 1.0],
                               ),
-                              const SizedBox(width: 8),
-                              _buildSuggestionChip(
-                                '🏢 New Client',
-                                'Add new client',
+                            ),
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children: [
+                                  _buildSuggestionChip(
+                                    '📋 New ${terminology[0].toUpperCase()}${terminology.substring(1)}',
+                                    'Help me to create a new $terminology and ask me for confirmation to save',
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _buildSuggestionChip(
+                                    '🏢 New Client',
+                                    'Add new client',
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _buildSuggestionChip(
+                                    '👤 New Role',
+                                    'Create new staff role',
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _buildSuggestionChip(
+                                    '💵 New Tariff',
+                                    'Set up new tariff. Tell me: rate, role, and client.',
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 8),
-                              _buildSuggestionChip(
-                                '👤 New Role',
-                                'Create new staff role',
-                              ),
-                              const SizedBox(width: 8),
-                              _buildSuggestionChip(
-                                '💵 New Tariff',
-                                'Set up new tariff. Tell me: rate, role, and client.',
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }
+                            ),
+                          );
+                        }
+                      ),
+                    ),
                   ),
                 ),
               ),
