@@ -345,8 +345,9 @@ class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProv
                 ),
               ),
             if (_keyboardVisible && !kIsWeb) const SizedBox(width: 4),
-            // Microphone button - tap to toggle recording
-            if (!_hasText && !_keyboardVisible)
+            // Voice/Send button - transforms based on text input
+            // Shows mic when no text, send when has text
+            if (!_hasText)
               GestureDetector(
                 onTap: _toggleRecording,
                 child: AnimatedBuilder(
@@ -428,9 +429,9 @@ class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProv
                   },
                 ),
               ),
-            if (!_hasText && !_keyboardVisible) const SizedBox(width: 4),
-            // Send button
-            Container(
+            // Send button - only shows when there is text (voice button shows otherwise)
+            if (_hasText)
+              Container(
               decoration: BoxDecoration(
                 gradient: _hasText && !widget.isLoading
                     ? const LinearGradient(
