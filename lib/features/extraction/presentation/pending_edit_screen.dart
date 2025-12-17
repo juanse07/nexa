@@ -705,20 +705,39 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
 
   /// Build the roles editor with +/- buttons for each position
   Widget _buildRolesEditor() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade300, width: 1.5),
-      ),
-      child: Column(
-        children: [
-          for (int i = 0; i < _roles.length; i++) ...[
-            if (i > 0) Divider(height: 1, color: Colors.grey.shade200),
-            _buildRoleRow(i),
-          ],
-        ],
-      ),
+    return Column(
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.grey.shade300, width: 1.5),
+          ),
+          child: Column(
+            children: [
+              for (int i = 0; i < _roles.length; i++) ...[
+                if (i > 0) Divider(height: 1, color: Colors.grey.shade200),
+                _buildRoleRow(i),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Add Position button
+        OutlinedButton.icon(
+          onPressed: _showAddPositionDialog,
+          icon: const Icon(Icons.add, size: 20),
+          label: const Text('Add Position'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.techBlue,
+            side: BorderSide(color: AppColors.techBlue.withValues(alpha: 0.5)),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -728,29 +747,43 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
     final count = (role['count'] as int?) ?? 1;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Row(
         children: [
+          // Delete button
+          IconButton(
+            onPressed: () => _confirmRemoveRole(index, roleName),
+            icon: Icon(
+              Icons.close,
+              size: 18,
+              color: Colors.grey.shade500,
+            ),
+            padding: const EdgeInsets.all(4),
+            constraints: const BoxConstraints(),
+            splashRadius: 16,
+            tooltip: 'Remove position',
+          ),
+          const SizedBox(width: 8),
           // Role icon
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
               color: AppColors.techBlue.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Icon(
               Icons.person_outline,
-              size: 20,
+              size: 18,
               color: AppColors.techBlue,
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           // Role name
           Expanded(
             child: Text(
               roleName,
               style: const TextStyle(
-                fontSize: 16,
+                fontSize: 15,
                 fontWeight: FontWeight.w600,
                 color: AppColors.textDark,
               ),
@@ -760,7 +793,7 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
           Container(
             decoration: BoxDecoration(
               color: Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -769,21 +802,22 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
                 IconButton(
                   onPressed: count > 1 ? () => _updateRoleCount(index, count - 1) : null,
                   icon: Icon(
-                    Icons.remove_circle_outline,
+                    Icons.remove,
+                    size: 18,
                     color: count > 1 ? AppColors.errorDark : Colors.grey.shade400,
                   ),
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(6),
                   constraints: const BoxConstraints(),
-                  splashRadius: 20,
+                  splashRadius: 18,
                 ),
                 // Count display
                 Container(
-                  constraints: const BoxConstraints(minWidth: 40),
+                  constraints: const BoxConstraints(minWidth: 32),
                   alignment: Alignment.center,
                   child: Text(
                     count.toString(),
                     style: const TextStyle(
-                      fontSize: 18,
+                      fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: AppColors.textDark,
                     ),
@@ -793,12 +827,13 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
                 IconButton(
                   onPressed: () => _updateRoleCount(index, count + 1),
                   icon: const Icon(
-                    Icons.add_circle_outline,
+                    Icons.add,
+                    size: 18,
                     color: AppColors.success,
                   ),
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(6),
                   constraints: const BoxConstraints(),
-                  splashRadius: 20,
+                  splashRadius: 18,
                 ),
               ],
             ),
@@ -815,6 +850,210 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
         ..._roles[index],
         'count': newCount,
       };
+    });
+  }
+
+  /// Show confirmation dialog before removing a position
+  void _confirmRemoveRole(int index, String roleName) {
+    // If it's the last role, show a different message
+    if (_roles.length == 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot remove the last position. At least one is required.'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove Position'),
+        content: Text('Are you sure you want to remove "$roleName" from this event?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _removeRole(index);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.errorDark,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Remove a role from the list
+  void _removeRole(int index) {
+    setState(() {
+      _roles.removeAt(index);
+    });
+  }
+
+  /// Show dialog to add a new position
+  void _showAddPositionDialog() {
+    final controller = TextEditingController();
+    final countController = TextEditingController(text: '1');
+
+    // Common position types for quick selection
+    final commonPositions = [
+      'Bartender',
+      'Server',
+      'Busser',
+      'Host',
+      'Cook',
+      'Dishwasher',
+      'Event Staff',
+      'Security',
+      'Photographer',
+      'DJ',
+      'Valet',
+      'Coat Check',
+    ];
+
+    // Filter out positions that already exist
+    final existingRoles = _roles.map((r) => r['role']?.toString().toLowerCase()).toSet();
+    final availablePositions = commonPositions
+        .where((p) => !existingRoles.contains(p.toLowerCase()))
+        .toList();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Add Position'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Quick selection chips
+                if (availablePositions.isNotEmpty) ...[
+                  const Text(
+                    'Quick Select:',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: availablePositions.take(6).map((position) {
+                      return ActionChip(
+                        label: Text(position),
+                        onPressed: () {
+                          controller.text = position;
+                          setDialogState(() {});
+                        },
+                        backgroundColor: controller.text == position
+                            ? AppColors.techBlue.withValues(alpha: 0.2)
+                            : null,
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 12),
+                ],
+                // Custom position input
+                TextField(
+                  controller: controller,
+                  decoration: const InputDecoration(
+                    labelText: 'Position Name',
+                    hintText: 'e.g., Bartender, Server',
+                    border: OutlineInputBorder(),
+                  ),
+                  textCapitalization: TextCapitalization.words,
+                  autofocus: availablePositions.isEmpty,
+                ),
+                const SizedBox(height: 16),
+                // Count input
+                Row(
+                  children: [
+                    const Text('How many needed: '),
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      width: 80,
+                      child: TextField(
+                        controller: countController,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        ),
+                        keyboardType: TextInputType.number,
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final name = controller.text.trim();
+                final count = int.tryParse(countController.text) ?? 1;
+
+                if (name.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Please enter a position name'),
+                      backgroundColor: AppColors.warning,
+                    ),
+                  );
+                  return;
+                }
+
+                // Check if position already exists
+                if (existingRoles.contains(name.toLowerCase())) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('"$name" already exists. Update the count instead.'),
+                      backgroundColor: AppColors.warning,
+                    ),
+                  );
+                  return;
+                }
+
+                Navigator.of(ctx).pop();
+                _addRole(name, count > 0 ? count : 1);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.techBlue,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Add'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Add a new role to the list
+  void _addRole(String name, int count) {
+    setState(() {
+      _roles.add({
+        'role': name,
+        'count': count,
+      });
     });
   }
 }
