@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../core/config/app_config.dart';
+import '../../../shared/presentation/theme/app_colors.dart';
 import '../../auth/data/services/auth_service.dart';
 import '../../cities/data/models/city.dart';
 import '../../venues/data/models/venue.dart';
@@ -19,7 +20,6 @@ class VenueListScreen extends StatefulWidget {
 
 class _VenueListScreenState extends State<VenueListScreen> {
   bool _isLoading = true;
-  bool _shouldUseTabbedView = false;
   String? _preferredCity;
   List<City> _cities = [];
   List<Venue> _venues = [];
@@ -48,19 +48,26 @@ class _VenueListScreenState extends State<VenueListScreen> {
       }
 
       final baseUrl = AppConfig.instance.baseUrl;
-      final response = await http.get(
-        Uri.parse('$baseUrl/managers/me'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      );
+      final headers = {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      };
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
+      // Load manager data and venues in parallel
+      final responses = await Future.wait([
+        http.get(Uri.parse('$baseUrl/managers/me'), headers: headers),
+        http.get(Uri.parse('$baseUrl/venues'), headers: headers),
+      ]);
+
+      final managerResponse = responses[0];
+      final venuesResponse = responses[1];
+
+      if (managerResponse.statusCode == 200 && venuesResponse.statusCode == 200) {
+        final managerData = jsonDecode(managerResponse.body) as Map<String, dynamic>;
+        final venuesData = jsonDecode(venuesResponse.body) as Map<String, dynamic>;
 
         // Check if manager has multiple cities configured
-        final citiesJson = data['cities'] as List?;
+        final citiesJson = managerData['cities'] as List?;
         final cities = (citiesJson ?? [])
             .map((json) => City.fromJson(json as Map<String, dynamic>))
             .toList();
@@ -76,14 +83,17 @@ class _VenueListScreenState extends State<VenueListScreen> {
           return;
         }
 
+        // Load venues from new endpoint
+        final venuesList = venuesData['venues'] as List?;
+        final venues = venuesList
+                ?.map((v) => Venue.fromJson(v as Map<String, dynamic>))
+                .toList() ??
+            [];
+
         setState(() {
           _cities = cities;
-          _preferredCity = data['preferredCity'] as String?;
-          final venueList = data['venueList'] as List?;
-          _venues = venueList
-                  ?.map((v) => Venue.fromJson(v as Map<String, dynamic>))
-                  .toList() ??
-              [];
+          _preferredCity = managerData['preferredCity'] as String?;
+          _venues = venues;
           _isLoading = false;
         });
       } else {
@@ -113,10 +123,10 @@ class _VenueListScreenState extends State<VenueListScreen> {
     }
   }
 
-  Future<void> _editVenue(Venue venue, int index) async {
+  Future<void> _editVenue(Venue venue) async {
     final result = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) => VenueFormScreen(venue: venue, venueIndex: index),
+        builder: (_) => VenueFormScreen(venue: venue),
       ),
     );
 
@@ -126,8 +136,8 @@ class _VenueListScreenState extends State<VenueListScreen> {
     }
   }
 
-  Future<void> _deleteVenue(int index) async {
-    final confirmed = await _showDeleteConfirmationDialog(index);
+  Future<void> _deleteVenue(Venue venue) async {
+    final confirmed = await _showDeleteConfirmationDialog(venue);
     if (confirmed != true) return;
 
     try {
@@ -139,14 +149,14 @@ class _VenueListScreenState extends State<VenueListScreen> {
 
       final baseUrl = AppConfig.instance.baseUrl;
       final response = await http.delete(
-        Uri.parse('$baseUrl/managers/me/venues/$index'),
+        Uri.parse('$baseUrl/venues/${venue.id}'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
       );
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 204 || response.statusCode == 200) {
         if (mounted) {
           _loadVenues(); // Reload list after deletion
           _showSnackBar('Venue removed successfully!', Colors.orange);
@@ -161,11 +171,10 @@ class _VenueListScreenState extends State<VenueListScreen> {
     }
   }
 
-  Future<bool?> _showDeleteConfirmationDialog(int index) async {
+  Future<bool?> _showDeleteConfirmationDialog(Venue venue) async {
     return showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
-        final venue = _venues[index];
         return AlertDialog(
           title: const Text('Remove Venue?'),
           content: Text(
@@ -202,13 +211,33 @@ class _VenueListScreenState extends State<VenueListScreen> {
 
   Widget _buildSourceBadge(Venue venue) {
     final isManual = venue.isManual;
+    final isPlaces = venue.isFromPlaces;
+
+    Color badgeColor;
+    IconData badgeIcon;
+    String badgeText;
+
+    if (isPlaces) {
+      badgeColor = AppColors.oceanBlue;
+      badgeIcon = Icons.place;
+      badgeText = 'Places';
+    } else if (isManual) {
+      badgeColor = Colors.green;
+      badgeIcon = Icons.person;
+      badgeText = 'Manual';
+    } else {
+      badgeColor = Colors.blue;
+      badgeIcon = Icons.smart_toy;
+      badgeText = 'AI';
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: isManual ? Colors.green.withOpacity(0.1) : Colors.blue.withOpacity(0.1),
+        color: badgeColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isManual ? Colors.green : Colors.blue,
+          color: badgeColor,
           width: 1,
         ),
       ),
@@ -216,17 +245,17 @@ class _VenueListScreenState extends State<VenueListScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            isManual ? Icons.person : Icons.smart_toy,
+            badgeIcon,
             size: 14,
-            color: isManual ? Colors.green[700] : Colors.blue[700],
+            color: badgeColor,
           ),
           const SizedBox(width: 4),
           Text(
-            isManual ? 'Manual' : 'AI',
+            badgeText,
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.bold,
-              color: isManual ? Colors.green[900] : Colors.blue[900],
+              color: badgeColor,
             ),
           ),
         ],
@@ -310,7 +339,7 @@ class _VenueListScreenState extends State<VenueListScreen> {
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(16),
-                          color: Theme.of(context).primaryColor.withOpacity(0.1),
+                          color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -344,13 +373,13 @@ class _VenueListScreenState extends State<VenueListScreen> {
                             itemBuilder: (context, index) {
                               final venue = _venues[index];
                               return Dismissible(
-                                key: Key('venue_$index'),
+                                key: Key('venue_${venue.id}'),
                                 direction: DismissDirection.endToStart,
                                 confirmDismiss: (direction) async {
-                                  return await _showDeleteConfirmationDialog(index);
+                                  return await _showDeleteConfirmationDialog(venue);
                                 },
                                 onDismissed: (direction) {
-                                  _deleteVenue(index);
+                                  _deleteVenue(venue);
                                 },
                                 background: Container(
                                   alignment: Alignment.centerRight,
@@ -365,13 +394,17 @@ class _VenueListScreenState extends State<VenueListScreen> {
                                 child: ListTile(
                                   contentPadding: EdgeInsets.zero,
                                   leading: CircleAvatar(
-                                    backgroundColor: venue.isManual
-                                        ? Colors.green
-                                        : Theme.of(context).primaryColor,
+                                    backgroundColor: venue.isFromPlaces
+                                        ? AppColors.oceanBlue
+                                        : venue.isManual
+                                            ? Colors.green
+                                            : Theme.of(context).primaryColor,
                                     child: Icon(
-                                      venue.isManual
-                                          ? Icons.person
-                                          : Icons.smart_toy,
+                                      venue.isFromPlaces
+                                          ? Icons.place
+                                          : venue.isManual
+                                              ? Icons.person
+                                              : Icons.smart_toy,
                                       color: Colors.white,
                                       size: 20,
                                     ),
@@ -404,7 +437,7 @@ class _VenueListScreenState extends State<VenueListScreen> {
                                     Icons.edit,
                                     color: Colors.grey[400],
                                   ),
-                                  onTap: () => _editVenue(venue, index),
+                                  onTap: () => _editVenue(venue),
                                 ),
                               );
                             },

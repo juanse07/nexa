@@ -34,6 +34,7 @@ const updateSchema = z.object({
     .regex(/^\d{9}$/)
     .optional(),
   picture: z.string().url().max(2048).optional(),
+  eventTerminology: z.enum(['shift', 'job', 'event']).optional(),
 });
 
 router.get('/users/me', requireAuth, async (req, res) => {
@@ -66,6 +67,7 @@ router.get('/users/me', requireAuth, async (req, res) => {
       phoneNumber: user.phone_number,
       picture: user.picture,
       appId: user.app_id,
+      eventTerminology: user.eventTerminology || 'shift',
     });
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -115,6 +117,7 @@ router.patch('/users/me', requireAuth, async (req, res) => {
     if (parsed.data.phoneNumber !== undefined) dbUpdate.phone_number = parsed.data.phoneNumber;
     if (parsed.data.appId !== undefined) dbUpdate.app_id = parsed.data.appId;
     if (parsed.data.picture !== undefined) dbUpdate.picture = parsed.data.picture;
+    if (parsed.data.eventTerminology !== undefined) dbUpdate.eventTerminology = parsed.data.eventTerminology;
 
     // eslint-disable-next-line no-console
     console.log('[users] PATCH /me - DB update object:', JSON.stringify(dbUpdate));
@@ -134,6 +137,7 @@ router.patch('/users/me', requireAuth, async (req, res) => {
       first_name: updated.first_name,
       last_name: updated.last_name,
       phone_number: updated.phone_number,
+      eventTerminology: updated.eventTerminology,
     }));
     return res.json({
       id: String(updated._id),
@@ -144,6 +148,7 @@ router.patch('/users/me', requireAuth, async (req, res) => {
       phoneNumber: updated.phone_number,
       picture: updated.picture,
       appId: updated.app_id,
+      eventTerminology: updated.eventTerminology || 'shift',
     });
   } catch (err) {
     // eslint-disable-next-line no-console

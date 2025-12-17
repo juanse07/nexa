@@ -11,6 +11,9 @@ export interface UserDocument extends Document {
   picture?: string; // optional override picture
   app_id?: string; // optional 9-digit app id
 
+  // User preferences
+  eventTerminology?: 'shift' | 'job' | 'event'; // How user prefers to call events in notifications
+
   // OneSignal fields
   oneSignalUserId?: string;
   notificationPreferences?: {
@@ -52,6 +55,9 @@ const UserSchema = new Schema<UserDocument>(
     phone_number: { type: String, trim: true },
     picture: { type: String, trim: true },
     app_id: { type: String, trim: true },
+
+    // User preferences
+    eventTerminology: { type: String, enum: ['shift', 'job', 'event'], default: 'shift' },
 
     // OneSignal fields
     oneSignalUserId: { type: String, sparse: true },

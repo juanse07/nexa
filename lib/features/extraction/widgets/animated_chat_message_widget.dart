@@ -227,9 +227,8 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
                         gradient: isUser
                             ? const LinearGradient(
                                 colors: [
-                                  AppColors.yellow,
-                                  AppColors.techBlue,
-                                  AppColors.indigoPurple,
+                                  AppColors.navySpaceCadet, // Navy blue
+                                  AppColors.oceanBlue, // Ocean blue
                                 ],
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
@@ -245,7 +244,7 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
                         boxShadow: [
                           BoxShadow(
                             color: isUser
-                                ? AppColors.yellow.withValues(alpha: 0.3)
+                                ? AppColors.oceanBlue.withValues(alpha: 0.3)
                                 : Colors.black.withValues(alpha: 0.08),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
@@ -493,11 +492,11 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
                     ],
                     colors: const [
                       AppColors.textDark, // Dark base
-                      AppColors.techBlue, // Indigo
-                      AppColors.yellow, // Purple
-                      AppColors.pink, // Pink highlight peak
-                      AppColors.yellow, // Purple
-                      AppColors.techBlue, // Indigo
+                      AppColors.navySpaceCadet, // Navy blue
+                      AppColors.oceanBlue, // Ocean blue
+                      AppColors.oceanBlue, // Ocean blue highlight peak
+                      AppColors.oceanBlue, // Ocean blue
+                      AppColors.navySpaceCadet, // Navy blue
                       AppColors.textDark, // Dark base
                     ],
                   ).createShader(bounds);
@@ -526,11 +525,11 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
                           (_shimmerAnimation.value + 0.4).clamp(0.0, 1.0),
                         ],
                         colors: const [
-                          AppColors.textDark,
-                          AppColors.yellow, // Soft violet
-                          Color(0xFFC084FC), // Bright purple
-                          AppColors.yellow, // Soft violet
-                          AppColors.textDark,
+                          AppColors.textDark, // Dark base
+                          AppColors.navySpaceCadet, // Navy blue
+                          AppColors.oceanBlue, // Ocean blue highlight
+                          AppColors.navySpaceCadet, // Navy blue
+                          AppColors.textDark, // Dark base
                         ],
                       ).createShader(bounds);
                     },
@@ -555,11 +554,11 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
                       ],
                       colors: const [
                         AppColors.textDark, // Dark base
-                        AppColors.techBlue, // Indigo
-                        AppColors.yellow, // Purple
-                        AppColors.pink, // Pink highlight peak
-                        AppColors.yellow, // Purple
-                        AppColors.techBlue, // Indigo
+                        AppColors.navySpaceCadet, // Navy blue
+                        AppColors.oceanBlue, // Ocean blue
+                        AppColors.oceanBlue, // Ocean blue highlight peak
+                        AppColors.oceanBlue, // Ocean blue
+                        AppColors.navySpaceCadet, // Navy blue
                         AppColors.textDark, // Dark base
                       ],
                     ).createShader(bounds);

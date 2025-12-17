@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:nexa/l10n/app_localizations.dart';
 import 'event_edit_screen.dart';
 import '../../extraction/services/event_service.dart';
+import '../../extraction/presentation/pending_publish_screen.dart';
+import '../../extraction/presentation/pending_edit_screen.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 class EventDetailScreen extends StatefulWidget {
@@ -165,6 +167,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               ),
             ),
             const SizedBox(height: 24),
+
+            // Action Buttons for Draft Events (Publish & Edit)
+            if (event['status'] == 'draft' && (event['accepted_staff'] as List?)?.isEmpty != false) ...[
+              _buildDraftActionButtons(),
+              const SizedBox(height: 24),
+            ],
 
             // Action Buttons for Published Events (or drafts sent to staff)
             if (event['status'] == 'published' ||
@@ -597,6 +605,90 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildDraftActionButtons() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Publish Button
+        ElevatedButton.icon(
+          onPressed: _navigateToPublish,
+          icon: const Icon(Icons.send, size: 20),
+          label: const Text('Publish'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.success,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Edit Button
+        OutlinedButton.icon(
+          onPressed: _navigateToEdit,
+          icon: const Icon(Icons.edit, size: 20),
+          label: const Text('Edit Details'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.techBlue,
+            side: const BorderSide(color: AppColors.techBlue, width: 2),
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _navigateToPublish() async {
+    final eventId = (event['_id'] ?? event['id'] ?? '').toString();
+
+    final result = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => PendingPublishScreen(
+          draft: event,
+          draftId: eventId,
+        ),
+      ),
+    );
+
+    if (result == true) {
+      widget.onEventUpdated?.call();
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    }
+  }
+
+  void _navigateToEdit() async {
+    final eventId = (event['_id'] ?? event['id'] ?? '').toString();
+
+    final result = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => PendingEditScreen(
+          draft: event,
+          draftId: eventId,
+        ),
+      ),
+    );
+
+    if (result == true) {
+      widget.onEventUpdated?.call();
+      if (!mounted) return;
+      // Refresh the event data
+      try {
+        final updatedEvent = await _eventService.getEvent(eventId);
+        setState(() {
+          event = updatedEvent;
+        });
+      } catch (e) {
+        // If refresh fails, just pop
+        Navigator.of(context).pop();
+      }
+    }
   }
 
   Widget _buildActionButtons() {

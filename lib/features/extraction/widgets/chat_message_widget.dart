@@ -116,9 +116,8 @@ class ChatMessageWidget extends StatelessWidget {
                     gradient: isUser
                         ? const LinearGradient(
                             colors: [
-                              AppColors.yellow, // Light purple
-                              AppColors.techBlue, // Medium purple
-                              AppColors.indigoPurple, // Darker purple
+                              AppColors.navySpaceCadet, // Navy blue
+                              AppColors.oceanBlue, // Ocean blue
                             ],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
@@ -134,7 +133,7 @@ class ChatMessageWidget extends StatelessWidget {
                     boxShadow: [
                       BoxShadow(
                         color: isUser
-                            ? AppColors.yellow.withValues(alpha: 0.3)
+                            ? AppColors.oceanBlue.withValues(alpha: 0.3)
                             : Colors.black.withValues(alpha: 0.08),
                         blurRadius: 8,
                         offset: const Offset(0, 2),

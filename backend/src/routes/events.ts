@@ -643,14 +643,13 @@ router.post('/events/:id/publish', requireAuth, async (req, res) => {
     if (targetUserKeys.length > 0) {
       console.log(`[EVENT NOTIF] Event ${eventId} published, notifying ${targetUserKeys.length} staff members (teams + selected users)`);
 
-      // Compose notification message with date, time, client, and roles
+      // Get event details
       const eventDate = (eventObj as any).date;
       const startTime = (eventObj as any).start_time;
       const endTime = (eventObj as any).end_time;
-      const clientName = (eventObj as any).client_name;
       const roles = (eventObj as any).roles || [];
 
-      // Format date as "15 Jan"
+      // Format date as "8 Jan"
       let formattedDate = '';
       if (eventDate) {
         const d = new Date(eventDate);
@@ -659,36 +658,20 @@ router.post('/events/:id/publish', requireAuth, async (req, res) => {
         formattedDate = `${day} ${month}`;
       }
 
-      // Get pluralized role names (e.g., "Servers, Bartenders")
-      const roleNames = roles
-        .map((r: any) => {
-          const roleName = r.role || r.role_name;
-          return roleName ? `${roleName}s` : null;
-        })
-        .filter(Boolean)
-        .join(', ');
-
-      // Build notification body: "15 Jan, 2:00 PM - 10:00 PM • ClientName • Servers, Bartenders"
-      const bodyParts = [];
-
-      if (formattedDate) {
-        let datePart = formattedDate;
-        if (startTime && endTime) {
-          datePart += `, ${startTime} - ${endTime}`;
-        }
-        bodyParts.push(datePart);
+      // Format time part
+      let timePart = '';
+      if (startTime && endTime) {
+        timePart = `${startTime} - ${endTime}`;
       }
 
-      if (clientName) {
-        bodyParts.push(clientName);
-      }
+      // Get team names for lookup (to show which team posted the event)
+      const teamIdStrings = (eventObj.audience_team_ids || []).map(String);
+      const teamsForNotification = await TeamModel.find({
+        _id: { $in: teamIdStrings.map((id: string) => new mongoose.Types.ObjectId(id)) }
+      }).lean();
+      const teamIdToName = new Map(teamsForNotification.map((t: any) => [String(t._id), t.name]));
 
-      if (roleNames) {
-        bodyParts.push(roleNames);
-      }
-
-      const notificationBody = bodyParts.length > 0 ? bodyParts.join(' • ') : 'Check the app for details';
-
+      // Send ONE notification PER ROLE to each user
       for (const userKey of targetUserKeys) {
         try {
           const [provider, subject] = userKey.split(':');
@@ -700,17 +683,52 @@ router.post('/events/:id/publish', requireAuth, async (req, res) => {
             continue;
           }
 
-          await notificationService.sendToUser(
-            String(user._id),
-            '🔵 New Job',
-            notificationBody,
-            {
-              type: 'event',
-              eventId: String(eventObj._id),
-            },
-            'user'
-            // No accent color - using emoji dot for differentiation
-          );
+          // Get user's preferred terminology (default: 'shift')
+          const terminology = (user as any).eventTerminology || 'shift';
+
+          // Find which team this user belongs to (from the event's audience teams)
+          let teamName = 'Your team';
+          const userTeamMembership = await TeamMemberModel.findOne({
+            provider,
+            subject,
+            teamId: { $in: teamIdStrings.map((id: string) => new mongoose.Types.ObjectId(id)) },
+            status: 'active'
+          }).lean();
+
+          if (userTeamMembership) {
+            teamName = teamIdToName.get(String(userTeamMembership.teamId)) || 'Your team';
+          }
+
+          // Send one notification per role
+          for (const role of roles) {
+            const roleName = role.role || role.role_name;
+            if (!roleName) continue;
+
+            // Build notification title and body
+            // Title: "🔵 New Open Shift" (or Job/Event based on user preference)
+            const capitalizedTerm = terminology.charAt(0).toUpperCase() + terminology.slice(1);
+            const notificationTitle = `🔵 New Open ${capitalizedTerm}`;
+
+            // Body: "Tie Events posted a new shift as Bartender • 8 Jan, 4:00 PM - 9:00 PM"
+            let notificationBody = `${teamName} posted a new ${terminology} as ${roleName}`;
+            if (formattedDate && timePart) {
+              notificationBody += ` • ${formattedDate}, ${timePart}`;
+            } else if (formattedDate) {
+              notificationBody += ` • ${formattedDate}`;
+            }
+
+            await notificationService.sendToUser(
+              String(user._id),
+              notificationTitle,
+              notificationBody,
+              {
+                type: 'event',
+                eventId: String(eventObj._id),
+                role: roleName,
+              },
+              'user'
+            );
+          }
         } catch (err) {
           console.error(`[EVENT NOTIF] Failed to send notification to ${userKey}:`, err);
         }
@@ -756,8 +774,9 @@ router.post('/events/:id/unpublish', requireAuth, async (req, res) => {
       });
     }
 
-    // Store accepted staff for notifications before removing them
+    // Store accepted staff and team IDs for notifications before removing them
     const acceptedStaff = event.accepted_staff || [];
+    const originalTeamIds = (event.audience_team_ids || []).map(String);
     const targetUserKeys: string[] = [];
 
     for (const staff of acceptedStaff) {
@@ -792,9 +811,11 @@ router.post('/events/:id/unpublish', requireAuth, async (req, res) => {
     // Send notifications to removed staff members
     if (targetUserKeys.length > 0) {
       const eventDate = (eventObj as any).date;
-      const clientName = (eventObj as any).client_name || 'A job';
+      const startTime = (eventObj as any).start_time;
+      const endTime = (eventObj as any).end_time;
+      const roles = (eventObj as any).roles || [];
 
-      // Format date as "15 Jan"
+      // Format date as "8 Jan"
       let formattedDate = '';
       if (eventDate) {
         const d = new Date(eventDate);
@@ -803,9 +824,17 @@ router.post('/events/:id/unpublish', requireAuth, async (req, res) => {
         formattedDate = `${day} ${month}`;
       }
 
-      const notificationBody = formattedDate
-        ? `${clientName} on ${formattedDate} has been moved back to drafts`
-        : `${clientName} has been moved back to drafts`;
+      // Format time part
+      let timePart = '';
+      if (startTime && endTime) {
+        timePart = `${startTime} - ${endTime}`;
+      }
+
+      // Get team names for lookup
+      const teamsForNotification = await TeamModel.find({
+        _id: { $in: originalTeamIds.map((id: string) => new mongoose.Types.ObjectId(id)) }
+      }).lean();
+      const teamIdToName = new Map(teamsForNotification.map((t: any) => [String(t._id), t.name]));
 
       for (const userKey of targetUserKeys) {
         try {
@@ -818,16 +847,51 @@ router.post('/events/:id/unpublish', requireAuth, async (req, res) => {
             continue;
           }
 
-          await notificationService.sendToUser(
-            String(user._id),
-            '⚪ Job Canceled',
-            notificationBody,
-            {
-              type: 'event',
-              eventId: String(eventObj._id),
-            },
-            'user'
-          );
+          // Get user's preferred terminology (default: 'shift')
+          const terminology = (user as any).eventTerminology || 'shift';
+          const capitalizedTerm = terminology.charAt(0).toUpperCase() + terminology.slice(1);
+
+          // Find which team this user belongs to
+          let teamName = 'Your team';
+          const userTeamMembership = await TeamMemberModel.findOne({
+            provider,
+            subject,
+            teamId: { $in: originalTeamIds.map((id: string) => new mongoose.Types.ObjectId(id)) },
+            status: 'active'
+          }).lean();
+
+          if (userTeamMembership) {
+            teamName = teamIdToName.get(String(userTeamMembership.teamId)) || 'Your team';
+          }
+
+          // Send one notification per role
+          for (const role of roles) {
+            const roleName = role.role || role.role_name;
+            if (!roleName) continue;
+
+            // Title: "⚪ Shift Canceled"
+            const notificationTitle = `⚪ ${capitalizedTerm} Canceled`;
+
+            // Body: "Bartender at Tie Events • 8 Jan, 4:00 PM - 9:00 PM"
+            let notificationBody = `${roleName} at ${teamName}`;
+            if (formattedDate && timePart) {
+              notificationBody += ` • ${formattedDate}, ${timePart}`;
+            } else if (formattedDate) {
+              notificationBody += ` • ${formattedDate}`;
+            }
+
+            await notificationService.sendToUser(
+              String(user._id),
+              notificationTitle,
+              notificationBody,
+              {
+                type: 'event',
+                eventId: String(eventObj._id),
+                role: roleName,
+              },
+              'user'
+            );
+          }
 
           // Emit socket event to user
           emitToUser(userKey, 'event:canceled', responsePayload);
@@ -933,15 +997,14 @@ router.patch('/events/:id/visibility', requireAuth, async (req, res) => {
           }
         }
 
-        // Send push notifications
+        // Send push notifications - one per role
         if (targetUserKeys.length > 0) {
           const eventDate = (eventObj as any).date;
           const startTime = (eventObj as any).start_time;
           const endTime = (eventObj as any).end_time;
-          const clientName = (eventObj as any).client_name;
           const roles = (eventObj as any).roles || [];
 
-          // Format date as "15 Jan"
+          // Format date as "8 Jan"
           let formattedDate = '';
           if (eventDate) {
             const d = new Date(eventDate);
@@ -950,32 +1013,17 @@ router.patch('/events/:id/visibility', requireAuth, async (req, res) => {
             formattedDate = `${day} ${month}`;
           }
 
-          // Get pluralized role names
-          const roleNames = roles
-            .map((r: any) => {
-              const roleName = r.role || r.role_name;
-              return roleName ? `${roleName}s` : null;
-            })
-            .filter(Boolean)
-            .join(', ');
-
-          // Build notification body
-          const bodyParts = [];
-          if (formattedDate) {
-            let datePart = formattedDate;
-            if (startTime && endTime) {
-              datePart += `, ${startTime} - ${endTime}`;
-            }
-            bodyParts.push(datePart);
-          }
-          if (clientName) {
-            bodyParts.push(clientName);
-          }
-          if (roleNames) {
-            bodyParts.push(roleNames);
+          // Format time part
+          let timePart = '';
+          if (startTime && endTime) {
+            timePart = `${startTime} - ${endTime}`;
           }
 
-          const notificationBody = bodyParts.length > 0 ? bodyParts.join(' • ') : 'Check the app for details';
+          // Get team names for lookup
+          const teamsForNotification = await TeamModel.find({
+            _id: { $in: audienceTeams.map((id: string) => new mongoose.Types.ObjectId(id)) }
+          }).lean();
+          const teamIdToName = new Map(teamsForNotification.map((t: any) => [String(t._id), t.name]));
 
           for (const userKey of targetUserKeys) {
             try {
@@ -985,16 +1033,51 @@ router.patch('/events/:id/visibility', requireAuth, async (req, res) => {
               const user = await UserModel.findOne({ provider, subject }).lean();
               if (!user) continue;
 
-              await notificationService.sendToUser(
-                String(user._id),
-                '🟢 Job Now Public',
-                notificationBody,
-                {
-                  type: 'event',
-                  eventId: String(eventObj._id),
-                },
-                'user'
-              );
+              // Get user's preferred terminology (default: 'shift')
+              const terminology = (user as any).eventTerminology || 'shift';
+              const capitalizedTerm = terminology.charAt(0).toUpperCase() + terminology.slice(1);
+
+              // Find which team this user belongs to
+              let teamName = 'Your team';
+              const userTeamMembership = await TeamMemberModel.findOne({
+                provider,
+                subject,
+                teamId: { $in: audienceTeams.map((id: string) => new mongoose.Types.ObjectId(id)) },
+                status: 'active'
+              }).lean();
+
+              if (userTeamMembership) {
+                teamName = teamIdToName.get(String(userTeamMembership.teamId)) || 'Your team';
+              }
+
+              // Send one notification per role
+              for (const role of roles) {
+                const roleName = role.role || role.role_name;
+                if (!roleName) continue;
+
+                // Title: "🟢 Shift Now Open"
+                const notificationTitle = `🟢 ${capitalizedTerm} Now Open`;
+
+                // Body: "Tie Events posted a new shift as Bartender • 8 Jan, 4:00 PM - 9:00 PM"
+                let notificationBody = `${teamName} posted a new ${terminology} as ${roleName}`;
+                if (formattedDate && timePart) {
+                  notificationBody += ` • ${formattedDate}, ${timePart}`;
+                } else if (formattedDate) {
+                  notificationBody += ` • ${formattedDate}`;
+                }
+
+                await notificationService.sendToUser(
+                  String(user._id),
+                  notificationTitle,
+                  notificationBody,
+                  {
+                    type: 'event',
+                    eventId: String(eventObj._id),
+                    role: roleName,
+                  },
+                  'user'
+                );
+              }
             } catch (err) {
               console.error(`[EVENT VISIBILITY] Failed to send notification to ${userKey}:`, err);
             }
@@ -1242,14 +1325,13 @@ router.patch('/events/:id', requireAuth, async (req, res) => {
       if (allTargetUserKeys.length > 0) {
         console.log(`[EVENT NOTIF] Event ${eventId} status changed to ${updated.status}, notifying ${allTargetUserKeys.length} staff members (teams + selected users)`);
 
-        // Compose notification message with date, time, client, and roles
+        // Get event details
         const eventDate = (updated as any).date;
         const startTime = (updated as any).start_time;
         const endTime = (updated as any).end_time;
-        const clientName = (updated as any).client_name;
         const roles = (updated as any).roles || [];
 
-        // Format date as "15 Jan"
+        // Format date as "8 Jan"
         let formattedDate = '';
         if (eventDate) {
           const d = new Date(eventDate);
@@ -1258,40 +1340,22 @@ router.patch('/events/:id', requireAuth, async (req, res) => {
           formattedDate = `${day} ${month}`;
         }
 
-        // Get pluralized role names (e.g., "Servers, Bartenders")
-        const roleNames = roles
-          .map((r: any) => {
-            const roleName = r.role || r.role_name;
-            return roleName ? `${roleName}s` : null;
-          })
-          .filter(Boolean)
-          .join(', ');
-
-        // Build notification body: "15 Jan, 2:00 PM - 10:00 PM • ClientName • Servers, Bartenders"
-        const bodyParts = [];
-
-        if (formattedDate) {
-          let datePart = formattedDate;
-          if (startTime && endTime) {
-            datePart += `, ${startTime} - ${endTime}`;
-          }
-          bodyParts.push(datePart);
+        // Format time part
+        let timePart = '';
+        if (startTime && endTime) {
+          timePart = `${startTime} - ${endTime}`;
         }
 
-        if (clientName) {
-          bodyParts.push(clientName);
-        }
+        // Get team names for lookup
+        const teamIdStrings = updateTeams.map(String);
+        const teamsForNotification = await TeamModel.find({
+          _id: { $in: teamIdStrings.map((id: string) => new mongoose.Types.ObjectId(id)) }
+        }).lean();
+        const teamIdToName = new Map(teamsForNotification.map((t: any) => [String(t._id), t.name]));
 
-        if (roleNames) {
-          bodyParts.push(roleNames);
-        }
-
-        const notificationBody = bodyParts.length > 0 ? bodyParts.join(' • ') : 'Check the app for details';
-
-        // Notify each assigned staff member
+        // Notify each assigned staff member - one notification per role
         for (const userKey of allTargetUserKeys) {
           try {
-            // Look up user by userKey (provider:subject)
             const [provider, subject] = userKey.split(':');
             if (!provider || !subject) continue;
 
@@ -1301,17 +1365,51 @@ router.patch('/events/:id', requireAuth, async (req, res) => {
               continue;
             }
 
-            await notificationService.sendToUser(
-              String(user._id),
-              '🔵 New Job',
-              notificationBody,
-              {
-                type: 'event',
-                eventId: String(updated._id),
-              },
-              'user'
-              // No accent color - using emoji dot for differentiation
-            );
+            // Get user's preferred terminology (default: 'shift')
+            const terminology = (user as any).eventTerminology || 'shift';
+            const capitalizedTerm = terminology.charAt(0).toUpperCase() + terminology.slice(1);
+
+            // Find which team this user belongs to
+            let teamName = 'Your team';
+            const userTeamMembership = await TeamMemberModel.findOne({
+              provider,
+              subject,
+              teamId: { $in: teamIdStrings.map((id: string) => new mongoose.Types.ObjectId(id)) },
+              status: 'active'
+            }).lean();
+
+            if (userTeamMembership) {
+              teamName = teamIdToName.get(String(userTeamMembership.teamId)) || 'Your team';
+            }
+
+            // Send one notification per role
+            for (const role of roles) {
+              const roleName = role.role || role.role_name;
+              if (!roleName) continue;
+
+              // Title: "🔵 New Open Shift"
+              const notificationTitle = `🔵 New Open ${capitalizedTerm}`;
+
+              // Body: "Tie Events posted a new shift as Bartender • 8 Jan, 4:00 PM - 9:00 PM"
+              let notificationBody = `${teamName} posted a new ${terminology} as ${roleName}`;
+              if (formattedDate && timePart) {
+                notificationBody += ` • ${formattedDate}, ${timePart}`;
+              } else if (formattedDate) {
+                notificationBody += ` • ${formattedDate}`;
+              }
+
+              await notificationService.sendToUser(
+                String(user._id),
+                notificationTitle,
+                notificationBody,
+                {
+                  type: 'event',
+                  eventId: String(updated._id),
+                  role: roleName,
+                },
+                'user'
+              );
+            }
           } catch (err) {
             console.error(`[EVENT NOTIF] Failed to send notification to ${userKey}:`, err);
           }
