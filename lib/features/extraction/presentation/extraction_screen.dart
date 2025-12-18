@@ -48,6 +48,7 @@ import '../widgets/batch_event_dialog.dart';
 import 'widgets/extraction_widgets.dart';
 import 'mixins/event_data_mixin.dart';
 import 'pending_publish_screen.dart';
+import 'package:nexa/shared/widgets/initials_avatar.dart';
 import 'pending_edit_screen.dart';
 import '../../users/presentation/pages/manager_profile_page.dart';
 import '../../users/presentation/pages/user_events_screen.dart';
@@ -163,6 +164,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   // Profile avatar state
   late final ManagerService _managerService;
   String? _profilePictureUrl;
+  String? _profileFirstName;
+  String? _profileLastName;
 
   // Timer for real-time updates
   Timer? _updateTimer;
@@ -2874,13 +2877,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   Widget _buildAvatarOrIcon(ThemeData theme) {
-    final url = _profilePictureUrl?.trim();
-    final hasUrl = url != null && url.isNotEmpty;
-    return CircleAvatar(
+    return InitialsAvatar(
+      imageUrl: _profilePictureUrl,
+      firstName: _profileFirstName,
+      lastName: _profileLastName,
       radius: 16,
-      backgroundColor: Colors.white24,
-      backgroundImage: hasUrl ? NetworkImage(url!) : null,
-      child: hasUrl ? null : const Icon(Icons.person, color: Colors.white),
     );
   }
 
@@ -2891,6 +2892,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       if (!mounted) return;
       setState(() {
         _profilePictureUrl = me.picture;
+        _profileFirstName = me.firstName;
+        _profileLastName = me.lastName;
       });
     } catch (_) {
       // Silently ignore; avatar will fall back to icon
@@ -8031,6 +8034,35 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         ),
                       ),
                       const SizedBox(width: 8),
+                      // Edit button
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () async {
+                          final eventId = (e['_id'] ?? e['id'] ?? '').toString();
+                          if (eventId.isEmpty) return;
+                          if (!mounted) return;
+                          final changed = await Navigator.of(context).push<bool>(
+                            MaterialPageRoute(
+                              builder: (_) => PendingEditScreen(
+                                draft: e,
+                                draftId: eventId,
+                              ),
+                            ),
+                          );
+                          if (changed == true) {
+                            await _loadEvents();
+                          }
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Icon(
+                            Icons.edit,
+                            size: 18,
+                            color: ExColors.lavender,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
                       // Navigate button
                       GestureDetector(
                         behavior: HitTestBehavior.opaque,

@@ -534,7 +534,7 @@ const AI_TOOLS = [
   },
   {
     name: 'create_shift',
-    description: 'Create a new event/shift (crear evento/turno). Use when user wants to: create event, make shift, add job, schedule staff, create trabajo, crear evento, agendar personal. IMPORTANT: Managers only care about CALL TIME (when staff should arrive), NOT guest arrival time. Call time is the staff arrival time.',
+    description: 'Create a new event/shift (crear evento/turno). Use when user wants to: create event, make shift, add job, schedule staff, create trabajo, crear evento, agendar personal. IMPORTANT: Managers only care about CALL TIME (when staff should arrive), NOT guest arrival time. Call time is the staff arrival time. 🚨 CRITICAL: ALL EVENTS MUST BE IN THE FUTURE - never create events for past dates.',
     parameters: {
       type: 'object',
       properties: {
@@ -544,7 +544,7 @@ const AI_TOOLS = [
         },
         date: {
           type: 'string',
-          description: 'Shift date - convert user input to ISO format YYYY-MM-DD (e.g., "February 3" → "2025-02-03"). Use current year if not specified.'
+          description: 'Shift date in ISO format YYYY-MM-DD. 🚨 CRITICAL: If user says a month that has already passed this year, use NEXT year. Example: If today is December 2025 and user says "February", use 2026-02-XX not 2025-02-XX. NEVER create events in the past.'
         },
         call_time: {
           type: 'string',
@@ -1384,6 +1384,7 @@ async function handleGroqRequest(
 3. **NEVER display function results or API responses** in their raw form
 4. **NEVER ask the user to provide dates in a specific format** - convert automatically
 5. **NEVER mention YYYY-MM-DD, ISO format, or any technical format** to the user
+6. **NEVER create events in the past** - ALL event dates MUST be today or in the future
 
 🎯 CONFIRMATION STYLE - ALWAYS USE NATURAL LANGUAGE:
 When you CREATE, UPDATE, or DELETE something:
@@ -1397,7 +1398,10 @@ When you CREATE, UPDATE, or DELETE something:
 📅 DATE & TIME HANDLING:
 - Accept ANY natural language date: "February 3", "3 de febrero", "next Friday", "tomorrow"
 - YOU must automatically convert to ISO format (YYYY-MM-DD) when calling functions
-- Use the current year from system context unless the user specifies a different year
+- 🚨 CRITICAL FUTURE DATE RULE: Check the system context for the current date!
+  - If user says a month that has ALREADY PASSED this year → use NEXT year
+  - Example: If today is December 2025 and user says "February" → use February 2026
+  - NEVER create events for dates that have already passed
 - If the date is ambiguous (missing month or day), ask for that specific info, NOT the format
 - Same for times: accept "4pm", "4 de la tarde" → convert to "16:00" internally
 

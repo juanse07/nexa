@@ -720,14 +720,14 @@ const STAFF_AI_TOOLS = [
   },
   {
     name: 'mark_availability',
-    description: 'Mark my availability for specific dates. Use when I say "I\'m available" or "I can\'t work on..."',
+    description: 'Mark my availability for specific dates. Use when I say "I\'m available" or "I can\'t work on...". 🚨 IMPORTANT: If user mentions a month that has already passed this year, use NEXT year.',
     parameters: {
       type: 'object',
       properties: {
         dates: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Array of ISO dates (YYYY-MM-DD) to mark availability for'
+          description: 'Array of ISO dates (YYYY-MM-DD). If user says a month that already passed this year, use next year. Example: "February" in December 2025 → "2026-02-XX"'
         },
         status: {
           type: 'string',
@@ -1829,6 +1829,8 @@ async function handleStaffGroqRequest(
 3. **NEVER display function results or API responses** in their raw form
 4. **ALWAYS use [LINK:Venue Name] format** for venues - NO EXCEPTIONS
    Example: "Venue: [LINK:Seawell Ballroom]" - This makes venues clickable in the app
+5. **When handling dates**: If user mentions a month that has ALREADY PASSED this year → use NEXT year
+   Example: If today is December 2025 and user says "February" → use February 2026
 
 🎯 CONFIRMATION STYLE - ALWAYS USE NATURAL LANGUAGE:
 When you ACCEPT, DECLINE, or UPDATE something:

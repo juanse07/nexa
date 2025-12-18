@@ -157,10 +157,33 @@ export function getFullSystemContext(timezone?: string): string {
     year: 'numeric',
     timeZone: tz
   });
+  const nextYear = String(parseInt(currentYear) + 1);
   const dateTimeContext = getDateTimeContext(tz);
   const isoDate = getISODate(tz);
 
+  // Get current month for date inference
+  const currentMonth = now.toLocaleDateString('en-US', {
+    month: 'long',
+    timeZone: tz
+  });
+  const currentMonthNum = now.getMonth() + 1; // 1-12
+
   return `Current system date/time: ${dateTimeContext}
 Current year: ${currentYear}
-Current date (ISO): ${isoDate}`;
+Next year: ${nextYear}
+Current month: ${currentMonth} (month ${currentMonthNum})
+Current date (ISO): ${isoDate}
+
+🚨 CRITICAL DATE RULE - EVENTS MUST BE IN THE FUTURE:
+When a user mentions a month WITHOUT specifying a year:
+- If that month has ALREADY PASSED this year → use NEXT YEAR (${nextYear})
+- If that month is the CURRENT month or LATER this year → use THIS YEAR (${currentYear})
+
+Examples (assuming today is ${currentMonth} ${currentYear}):
+- "January" → January ${nextYear} (January already passed)
+- "February" → February ${nextYear} (February already passed)
+- "${currentMonth}" → ${currentMonth} ${currentYear} (current month, use this year)
+- "December" → December ${currentYear} (hasn't happened yet)
+
+NEVER create events in the past. All dates must be today or later.`;
 }
