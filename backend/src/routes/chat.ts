@@ -1253,6 +1253,7 @@ router.post('/invitations/send-bulk', requireAuth, async (req, res) => {
     const results: Array<{
       userKey: string;
       roleId: string;
+      roleName?: string;
       success: boolean;
       error?: string;
       conversationId?: string;
@@ -1455,12 +1456,13 @@ router.post('/invitations/send-bulk', requireAuth, async (req, res) => {
         results.push({
           userKey,
           roleId,
+          roleName,
           success: true,
           conversationId: String(conversation._id),
           messageId: String(chatMessage._id),
         });
 
-        console.log('[BULK INVITATION] Sent to', userKey, 'for role', roleId);
+        console.log('[BULK INVITATION] Sent to', userKey, 'for role', roleName);
       } catch (error) {
         console.error('[BULK INVITATION] Error sending to', userKey, error);
         results.push({
@@ -1481,10 +1483,16 @@ router.post('/invitations/send-bulk', requireAuth, async (req, res) => {
     if (successCount > 0 && !wasAlreadyPublished) {
       console.log('[BULK INVITATION] Publishing event as private');
 
-      // Collect all successfully invited user keys
-      const invitedUserKeys = results
-        .filter((r) => r.success)
-        .map((r) => r.userKey);
+      // Collect all successfully invited user keys and their role assignments
+      const successfulInvitations = results.filter((r) => r.success);
+      const invitedUserKeys = successfulInvitations.map((r) => r.userKey);
+
+      // Build invited_staff array with role assignments
+      const newInvitedStaff = successfulInvitations.map((r) => ({
+        userKey: r.userKey,
+        roleId: r.roleId,
+        roleName: r.roleName || 'Position',
+      }));
 
       // Update event to published status with private visibility
       event.status = 'published';
@@ -1495,6 +1503,12 @@ router.post('/invitations/send-bulk', requireAuth, async (req, res) => {
       // Set audience_user_keys to invited users (merge with existing if any)
       const existingAudience = event.audience_user_keys || [];
       event.audience_user_keys = [...new Set([...existingAudience, ...invitedUserKeys])];
+
+      // Store role assignments for each invited user (merge with existing)
+      const existingInvitedStaff = (event as any).invited_staff || [];
+      const existingUserKeys = new Set(existingInvitedStaff.map((s: any) => s.userKey));
+      const uniqueNewStaff = newInvitedStaff.filter((s) => !existingUserKeys.has(s.userKey));
+      (event as any).invited_staff = [...existingInvitedStaff, ...uniqueNewStaff];
 
       await event.save();
 
@@ -1508,13 +1522,25 @@ router.post('/invitations/send-bulk', requireAuth, async (req, res) => {
         managerId: String(eventObj.managerId),
       });
     } else if (successCount > 0 && wasAlreadyPublished) {
-      // Event already published, just update audience_user_keys
-      const invitedUserKeys = results
-        .filter((r) => r.success)
-        .map((r) => r.userKey);
+      // Event already published, just update audience_user_keys and invited_staff
+      const successfulInvitations = results.filter((r) => r.success);
+      const invitedUserKeys = successfulInvitations.map((r) => r.userKey);
+
+      // Build invited_staff array with role assignments
+      const newInvitedStaff = successfulInvitations.map((r) => ({
+        userKey: r.userKey,
+        roleId: r.roleId,
+        roleName: r.roleName || 'Position',
+      }));
 
       const existingAudience = event.audience_user_keys || [];
       event.audience_user_keys = [...new Set([...existingAudience, ...invitedUserKeys])];
+
+      // Store role assignments for each invited user (merge with existing)
+      const existingInvitedStaff = (event as any).invited_staff || [];
+      const existingUserKeys = new Set(existingInvitedStaff.map((s: any) => s.userKey));
+      const uniqueNewStaff = newInvitedStaff.filter((s) => !existingUserKeys.has(s.userKey));
+      (event as any).invited_staff = [...existingInvitedStaff, ...uniqueNewStaff];
 
       await event.save();
       console.log(`[BULK INVITATION] Added ${invitedUserKeys.length} more users to published event`);

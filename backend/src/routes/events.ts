@@ -1667,8 +1667,37 @@ router.get('/events', requireAuth, async (req, res) => {
     // Enrich with tariff data
     const enrichedEvents = await enrichEventsWithTariffs(events);
 
+    // For staff users, filter roles to only show their assigned role for private events
+    let processedEvents = enrichedEvents;
+    if (!managerScope && audienceKey) {
+      processedEvents = enrichedEvents.map((event: any) => {
+        const invitedStaff = event.invited_staff || [];
+        const userInvitation = invitedStaff.find((s: any) => s.userKey === audienceKey);
+
+        if (userInvitation && event.visibilityType === 'private') {
+          // Filter roles to only the assigned role
+          const assignedRoleName = userInvitation.roleName;
+          const filteredRoles = (event.roles || []).filter((r: any) =>
+            r.role === assignedRoleName ||
+            r.role === userInvitation.roleId ||
+            r._id?.toString() === userInvitation.roleId
+          );
+
+          console.log(`[EVENTS DEBUG] Filtering roles for ${audienceKey}: ${assignedRoleName}`);
+
+          return {
+            ...event,
+            roles: filteredRoles.length > 0 ? filteredRoles : event.roles, // Fallback to all if no match
+            assigned_role: assignedRoleName, // Tell staff app which role they were assigned
+          };
+        }
+
+        return event;
+      });
+    }
+
     // Map events to include string ids
-    const mappedEvents = enrichedEvents.map((event: any) => {
+    const mappedEvents = processedEvents.map((event: any) => {
       const teamIds = Array.isArray(event.audience_team_ids)
         ? event.audience_team_ids
             .map((value: any) => {

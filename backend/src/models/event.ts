@@ -50,6 +50,14 @@ export interface RoleStat {
   is_full: boolean;
 }
 
+// Stores which role each invited staff member was assigned
+// Used for private events where each person gets a specific role
+export interface InvitedStaffMember {
+  userKey: string;    // "provider:subject" format
+  roleId: string;     // The role ID or name they were invited for
+  roleName: string;   // Cached role name for display
+}
+
 export interface EventDocument extends Document {
   managerId: mongoose.Types.ObjectId;
 
@@ -107,6 +115,7 @@ export interface EventDocument extends Document {
   role_stats?: RoleStat[];
   audience_user_keys?: string[];
   audience_team_ids?: mongoose.Types.ObjectId[];
+  invited_staff?: InvitedStaffMember[]; // Role assignments for private event invitations
 
   // Hours approval workflow
   hoursStatus?: 'pending' | 'sheet_submitted' | 'approved' | 'paid';
@@ -184,6 +193,16 @@ const RoleStatSchema = new Schema<RoleStat>(
   { _id: false }
 );
 
+// Schema for tracking which role each invited user was assigned
+const InvitedStaffMemberSchema = new Schema<InvitedStaffMember>(
+  {
+    userKey: { type: String, required: true, trim: true },
+    roleId: { type: String, required: true, trim: true },
+    roleName: { type: String, required: true, trim: true },
+  },
+  { _id: false }
+);
+
 const EventSchema = new Schema<EventDocument>(
   {
     managerId: { type: Schema.Types.ObjectId, ref: 'Manager', required: true, index: true },
@@ -248,6 +267,7 @@ const EventSchema = new Schema<EventDocument>(
     role_stats: { type: [RoleStatSchema], default: [] },
     audience_user_keys: { type: [String], default: [] },
     audience_team_ids: { type: [Schema.Types.ObjectId], ref: 'Team', default: [] },
+    invited_staff: { type: [InvitedStaffMemberSchema], default: [] },
 
     // Hours approval workflow
     hoursStatus: {
