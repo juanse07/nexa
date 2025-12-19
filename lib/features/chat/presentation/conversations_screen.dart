@@ -6,6 +6,7 @@ import '../domain/entities/conversation.dart';
 import 'chat_screen.dart';
 import '../../extraction/presentation/ai_chat_screen.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
+import 'package:nexa/shared/widgets/initials_avatar.dart';
 
 class ConversationsScreen extends StatefulWidget {
   const ConversationsScreen({super.key});
@@ -210,22 +211,10 @@ class _ConversationTile extends StatelessWidget {
             // Avatar
             Stack(
               children: <Widget>[
-                CircleAvatar(
+                UserAvatar(
+                  imageUrl: conversation.displayPicture,
+                  fullName: conversation.displayName,
                   radius: 28,
-                  backgroundColor: theme.primaryColor.withOpacity(0.1),
-                  backgroundImage: conversation.displayPicture != null
-                      ? NetworkImage(conversation.displayPicture!)
-                      : null,
-                  child: conversation.displayPicture == null
-                      ? Text(
-                          _getInitials(conversation.displayName),
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            color: theme.primaryColor,
-                          ),
-                        )
-                      : null,
                 ),
                 if (hasUnread)
                   Positioned(
@@ -311,14 +300,6 @@ class _ConversationTile extends StatelessWidget {
     );
   }
 
-  String _getInitials(String name) {
-    final parts = name.trim().split(' ');
-    if (parts.isEmpty) return '?';
-    if (parts.length == 1) {
-      return parts[0].substring(0, 1).toUpperCase();
-    }
-    return (parts[0].substring(0, 1) + parts[1].substring(0, 1)).toUpperCase();
-  }
 }
 
 /// Pinned Valerio Assistant chat tile

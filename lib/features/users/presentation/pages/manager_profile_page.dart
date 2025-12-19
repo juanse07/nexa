@@ -4,6 +4,7 @@ import 'package:get_it/get_it.dart';
 import 'package:nexa/core/network/api_client.dart';
 import 'package:nexa/features/users/data/services/manager_service.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
+import 'package:nexa/shared/widgets/initials_avatar.dart';
 
 class ManagerProfilePage extends StatefulWidget {
   const ManagerProfilePage({super.key});
@@ -149,14 +150,11 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
   }
 
   Widget _buildAvatar() {
-    final url = _pictureCtrl.text.trim();
-    return CircleAvatar(
+    return InitialsAvatar(
+      imageUrl: _pictureCtrl.text.trim(),
+      firstName: _firstNameCtrl.text.trim(),
+      lastName: _lastNameCtrl.text.trim(),
       radius: 48,
-      backgroundColor: AppColors.primaryPurple,
-      backgroundImage: url.isNotEmpty ? NetworkImage(url) : null,
-      child: url.isEmpty
-          ? const Icon(Icons.person, color: Colors.white, size: 48)
-          : null,
     );
   }
 }

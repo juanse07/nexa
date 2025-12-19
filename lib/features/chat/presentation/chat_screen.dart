@@ -13,6 +13,7 @@ import '../../../features/extraction/services/event_service.dart';
 import '../../../features/extraction/services/roles_service.dart';
 import '../../../features/users/presentation/pages/user_events_screen.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
+import 'package:nexa/shared/widgets/initials_avatar.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
@@ -612,23 +613,10 @@ class _ChatScreenState extends State<ChatScreen> {
                           ),
                         ],
                       ),
-                      child: CircleAvatar(
+                      child: UserAvatar(
+                        imageUrl: widget.targetPicture,
+                        fullName: widget.targetName,
                         radius: 20,
-                        backgroundColor: Colors.white,
-                        backgroundImage: widget.targetPicture != null
-                            ? NetworkImage(widget.targetPicture!)
-                            : null,
-                        child: widget.targetPicture == null
-                            ? Text(
-                                _getInitials(widget.targetName),
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.yellow,
-                                  letterSpacing: 0.5,
-                                ),
-                              )
-                            : null,
                       ),
                     ),
                     const SizedBox(width: 14),
@@ -1265,15 +1253,6 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  String _getInitials(String name) {
-    final parts = name.trim().split(' ');
-    if (parts.isEmpty) return '?';
-    if (parts.length == 1) {
-      return parts[0].substring(0, 1).toUpperCase();
-    }
-    return (parts[0].substring(0, 1) + parts[1].substring(0, 1)).toUpperCase();
-  }
-
   // Favorites management
   Future<void> _loadFavorites() async {
     final prefs = await SharedPreferences.getInstance();
@@ -1355,22 +1334,10 @@ class _MessageBubble extends StatelessWidget {
             children: <Widget>[
               // Incoming message avatar
               if (!isMe) ...<Widget>[
-                CircleAvatar(
+                UserAvatar(
+                  imageUrl: message.senderPicture,
+                  fullName: message.senderName,
                   radius: 14,
-                  backgroundColor: theme.primaryColor.withOpacity(0.1),
-                  backgroundImage: message.senderPicture != null
-                      ? NetworkImage(message.senderPicture!)
-                      : null,
-                  child: message.senderPicture == null
-                      ? Text(
-                          (message.senderName ?? '?')[0].toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: theme.primaryColor,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        )
-                      : null,
                 ),
                 const SizedBox(width: 8),
               ],
