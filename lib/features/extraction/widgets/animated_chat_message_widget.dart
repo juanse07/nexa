@@ -30,6 +30,22 @@ class AnimatedChatMessageWidget extends StatefulWidget {
 
 class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
     with TickerProviderStateMixin {
+  /// Strips JSON command blocks from message content for display
+  /// These blocks are used by the backend but shouldn't be shown to users
+  String _stripJsonBlocks(String content) {
+    // Pattern to match command blocks like:
+    // EVENT_COMPLETE { ... }
+    // TARIFF_CREATE { ... }
+    // CLIENT_CREATE { ... }
+    // EVENT_UPDATE { ... }
+    final commandPattern = RegExp(
+      r'\n*(EVENT_COMPLETE|TARIFF_CREATE|CLIENT_CREATE|EVENT_UPDATE)\s*\{[\s\S]*?\}(?:\s*\})*',
+      multiLine: true,
+    );
+
+    return content.replaceAll(commandPattern, '').trim();
+  }
+
   // Animation controllers
   late AnimationController _fadeInController;
   late AnimationController _slideInController;
@@ -436,7 +452,9 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
 
   Widget _buildMessageContent(bool isUser) {
     // For typewriter effect, show the displayed text instead of full content
-    final content = isUser ? widget.message.content : _displayedText;
+    // Strip JSON command blocks before displaying
+    final rawContent = isUser ? widget.message.content : _displayedText;
+    final content = _stripJsonBlocks(rawContent);
     final linkPattern = RegExp(r'\[LINK:([^\]]+)\]');
     final match = linkPattern.firstMatch(content);
 

@@ -18,6 +18,22 @@ class ChatMessageWidget extends StatelessWidget {
     this.userProfilePicture,
   });
 
+  /// Strips JSON command blocks from message content for display
+  /// These blocks are used by the backend but shouldn't be shown to users
+  String _stripJsonBlocks(String content) {
+    // Pattern to match command blocks like:
+    // EVENT_COMPLETE { ... }
+    // TARIFF_CREATE { ... }
+    // CLIENT_CREATE { ... }
+    // EVENT_UPDATE { ... }
+    final commandPattern = RegExp(
+      r'\n*(EVENT_COMPLETE|TARIFF_CREATE|CLIENT_CREATE|EVENT_UPDATE)\s*\{[\s\S]*?\}(?:\s*\})*',
+      multiLine: true,
+    );
+
+    return content.replaceAll(commandPattern, '').trim();
+  }
+
   @override
   Widget build(BuildContext context) {
     final isUser = message.role == 'user';
@@ -238,7 +254,8 @@ class ChatMessageWidget extends StatelessWidget {
 
   /// Build message content with support for clickable links
   Widget _buildMessageContent(bool isUser) {
-    final content = message.content;
+    // Strip JSON command blocks before displaying
+    final content = _stripJsonBlocks(message.content);
     final linkPattern = RegExp(r'\[LINK:([^\]]+)\]');
     final match = linkPattern.firstMatch(content);
 

@@ -186,28 +186,47 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
   }
 
   Future<void> _pickDate() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate ?? now,
-      firstDate: now.subtract(const Duration(days: 365)),
-      lastDate: now.add(const Duration(days: 365 * 3)),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: AppColors.techBlue,
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: AppColors.textDark,
+    try {
+      final now = DateTime.now();
+      final firstDate = DateTime(2020, 1, 1); // Allow past dates for editing
+      final lastDate = now.add(const Duration(days: 365 * 5));
+
+      // Ensure initialDate is within valid range
+      DateTime initialDate = _selectedDate ?? now;
+      if (initialDate.isBefore(firstDate)) {
+        initialDate = firstDate;
+      } else if (initialDate.isAfter(lastDate)) {
+        initialDate = lastDate;
+      }
+
+      print('[PendingEditScreen] Opening date picker - initial: $initialDate');
+
+      final picked = await showDatePicker(
+        context: context,
+        initialDate: initialDate,
+        firstDate: firstDate,
+        lastDate: lastDate,
+        builder: (context, child) {
+          return Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme: const ColorScheme.light(
+                primary: AppColors.techBlue,
+                onPrimary: Colors.white,
+                surface: Colors.white,
+                onSurface: AppColors.textDark,
+              ),
             ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) {
-      setState(() => _selectedDate = picked);
+            child: child!,
+          );
+        },
+      );
+      if (picked != null) {
+        print('[PendingEditScreen] Date picked: $picked');
+        setState(() => _selectedDate = picked);
+      }
+    } catch (e, stack) {
+      print('[PendingEditScreen] Error showing date picker: $e');
+      print(stack);
     }
   }
 

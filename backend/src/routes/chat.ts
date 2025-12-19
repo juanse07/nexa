@@ -354,6 +354,70 @@ router.post('/conversations/:targetId/messages', requireAuth, async (req, res) =
       readByUser: senderType === 'user',
     });
 
+    // If this is an event invitation, update the event's invited_staff array
+    // This ensures the staff member only sees the role they were invited for
+    if (messageType === 'eventInvitation' && metadata?.eventId && metadata?.roleId && senderType === 'manager') {
+      try {
+        const { EventModel } = await import('../models/event');
+        const event = await EventModel.findById(metadata.eventId);
+
+        if (event) {
+          // Find the role to get its name
+          const role = event.roles.find(
+            (r: any) =>
+              r._id?.toString() === metadata.roleId ||
+              r.role_id?.toString() === metadata.roleId ||
+              r.role === metadata.roleId
+          );
+          const roleName = role?.role || metadata.roleId;
+
+          // Check if user is already in invited_staff
+          const existingInvitedStaff = (event as any).invited_staff || [];
+          const alreadyInvited = existingInvitedStaff.some(
+            (s: any) => s.userKey === targetUserKey
+          );
+
+          if (!alreadyInvited) {
+            // Add to invited_staff
+            const newInvitedStaff = {
+              userKey: targetUserKey,
+              roleId: String(metadata.roleId),
+              roleName: roleName,
+            };
+
+            // Build update - always add to invited_staff and audience
+            const updateOps: any = {
+              $push: { invited_staff: newInvitedStaff },
+              $addToSet: { audience_user_keys: targetUserKey },
+            };
+
+            // If event is still a draft, publish as private (same as bulk invitation)
+            if (event.status === 'draft') {
+              updateOps.$set = {
+                status: 'published',
+                visibilityType: 'private',
+                publishedAt: new Date(),
+                publishedBy: name || 'Manager',
+              };
+              console.log('[CHAT] Publishing draft event as private');
+            }
+
+            await EventModel.updateOne(
+              { _id: metadata.eventId },
+              updateOps
+            );
+
+            console.log('[CHAT] Added user to invited_staff:', targetUserKey, 'for role:', roleName);
+          } else {
+            console.log('[CHAT] User already in invited_staff:', targetUserKey);
+          }
+        }
+      } catch (err) {
+        console.error('[CHAT] Error updating invited_staff:', err);
+        // Non-fatal error - invitation message was still sent
+      }
+    }
+
     // Update conversation
     await ConversationModel.findByIdAndUpdate(conversation._id, {
       lastMessageAt: chatMessage.createdAt,

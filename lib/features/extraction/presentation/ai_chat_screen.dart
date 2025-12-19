@@ -26,6 +26,7 @@ import '../widgets/document_preview_card.dart';
 import '../widgets/event_confirmation_card.dart';
 import '../widgets/batch_event_dialog.dart';
 import 'extraction_screen.dart';
+import 'pending_edit_screen.dart';
 import '../../main/presentation/main_screen.dart';
 import 'dart:async';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
@@ -426,18 +427,30 @@ class _AIChatScreenState extends State<AIChatScreen>
     }
   }
 
-  /// Handle edit button - continue conversation
-  void _handleEdit() {
-    _stateProvider.hideConfirmation();
+  /// Handle edit button - open edit screen
+  Future<void> _handleEdit() async {
+    final eventData = _stateProvider.currentEventData;
+    if (eventData.isEmpty) {
+      ErrorDisplayService.showError(context, 'No event data to edit');
+      return;
+    }
 
-    // Add message indicating user wants to edit
-    final editMsg = ChatMessage(
-      role: 'assistant',
-      content: '✏️ Sure! What would you like to change?',
+    // Navigate to edit screen with current event data
+    // Using a temporary ID since this is not yet saved
+    final result = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(
+        builder: (context) => _InlineEventEditScreen(
+          eventData: eventData,
+          onSave: (updatedData) {
+            // Update the state provider with edited data
+            _stateProvider.updateEventData(updatedData);
+          },
+        ),
+      ),
     );
 
-    _stateProvider.chatService.addMessage(editMsg);
-    _scrollToBottom(animated: true);
+    // If user saved changes, the onSave callback already updated the data
+    // The confirmation card will show updated data on rebuild
   }
 
   /// Handle cancel - discard shift
@@ -1165,5 +1178,401 @@ class _AIChatScreenState extends State<AIChatScreen>
         ),
       ),
     );
+  }
+}
+
+/// Inline edit screen for editing event data before saving
+class _InlineEventEditScreen extends StatefulWidget {
+  final Map<String, dynamic> eventData;
+  final Function(Map<String, dynamic>) onSave;
+
+  const _InlineEventEditScreen({
+    required this.eventData,
+    required this.onSave,
+  });
+
+  @override
+  State<_InlineEventEditScreen> createState() => _InlineEventEditScreenState();
+}
+
+class _InlineEventEditScreenState extends State<_InlineEventEditScreen> {
+  late final TextEditingController _eventNameCtrl;
+  late final TextEditingController _clientNameCtrl;
+  late final TextEditingController _venueNameCtrl;
+  late final TextEditingController _venueAddressCtrl;
+  late final TextEditingController _guestCountCtrl;
+
+  DateTime? _selectedDate;
+  TimeOfDay? _startTime;
+  TimeOfDay? _endTime;
+  List<Map<String, dynamic>> _roles = [];
+
+  @override
+  void initState() {
+    super.initState();
+    final d = widget.eventData;
+    _eventNameCtrl = TextEditingController(text: (d['event_name'] ?? '').toString());
+    _clientNameCtrl = TextEditingController(text: (d['client_name'] ?? '').toString());
+    _venueNameCtrl = TextEditingController(text: (d['venue_name'] ?? '').toString());
+    _venueAddressCtrl = TextEditingController(text: (d['venue_address'] ?? '').toString());
+    _guestCountCtrl = TextEditingController(text: (d['guest_count'] ?? '').toString());
+
+    // Parse date
+    final dateStr = d['date']?.toString();
+    if (dateStr != null && dateStr.isNotEmpty) {
+      try {
+        _selectedDate = DateTime.parse(dateStr);
+      } catch (_) {}
+    }
+
+    // Parse times
+    _startTime = _parseTime(d['start_time']?.toString());
+    _endTime = _parseTime(d['end_time']?.toString());
+
+    // Parse roles
+    final rolesData = d['roles'];
+    if (rolesData is List) {
+      _roles = rolesData.map((r) => Map<String, dynamic>.from(r as Map)).toList();
+    }
+  }
+
+  TimeOfDay? _parseTime(String? timeStr) {
+    if (timeStr == null || timeStr.isEmpty) return null;
+    try {
+      final parts = timeStr.split(':');
+      if (parts.length >= 2) {
+        return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  String _formatTime(TimeOfDay? time) {
+    if (time == null) return '';
+    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  }
+
+  String _formatDate(DateTime? date) {
+    if (date == null) return '';
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final firstDate = DateTime(2020, 1, 1);
+    final lastDate = now.add(const Duration(days: 365 * 5));
+
+    DateTime initialDate = _selectedDate ?? now;
+    if (initialDate.isBefore(firstDate)) initialDate = now;
+    if (initialDate.isAfter(lastDate)) initialDate = now;
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: firstDate,
+      lastDate: lastDate,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: AppColors.techBlue,
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: AppColors.charcoal,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() => _selectedDate = picked);
+    }
+  }
+
+  Future<void> _pickTime({required bool isStart}) async {
+    final initial = isStart ? _startTime : _endTime;
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initial ?? const TimeOfDay(hour: 9, minute: 0),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: AppColors.techBlue,
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: AppColors.charcoal,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() {
+        if (isStart) {
+          _startTime = picked;
+        } else {
+          _endTime = picked;
+        }
+      });
+    }
+  }
+
+  void _save() {
+    final updatedData = Map<String, dynamic>.from(widget.eventData);
+    updatedData['event_name'] = _eventNameCtrl.text.trim();
+    updatedData['client_name'] = _clientNameCtrl.text.trim();
+    updatedData['venue_name'] = _venueNameCtrl.text.trim();
+    updatedData['venue_address'] = _venueAddressCtrl.text.trim();
+    updatedData['guest_count'] = _guestCountCtrl.text.trim();
+    updatedData['date'] = _formatDate(_selectedDate);
+    updatedData['start_time'] = _formatTime(_startTime);
+    updatedData['end_time'] = _formatTime(_endTime);
+    updatedData['roles'] = _roles;
+
+    widget.onSave(updatedData);
+    Navigator.of(context).pop();
+  }
+
+  @override
+  void dispose() {
+    _eventNameCtrl.dispose();
+    _clientNameCtrl.dispose();
+    _venueNameCtrl.dispose();
+    _venueAddressCtrl.dispose();
+    _guestCountCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        backgroundColor: AppColors.navySpaceCadet,
+        foregroundColor: Colors.white,
+        title: const Text('Edit Event'),
+        actions: [
+          TextButton(
+            onPressed: _save,
+            child: const Text('Save', style: TextStyle(color: AppColors.warning, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          _buildTextField('Event Name', _eventNameCtrl, Icons.celebration),
+          const SizedBox(height: 16),
+          _buildTextField('Client', _clientNameCtrl, Icons.business),
+          const SizedBox(height: 16),
+          _buildDatePicker(),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(child: _buildTimePicker('Start Time', _startTime, true)),
+              const SizedBox(width: 12),
+              Expanded(child: _buildTimePicker('End Time', _endTime, false)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _buildTextField('Venue', _venueNameCtrl, Icons.location_on),
+          const SizedBox(height: 16),
+          _buildTextField('Address', _venueAddressCtrl, Icons.map),
+          const SizedBox(height: 16),
+          _buildTextField('Guest Count', _guestCountCtrl, Icons.groups, keyboardType: TextInputType.number),
+          const SizedBox(height: 24),
+          if (_roles.isNotEmpty) ...[
+            const Text('Positions', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 12),
+            _buildRolesList(),
+          ],
+          const SizedBox(height: 32),
+          ElevatedButton(
+            onPressed: _save,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.techBlue,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Save Changes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTextField(String label, TextEditingController controller, IconData icon, {TextInputType? keyboardType}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
+        const SizedBox(height: 8),
+        TextField(
+          controller: controller,
+          keyboardType: keyboardType,
+          decoration: InputDecoration(
+            prefixIcon: Icon(icon, color: AppColors.techBlue),
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.techBlue, width: 2)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDatePicker() {
+    final hasDate = _selectedDate != null;
+    final displayText = hasDate
+        ? '${_selectedDate!.month}/${_selectedDate!.day}/${_selectedDate!.year}'
+        : 'Select date';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Date', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
+        const SizedBox(height: 8),
+        InkWell(
+          onTap: _pickDate,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.calendar_today, color: AppColors.techBlue),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    displayText,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: hasDate ? Colors.black87 : Colors.grey.shade500,
+                    ),
+                  ),
+                ),
+                Icon(Icons.arrow_drop_down, color: Colors.grey.shade600),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTimePicker(String label, TimeOfDay? time, bool isStart) {
+    final hasTime = time != null;
+    final displayText = hasTime ? time.format(context) : 'Select';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
+        const SizedBox(height: 8),
+        InkWell(
+          onTap: () => _pickTime(isStart: isStart),
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.access_time, color: isStart ? AppColors.success : AppColors.warning, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    displayText,
+                    style: TextStyle(fontSize: 15, color: hasTime ? Colors.black87 : Colors.grey.shade500),
+                  ),
+                ),
+                Icon(Icons.arrow_drop_down, color: Colors.grey.shade600, size: 20),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRolesList() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Column(
+        children: [
+          for (int i = 0; i < _roles.length; i++) ...[
+            if (i > 0) Divider(height: 1, color: Colors.grey.shade200),
+            _buildRoleRow(i),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRoleRow(int index) {
+    final role = _roles[index];
+    final roleName = role['role']?.toString() ?? 'Position';
+    final count = (role['count'] as int?) ?? 1;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          const Icon(Icons.person_outline, color: AppColors.techBlue, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(roleName, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+          ),
+          Container(
+            decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  onPressed: count > 1 ? () => _updateRoleCount(index, count - 1) : null,
+                  icon: Icon(Icons.remove, size: 18, color: count > 1 ? AppColors.errorDark : Colors.grey),
+                  constraints: const BoxConstraints(),
+                  padding: const EdgeInsets.all(8),
+                ),
+                SizedBox(
+                  width: 32,
+                  child: Text(count.toString(), textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w600)),
+                ),
+                IconButton(
+                  onPressed: () => _updateRoleCount(index, count + 1),
+                  icon: const Icon(Icons.add, size: 18, color: AppColors.success),
+                  constraints: const BoxConstraints(),
+                  padding: const EdgeInsets.all(8),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _updateRoleCount(int index, int newCount) {
+    if (newCount < 1) return;
+    setState(() {
+      _roles[index] = {..._roles[index], 'count': newCount};
+    });
   }
 }

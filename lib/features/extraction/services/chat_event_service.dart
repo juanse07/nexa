@@ -818,62 +818,131 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
       }
     } else if (content.contains('TARIFF_CREATE')) {
       // Handle tariff creation requests
+      print('[TARIFF_CREATE] Detected in response');
+      print('[TARIFF_CREATE] Raw content: $content');
+
       final jsonMatch = RegExp(r'\{[\s\S]*\}').firstMatch(content);
+      print('[TARIFF_CREATE] JSON match found: ${jsonMatch != null}');
+
       if (jsonMatch != null) {
+        print('[TARIFF_CREATE] Matched JSON: ${jsonMatch.group(0)}');
         try {
           final tariffData = jsonDecode(jsonMatch.group(0)!) as Map<String, dynamic>;
+          print('[TARIFF_CREATE] Parsed tariff data: $tariffData');
+
           final clientName = tariffData['client_name'] as String?;
           final roleName = tariffData['role_name'] as String?;
           final rate = tariffData['rate'] as num?;
 
+          print('[TARIFF_CREATE] clientName=$clientName, roleName=$roleName, rate=$rate');
+
           if (clientName != null && roleName != null && rate != null) {
-            print('Creating tariff: $clientName - $roleName at \$$rate/hr');
+            print('[TARIFF_CREATE] Creating tariff: $clientName - $roleName at \$$rate/hr');
+
             // Get or create client ID
             final clients = await _clientsService.fetchClients();
+            print('[TARIFF_CREATE] Fetched ${clients.length} clients');
+
             var client = clients.firstWhere(
-              (c) => (c['name'] as String?) == clientName,
+              (c) => (c['name'] as String?)?.toLowerCase() == clientName.toLowerCase(),
               orElse: () => <String, dynamic>{},
             );
+            print('[TARIFF_CREATE] Found existing client: ${client.isNotEmpty}');
 
             if (client.isEmpty) {
-              print('Client not found, creating: $clientName');
-              client = await _clientsService.createClient(clientName);
-              (_createdEntities['clients'] as List).add(client);
-              _existingClientNames.add(clientName);
+              print('[TARIFF_CREATE] Client not found by exact match, trying to create: $clientName');
+              try {
+                client = await _clientsService.createClient(clientName);
+                (_createdEntities['clients'] as List).add(client);
+                _existingClientNames.add(clientName);
+                print('[TARIFF_CREATE] Client created: ${client['_id'] ?? client['id']}');
+              } catch (e) {
+                // Handle 409 "already exists" - client exists with different casing
+                if (e.toString().contains('409') || e.toString().contains('already exists')) {
+                  print('[TARIFF_CREATE] Client already exists (409), fetching again...');
+                  final refreshedClients = await _clientsService.fetchClients();
+                  client = refreshedClients.firstWhere(
+                    (c) => (c['name'] as String?)?.toLowerCase() == clientName.toLowerCase(),
+                    orElse: () => <String, dynamic>{},
+                  );
+                  if (client.isNotEmpty) {
+                    print('[TARIFF_CREATE] Found existing client after refresh: ${client['_id'] ?? client['id']}');
+                  } else {
+                    print('[TARIFF_CREATE] ✗ Could not find client even after refresh');
+                    rethrow;
+                  }
+                } else {
+                  rethrow;
+                }
+              }
             }
 
             // Get or create role ID
             final roles = await _rolesService.fetchRoles();
+            print('[TARIFF_CREATE] Fetched ${roles.length} roles');
+
             var role = roles.firstWhere(
-              (r) => (r['name'] as String?) == roleName,
+              (r) => (r['name'] as String?)?.toLowerCase() == roleName.toLowerCase(),
               orElse: () => <String, dynamic>{},
             );
+            print('[TARIFF_CREATE] Found existing role: ${role.isNotEmpty}');
 
             if (role.isEmpty) {
-              print('Role not found, creating: $roleName');
-              role = await _rolesService.createRole(roleName);
-              (_createdEntities['roles'] as List).add(role);
+              print('[TARIFF_CREATE] Role not found by exact match, trying to create: $roleName');
+              try {
+                role = await _rolesService.createRole(roleName);
+                (_createdEntities['roles'] as List).add(role);
+                print('[TARIFF_CREATE] Role created: ${role['_id'] ?? role['id']}');
+              } catch (e) {
+                // Handle 409 "already exists" - role exists with different casing
+                if (e.toString().contains('409') || e.toString().contains('already exists')) {
+                  print('[TARIFF_CREATE] Role already exists (409), fetching again...');
+                  // Re-fetch roles and find by case-insensitive match
+                  final refreshedRoles = await _rolesService.fetchRoles();
+                  role = refreshedRoles.firstWhere(
+                    (r) => (r['name'] as String?)?.toLowerCase() == roleName.toLowerCase(),
+                    orElse: () => <String, dynamic>{},
+                  );
+                  if (role.isNotEmpty) {
+                    print('[TARIFF_CREATE] Found existing role after refresh: ${role['_id'] ?? role['id']}');
+                  } else {
+                    print('[TARIFF_CREATE] ✗ Could not find role even after refresh');
+                    rethrow;
+                  }
+                } else {
+                  rethrow;
+                }
+              }
             }
 
             // Create tariff
             final clientId = client['_id'] ?? client['id'];
             final roleId = role['_id'] ?? role['id'];
+            print('[TARIFF_CREATE] clientId=$clientId, roleId=$roleId');
 
             if (clientId != null && roleId != null) {
+              print('[TARIFF_CREATE] Calling upsertTariff...');
               final newTariff = await _tariffsService.upsertTariff(
                 clientId: clientId.toString(),
                 roleId: roleId.toString(),
                 rate: rate.toDouble(),
               );
               (_createdEntities['tariffs'] as List).add(newTariff);
-              print('Tariff created successfully');
+              print('[TARIFF_CREATE] ✓ Tariff created successfully: $newTariff');
               // Invalidate cache
               _invalidateCache();
+            } else {
+              print('[TARIFF_CREATE] ✗ Missing clientId or roleId - cannot create tariff');
             }
+          } else {
+            print('[TARIFF_CREATE] ✗ Missing required fields - clientName=$clientName, roleName=$roleName, rate=$rate');
           }
-        } catch (e) {
-          print('Failed to create tariff from chat: $e');
+        } catch (e, stackTrace) {
+          print('[TARIFF_CREATE] ✗ Failed to create tariff: $e');
+          print('[TARIFF_CREATE] Stack trace: $stackTrace');
         }
+      } else {
+        print('[TARIFF_CREATE] ✗ No JSON found in response');
       }
     } else {
       // Try to extract any field values from the conversation
@@ -894,24 +963,32 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
   /// This hides EVENT_COMPLETE, EVENT_UPDATE, CLIENT_CREATE, etc. from users
   /// while still processing the JSON in the background
   String _extractUserFriendlyMessage(String content) {
-    // List of technical markers to strip from user-facing messages
-    final markers = [
-      'EVENT_COMPLETE',
-      'EVENT_UPDATE',
-      'CLIENT_CREATE',
-      'TARIFF_CREATE',
-    ];
+    // List of technical markers with their fallback messages
+    final markersWithFallbacks = {
+      'EVENT_COMPLETE': '🎉 Perfect! Your event is ready to save!',
+      'EVENT_UPDATE': '✅ Done! I\'ve updated the event for you.',
+      'CLIENT_CREATE': '✨ Got it! I\'ve added the new client.',
+      'TARIFF_CREATE': '💰 Perfect! The pay rate has been set up.',
+    };
 
     String cleaned = content;
+    String? fallbackMessage;
 
     // Check if any marker exists in the response
-    for (final marker in markers) {
+    for (final entry in markersWithFallbacks.entries) {
+      final marker = entry.key;
       if (cleaned.contains(marker)) {
         // Extract everything BEFORE the marker (the friendly message)
         final markerIndex = cleaned.indexOf(marker);
         cleaned = cleaned.substring(0, markerIndex).trim();
+        fallbackMessage = entry.value;
         break;
       }
+    }
+
+    // If the friendly message is empty, use the fallback
+    if (cleaned.isEmpty && fallbackMessage != null) {
+      return fallbackMessage;
     }
 
     return cleaned;

@@ -1477,6 +1477,56 @@ router.delete('/events/:id', requireAuth, async (req, res) => {
   }
 });
 
+// Get a single event by ID
+router.get('/events/:id', requireAuth, async (req, res) => {
+  try {
+    const eventId = req.params.id;
+
+    if (!eventId || !mongoose.Types.ObjectId.isValid(eventId)) {
+      return res.status(400).json({ message: 'Invalid event ID' });
+    }
+
+    // Verify the requester is a manager
+    const manager = await resolveManagerForRequest(req as any);
+    if (!manager) {
+      return res.status(403).json({ message: 'Unauthorized: Manager access required' });
+    }
+
+    const event = await EventModel.findOne({
+      _id: eventId,
+      managerId: manager._id,
+    }).lean();
+
+    if (!event) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    // Return with string IDs
+    const teamIds = Array.isArray(event.audience_team_ids)
+      ? event.audience_team_ids
+          .map((value: any) => {
+            if (!value) return null;
+            if (value instanceof mongoose.Types.ObjectId) {
+              return value.toHexString();
+            }
+            const str = value.toString();
+            return mongoose.Types.ObjectId.isValid(str) ? str : null;
+          })
+          .filter((value: string | null): value is string => !!value)
+      : [];
+
+    return res.json({
+      ...event,
+      id: String(event._id),
+      managerId: event.managerId ? String(event.managerId) : undefined,
+      audience_team_ids: teamIds,
+    });
+  } catch (err) {
+    console.error('[GET /events/:id] Error:', err);
+    return res.status(500).json({ message: 'Failed to get event' });
+  }
+});
+
 router.get('/events', requireAuth, async (req, res) => {
   try {
     const authUser = (req as any).user as AuthenticatedUser | undefined;
@@ -1677,17 +1727,32 @@ router.get('/events', requireAuth, async (req, res) => {
         if (userInvitation && event.visibilityType === 'private') {
           // Filter roles to only the assigned role
           const assignedRoleName = userInvitation.roleName;
-          const filteredRoles = (event.roles || []).filter((r: any) =>
-            r.role === assignedRoleName ||
-            r.role === userInvitation.roleId ||
-            r._id?.toString() === userInvitation.roleId
-          );
+          const originalRoles = event.roles || [];
+          const filteredRoles = originalRoles.filter((r: any) => {
+            const roleNameLower = (r.role || '').toLowerCase();
+            const assignedLower = (assignedRoleName || '').toLowerCase();
+            const roleIdLower = (userInvitation.roleId || '').toLowerCase();
+            return roleNameLower === assignedLower || roleNameLower === roleIdLower;
+          });
 
-          console.log(`[EVENTS DEBUG] Filtering roles for ${audienceKey}: ${assignedRoleName}`);
+          // Also filter role_stats to match filtered roles
+          const originalRoleStats = event.role_stats || [];
+          const filteredRoleStats = originalRoleStats.filter((rs: any) => {
+            const roleNameLower = (rs.role || '').toLowerCase();
+            const assignedLower = (assignedRoleName || '').toLowerCase();
+            const roleIdLower = (userInvitation.roleId || '').toLowerCase();
+            return roleNameLower === assignedLower || roleNameLower === roleIdLower;
+          });
+
+          console.log(`[EVENTS DEBUG] Event ${event.client_name}: Original roles: ${JSON.stringify(originalRoles.map((r: any) => r.role))}`);
+          console.log(`[EVENTS DEBUG] Filtering for: assignedRoleName="${assignedRoleName}", roleId="${userInvitation.roleId}"`);
+          console.log(`[EVENTS DEBUG] Filtered roles: ${JSON.stringify(filteredRoles.map((r: any) => r.role))}`);
+          console.log(`[EVENTS DEBUG] Filtered role_stats: ${JSON.stringify(filteredRoleStats.map((rs: any) => rs.role))}`);
 
           return {
             ...event,
             roles: filteredRoles.length > 0 ? filteredRoles : event.roles, // Fallback to all if no match
+            role_stats: filteredRoleStats.length > 0 ? filteredRoleStats : event.role_stats, // Fallback to all if no match
             assigned_role: assignedRoleName, // Tell staff app which role they were assigned
           };
         }
