@@ -136,6 +136,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   final _venueAddressController = TextEditingController();
   final _cityController = TextEditingController();
   final _stateController = TextEditingController();
+  final _zipController = TextEditingController();
   final _contactNameController = TextEditingController();
   final _contactPhoneController = TextEditingController();
   final _contactEmailController = TextEditingController();
@@ -369,6 +370,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     _venueAddressController.dispose();
     _cityController.dispose();
     _stateController.dispose();
+    _zipController.dispose();
     _contactNameController.dispose();
     _contactPhoneController.dispose();
     _contactEmailController.dispose();
@@ -8251,7 +8253,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // AI Chat button - Return to AI Chat screen
+          // AI Chat button - compact, right-aligned
           Align(
             alignment: Alignment.centerRight,
             child: TextButton.icon(
@@ -8262,342 +8264,501 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   ),
                 );
               },
-              icon: const Icon(Icons.auto_awesome, size: 20),
+              icon: const Icon(Icons.auto_awesome, size: 18),
               label: const Text('AI Chat'),
               style: TextButton.styleFrom(
                 foregroundColor: ExColors.techBlue,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               ),
             ),
           ),
-          const SizedBox(height: 8),
           FormSection(
-            title: AppLocalizations.of(context)!.jobInformation,
-                  icon: Icons.event,
-                  children: [
-                    LabeledTextField(
-                      controller: _eventNameController,
-                      label: AppLocalizations.of(context)!.jobTitle,
-                      icon: Icons.celebration,
-                      isRequired: true,
-                    ),
-                    const SizedBox(height: 16),
-                    LabeledTextField(
-                      controller: _clientNameController,
-                      label: AppLocalizations.of(context)!.clientName,
-                      icon: Icons.person,
-                      isRequired: true,
-                    ),
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton.icon(
-                        onPressed: () async {
-                          await _openClientPicker();
-                        },
-                        icon: const Icon(Icons.business),
-                        label: const Text('Pick from Clients'),
-                        style: TextButton.styleFrom(
-                          foregroundColor: ExColors.techBlue,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildModernDatePicker(),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildModernTimePicker(
-                            label: AppLocalizations.of(context)!.startTime,
-                            icon: Icons.access_time,
-                            selectedTime: _selectedStartTime,
-                            onTimeSelected: (time) {
-                              setState(() {
-                                _selectedStartTime = time;
-                                _startTimeController.text = time.format(
-                                  context,
-                                );
-                              });
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildModernTimePicker(
-                            label: AppLocalizations.of(context)!.endTime,
-                            icon: Icons.access_time_filled,
-                            selectedTime: _selectedEndTime,
-                            onTimeSelected: (time) {
-                              setState(() {
-                                _selectedEndTime = time;
-                                _endTimeController.text = time.format(context);
-                              });
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: 2,
-                          child: Container(), // Spacer
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: LabeledTextField(
-                            controller: _headcountController,
-                            label: AppLocalizations.of(context)!.headcount,
-                            icon: Icons.people,
-                            keyboardType: TextInputType.number,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                FormSection(
-                  title: AppLocalizations.of(context)!.locationInformation,
-                  icon: Icons.location_on,
-                  children: [
-                    LabeledTextField(
-                      controller: _venueNameController,
-                      label: AppLocalizations.of(context)!.locationName,
-                      icon: Icons.business,
-                    ),
-                    const SizedBox(height: 16),
-                    ModernAddressField(
-                      controller: _venueAddressController,
-                      label: AppLocalizations.of(context)!.address,
-                      icon: Icons.place,
-                      onPlaceSelected: (placeDetails) {
+            title: 'Shift Information',
+            icon: Icons.event,
+            children: [
+              // Integrated Client Selector with Autocomplete
+              _buildClientSelector(),
+              const SizedBox(height: 16),
+              _buildModernDatePicker(),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildModernTimePicker(
+                      label: AppLocalizations.of(context)!.startTime,
+                      icon: Icons.access_time,
+                      selectedTime: _selectedStartTime,
+                      onTimeSelected: (time) {
                         setState(() {
-                          _selectedVenuePlace = placeDetails;
-                          // Auto-fill city and state from the selected place
-                          if (placeDetails
-                                  .addressComponents['city']
-                                  ?.isNotEmpty ==
-                              true) {
-                            _cityController.text =
-                                placeDetails.addressComponents['city']!;
-                          }
-                          if (placeDetails
-                                  .addressComponents['state']
-                                  ?.isNotEmpty ==
-                              true) {
-                            _stateController.text =
-                                placeDetails.addressComponents['state']!;
-                          }
+                          _selectedStartTime = time;
+                          _startTimeController.text = time.format(context);
                         });
-
-                        // Show success feedback
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Row(
-                              children: [
-                                const Icon(
-                                  Icons.check_circle,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'Address selected and city/state auto-filled',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            backgroundColor: ExColors.successDark,
-                            behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        );
                       },
                     ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: 2,
-                          child: LabeledTextField(
-                            controller: _cityController,
-                            label: AppLocalizations.of(context)!.city,
-                            icon: Icons.location_city,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: LabeledTextField(
-                            controller: _stateController,
-                            label: AppLocalizations.of(context)!.state,
-                            icon: Icons.map,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                FormSection(
-                  title: AppLocalizations.of(context)!.contactInformation,
-                  icon: Icons.contact_phone,
-                  children: [
-                    LabeledTextField(
-                      controller: _contactNameController,
-                      label: AppLocalizations.of(context)!.contactName,
-                      icon: Icons.person_outline,
-                    ),
-                    const SizedBox(height: 16),
-                    LabeledTextField(
-                      controller: _contactPhoneController,
-                      label: AppLocalizations.of(context)!.phoneNumber,
-                      icon: Icons.phone,
-                      keyboardType: TextInputType.phone,
-                    ),
-                    const SizedBox(height: 16),
-                    LabeledTextField(
-                      controller: _contactEmailController,
-                      label: AppLocalizations.of(context)!.email,
-                      icon: Icons.email,
-                      keyboardType: TextInputType.emailAddress,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                FormSection(
-                  title: AppLocalizations.of(context)!.additionalNotes,
-                  icon: Icons.note,
-                  children: [
-                    LabeledTextField(
-                      controller: _notesController,
-                      label: AppLocalizations.of(context)!.notes,
-                      icon: Icons.notes,
-                      maxLines: 3,
-                      placeholder: 'Special requirements, setup details, etc.',
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                // Staff Roles Section
-                FormSection(
-                  title: 'Staff Roles Required',
-                  icon: Icons.badge,
-                  children: [
-                    if (_isRolesLoading)
-                      const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(16),
-                          child: CircularProgressIndicator(),
-                        ),
-                      )
-                    else if (_roleCountControllers.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          children: [
-                            Icon(Icons.info_outline, color: Colors.grey.shade400, size: 32),
-                            const SizedBox(height: 8),
-                            Text(
-                              'No roles defined yet. Add roles in the Catalog tab.',
-                              style: TextStyle(color: Colors.grey.shade600),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
-                      )
-                    else
-                      ..._roleCountControllers.entries.map((entry) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                flex: 3,
-                                child: Text(
-                                  entry.key,
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              SizedBox(
-                                width: 80,
-                                child: TextFormField(
-                                  controller: entry.value,
-                                  keyboardType: TextInputType.number,
-                                  textAlign: TextAlign.center,
-                                  decoration: InputDecoration(
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 8,
-                                    ),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    hintText: '0',
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                // Primary action: Save directly to Pending
-                ElevatedButton.icon(
-                  onPressed: _saveManualEntryToPending,
-                  icon: const Icon(Icons.check, size: 20),
-                  label: Text(
-                    AppLocalizations.of(context)!.saveToPending,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                   ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: ExColors.successDark,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 32,
-                      vertical: 16,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildModernTimePicker(
+                      label: AppLocalizations.of(context)!.endTime,
+                      icon: Icons.access_time_filled,
+                      selectedTime: _selectedEndTime,
+                      onTimeSelected: (time) {
+                        setState(() {
+                          _selectedEndTime = time;
+                          _endTimeController.text = time.format(context);
+                        });
+                      },
                     ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    elevation: 0,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                // Secondary action: Create recurring series
-                TextButton.icon(
-                  onPressed: _showManualEntryBatchDialog,
-                  icon: const Icon(Icons.calendar_month, size: 18),
-                  label: const Text('Create Recurring Series'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: ExColors.techBlue,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                if (structuredData != null) ...[
-                  InfoCard(
-                    title: AppLocalizations.of(context)!.jobDetails,
-                    icon: Icons.event_note,
-                    child: _buildEventDetails(structuredData!),
                   ),
                 ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          FormSection(
+            title: AppLocalizations.of(context)!.locationInformation,
+            icon: Icons.location_on,
+            children: [
+              // Address FIRST with auto-fill
+              ModernAddressField(
+                controller: _venueAddressController,
+                label: AppLocalizations.of(context)!.address,
+                icon: Icons.place,
+                onPlaceSelected: (placeDetails) {
+                  setState(() {
+                    _selectedVenuePlace = placeDetails;
+                    // Auto-fill city from selected place
+                    if (placeDetails.addressComponents['city']?.isNotEmpty == true) {
+                      _cityController.text = placeDetails.addressComponents['city']!;
+                    }
+                    // Auto-fill state
+                    if (placeDetails.addressComponents['state']?.isNotEmpty == true) {
+                      _stateController.text = placeDetails.addressComponents['state']!;
+                    }
+                    // Auto-fill zip code
+                    if (placeDetails.addressComponents['postal_code']?.isNotEmpty == true) {
+                      _zipController.text = placeDetails.addressComponents['postal_code']!;
+                    }
+                    // Auto-fill location name from street address or first part of formatted address
+                    if (placeDetails.addressComponents['street']?.isNotEmpty == true) {
+                      _venueNameController.text = placeDetails.addressComponents['street']!;
+                    } else if (placeDetails.formattedAddress.isNotEmpty) {
+                      // Use first part of address (before first comma) as location name
+                      final firstPart = placeDetails.formattedAddress.split(',').first.trim();
+                      if (firstPart.isNotEmpty) {
+                        _venueNameController.text = firstPart;
+                      }
+                    }
+                  });
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Row(
+                        children: [
+                          const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                          const SizedBox(width: 8),
+                          const Expanded(
+                            child: Text(
+                              'Address selected - fields auto-filled',
+                              style: TextStyle(fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                        ],
+                      ),
+                      backgroundColor: ExColors.successDark,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+              // City, State, Zip in a row
+              Row(
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: LabeledTextField(
+                      controller: _cityController,
+                      label: AppLocalizations.of(context)!.city,
+                      icon: Icons.location_city,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 2,
+                    child: LabeledTextField(
+                      controller: _stateController,
+                      label: AppLocalizations.of(context)!.state,
+                      icon: Icons.map,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 2,
+                    child: LabeledTextField(
+                      controller: _zipController,
+                      label: 'Zip',
+                      icon: Icons.markunread_mailbox_outlined,
+                      keyboardType: TextInputType.number,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              // Location Name LAST (auto-inferred)
+              LabeledTextField(
+                controller: _venueNameController,
+                label: AppLocalizations.of(context)!.locationName,
+                icon: Icons.business,
+                placeholder: 'Auto-filled from address',
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Simplified Contact section - phone only
+          FormSection(
+            title: 'Contact',
+            icon: Icons.phone,
+            children: [
+              LabeledTextField(
+                controller: _contactPhoneController,
+                label: AppLocalizations.of(context)!.phoneNumber,
+                icon: Icons.phone,
+                keyboardType: TextInputType.phone,
+                placeholder: 'Optional',
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          FormSection(
+            title: AppLocalizations.of(context)!.additionalNotes,
+            icon: Icons.note,
+            children: [
+              LabeledTextField(
+                controller: _notesController,
+                label: AppLocalizations.of(context)!.notes,
+                icon: Icons.notes,
+                maxLines: 3,
+                placeholder: 'Special requirements, setup details, etc.',
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Staff Roles Section with +/- buttons
+          FormSection(
+            title: 'Staff Roles Required',
+            icon: Icons.badge,
+            children: [
+              if (_isRolesLoading)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: CircularProgressIndicator(),
+                  ),
+                )
+              else if (_roleCountControllers.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.grey.shade400, size: 32),
+                      const SizedBox(height: 8),
+                      Text(
+                        'No roles defined yet. Add roles in the Catalog tab.',
+                        style: TextStyle(color: Colors.grey.shade600),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                )
+              else
+                ..._roleCountControllers.entries.map((entry) {
+                  return _buildManualEntryRoleRow(entry.key, entry.value);
+                }),
+            ],
+          ),
+          const SizedBox(height: 24),
+          // Primary action: Save directly to Pending
+          ElevatedButton.icon(
+            onPressed: _saveManualEntryToPending,
+            icon: const Icon(Icons.check, size: 20),
+            label: Text(
+              AppLocalizations.of(context)!.saveToPending,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: ExColors.successDark,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              elevation: 0,
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Secondary action: Create recurring series
+          TextButton.icon(
+            onPressed: _showManualEntryBatchDialog,
+            icon: const Icon(Icons.calendar_month, size: 18),
+            label: const Text('Create Recurring Series'),
+            style: TextButton.styleFrom(foregroundColor: ExColors.techBlue),
+          ),
+          const SizedBox(height: 20),
+          if (structuredData != null) ...[
+            InfoCard(
+              title: AppLocalizations.of(context)!.jobDetails,
+              icon: Icons.event_note,
+              child: _buildEventDetails(structuredData!),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Builds an integrated client selector with autocomplete and create-new functionality
+  Widget _buildClientSelector() {
+    final clientList = _clients ?? [];
+
+    return Autocomplete<Map<String, dynamic>>(
+      optionsBuilder: (TextEditingValue textEditingValue) {
+        final query = textEditingValue.text.toLowerCase().trim();
+        if (query.isEmpty) {
+          // Show all clients when empty
+          return clientList.take(10);
+        }
+
+        final matches = clientList.where((client) {
+          final name = (client['name'] ?? '').toString().toLowerCase();
+          return name.contains(query);
+        }).toList();
+
+        // If no exact match exists, add "Create new" option
+        final exactMatch = matches.any((c) =>
+          (c['name'] ?? '').toString().toLowerCase() == query);
+
+        if (!exactMatch && query.isNotEmpty) {
+          matches.add({'name': query, '_isNew': true});
+        }
+
+        return matches.take(10);
+      },
+      displayStringForOption: (client) => client['name']?.toString() ?? '',
+      fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
+        // Sync with our main controller
+        if (_clientNameController.text.isNotEmpty && textController.text.isEmpty) {
+          textController.text = _clientNameController.text;
+        }
+        textController.addListener(() {
+          _clientNameController.text = textController.text;
+        });
+
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: Row(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 12),
+                child: Icon(Icons.person, color: ExColors.techBlue, size: 20),
+              ),
+              Expanded(
+                child: TextField(
+                  controller: textController,
+                  focusNode: focusNode,
+                  decoration: InputDecoration(
+                    hintText: 'Type client name or select...',
+                    hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 15),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                  ),
+                  style: const TextStyle(fontSize: 15),
+                  onSubmitted: (_) => onFieldSubmitted(),
+                ),
+              ),
+              // Dropdown button to show all options
+              IconButton(
+                icon: Icon(Icons.arrow_drop_down, color: Colors.grey.shade600),
+                onPressed: () {
+                  // Clear and refocus to show all options
+                  textController.clear();
+                  focusNode.requestFocus();
+                },
+                splashRadius: 20,
+              ),
+            ],
+          ),
+        );
+      },
+      optionsViewBuilder: (context, onSelected, options) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              constraints: const BoxConstraints(maxHeight: 250, maxWidth: 350),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: options.length,
+                itemBuilder: (context, index) {
+                  final client = options.elementAt(index);
+                  final isNew = client['_isNew'] == true;
+                  final name = client['name']?.toString() ?? '';
+
+                  return ListTile(
+                    leading: Icon(
+                      isNew ? Icons.add_circle_outline : Icons.business,
+                      color: isNew ? ExColors.techBlue : Colors.grey.shade600,
+                      size: 20,
+                    ),
+                    title: Text(
+                      isNew ? 'Create "$name"' : name,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: isNew ? FontWeight.w600 : FontWeight.w500,
+                        color: isNew ? ExColors.techBlue : Colors.grey.shade800,
+                      ),
+                    ),
+                    dense: true,
+                    onTap: () => onSelected(client),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+      onSelected: (client) {
+        final name = client['name']?.toString() ?? '';
+        _clientNameController.text = name;
+
+        // If creating a new client
+        if (client['_isNew'] == true) {
+          // Optionally create the client in backend
+          _clientsService.createClient(name).then((_) {
+            _loadClients();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Client "$name" created'),
+                backgroundColor: ExColors.successDark,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }).catchError((e) {
+            // Still use the name even if backend creation fails
+            debugPrint('Error creating client: $e');
+          });
+        }
+      },
+    );
+  }
+
+  /// Builds a role row with +/- buttons for the manual entry form
+  Widget _buildManualEntryRoleRow(String roleName, TextEditingController controller) {
+    final count = int.tryParse(controller.text) ?? 0;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          // Role icon
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: ExColors.techBlue.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.person_outline,
+              size: 18,
+              color: ExColors.techBlue,
+            ),
+          ),
+          const SizedBox(width: 10),
+          // Role name
+          Expanded(
+            child: Text(
+              roleName,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+          // Count controls with +/- buttons
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Minus button
+                IconButton(
+                  onPressed: count > 0
+                    ? () {
+                        setState(() {
+                          controller.text = (count - 1).toString();
+                        });
+                      }
+                    : null,
+                  icon: Icon(
+                    Icons.remove,
+                    size: 18,
+                    color: count > 0 ? ExColors.errorDark : Colors.grey.shade400,
+                  ),
+                  padding: const EdgeInsets.all(6),
+                  constraints: const BoxConstraints(),
+                  splashRadius: 18,
+                ),
+                // Count display
+                Container(
+                  constraints: const BoxConstraints(minWidth: 32),
+                  alignment: Alignment.center,
+                  child: Text(
+                    count.toString(),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ),
+                // Plus button
+                IconButton(
+                  onPressed: () {
+                    setState(() {
+                      controller.text = (count + 1).toString();
+                    });
+                  },
+                  icon: const Icon(
+                    Icons.add,
+                    size: 18,
+                    color: ExColors.successDark,
+                  ),
+                  padding: const EdgeInsets.all(6),
+                  constraints: const BoxConstraints(),
+                  splashRadius: 18,
+                ),
               ],
             ),
-          );
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildManualEntryTab() {
