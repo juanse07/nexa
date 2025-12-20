@@ -16,6 +16,7 @@ import { ManagerModel } from '../models/manager';
 import { RoleModel } from '../models/role';
 import { TariffModel } from '../models/tariff';
 import { VenueModel } from '../models/venue';
+import { AIChatSummaryModel } from '../models/aiChatSummary';
 
 const router = Router();
 
@@ -1351,6 +1352,40 @@ router.post('/ai/chat/message', requireAuth, async (req, res) => {
 });
 
 /**
+ * Format context examples from past successful conversations for prompt injection
+ * Helps the AI learn from the manager's successful interaction patterns
+ */
+function formatContextExamples(examples: any[]): string {
+  if (!examples || examples.length === 0) return '';
+
+  const formattedExamples = examples.map((ex, index) => {
+    // Extract key info from the conversation
+    const userMessages = ex.messages
+      .filter((m: any) => m.role === 'user')
+      .slice(0, 2) // First 2 user messages only
+      .map((m: any) => m.content.substring(0, 200)) // Truncate long messages
+      .join(' → ');
+
+    const eventData = ex.extractedEventData || {};
+    const summary = [
+      eventData.client_name && `Client: ${eventData.client_name}`,
+      eventData.date && `Date: ${eventData.date}`,
+      eventData.venue_name && `Venue: ${eventData.venue_name}`,
+    ].filter(Boolean).join(', ');
+
+    return `Example ${index + 1}: "${userMessages}" → Created: ${summary || 'Event'}`;
+  }).join('\n');
+
+  return `
+📚 LEARNING FROM PAST SUCCESS (Manager's successful conversations):
+These are examples of successful event creations from this manager. Use similar patterns:
+${formattedExamples}
+
+Use these examples to understand how this manager typically communicates and creates events.
+`;
+}
+
+/**
  * Handle Groq chat request for manager with optimized Chat Completions API
  * Supports: llama-3.1-8b-instant (fast/cheap) and openai/gpt-oss-20b (reasoning)
  * Features: Parallel tool calls, prompt caching, retry logic, reasoning mode
@@ -1375,6 +1410,31 @@ async function handleGroqRequest(
   const isReasoningModel = false;
 
   console.log(`[Groq] Manager using model: ${groqModel}`);
+
+  // Fetch context examples from successful past conversations (for learning)
+  let contextExamplesPrompt = '';
+  if (managerId) {
+    try {
+      const examples = await AIChatSummaryModel.find({
+        managerId,
+        outcome: 'event_created',
+        wasEdited: false,
+        messageCount: { $lte: 8 }, // Very short conversations only
+      })
+        .sort({ createdAt: -1 })
+        .limit(2)
+        .select('messages extractedEventData')
+        .lean();
+
+      if (examples.length > 0) {
+        contextExamplesPrompt = formatContextExamples(examples);
+        console.log(`[Groq] Injected ${examples.length} context example(s) from past conversations`);
+      }
+    } catch (error) {
+      console.error('[Groq] Failed to fetch context examples:', error);
+      // Continue without examples - non-blocking
+    }
+  }
 
   // Optimize prompt structure: CRITICAL rules FIRST (open-source models follow early instructions better)
   const systemInstructions = `
@@ -1420,7 +1480,8 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
   const dateContext = getFullSystemContext(timezone);
 
   // Put static instructions FIRST (cacheable), dynamic date context LAST (not cached)
-  const systemContent = `${systemInstructions}\n\n${dateContext}`;
+  // Include context examples from successful past conversations for learning
+  const systemContent = `${systemInstructions}\n\n${dateContext}${contextExamplesPrompt ? '\n\n' + contextExamplesPrompt : ''}`;
 
   // Build messages: system prompt first (cached), then conversation
   const processedMessages: any[] = [];
@@ -1987,6 +2048,396 @@ YOU MUST RETURN AT LEAST ${minVenues} VENUES. Prioritize the most popular and la
     return res.status(500).json({
       message: 'Failed to discover venues',
       error: error.message
+    });
+  }
+});
+
+// ============================================================================
+// AI CHAT SUMMARY ENDPOINTS - For learning and analytics
+// ============================================================================
+
+/**
+ * Zod schema for conversation message
+ */
+const conversationMessageSchema = z.object({
+  role: z.enum(['user', 'assistant', 'system']),
+  content: z.string().max(10000),
+  timestamp: z.string(), // ISO string, parsed later (Dart's toIso8601String doesn't include Z)
+  toolsUsed: z.array(z.string()).optional(),
+});
+
+/**
+ * Zod schema for saving chat summary
+ */
+const saveChatSummarySchema = z.object({
+  messages: z.array(conversationMessageSchema).min(1),
+  extractedEventData: z.record(z.unknown()),
+  eventId: z.string().optional().nullable(),
+  outcome: z.enum(['event_created', 'event_cancelled', 'timeout_saved', 'abandoned', 'error']),
+  outcomeReason: z.string().max(500).optional().nullable(),
+  durationMs: z.number().min(0),
+  toolCallCount: z.number().min(0),
+  toolsUsed: z.array(z.string()),
+  inputSource: z.enum(['text', 'voice', 'image', 'pdf']).optional(),
+  wasEdited: z.boolean(),
+  editedFields: z.array(z.string()).optional(),
+  aiModel: z.string(),
+  aiProvider: z.string(),
+  conversationStartedAt: z.string(), // ISO string, parsed later
+  conversationEndedAt: z.string(), // ISO string, parsed later
+});
+
+/**
+ * POST /api/ai/chat/summary
+ * Save AI chat conversation summary when event is created
+ */
+router.post('/ai/chat/summary', requireAuth, async (req, res) => {
+  try {
+    const authUser = (req as any).user;
+    const managerId = authUser?.managerId;
+
+    if (!managerId) {
+      return res.status(401).json({ error: 'Manager authentication required' });
+    }
+
+    // Validate request body
+    const parseResult = saveChatSummarySchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: parseResult.error.flatten(),
+      });
+    }
+
+    const data = parseResult.data;
+
+    // Convert string timestamps to Date objects
+    const messages = data.messages.map(m => ({
+      ...m,
+      timestamp: new Date(m.timestamp),
+    }));
+
+    // Create the summary document
+    const summary = new AIChatSummaryModel({
+      managerId: new mongoose.Types.ObjectId(managerId),
+      userType: 'manager',
+      messages,
+      extractedEventData: data.extractedEventData,
+      eventId: data.eventId ? new mongoose.Types.ObjectId(data.eventId) : undefined,
+      outcome: data.outcome,
+      outcomeReason: data.outcomeReason,
+      durationMs: data.durationMs,
+      toolCallCount: data.toolCallCount,
+      toolsUsed: data.toolsUsed,
+      inputSource: data.inputSource || 'text',
+      wasEdited: data.wasEdited,
+      editedFields: data.editedFields || [],
+      aiModel: data.aiModel,
+      aiProvider: data.aiProvider,
+      conversationStartedAt: new Date(data.conversationStartedAt),
+      conversationEndedAt: new Date(data.conversationEndedAt),
+    });
+
+    await summary.save();
+
+    console.log(`[chat/summary] Saved conversation summary for manager ${managerId}, outcome: ${data.outcome}`);
+
+    return res.status(201).json({
+      message: 'Chat summary saved successfully',
+      id: summary._id,
+    });
+  } catch (error: any) {
+    console.error('[chat/summary] Error saving summary:', error);
+    return res.status(500).json({
+      error: 'Failed to save chat summary',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/ai/chat/context-examples
+ * Get successful conversation examples for AI context injection
+ * Returns 2-3 short, successful, unedited conversations
+ */
+router.get('/ai/chat/context-examples', requireAuth, async (req, res) => {
+  try {
+    const authUser = (req as any).user;
+    const managerId = authUser?.managerId;
+
+    if (!managerId) {
+      return res.status(401).json({ error: 'Manager authentication required' });
+    }
+
+    // Find successful, unedited, short conversations
+    const examples = await AIChatSummaryModel.find({
+      managerId: new mongoose.Types.ObjectId(managerId),
+      outcome: 'event_created',
+      wasEdited: false,
+      messageCount: { $lte: 10 }, // Short conversations only
+    })
+      .sort({ createdAt: -1 })
+      .limit(3)
+      .select('messages extractedEventData messageCount durationMs')
+      .lean();
+
+    return res.json({
+      examples: examples.map(ex => ({
+        messages: ex.messages.slice(0, 6), // Limit to first 6 messages
+        eventSummary: {
+          clientName: ex.extractedEventData?.client_name,
+          date: ex.extractedEventData?.date,
+          venueName: ex.extractedEventData?.venue_name,
+        },
+        messageCount: ex.messageCount,
+      })),
+      count: examples.length,
+    });
+  } catch (error: any) {
+    console.error('[chat/context-examples] Error:', error);
+    return res.status(500).json({
+      error: 'Failed to fetch context examples',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/ai/chat/summaries
+ * List conversation summaries with pagination for analytics/review
+ */
+router.get('/ai/chat/summaries', requireAuth, async (req, res) => {
+  try {
+    const authUser = (req as any).user;
+    const managerId = authUser?.managerId;
+
+    if (!managerId) {
+      return res.status(401).json({ error: 'Manager authentication required' });
+    }
+
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const skip = (page - 1) * limit;
+
+    // Optional filters
+    const outcome = req.query.outcome as string;
+    const startDate = req.query.startDate as string;
+    const endDate = req.query.endDate as string;
+
+    // Build query
+    const query: any = {
+      managerId: new mongoose.Types.ObjectId(managerId),
+    };
+
+    if (outcome) {
+      query.outcome = outcome;
+    }
+
+    if (startDate || endDate) {
+      query.createdAt = {};
+      if (startDate) query.createdAt.$gte = new Date(startDate);
+      if (endDate) query.createdAt.$lte = new Date(endDate);
+    }
+
+    const [summaries, total] = await Promise.all([
+      AIChatSummaryModel.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .select('outcome messageCount durationMs toolsUsed inputSource wasEdited aiModel createdAt extractedEventData')
+        .lean(),
+      AIChatSummaryModel.countDocuments(query),
+    ]);
+
+    return res.json({
+      summaries: summaries.map(s => ({
+        id: s._id,
+        outcome: s.outcome,
+        messageCount: s.messageCount,
+        durationMs: s.durationMs,
+        durationFormatted: `${Math.round(s.durationMs / 1000)}s`,
+        toolsUsed: s.toolsUsed,
+        inputSource: s.inputSource,
+        wasEdited: s.wasEdited,
+        aiModel: s.aiModel,
+        createdAt: s.createdAt,
+        eventPreview: s.extractedEventData?.client_name
+          ? `${s.extractedEventData.client_name} - ${s.extractedEventData.date || 'No date'}`
+          : null,
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error: any) {
+    console.error('[chat/summaries] Error:', error);
+    return res.status(500).json({
+      error: 'Failed to fetch summaries',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/ai/chat/summaries/:id
+ * Get single conversation summary with full messages
+ */
+router.get('/ai/chat/summaries/:id', requireAuth, async (req, res) => {
+  try {
+    const authUser = (req as any).user;
+    const managerId = authUser?.managerId;
+
+    if (!managerId) {
+      return res.status(401).json({ error: 'Manager authentication required' });
+    }
+
+    const summaryId = req.params.id;
+
+    if (!summaryId || !mongoose.Types.ObjectId.isValid(summaryId)) {
+      return res.status(400).json({ error: 'Invalid summary ID' });
+    }
+
+    const summary = await AIChatSummaryModel.findOne({
+      _id: new mongoose.Types.ObjectId(summaryId),
+      managerId: new mongoose.Types.ObjectId(managerId),
+    }).lean();
+
+    if (!summary) {
+      return res.status(404).json({ error: 'Summary not found' });
+    }
+
+    return res.json({ summary });
+  } catch (error: any) {
+    console.error('[chat/summaries/:id] Error:', error);
+    return res.status(500).json({
+      error: 'Failed to fetch summary',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/ai/chat/analytics
+ * Get aggregated analytics for AI conversations
+ */
+router.get('/ai/chat/analytics', requireAuth, async (req, res) => {
+  try {
+    const authUser = (req as any).user;
+    const managerId = authUser?.managerId;
+
+    if (!managerId) {
+      return res.status(401).json({ error: 'Manager authentication required' });
+    }
+
+    const startDate = req.query.startDate
+      ? new Date(req.query.startDate as string)
+      : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // Default: last 30 days
+    const endDate = req.query.endDate
+      ? new Date(req.query.endDate as string)
+      : new Date();
+
+    const managerObjectId = new mongoose.Types.ObjectId(managerId);
+
+    // Aggregation pipeline
+    const [stats, outcomeBreakdown, toolUsage] = await Promise.all([
+      // Overall stats
+      AIChatSummaryModel.aggregate([
+        {
+          $match: {
+            managerId: managerObjectId,
+            createdAt: { $gte: startDate, $lte: endDate },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: 1 },
+            successful: {
+              $sum: { $cond: [{ $eq: ['$outcome', 'event_created'] }, 1, 0] },
+            },
+            avgDuration: { $avg: '$durationMs' },
+            avgMessages: { $avg: '$messageCount' },
+            avgToolCalls: { $avg: '$toolCallCount' },
+          },
+        },
+      ]),
+
+      // Outcome breakdown
+      AIChatSummaryModel.aggregate([
+        {
+          $match: {
+            managerId: managerObjectId,
+            createdAt: { $gte: startDate, $lte: endDate },
+          },
+        },
+        {
+          $group: {
+            _id: '$outcome',
+            count: { $sum: 1 },
+          },
+        },
+      ]),
+
+      // Top tools used
+      AIChatSummaryModel.aggregate([
+        {
+          $match: {
+            managerId: managerObjectId,
+            createdAt: { $gte: startDate, $lte: endDate },
+          },
+        },
+        { $unwind: '$toolsUsed' },
+        {
+          $group: {
+            _id: '$toolsUsed',
+            count: { $sum: 1 },
+          },
+        },
+        { $sort: { count: -1 } },
+        { $limit: 10 },
+      ]),
+    ]);
+
+    const overallStats = stats[0] || {
+      total: 0,
+      successful: 0,
+      avgDuration: 0,
+      avgMessages: 0,
+      avgToolCalls: 0,
+    };
+
+    return res.json({
+      period: {
+        startDate,
+        endDate,
+      },
+      overall: {
+        totalConversations: overallStats.total,
+        successfulConversations: overallStats.successful,
+        successRate: overallStats.total > 0
+          ? Math.round((overallStats.successful / overallStats.total) * 100)
+          : 0,
+        avgDurationSeconds: Math.round(overallStats.avgDuration / 1000),
+        avgMessageCount: Math.round(overallStats.avgMessages * 10) / 10,
+        avgToolCalls: Math.round(overallStats.avgToolCalls * 10) / 10,
+      },
+      outcomeBreakdown: outcomeBreakdown.reduce((acc, item) => {
+        acc[item._id] = item.count;
+        return acc;
+      }, {} as Record<string, number>),
+      topToolsUsed: toolUsage.map(t => ({
+        tool: t._id,
+        count: t.count,
+      })),
+    });
+  } catch (error: any) {
+    console.error('[chat/analytics] Error:', error);
+    return res.status(500).json({
+      error: 'Failed to fetch analytics',
+      message: error.message,
     });
   }
 });

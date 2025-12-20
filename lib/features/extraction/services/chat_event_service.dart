@@ -136,11 +136,77 @@ Be conversational and friendly. If the user provides multiple pieces of informat
   final Map<String, dynamic> _currentEventData = {};
   bool _eventComplete = false;
 
+  // Conversation tracking for summaries
+  DateTime? _conversationStartTime;
+  final List<String> _toolsUsedInConversation = [];
+  int _toolCallCount = 0;
+  String _inputSource = 'text'; // 'text', 'voice', 'image', 'pdf'
+  String _aiModel = 'openai/gpt-oss-20b';
+  String _aiProvider = 'groq';
+
   List<ChatMessage> get conversationHistory =>
       List.unmodifiable(_conversationHistory);
   Map<String, dynamic> get currentEventData =>
       Map.unmodifiable(_currentEventData);
   bool get eventComplete => _eventComplete;
+  DateTime? get conversationStartTime => _conversationStartTime;
+  List<String> get toolsUsed => List.unmodifiable(_toolsUsedInConversation);
+  int get toolCallCount => _toolCallCount;
+  String get inputSource => _inputSource;
+  String get aiModel => _aiModel;
+
+  /// Set the input source for conversation tracking
+  void setInputSource(String source) {
+    if (['text', 'voice', 'image', 'pdf'].contains(source)) {
+      _inputSource = source;
+      print('[ChatEventService] Input source set to: $_inputSource');
+    }
+  }
+
+  /// Record a tool call for analytics tracking
+  void recordToolCall(String toolName) {
+    _toolCallCount++;
+    if (!_toolsUsedInConversation.contains(toolName)) {
+      _toolsUsedInConversation.add(toolName);
+    }
+    print('[ChatEventService] Tool call recorded: $toolName (total: $_toolCallCount)');
+  }
+
+  /// Export conversation data for saving to database
+  Map<String, dynamic> exportConversationSummary({
+    required String outcome,
+    String? eventId,
+    bool wasEdited = false,
+    List<String>? editedFields,
+    String? outcomeReason,
+  }) {
+    final now = DateTime.now();
+    final durationMs = _conversationStartTime != null
+        ? now.difference(_conversationStartTime!).inMilliseconds
+        : 0;
+
+    return {
+      'messages': _conversationHistory.map((msg) => {
+        'role': msg.role,
+        'content': msg.content,
+        'timestamp': msg.timestamp.toIso8601String(),
+      }).toList(),
+      'extractedEventData': Map<String, dynamic>.from(_currentEventData),
+      'eventId': eventId,
+      'outcome': outcome,
+      'outcomeReason': outcomeReason,
+      'durationMs': durationMs,
+      'toolCallCount': _toolCallCount,
+      'toolsUsed': _toolsUsedInConversation.toSet().toList(),
+      'inputSource': _inputSource,
+      'wasEdited': wasEdited,
+      'editedFields': editedFields ?? [],
+      'aiModel': _aiModel,
+      'aiProvider': _aiProvider,
+      'conversationStartedAt': _conversationStartTime?.toIso8601String() ?? now.toIso8601String(),
+      'conversationEndedAt': now.toIso8601String(),
+    };
+  }
 
   /// Clear current event data and reset completion flag
   void clearCurrentEventData() {
@@ -380,7 +446,7 @@ Be conversational and friendly. If the user provides multiple pieces of informat
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        _preferredCity = data['preferredCity'];
+        _preferredCity = data['preferredCity'] as String?;
         final venueList = data['venueList'] as List?;
         _venueList = venueList?.cast<Map<String, dynamic>>() ?? [];
         _venuesCacheTime = DateTime.now();
@@ -702,6 +768,13 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
     (_createdEntities['roles'] as List).clear();
     (_createdEntities['tariffs'] as List).clear();
     _pendingUpdates.clear();
+
+    // Reset conversation tracking for summaries
+    _conversationStartTime = DateTime.now();
+    _toolsUsedInConversation.clear();
+    _toolCallCount = 0;
+    _inputSource = 'text';
+    print('[ChatEventService] New conversation started at $_conversationStartTime');
   }
 
   /// Add a message to the conversation history
@@ -1103,14 +1176,11 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
     _pendingUpdates.remove(update);
   }
 
-  // AI provider preference (always 'groq' for manager app)
-  String _aiProvider = 'groq'; // Use Groq for cost efficiency
-
   // Model preference for Groq ('llama' or 'gpt-oss')
   String _modelPreference = 'llama'; // Default to Llama 3.1 8B (faster, cheaper)
 
   /// Get current AI provider
-  String get aiProvider => _aiProvider;
+  String get aiProviderName => _aiProvider;
 
   /// Get current model preference
   String get modelPreference => _modelPreference;
@@ -1155,7 +1225,7 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
       'Content-Type': 'application/json',
     };
 
-    print('Sending request to AI ($aiProvider)...');
+    print('Sending request to AI ($_aiProvider)...');
 
     final response = await http.post(
       uri,
@@ -1229,6 +1299,9 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
   /// Get a greeting message to start the conversation
   /// Fetches current date/time from backend for contextual greeting
   Future<ChatMessage> getGreeting() async {
+    // Initialize conversation start time if not already set
+    _conversationStartTime ??= DateTime.now();
+
     String greetingContent = 'Hey! 👋 Let\'s create an event. Just tell me about it - I\'ll figure out what I need as we go.';
 
     try {

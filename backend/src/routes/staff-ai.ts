@@ -2084,4 +2084,172 @@ Example: "February" in December 2025 → February 2026`;
   });
 }
 
+// ============================================================================
+// STAFF AI CHAT SUMMARY ENDPOINTS - For learning and analytics
+// ============================================================================
+
+import { AIChatSummaryModel } from '../models/aiChatSummary';
+
+/**
+ * Zod schema for staff conversation message
+ */
+const staffConversationMessageSchema = z.object({
+  role: z.enum(['user', 'assistant', 'system']),
+  content: z.string().max(10000),
+  timestamp: z.string(), // ISO string
+});
+
+/**
+ * Zod schema for saving staff chat summary
+ */
+const saveStaffChatSummarySchema = z.object({
+  messages: z.array(staffConversationMessageSchema).min(1),
+  outcome: z.enum([
+    'availability_marked', 'shift_accepted', 'shift_declined', 'question_answered',
+    'abandoned', 'error',
+  ]),
+  outcomeReason: z.string().max(500).optional().nullable(),
+  durationMs: z.number().min(0),
+  toolsUsed: z.array(z.string()).optional(),
+  inputSource: z.enum(['text', 'voice']).optional(),
+  aiModel: z.string(),
+  aiProvider: z.string(),
+  conversationStartedAt: z.string(),
+  conversationEndedAt: z.string(),
+  // Staff-specific context
+  actionData: z.record(z.unknown()).optional(), // Data related to the action (availability, shift, etc.)
+});
+
+/**
+ * POST /api/ai/staff/chat/summary
+ * Save staff AI chat conversation summary
+ */
+router.post('/ai/staff/chat/summary', requireAuth, async (req, res) => {
+  try {
+    const authUser = (req as any).user || (req as any).authUser;
+    const { provider, sub: subject } = authUser || {};
+
+    if (!provider || !subject) {
+      return res.status(401).json({ error: 'Staff authentication required' });
+    }
+
+    // Find the user ID
+    const user = await UserModel.findOne({ provider, subject }).select('_id').lean();
+    if (!user) {
+      return res.status(404).json({ error: 'Staff user not found' });
+    }
+
+    // Validate request body
+    const parseResult = saveStaffChatSummarySchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: parseResult.error.flatten(),
+      });
+    }
+
+    const data = parseResult.data;
+
+    // Convert string timestamps to Date objects
+    const messages = data.messages.map(m => ({
+      ...m,
+      timestamp: new Date(m.timestamp),
+    }));
+
+    // Create the summary document
+    const summary = new AIChatSummaryModel({
+      userId: user._id,
+      userType: 'staff',
+      messages,
+      extractedEventData: data.actionData || {}, // Use actionData for staff
+      outcome: data.outcome,
+      outcomeReason: data.outcomeReason,
+      durationMs: data.durationMs,
+      toolCallCount: 0, // Staff AI doesn't use tool calls like manager
+      toolsUsed: data.toolsUsed || [],
+      inputSource: data.inputSource || 'text',
+      wasEdited: false, // Staff AI doesn't have edit functionality
+      editedFields: [],
+      aiModel: data.aiModel,
+      aiProvider: data.aiProvider,
+      conversationStartedAt: new Date(data.conversationStartedAt),
+      conversationEndedAt: new Date(data.conversationEndedAt),
+    });
+
+    await summary.save();
+
+    console.log(`[staff/chat/summary] Saved conversation summary for user ${user._id}, outcome: ${data.outcome}`);
+
+    return res.status(201).json({
+      message: 'Staff chat summary saved successfully',
+      id: summary._id,
+    });
+  } catch (error: any) {
+    console.error('[staff/chat/summary] Error saving summary:', error);
+    return res.status(500).json({
+      error: 'Failed to save staff chat summary',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/ai/staff/chat/summaries
+ * List staff conversation summaries with pagination
+ */
+router.get('/ai/staff/chat/summaries', requireAuth, async (req, res) => {
+  try {
+    const authUser = (req as any).user || (req as any).authUser;
+    const { provider, sub: subject } = authUser || {};
+
+    if (!provider || !subject) {
+      return res.status(401).json({ error: 'Staff authentication required' });
+    }
+
+    const user = await UserModel.findOne({ provider, subject }).select('_id').lean();
+    if (!user) {
+      return res.status(404).json({ error: 'Staff user not found' });
+    }
+
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const skip = (page - 1) * limit;
+
+    const [summaries, total] = await Promise.all([
+      AIChatSummaryModel.find({ userId: user._id, userType: 'staff' })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .select('outcome messageCount durationMs inputSource aiModel createdAt')
+        .lean(),
+      AIChatSummaryModel.countDocuments({ userId: user._id, userType: 'staff' }),
+    ]);
+
+    return res.json({
+      summaries: summaries.map(s => ({
+        id: s._id,
+        outcome: s.outcome,
+        messageCount: s.messageCount,
+        durationMs: s.durationMs,
+        durationFormatted: `${Math.round(s.durationMs / 1000)}s`,
+        inputSource: s.inputSource,
+        aiModel: s.aiModel,
+        createdAt: s.createdAt,
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error: any) {
+    console.error('[staff/chat/summaries] Error:', error);
+    return res.status(500).json({
+      error: 'Failed to fetch summaries',
+      message: error.message,
+    });
+  }
+});
+
 export default router;

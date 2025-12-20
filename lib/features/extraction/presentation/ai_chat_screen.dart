@@ -14,6 +14,7 @@ import '../../../services/terminology_provider.dart';
 import '../../../shared/services/error_display_service.dart';
 import '../providers/chat_screen_state_provider.dart';
 import '../services/chat_event_service.dart';
+import '../services/chat_summary_service.dart';
 import '../services/event_service.dart';
 import '../services/extraction_service.dart';
 import '../services/file_processor_service.dart';
@@ -25,8 +26,10 @@ import '../widgets/image_preview_card.dart';
 import '../widgets/document_preview_card.dart';
 import '../widgets/event_confirmation_card.dart';
 import '../widgets/batch_event_dialog.dart';
+import '../widgets/manual_entry_bottom_sheet.dart';
 import 'extraction_screen.dart';
 import 'pending_edit_screen.dart';
+import 'bulk_extraction_screen.dart';
 import '../../main/presentation/main_screen.dart';
 import 'dart:async';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
@@ -47,7 +50,12 @@ class _AIChatScreenState extends State<AIChatScreen>
     with TickerProviderStateMixin {
   // Services (still needed for non-provider functionality)
   final EventService _eventService = EventService();
+  final ChatSummaryService _summaryService = ChatSummaryService();
   final ImagePicker _imagePicker = ImagePicker();
+
+  // Track if user edited the event data
+  bool _wasEdited = false;
+  List<String> _editedFields = [];
 
   // Provider (replaces 15+ state variables)
   late ChatScreenStateProvider _stateProvider;
@@ -161,7 +169,7 @@ class _AIChatScreenState extends State<AIChatScreen>
     });
   }
 
-  /// Show bottom sheet to choose camera, gallery, or documents
+  /// Show bottom sheet to choose camera, gallery, documents, manual entry, or bulk import
   Future<void> _showImageSourceSelector() async {
     if (kIsWeb) {
       // Web doesn't support camera, just pick from files
@@ -200,8 +208,56 @@ class _AIChatScreenState extends State<AIChatScreen>
                 _pickDocument();
               },
             ),
+            const Divider(),
+            ListTile(
+              leading: Icon(Icons.edit_note, color: AppColors.success),
+              title: const Text('Quick Manual Entry'),
+              subtitle: const Text('Create event without AI extraction'),
+              onTap: () {
+                Navigator.pop(context);
+                _showManualEntrySheet();
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.folder_copy, color: AppColors.techBlue),
+              title: const Text('Bulk Import'),
+              subtitle: const Text('Import multiple files at once'),
+              onTap: () {
+                Navigator.pop(context);
+                _navigateToBulkImport();
+              },
+            ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Show the manual entry bottom sheet for quick event creation
+  Future<void> _showManualEntrySheet() async {
+    HapticFeedback.selectionClick();
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => const ManualEntryBottomSheet(),
+    );
+
+    if (result == true && mounted) {
+      // Event was created successfully - show confirmation in chat
+      ErrorDisplayService.showSuccess(
+        context,
+        'Event created! Check the Pending tab.',
+      );
+    }
+  }
+
+  /// Navigate to the bulk import screen
+  void _navigateToBulkImport() {
+    HapticFeedback.selectionClick();
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const BulkExtractionScreen(),
       ),
     );
   }
@@ -228,43 +284,42 @@ class _AIChatScreenState extends State<AIChatScreen>
     }
   }
 
-  /// Pick multiple images from gallery
+  /// Pick single image from gallery
   Future<void> _pickImagesFromGallery() async {
     try {
-      final List<XFile> images = await _imagePicker.pickMultiImage(
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
         maxWidth: 1920,
         maxHeight: 1920,
         imageQuality: 85,
       );
 
-      for (final image in images) {
+      if (image != null) {
         final file = File(image.path);
         await _processImage(file);
       }
     } catch (e) {
-      print('[AIChatScreen] Error picking images from gallery: $e');
+      print('[AIChatScreen] Error picking image from gallery: $e');
       if (mounted) {
-        ErrorDisplayService.showError(context, 'Failed to select images: $e');
+        ErrorDisplayService.showError(context, 'Failed to select image: $e');
       }
     }
   }
 
-  /// Pick document file (PDF only - matching Upload Data tab functionality)
+  /// Pick single PDF document
   Future<void> _pickDocument() async {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf'],
-        allowMultiple: true, // Allow selecting multiple files at once
+        allowMultiple: false, // Single file only
       );
 
       if (result != null && result.files.isNotEmpty) {
-        // Process each selected file
-        for (final platformFile in result.files) {
-          if (platformFile.path != null) {
-            final file = File(platformFile.path!);
-            await _processDocument(file);
-          }
+        final platformFile = result.files.first;
+        if (platformFile.path != null) {
+          final file = File(platformFile.path!);
+          await _processDocument(file);
         }
       }
     } catch (e) {
@@ -379,7 +434,7 @@ class _AIChatScreenState extends State<AIChatScreen>
     );
 
     _stateProvider.chatService.addMessage(autoSaveMsg);
-    await _saveEventToPending();
+    await _saveEventToPending(outcome: 'timeout_saved');
   }
 
   /// Handle user confirmation - save the event
@@ -396,7 +451,7 @@ class _AIChatScreenState extends State<AIChatScreen>
   }
 
   /// Save event to pending
-  Future<void> _saveEventToPending() async {
+  Future<void> _saveEventToPending({String outcome = 'event_created'}) async {
     try {
       final eventData = {
         ..._stateProvider.currentEventData,
@@ -407,6 +462,12 @@ class _AIChatScreenState extends State<AIChatScreen>
       final eventId = createdEvent['_id'] ?? createdEvent['id'] ?? '';
 
       print('[AIChatScreen] ✓ Event saved to database as draft (ID: $eventId)');
+
+      // Save conversation summary (fire-and-forget, non-blocking)
+      _saveConversationSummary(
+        outcome: outcome,
+        eventId: eventId.toString(),
+      );
 
       // Show success message
       final successMsg = ChatMessage(
@@ -419,12 +480,51 @@ class _AIChatScreenState extends State<AIChatScreen>
 
     } catch (e) {
       print('[AIChatScreen] ✗ Failed to save shift: $e');
+
+      // Save summary with error outcome
+      _saveConversationSummary(
+        outcome: 'error',
+        outcomeReason: e.toString(),
+      );
+
       if (mounted) {
         ErrorDisplayService.showError(context, 'Failed to save shift: $e');
       }
     } finally {
       _stateProvider.setLoading(false);
     }
+  }
+
+  /// Save conversation summary to database (fire-and-forget)
+  void _saveConversationSummary({
+    required String outcome,
+    String? eventId,
+    String? outcomeReason,
+  }) {
+    print('[AIChatScreen] _saveConversationSummary called with outcome: $outcome, eventId: $eventId');
+
+    // Export conversation data from ChatEventService
+    final summaryData = _stateProvider.chatService.exportConversationSummary(
+      outcome: outcome,
+      eventId: eventId,
+      wasEdited: _wasEdited,
+      editedFields: _editedFields.toSet().toList(), // Deduplicate
+      outcomeReason: outcomeReason,
+    );
+
+    print('[AIChatScreen] Summary data messages count: ${(summaryData['messages'] as List?)?.length ?? 0}');
+    print('[AIChatScreen] Summary data: ${summaryData.keys.toList()}');
+
+    // Fire and forget - don't await
+    _summaryService.saveSummary(summaryData).then((_) {
+      print('[AIChatScreen] Conversation summary saved (outcome: $outcome)');
+    }).catchError((e) {
+      print('[AIChatScreen] Failed to save conversation summary: $e');
+    });
+
+    // Reset edit tracking for next conversation
+    _wasEdited = false;
+    _editedFields = [];
   }
 
   /// Handle edit button - open edit screen
@@ -435,6 +535,9 @@ class _AIChatScreenState extends State<AIChatScreen>
       return;
     }
 
+    // Store original data to detect changes
+    final originalData = Map<String, dynamic>.from(eventData);
+
     // Navigate to edit screen with current event data
     // Using a temporary ID since this is not yet saved
     final result = await Navigator.of(context).push<Map<String, dynamic>>(
@@ -442,6 +545,22 @@ class _AIChatScreenState extends State<AIChatScreen>
         builder: (context) => _InlineEventEditScreen(
           eventData: eventData,
           onSave: (updatedData) {
+            // Detect which fields were edited
+            final changedFields = <String>[];
+            for (final key in updatedData.keys) {
+              final original = originalData[key]?.toString() ?? '';
+              final updated = updatedData[key]?.toString() ?? '';
+              if (original != updated) {
+                changedFields.add(key);
+              }
+            }
+
+            if (changedFields.isNotEmpty) {
+              _wasEdited = true;
+              _editedFields = [..._editedFields, ...changedFields];
+              print('[AIChatScreen] User edited fields: ${changedFields.join(', ')}');
+            }
+
             // Update the state provider with edited data
             _stateProvider.updateEventData(updatedData);
           },
@@ -455,6 +574,12 @@ class _AIChatScreenState extends State<AIChatScreen>
 
   /// Handle cancel - discard shift
   void _handleCancel() {
+    // Save conversation summary with cancelled outcome before clearing data
+    _saveConversationSummary(
+      outcome: 'event_cancelled',
+      outcomeReason: 'User explicitly cancelled',
+    );
+
     _stateProvider.hideConfirmation();
     _stateProvider.clearEventData();
 
