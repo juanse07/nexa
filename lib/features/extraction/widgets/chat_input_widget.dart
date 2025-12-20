@@ -285,18 +285,18 @@ class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProv
                       horizontal: 16,
                       vertical: 6, // Reduced from 10 to 6
                     ),
-                    // Attachment icon on the left
+                    // Add content button on the left
                     prefixIcon: widget.onAttachmentTap != null
                         ? IconButton(
                             icon: Icon(
-                              Icons.attach_file,
+                              Icons.add_circle_outline,
                               color: Colors.grey.shade600,
-                              size: 18,
+                              size: 24,
                             ),
                             onPressed: widget.isLoading || _isRecording || _isTranscribing
                                 ? null
                                 : widget.onAttachmentTap,
-                            tooltip: 'Attach image or document',
+                            tooltip: 'Add photo, document, or create event',
                           )
                         : null,
                   ),

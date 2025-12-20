@@ -7751,51 +7751,69 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   Widget _buildEventCard(Map<String, dynamic> e, {bool showMargin = false}) {
     // Extract essential data
     final String clientName = (e['client_name'] ?? 'Client').toString();
-    final String venueName = (e['venue_name'] ?? AppLocalizations.of(context)!.locationTbd).toString();
+    final String venueName = (e['venue_name'] ?? '').toString();
     final String venueAddress = (e['venue_address'] ?? '').toString();
     final String googleMapsUrl = (e['google_maps_url'] ?? '').toString();
     final String status = (e['status'] ?? 'draft').toString();
 
-    String dateStr = '';
+    // Determine if venue is missing
+    final localizations = AppLocalizations.of(context);
+    final locationTbdText = localizations?.locationTbd ?? 'Location TBD';
+    final bool isVenueMissing = venueName.isEmpty ||
+        venueName.toLowerCase() == 'location tbd' ||
+        venueName == locationTbdText;
+
     String displayDate = '';
-    bool isUpcoming = false;
+    bool isDateMissing = true;
     final dynamic rawDate = e['date'];
     if (rawDate is String && rawDate.isNotEmpty) {
       try {
         final d = DateTime.parse(rawDate);
-        final now = DateTime.now();
-        isUpcoming = !d.isBefore(DateTime(now.year, now.month, now.day));
-        dateStr =
-            '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+        isDateMissing = false;
 
         // Format date as "Mon, Jan 15"
         final months = [
-          'Jan',
-          'Feb',
-          'Mar',
-          'Apr',
-          'May',
-          'Jun',
-          'Jul',
-          'Aug',
-          'Sep',
-          'Oct',
-          'Nov',
-          'Dec',
+          'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
         ];
         final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
         displayDate = '${days[d.weekday - 1]}, ${months[d.month - 1]} ${d.day}';
       } catch (_) {
-        dateStr = rawDate;
         displayDate = rawDate;
+        isDateMissing = false;
       }
     }
 
+    // Time handling - both start and end
     final String startTime = (e['start_time'] ?? '').toString();
+    final String endTime = (e['end_time'] ?? '').toString();
+    final bool isStartTimeMissing = startTime.isEmpty;
+    final bool isEndTimeMissing = endTime.isEmpty;
 
-    final statusColor = isUpcoming
-        ? ExColors.lavender
-        : ExColors.slateGray;
+    // Build time display string
+    String timeDisplay;
+    if (startTime.isNotEmpty && endTime.isNotEmpty) {
+      timeDisplay = '$startTime - $endTime';
+    } else if (startTime.isNotEmpty) {
+      timeDisplay = startTime;
+    } else {
+      timeDisplay = 'Time TBD';
+    }
+
+    // Extract roles for display
+    final roles = (e['roles'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final bool isRolesMissing = roles.isEmpty ||
+        roles.every((r) => ((r['count'] as int?) ?? 0) == 0);
+
+    // Build roles display string
+    String rolesDisplay = '';
+    if (!isRolesMissing) {
+      final roleStrings = roles
+          .where((r) => ((r['count'] as int?) ?? 0) > 0)
+          .map((r) => '${r['role']} (${r['count']})')
+          .toList();
+      rolesDisplay = roleStrings.join(', ');
+    }
 
     return GestureDetector(
       onTap: () async {
@@ -7811,231 +7829,40 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       },
       child: Container(
         margin: showMargin
-            ? const EdgeInsets.only(bottom: 12)
+            ? const EdgeInsets.only(bottom: 16)
             : EdgeInsets.zero,
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.grey.shade200, width: 1),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
         ),
-        child: Row(
-          children: [
-            // Colored privacy indicator strip
-            Container(
-              width: 4,
-              decoration: BoxDecoration(
-                color: _getPrivacyColor(_getPrivacyStatus(e)),
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(15),
-                  bottomLeft: Radius.circular(15),
-                ),
-              ),
-            ),
-            // Event content
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header row: Client name + action buttons
+              Row(
+                children: [
                   // Client name
-                  Text(
-                    clientName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: ExColors.textPrimary,
-                      letterSpacing: -0.2,
-                      height: 1.2,
+                  Expanded(
+                    child: Text(
+                      clientName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                        color: ExColors.textPrimary,
+                        letterSpacing: -0.2,
+                        height: 1.2,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  // Date
-                  if (displayDate.isNotEmpty) ...[
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.calendar_today,
-                          size: 14,
-                          color: statusColor,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          displayDate,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: statusColor,
-                            height: 1.2,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                  ],
-                  // Badges row (capacity + privacy)
-                  Builder(
-                    builder: (context) {
-                      final capacity = _calculateCapacity(e);
-                      final filled = capacity['filled'] ?? 0;
-                      final total = capacity['total'] ?? 0;
-                      final capacityColor = _getCapacityColor(filled, total);
-                      final isFull = filled >= total && total > 0;
-
-                      final privacyStatus = _getPrivacyStatus(e);
-                      final privacyColor = _getPrivacyColor(privacyStatus);
-                      final privacyLabel = privacyStatus == 'private'
-                          ? 'Private'
-                          : privacyStatus == 'public'
-                              ? 'Public'
-                              : 'Private+Public';
-
-                      return Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          // Capacity badge
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: capacityColor.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: capacityColor.withValues(alpha: 0.3),
-                                width: 1,
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  isFull ? Icons.lock : Icons.people,
-                                  size: 12,
-                                  color: capacityColor,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  isFull ? 'Full' : '$filled/$total filled',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: capacityColor,
-                                    height: 1.2,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          // Privacy badge (for published events only - both public and private)
-                          if (status == 'published')
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: privacyColor.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: privacyColor.withValues(alpha: 0.3),
-                                  width: 1,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    privacyStatus == 'private'
-                                        ? Icons.lock_outline
-                                        : privacyStatus == 'public'
-                                            ? Icons.public
-                                            : Icons.group,
-                                    size: 12,
-                                    color: privacyColor,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    privacyLabel,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      color: privacyColor,
-                                      height: 1.2,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          // Make Public button removed - only available from event detail screen
-                          if (false)
-                            GestureDetector(
-                              onTap: () => _makeJobPublic(e),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: ExColors.successDark.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: ExColors.successDark.withValues(alpha: 0.3),
-                                    width: 1,
-                                  ),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.public,
-                                      size: 12,
-                                      color: ExColors.successDark,
-                                    ),
-                                    SizedBox(width: 4),
-                                    Text(
-                                      'Make Public',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                        color: ExColors.successDark,
-                                        height: 1.2,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                        ],
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  // Venue
+                  // Action buttons
                   Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        Icons.location_on,
-                        size: 14,
-                        color: Colors.grey.shade500,
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          venueName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.grey.shade600,
-                            height: 1.2,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
                       // Edit button
                       GestureDetector(
                         behavior: HitTestBehavior.opaque,
@@ -8056,15 +7883,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           }
                         },
                         child: Padding(
-                          padding: const EdgeInsets.all(8),
+                          padding: const EdgeInsets.all(6),
                           child: Icon(
-                            Icons.edit,
+                            Icons.edit_outlined,
                             size: 18,
-                            color: ExColors.lavender,
+                            color: Colors.grey.shade500,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 4),
                       // Navigate button
                       GestureDetector(
                         behavior: HitTestBehavior.opaque,
@@ -8075,15 +7901,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           );
                         },
                         child: Padding(
-                          padding: const EdgeInsets.all(8),
+                          padding: const EdgeInsets.all(6),
                           child: Icon(
-                            Icons.directions,
-                            size: 20,
-                            color: ExColors.lavender,
+                            Icons.directions_outlined,
+                            size: 18,
+                            color: Colors.grey.shade500,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 4),
                       // Copy button
                       GestureDetector(
                         behavior: HitTestBehavior.opaque,
@@ -8091,127 +7916,309 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           _shareEvent(e);
                         },
                         child: Padding(
-                          padding: const EdgeInsets.all(8),
+                          padding: const EdgeInsets.all(6),
                           child: Icon(
-                            Icons.copy,
-                            size: 18,
-                            color: Colors.grey.shade600,
+                            Icons.copy_outlined,
+                            size: 16,
+                            color: Colors.grey.shade500,
                           ),
                         ),
                       ),
                     ],
                   ),
-                  if (startTime.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    // Time
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.access_time,
-                          size: 14,
-                          color: Colors.grey.shade500,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          startTime,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.grey.shade600,
-                            height: 1.2,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                  // Action buttons for pending/draft events (only true drafts, not sent to staff yet)
-                  if (status == 'draft' && ((e['accepted_staff'] as List?)?.isEmpty ?? true)) ...[
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () async {
-                              final eventId = (e['_id'] ?? e['id'] ?? '').toString();
-                              if (eventId.isEmpty) return;
-                              if (!mounted) return;
-                              final changed = await Navigator.of(context).push<bool>(
-                                MaterialPageRoute(
-                                  builder: (_) => PendingPublishScreen(
-                                    draft: e,
-                                    draftId: eventId,
-                                  ),
-                                ),
-                              );
-                              if (changed == true) {
-                                await _loadEvents();
-                              }
-                            },
-                            icon: const Icon(Icons.campaign, size: 18),
-                            label: const Text('Publish'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: ExColors.lavender,
-                              side: const BorderSide(color: ExColors.lavender),
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          icon: const Icon(Icons.delete, color: ExColors.errorDark, size: 20),
-                          onPressed: () async {
-                            final eventId = (e['_id'] ?? e['id'] ?? '').toString();
-                            if (eventId.isEmpty) return;
-
-                            // Confirm deletion
-                            final confirm = await showDialog<bool>(
-                              context: context,
-                              builder: (context) => AlertDialog(
-                                title: const Text('Delete Event'),
-                                content: const Text('Are you sure you want to delete this draft event?'),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(context, false),
-                                    child: const Text('Cancel'),
-                                  ),
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(context, true),
-                                    child: const Text('Delete', style: TextStyle(color: ExColors.errorDark)),
-                                  ),
-                                ],
-                              ),
-                            );
-
-                            if (confirm != true) return;
-
-                            try {
-                              await _eventService.deleteEvent(eventId);
-                              await _loadEvents();
-                              if (!mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Event deleted')),
-                              );
-                            } catch (e) {
-                              if (!mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Failed to delete: $e'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                  ],
                 ],
               ),
-            ),
+
+              // Divider
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Divider(
+                  height: 1,
+                  color: Colors.grey.shade200,
+                ),
+              ),
+
+              // Date and Time row
+              Row(
+                children: [
+                  // Date
+                  Expanded(
+                    child: _buildCardInfoRow(
+                      icon: Icons.calendar_today_outlined,
+                      text: isDateMissing ? 'Date TBD' : displayDate,
+                      isMissing: isDateMissing,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  // Time
+                  Expanded(
+                    child: _buildCardInfoRow(
+                      icon: Icons.access_time,
+                      text: timeDisplay,
+                      isMissing: isStartTimeMissing,
+                      showEndTimeWarning: !isStartTimeMissing && isEndTimeMissing,
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 8),
+
+              // Address row
+              _buildCardInfoRow(
+                icon: Icons.location_on_outlined,
+                text: isVenueMissing ? 'Address TBD' : venueName,
+                isMissing: isVenueMissing,
+              ),
+
+              const SizedBox(height: 8),
+
+              // Roles row
+              _buildCardInfoRow(
+                icon: Icons.people_outline,
+                text: isRolesMissing ? 'No roles defined' : rolesDisplay,
+                isMissing: isRolesMissing,
+                maxLines: 2,
+              ),
+
+              const SizedBox(height: 12),
+
+              // Badges row (capacity + privacy) - more subtle
+              Builder(
+                builder: (context) {
+                  final capacity = _calculateCapacity(e);
+                  final filled = capacity['filled'] ?? 0;
+                  final total = capacity['total'] ?? 0;
+                  final capacityColor = _getCapacityColor(filled, total);
+                  final isFull = filled >= total && total > 0;
+
+                  final privacyStatus = _getPrivacyStatus(e);
+                  final privacyColor = _getPrivacyColor(privacyStatus);
+                  final privacyLabel = privacyStatus == 'private'
+                      ? 'Private'
+                      : privacyStatus == 'public'
+                          ? 'Public'
+                          : 'Private+Public';
+
+                  return Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      // Capacity badge - subtle style
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: capacityColor.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: capacityColor.withValues(alpha: 0.2),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isFull ? Icons.check_circle_outline : Icons.people_outline,
+                              size: 11,
+                              color: capacityColor,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              isFull ? 'Full' : '$filled/$total',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500,
+                                color: capacityColor,
+                                height: 1.2,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Privacy badge (for published events only)
+                      if (status == 'published')
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: privacyColor.withValues(alpha: 0.06),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: privacyColor.withValues(alpha: 0.2),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                privacyStatus == 'private'
+                                    ? Icons.lock_outline
+                                    : privacyStatus == 'public'
+                                        ? Icons.public
+                                        : Icons.groups_outlined,
+                                size: 11,
+                                color: privacyColor,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                privacyLabel,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w500,
+                                  color: privacyColor,
+                                  height: 1.2,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+
+              // Action buttons for pending/draft events (only true drafts, not sent to staff yet)
+              if (status == 'draft' && ((e['accepted_staff'] as List?)?.isEmpty ?? true)) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          final eventId = (e['_id'] ?? e['id'] ?? '').toString();
+                          if (eventId.isEmpty) return;
+                          if (!mounted) return;
+                          final changed = await Navigator.of(context).push<bool>(
+                            MaterialPageRoute(
+                              builder: (_) => PendingPublishScreen(
+                                draft: e,
+                                draftId: eventId,
+                              ),
+                            ),
+                          );
+                          if (changed == true) {
+                            await _loadEvents();
+                          }
+                        },
+                        icon: const Icon(Icons.campaign_outlined, size: 16),
+                        label: const Text('Publish'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.grey.shade700,
+                          side: BorderSide(color: Colors.grey.shade300),
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          textStyle: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: Icon(Icons.delete_outline, color: Colors.grey.shade500, size: 20),
+                      onPressed: () async {
+                        final eventId = (e['_id'] ?? e['id'] ?? '').toString();
+                        if (eventId.isEmpty) return;
+
+                        // Confirm deletion
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Delete Event'),
+                            content: const Text('Are you sure you want to delete this draft event?'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: const Text('Cancel'),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                child: const Text('Delete', style: TextStyle(color: ExColors.errorDark)),
+                              ),
+                            ],
+                          ),
+                        );
+
+                        if (confirm != true) return;
+
+                        try {
+                          await _eventService.deleteEvent(eventId);
+                          await _loadEvents();
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Event deleted')),
+                          );
+                        } catch (e) {
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Failed to delete: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ],
           ),
-          ],
         ),
       ),
+    );
+  }
+
+  /// Helper method to build consistent info rows in event cards
+  Widget _buildCardInfoRow({
+    required IconData icon,
+    required String text,
+    bool isMissing = false,
+    bool showEndTimeWarning = false,
+    int maxLines = 1,
+  }) {
+    final Color iconColor = isMissing ? ExColors.warning : Colors.grey.shade500;
+    final Color textColor = isMissing ? ExColors.warning : Colors.grey.shade600;
+
+    return Row(
+      crossAxisAlignment: maxLines > 1 ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+      children: [
+        Icon(
+          isMissing ? Icons.warning_amber_rounded : icon,
+          size: 14,
+          color: iconColor,
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Row(
+            children: [
+              Flexible(
+                child: Text(
+                  text,
+                  maxLines: maxLines,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w400,
+                    color: textColor,
+                    fontStyle: isMissing ? FontStyle.italic : FontStyle.normal,
+                    height: 1.3,
+                  ),
+                ),
+              ),
+              if (showEndTimeWarning) ...[
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.warning_amber_rounded,
+                  size: 12,
+                  color: ExColors.warning.withValues(alpha: 0.7),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
     );
   }
 

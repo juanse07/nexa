@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:nexa/l10n/app_localizations.dart';
 
+import '../services/clients_service.dart';
 import '../services/event_service.dart';
 import '../services/google_places_service.dart';
 import '../widgets/modern_address_field.dart';
@@ -25,6 +26,9 @@ class PendingEditScreen extends StatefulWidget {
 
 class _PendingEditScreenState extends State<PendingEditScreen> {
   final EventService _eventService = EventService();
+  final ClientsService _clientsService = ClientsService();
+
+  List<String> _clientSuggestions = [];
 
   late final TextEditingController _eventNameCtrl;
   late final TextEditingController _clientNameCtrl;
@@ -78,6 +82,26 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
           'call_time': r['call_time']?.toString(),
         };
       }).toList();
+    }
+
+    // Load client suggestions
+    _loadClientSuggestions();
+  }
+
+  Future<void> _loadClientSuggestions() async {
+    try {
+      final clients = await _clientsService.fetchClients();
+      if (mounted) {
+        setState(() {
+          _clientSuggestions = clients
+              .map((c) => c['name']?.toString() ?? '')
+              .where((name) => name.isNotEmpty)
+              .toList();
+        });
+      }
+    } catch (e) {
+      // Silently fail - autocomplete is a nice-to-have
+      print('[PendingEditScreen] Failed to load client suggestions: $e');
     }
   }
 
@@ -316,12 +340,7 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
               hint: 'Enter event title',
             ),
             const SizedBox(height: 16),
-            _modernInput(
-              label: l10n.client,
-              controller: _clientNameCtrl,
-              icon: Icons.business_outlined,
-              hint: 'Client or company name',
-            ),
+            _buildClientAutocomplete(l10n),
             const SizedBox(height: 16),
 
             // Date Picker
@@ -569,6 +588,143 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
             fontWeight: FontWeight.w500,
             color: AppColors.textDark,
           ),
+        ),
+      ],
+    );
+  }
+
+  /// Client name field with autocomplete suggestions
+  Widget _buildClientAutocomplete(AppLocalizations l10n) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.business_outlined, size: 16, color: Colors.grey.shade600),
+            const SizedBox(width: 8),
+            Text(
+              l10n.client,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade700,
+                letterSpacing: 0.1,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Autocomplete<String>(
+          initialValue: TextEditingValue(text: _clientNameCtrl.text),
+          optionsBuilder: (TextEditingValue textEditingValue) {
+            if (textEditingValue.text.isEmpty) {
+              return const Iterable<String>.empty();
+            }
+            final query = textEditingValue.text.toLowerCase();
+            return _clientSuggestions.where((client) =>
+              client.toLowerCase().contains(query)
+            ).take(5);
+          },
+          onSelected: (String selection) {
+            _clientNameCtrl.text = selection;
+          },
+          fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
+            // Sync with our controller
+            textController.text = _clientNameCtrl.text;
+            textController.addListener(() {
+              if (_clientNameCtrl.text != textController.text) {
+                _clientNameCtrl.text = textController.text;
+              }
+            });
+
+            return TextFormField(
+              controller: textController,
+              focusNode: focusNode,
+              onFieldSubmitted: (_) => onFieldSubmitted(),
+              textCapitalization: TextCapitalization.words,
+              decoration: InputDecoration(
+                hintText: 'Client or company name',
+                hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 16),
+                prefixIcon: Container(
+                  margin: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.techBlue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.business_outlined, size: 20, color: AppColors.techBlue),
+                ),
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: Colors.grey.shade300, width: 1.5),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: Colors.grey.shade300, width: 1.5),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: AppColors.techBlue, width: 2),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              ),
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textDark,
+              ),
+            );
+          },
+          optionsViewBuilder: (context, onSelected, options) {
+            return Align(
+              alignment: Alignment.topLeft,
+              child: Material(
+                elevation: 8,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  constraints: const BoxConstraints(maxHeight: 200, maxWidth: 350),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    shrinkWrap: true,
+                    itemCount: options.length,
+                    itemBuilder: (context, index) {
+                      final option = options.elementAt(index);
+                      return ListTile(
+                        dense: true,
+                        leading: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: AppColors.techBlue.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Icon(
+                            Icons.business,
+                            size: 16,
+                            color: AppColors.techBlue,
+                          ),
+                        ),
+                        title: Text(
+                          option,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w500,
+                            fontSize: 14,
+                          ),
+                        ),
+                        onTap: () => onSelected(option),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            );
+          },
         ),
       ],
     );
