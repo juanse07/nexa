@@ -17,6 +17,8 @@ import { RoleModel } from '../models/role';
 import { TariffModel } from '../models/tariff';
 import { VenueModel } from '../models/venue';
 import { AIChatSummaryModel } from '../models/aiChatSummary';
+import { FlaggedAttendanceModel } from '../models/flaggedAttendance';
+import { UserModel } from '../models/user';
 
 const router = Router();
 
@@ -633,6 +635,217 @@ const AI_TOOLS = [
         client_name: {
           type: ['string', 'null'],
           description: 'Optional: Filter tariffs by specific client name'
+        }
+      },
+      required: []
+    }
+  },
+  // ===== STATISTICS & ANALYTICS FUNCTIONS =====
+  {
+    name: 'get_top_staff',
+    description: 'Find top performing staff members by various metrics. Use when manager asks "who\'s my best bartender?", "top servers", "most reliable staff", etc.',
+    parameters: {
+      type: 'object',
+      properties: {
+        metric: {
+          type: 'string',
+          enum: ['hours_worked', 'events_completed', 'punctuality', 'points'],
+          description: 'Metric to rank by: hours_worked (total hours), events_completed (number of events), punctuality (on-time rate), points (gamification)'
+        },
+        role_name: {
+          type: ['string', 'null'],
+          description: 'Optional: Filter by specific role (e.g., "Bartender", "Server")'
+        },
+        limit: {
+          type: ['number', 'null'],
+          description: 'Number of results to return (default: 5, max: 20)'
+        },
+        days: {
+          type: ['number', 'null'],
+          description: 'Time period in days (default: 30)'
+        }
+      },
+      required: ['metric']
+    }
+  },
+  {
+    name: 'get_staff_stats',
+    description: 'Get detailed statistics for a specific staff member. Use when manager asks "show me Maria\'s stats", "how many hours has John worked?", etc.',
+    parameters: {
+      type: 'object',
+      properties: {
+        staff_name: {
+          type: 'string',
+          description: 'Name of the staff member to look up'
+        },
+        days: {
+          type: ['number', 'null'],
+          description: 'Time period in days (default: 30)'
+        }
+      },
+      required: ['staff_name']
+    }
+  },
+  {
+    name: 'get_staff_leaderboard',
+    description: 'Get gamification leaderboard showing points, streaks, and achievements. Use when manager asks "show leaderboard", "who has the most points?", etc.',
+    parameters: {
+      type: 'object',
+      properties: {
+        limit: {
+          type: ['number', 'null'],
+          description: 'Number of results (default: 10)'
+        }
+      },
+      required: []
+    }
+  },
+  {
+    name: 'get_client_stats',
+    description: 'Get statistics for a specific client including events, hours, and revenue. Use when manager asks about a specific client\'s activity.',
+    parameters: {
+      type: 'object',
+      properties: {
+        client_name: {
+          type: 'string',
+          description: 'Name of the client'
+        },
+        days: {
+          type: ['number', 'null'],
+          description: 'Time period in days (default: 90)'
+        }
+      },
+      required: ['client_name']
+    }
+  },
+  {
+    name: 'get_top_clients',
+    description: 'Find top clients by various metrics. Use when manager asks "who\'s my biggest client?", "which client has most events?", etc.',
+    parameters: {
+      type: 'object',
+      properties: {
+        metric: {
+          type: 'string',
+          enum: ['events', 'hours', 'revenue', 'staff_used'],
+          description: 'Metric to rank by'
+        },
+        limit: {
+          type: ['number', 'null'],
+          description: 'Number of results (default: 5)'
+        },
+        days: {
+          type: ['number', 'null'],
+          description: 'Time period in days (default: 90)'
+        }
+      },
+      required: ['metric']
+    }
+  },
+  {
+    name: 'get_revenue_summary',
+    description: 'Calculate revenue/billing metrics using approved hours and tariff rates. Use when manager asks "what\'s my revenue?", "billing summary", etc.',
+    parameters: {
+      type: 'object',
+      properties: {
+        group_by: {
+          type: 'string',
+          enum: ['client', 'role', 'month', 'week'],
+          description: 'How to group the revenue breakdown'
+        },
+        client_name: {
+          type: ['string', 'null'],
+          description: 'Optional: Filter by specific client'
+        },
+        days: {
+          type: ['number', 'null'],
+          description: 'Time period in days (default: 30)'
+        }
+      },
+      required: ['group_by']
+    }
+  },
+  {
+    name: 'get_billing_status',
+    description: 'Get hours approval status breakdown. Use when manager asks "pending hours?", "hours to approve?", "billing status?", etc.',
+    parameters: {
+      type: 'object',
+      properties: {
+        days: {
+          type: ['number', 'null'],
+          description: 'Time period in days (default: 30)'
+        }
+      },
+      required: []
+    }
+  },
+  {
+    name: 'get_role_demand',
+    description: 'Show which roles are most in-demand. Use when manager asks "most requested role?", "role demand?", etc.',
+    parameters: {
+      type: 'object',
+      properties: {
+        limit: {
+          type: ['number', 'null'],
+          description: 'Number of results (default: 10)'
+        },
+        days: {
+          type: ['number', 'null'],
+          description: 'Time period in days (default: 30)'
+        }
+      },
+      required: []
+    }
+  },
+  {
+    name: 'get_event_summary',
+    description: 'Get overview of event activity. Use when manager asks "event summary", "how many events?", "event stats?", etc.',
+    parameters: {
+      type: 'object',
+      properties: {
+        days: {
+          type: ['number', 'null'],
+          description: 'Time period in days (default: 30)'
+        },
+        status: {
+          type: ['string', 'null'],
+          description: 'Optional: Filter by status (draft, published, completed, cancelled)'
+        }
+      },
+      required: []
+    }
+  },
+  {
+    name: 'get_busy_periods',
+    description: 'Identify peak times for scheduling. Use when manager asks "busiest day?", "when do I have most events?", etc.',
+    parameters: {
+      type: 'object',
+      properties: {
+        group_by: {
+          type: 'string',
+          enum: ['day_of_week', 'month'],
+          description: 'How to group: day_of_week (Mon-Sun) or month'
+        },
+        days: {
+          type: ['number', 'null'],
+          description: 'Time period in days (default: 90)'
+        }
+      },
+      required: ['group_by']
+    }
+  },
+  {
+    name: 'get_attendance_issues',
+    description: 'Get summary of attendance flags/anomalies needing review. Use when manager asks "attendance issues?", "any flags?", etc.',
+    parameters: {
+      type: 'object',
+      properties: {
+        days: {
+          type: ['number', 'null'],
+          description: 'Time period in days (default: 30)'
+        },
+        status: {
+          type: ['string', 'null'],
+          description: 'Filter by status: pending (default), all'
         }
       },
       required: []
@@ -1453,6 +1666,674 @@ async function executeFunctionCall(
         }).join('\n');
 
         return `You have ${tariffs.length} tariff(s):\n${tariffList}`;
+      }
+
+      // ===== STATISTICS & ANALYTICS HANDLERS =====
+
+      case 'get_top_staff': {
+        const { metric, role_name, limit = 5, days = 30 } = functionArgs;
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+        const maxLimit = Math.min(limit, 20);
+
+        // Build match filter
+        const matchFilter: any = {
+          managerId,
+          date: { $gte: startDate },
+          status: { $in: ['completed', 'fulfilled', 'in_progress'] }
+        };
+
+        if (role_name) {
+          matchFilter['accepted_staff.role'] = new RegExp(role_name, 'i');
+        }
+
+        if (metric === 'hours_worked') {
+          const results = await EventModel.aggregate([
+            { $match: matchFilter },
+            { $unwind: '$accepted_staff' },
+            ...(role_name ? [{ $match: { 'accepted_staff.role': new RegExp(role_name, 'i') } }] : []),
+            { $unwind: { path: '$accepted_staff.attendance', preserveNullAndEmptyArrays: true } },
+            {
+              $group: {
+                _id: '$accepted_staff.userKey',
+                name: { $first: '$accepted_staff.name' },
+                totalHours: { $sum: { $ifNull: ['$accepted_staff.attendance.approvedHours', '$accepted_staff.attendance.estimatedHours'] } },
+                eventsCount: { $addToSet: '$_id' }
+              }
+            },
+            { $addFields: { eventCount: { $size: '$eventsCount' } } },
+            { $sort: { totalHours: -1 } },
+            { $limit: maxLimit }
+          ]);
+
+          if (results.length === 0) {
+            return `No staff data found for the last ${days} days${role_name ? ` with role "${role_name}"` : ''}.`;
+          }
+
+          const list = results.map((r, i) =>
+            `${i + 1}. ${r.name || 'Unknown'} - ${r.totalHours?.toFixed(1) || 0} hours (${r.eventCount} events)`
+          ).join('\n');
+
+          return `📊 Top Staff by Hours Worked (last ${days} days)${role_name ? ` - ${role_name}` : ''}:\n${list}`;
+        }
+
+        if (metric === 'events_completed') {
+          const results = await EventModel.aggregate([
+            { $match: matchFilter },
+            { $unwind: '$accepted_staff' },
+            ...(role_name ? [{ $match: { 'accepted_staff.role': new RegExp(role_name, 'i') } }] : []),
+            {
+              $group: {
+                _id: '$accepted_staff.userKey',
+                name: { $first: '$accepted_staff.name' },
+                eventCount: { $sum: 1 }
+              }
+            },
+            { $sort: { eventCount: -1 } },
+            { $limit: maxLimit }
+          ]);
+
+          if (results.length === 0) {
+            return `No staff data found for the last ${days} days${role_name ? ` with role "${role_name}"` : ''}.`;
+          }
+
+          const list = results.map((r, i) =>
+            `${i + 1}. ${r.name || 'Unknown'} - ${r.eventCount} events`
+          ).join('\n');
+
+          return `📊 Top Staff by Events Completed (last ${days} days)${role_name ? ` - ${role_name}` : ''}:\n${list}`;
+        }
+
+        if (metric === 'points') {
+          // Get team members for this manager
+          const teamMembers = await TeamMemberModel.find({ managerId, status: 'active' }).lean();
+          const userKeys = teamMembers.map(tm => `${tm.provider}:${tm.subject}`);
+
+          const users = await UserModel.find({
+            userKey: { $in: userKeys },
+            'gamification.totalPoints': { $gt: 0 }
+          })
+            .sort({ 'gamification.totalPoints': -1 })
+            .limit(maxLimit)
+            .lean();
+
+          if (users.length === 0) {
+            return 'No staff with gamification points found.';
+          }
+
+          const list = users.map((u: any, i) =>
+            `${i + 1}. ${u.name || u.first_name || 'Unknown'} - ${u.gamification?.totalPoints || 0} pts (${u.gamification?.currentStreak || 0} day streak)`
+          ).join('\n');
+
+          return `🏆 Top Staff by Points:\n${list}`;
+        }
+
+        return `Metric "${metric}" not supported. Use: hours_worked, events_completed, or points.`;
+      }
+
+      case 'get_staff_stats': {
+        const { staff_name, days = 30 } = functionArgs;
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+
+        // Find events where this staff worked
+        const events = await EventModel.find({
+          managerId,
+          date: { $gte: startDate },
+          'accepted_staff.name': new RegExp(staff_name, 'i')
+        }).lean();
+
+        if (events.length === 0) {
+          return `No events found for staff member "${staff_name}" in the last ${days} days.`;
+        }
+
+        // Calculate stats
+        let totalHours = 0;
+        let eventCount = 0;
+        const rolesWorked = new Set<string>();
+        const clientsWorked = new Set<string>();
+
+        for (const event of events) {
+          const staffEntry = event.accepted_staff?.find(s =>
+            s.name?.toLowerCase().includes(staff_name.toLowerCase())
+          );
+          if (staffEntry) {
+            eventCount++;
+            if (staffEntry.role) rolesWorked.add(staffEntry.role);
+            if (event.client_name) clientsWorked.add(event.client_name);
+
+            for (const attendance of staffEntry.attendance || []) {
+              totalHours += attendance.approvedHours || attendance.estimatedHours || 0;
+            }
+          }
+        }
+
+        const avgHoursPerEvent = eventCount > 0 ? (totalHours / eventCount).toFixed(1) : 0;
+
+        // Try to find gamification data
+        let gamificationInfo = '';
+        const teamMember = await TeamMemberModel.findOne({
+          managerId,
+          $or: [
+            { name: new RegExp(staff_name, 'i') },
+            { email: new RegExp(staff_name, 'i') }
+          ]
+        }).lean();
+
+        if (teamMember) {
+          const user = await UserModel.findOne({
+            userKey: `${teamMember.provider}:${teamMember.subject}`
+          }).lean();
+
+          if ((user as any)?.gamification) {
+            const gam = (user as any).gamification;
+            gamificationInfo = `\n🏆 Points: ${gam.totalPoints || 0}
+🔥 Current Streak: ${gam.currentStreak || 0} days
+⭐ Longest Streak: ${gam.longestStreak || 0} days`;
+          }
+        }
+
+        return `📊 Stats for ${staff_name} (last ${days} days):
+📋 Events Worked: ${eventCount}
+⏱️ Total Hours: ${totalHours.toFixed(1)}
+📈 Avg Hours/Event: ${avgHoursPerEvent}
+👔 Roles: ${Array.from(rolesWorked).join(', ') || 'N/A'}
+🏢 Clients: ${Array.from(clientsWorked).join(', ') || 'N/A'}${gamificationInfo}`;
+      }
+
+      case 'get_staff_leaderboard': {
+        const { limit = 10 } = functionArgs;
+        const maxLimit = Math.min(limit, 20);
+
+        // Get team members for this manager
+        const teamMembers = await TeamMemberModel.find({ managerId, status: 'active' }).lean();
+        const userKeys = teamMembers.map(tm => `${tm.provider}:${tm.subject}`);
+
+        const users = await UserModel.find({
+          userKey: { $in: userKeys }
+        })
+          .sort({ 'gamification.totalPoints': -1 })
+          .limit(maxLimit)
+          .lean();
+
+        if (users.length === 0) {
+          return 'No staff found for leaderboard.';
+        }
+
+        const medals = ['🥇', '🥈', '🥉'];
+        const list = users.map((u: any, i) => {
+          const medal = i < 3 ? medals[i] : `${i + 1}.`;
+          const points = u.gamification?.totalPoints || 0;
+          const streak = u.gamification?.currentStreak || 0;
+          return `${medal} ${u.name || u.first_name || 'Unknown'} - ${points} pts${streak > 0 ? ` (🔥${streak} day streak)` : ''}`;
+        }).join('\n');
+
+        return `🏆 Staff Leaderboard:\n${list}`;
+      }
+
+      case 'get_client_stats': {
+        const { client_name, days = 90 } = functionArgs;
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+
+        // Find events for this client
+        const events = await EventModel.find({
+          managerId,
+          client_name: new RegExp(client_name, 'i'),
+          date: { $gte: startDate }
+        }).lean();
+
+        if (events.length === 0) {
+          return `No events found for client "${client_name}" in the last ${days} days.`;
+        }
+
+        // Calculate stats
+        let totalHours = 0;
+        let totalStaff = 0;
+        const statusCounts: Record<string, number> = {};
+        const rolesUsed = new Map<string, number>();
+
+        for (const event of events) {
+          statusCounts[event.status || 'unknown'] = (statusCounts[event.status || 'unknown'] || 0) + 1;
+
+          for (const staff of event.accepted_staff || []) {
+            totalStaff++;
+            if (staff.role) {
+              rolesUsed.set(staff.role, (rolesUsed.get(staff.role) || 0) + 1);
+            }
+            for (const attendance of staff.attendance || []) {
+              totalHours += attendance.approvedHours || attendance.estimatedHours || 0;
+            }
+          }
+        }
+
+        // Get tariffs for revenue estimate
+        const client = await ClientModel.findOne({
+          managerId,
+          normalizedName: client_name.toLowerCase()
+        }).lean();
+
+        let revenueEstimate = '';
+        if (client) {
+          const tariffs = await TariffModel.find({ managerId, clientId: client._id }).lean();
+          if (tariffs.length > 0) {
+            const avgRate = tariffs.reduce((sum, t) => sum + t.rate, 0) / tariffs.length;
+            revenueEstimate = `\n💰 Est. Revenue: $${(totalHours * avgRate).toFixed(2)} (avg rate $${avgRate.toFixed(2)}/hr)`;
+          }
+        }
+
+        const topRoles = Array.from(rolesUsed.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([role, count]) => `${role} (${count})`)
+          .join(', ');
+
+        return `📊 Stats for ${client_name} (last ${days} days):
+📋 Total Events: ${events.length}
+📈 Status: ${Object.entries(statusCounts).map(([s, c]) => `${s}: ${c}`).join(', ')}
+👥 Staff Assignments: ${totalStaff}
+⏱️ Total Hours: ${totalHours.toFixed(1)}
+👔 Top Roles: ${topRoles || 'N/A'}${revenueEstimate}`;
+      }
+
+      case 'get_top_clients': {
+        const { metric, limit = 5, days = 90 } = functionArgs;
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+        const maxLimit = Math.min(limit, 20);
+
+        const matchFilter = {
+          managerId,
+          date: { $gte: startDate },
+          status: { $in: ['completed', 'fulfilled', 'in_progress', 'published'] }
+        };
+
+        if (metric === 'events') {
+          const results = await EventModel.aggregate([
+            { $match: matchFilter },
+            { $group: { _id: '$client_name', eventCount: { $sum: 1 } } },
+            { $sort: { eventCount: -1 } },
+            { $limit: maxLimit }
+          ]);
+
+          if (results.length === 0) {
+            return `No client data found for the last ${days} days.`;
+          }
+
+          const list = results.map((r, i) => `${i + 1}. ${r._id} - ${r.eventCount} events`).join('\n');
+          return `📊 Top Clients by Events (last ${days} days):\n${list}`;
+        }
+
+        if (metric === 'hours') {
+          const results = await EventModel.aggregate([
+            { $match: matchFilter },
+            { $unwind: '$accepted_staff' },
+            { $unwind: { path: '$accepted_staff.attendance', preserveNullAndEmptyArrays: true } },
+            {
+              $group: {
+                _id: '$client_name',
+                totalHours: { $sum: { $ifNull: ['$accepted_staff.attendance.approvedHours', '$accepted_staff.attendance.estimatedHours'] } }
+              }
+            },
+            { $sort: { totalHours: -1 } },
+            { $limit: maxLimit }
+          ]);
+
+          if (results.length === 0) {
+            return `No client data found for the last ${days} days.`;
+          }
+
+          const list = results.map((r, i) => `${i + 1}. ${r._id} - ${r.totalHours?.toFixed(1) || 0} hours`).join('\n');
+          return `📊 Top Clients by Hours (last ${days} days):\n${list}`;
+        }
+
+        if (metric === 'staff_used') {
+          const results = await EventModel.aggregate([
+            { $match: matchFilter },
+            { $unwind: '$accepted_staff' },
+            {
+              $group: {
+                _id: '$client_name',
+                staffCount: { $sum: 1 }
+              }
+            },
+            { $sort: { staffCount: -1 } },
+            { $limit: maxLimit }
+          ]);
+
+          if (results.length === 0) {
+            return `No client data found for the last ${days} days.`;
+          }
+
+          const list = results.map((r, i) => `${i + 1}. ${r._id} - ${r.staffCount} staff assignments`).join('\n');
+          return `📊 Top Clients by Staff Used (last ${days} days):\n${list}`;
+        }
+
+        return `Metric "${metric}" not supported. Use: events, hours, or staff_used.`;
+      }
+
+      case 'get_revenue_summary': {
+        const { group_by, client_name, days = 30 } = functionArgs;
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+
+        const matchFilter: any = {
+          managerId,
+          date: { $gte: startDate },
+          status: { $in: ['completed', 'fulfilled'] }
+        };
+
+        if (client_name) {
+          matchFilter.client_name = new RegExp(client_name, 'i');
+        }
+
+        // Get tariffs for rate lookup
+        const tariffs = await TariffModel.find({ managerId })
+          .populate('clientId', 'name normalizedName')
+          .populate('roleId', 'name normalizedName')
+          .lean();
+
+        const tariffMap = new Map<string, number>();
+        for (const t of tariffs) {
+          const clientName = (t.clientId as any)?.normalizedName || '';
+          const roleName = (t.roleId as any)?.normalizedName || '';
+          tariffMap.set(`${clientName}:${roleName}`, t.rate);
+        }
+
+        // Get events with hours
+        const events = await EventModel.find(matchFilter).lean();
+
+        if (events.length === 0) {
+          return `No completed events found for the last ${days} days${client_name ? ` for client "${client_name}"` : ''}.`;
+        }
+
+        const revenueByGroup = new Map<string, { hours: number; revenue: number }>();
+
+        for (const event of events) {
+          for (const staff of event.accepted_staff || []) {
+            const clientKey = event.client_name?.toLowerCase() || '';
+            const roleKey = staff.role?.toLowerCase() || '';
+            const rate = tariffMap.get(`${clientKey}:${roleKey}`) || 0;
+
+            let hours = 0;
+            for (const attendance of staff.attendance || []) {
+              hours += attendance.approvedHours || attendance.estimatedHours || 0;
+            }
+
+            let groupKey = '';
+            if (group_by === 'client') {
+              groupKey = event.client_name || 'Unknown';
+            } else if (group_by === 'role') {
+              groupKey = staff.role || 'Unknown';
+            } else if (group_by === 'month' && event.date) {
+              groupKey = new Date(event.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+            } else if (group_by === 'week' && event.date) {
+              const weekStart = new Date(event.date);
+              weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+              groupKey = `Week of ${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+            }
+
+            const current = revenueByGroup.get(groupKey) || { hours: 0, revenue: 0 };
+            current.hours += hours;
+            current.revenue += hours * rate;
+            revenueByGroup.set(groupKey, current);
+          }
+        }
+
+        const sorted = Array.from(revenueByGroup.entries())
+          .sort((a, b) => b[1].revenue - a[1].revenue);
+
+        const totalRevenue = sorted.reduce((sum, [, data]) => sum + data.revenue, 0);
+        const totalHours = sorted.reduce((sum, [, data]) => sum + data.hours, 0);
+
+        const list = sorted.map(([group, data]) =>
+          `${group}: $${data.revenue.toFixed(2)} (${data.hours.toFixed(1)} hrs)`
+        ).join('\n');
+
+        return `💰 Revenue Summary by ${group_by} (last ${days} days):
+${list}
+━━━━━━━━━━━━━━━━━━
+Total: $${totalRevenue.toFixed(2)} (${totalHours.toFixed(1)} hours)`;
+      }
+
+      case 'get_billing_status': {
+        const { days = 30 } = functionArgs;
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+
+        const events = await EventModel.find({
+          managerId,
+          date: { $gte: startDate }
+        }).lean();
+
+        const statusCounts: Record<string, { count: number; hours: number }> = {
+          pending: { count: 0, hours: 0 },
+          sheet_submitted: { count: 0, hours: 0 },
+          approved: { count: 0, hours: 0 },
+          paid: { count: 0, hours: 0 }
+        };
+
+        for (const event of events) {
+          const status = event.hoursStatus || 'pending';
+          if (!statusCounts[status]) {
+            statusCounts[status] = { count: 0, hours: 0 };
+          }
+          statusCounts[status].count++;
+
+          for (const staff of event.accepted_staff || []) {
+            for (const attendance of staff.attendance || []) {
+              statusCounts[status].hours += attendance.approvedHours || attendance.estimatedHours || 0;
+            }
+          }
+        }
+
+        return `📋 Billing Status (last ${days} days):
+⏳ Pending: ${statusCounts.pending?.count || 0} events (${(statusCounts.pending?.hours || 0).toFixed(1)} hrs)
+📝 Sheet Submitted: ${statusCounts.sheet_submitted?.count || 0} events (${(statusCounts.sheet_submitted?.hours || 0).toFixed(1)} hrs)
+✅ Approved: ${statusCounts.approved?.count || 0} events (${(statusCounts.approved?.hours || 0).toFixed(1)} hrs)
+💵 Paid: ${statusCounts.paid?.count || 0} events (${(statusCounts.paid?.hours || 0).toFixed(1)} hrs)`;
+      }
+
+      case 'get_role_demand': {
+        const { limit = 10, days = 30 } = functionArgs;
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+        const maxLimit = Math.min(limit, 20);
+
+        const results = await EventModel.aggregate([
+          {
+            $match: {
+              managerId,
+              date: { $gte: startDate }
+            }
+          },
+          { $unwind: '$roles' },
+          {
+            $group: {
+              _id: '$roles.role',
+              timesRequested: { $sum: 1 },
+              totalNeeded: { $sum: '$roles.count' }
+            }
+          },
+          { $sort: { timesRequested: -1 } },
+          { $limit: maxLimit }
+        ]);
+
+        if (results.length === 0) {
+          return `No role demand data found for the last ${days} days.`;
+        }
+
+        const list = results.map((r, i) =>
+          `${i + 1}. ${r._id} - ${r.timesRequested} events (${r.totalNeeded} positions total)`
+        ).join('\n');
+
+        return `📊 Role Demand (last ${days} days):\n${list}`;
+      }
+
+      case 'get_event_summary': {
+        const { days = 30, status } = functionArgs;
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+
+        const matchFilter: any = {
+          managerId,
+          date: { $gte: startDate }
+        };
+
+        if (status) {
+          matchFilter.status = status;
+        }
+
+        const events = await EventModel.find(matchFilter).lean();
+
+        if (events.length === 0) {
+          return `No events found for the last ${days} days${status ? ` with status "${status}"` : ''}.`;
+        }
+
+        // Calculate stats
+        const statusCounts: Record<string, number> = {};
+        const venueCounts: Record<string, number> = {};
+        let totalStaff = 0;
+        let totalCapacity = 0;
+        let filledCapacity = 0;
+
+        for (const event of events) {
+          statusCounts[event.status || 'unknown'] = (statusCounts[event.status || 'unknown'] || 0) + 1;
+
+          if (event.venue_name) {
+            venueCounts[event.venue_name] = (venueCounts[event.venue_name] || 0) + 1;
+          }
+
+          totalStaff += event.accepted_staff?.length || 0;
+
+          for (const roleStat of event.role_stats || []) {
+            totalCapacity += roleStat.capacity || 0;
+            filledCapacity += roleStat.taken || 0;
+          }
+        }
+
+        const utilizationRate = totalCapacity > 0 ? ((filledCapacity / totalCapacity) * 100).toFixed(1) : 'N/A';
+        const avgStaffPerEvent = (totalStaff / events.length).toFixed(1);
+
+        const topVenues = Object.entries(venueCounts)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([v, c]) => `${v} (${c})`)
+          .join(', ');
+
+        return `📊 Event Summary (last ${days} days):
+📋 Total Events: ${events.length}
+📈 By Status: ${Object.entries(statusCounts).map(([s, c]) => `${s}: ${c}`).join(', ')}
+👥 Avg Staff/Event: ${avgStaffPerEvent}
+📊 Capacity Utilization: ${utilizationRate}%
+🏢 Top Venues: ${topVenues || 'N/A'}`;
+      }
+
+      case 'get_busy_periods': {
+        const { group_by, days = 90 } = functionArgs;
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+
+        const events = await EventModel.find({
+          managerId,
+          date: { $gte: startDate }
+        }).lean();
+
+        if (events.length === 0) {
+          return `No events found for the last ${days} days.`;
+        }
+
+        const periodCounts = new Map<string, number>();
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+        for (const event of events) {
+          if (!event.date) continue;
+          const eventDate = new Date(event.date);
+          let key = '';
+
+          if (group_by === 'day_of_week') {
+            key = dayNames[eventDate.getDay()] ?? 'Unknown';
+          } else if (group_by === 'month') {
+            key = eventDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+          }
+
+          periodCounts.set(key, (periodCounts.get(key) || 0) + 1);
+        }
+
+        let sorted: [string, number][];
+        if (group_by === 'day_of_week') {
+          // Sort by day order
+          sorted = dayNames.map(day => [day, periodCounts.get(day) || 0] as [string, number]);
+        } else {
+          sorted = Array.from(periodCounts.entries()).sort((a, b) => b[1] - a[1]);
+        }
+
+        const maxCount = Math.max(...sorted.map(([, c]) => c));
+        const busiest = sorted.find(([, c]) => c === maxCount)?.[0] || 'Unknown';
+
+        const list = sorted.map(([period, count]) => {
+          const bar = '█'.repeat(Math.round((count / maxCount) * 10));
+          return `${period}: ${bar} ${count}`;
+        }).join('\n');
+
+        return `📊 Events by ${group_by === 'day_of_week' ? 'Day of Week' : 'Month'} (last ${days} days):
+${list}
+━━━━━━━━━━━━━━━━━━
+🔥 Busiest: ${busiest}`;
+      }
+
+      case 'get_attendance_issues': {
+        const { days = 30, status = 'pending' } = functionArgs;
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+
+        const matchFilter: any = {
+          managerId,
+          createdAt: { $gte: startDate }
+        };
+
+        if (status !== 'all') {
+          matchFilter.status = status;
+        }
+
+        const flags = await FlaggedAttendanceModel.find(matchFilter)
+          .sort({ createdAt: -1 })
+          .limit(50)
+          .lean();
+
+        if (flags.length === 0) {
+          return `No ${status === 'pending' ? 'pending ' : ''}attendance issues found for the last ${days} days. ✅`;
+        }
+
+        // Group by type
+        const byType: Record<string, number> = {};
+        const bySeverity: Record<string, number> = {};
+        const byStaff: Record<string, number> = {};
+
+        for (const flag of flags) {
+          byType[flag.flagType] = (byType[flag.flagType] || 0) + 1;
+          bySeverity[flag.severity] = (bySeverity[flag.severity] || 0) + 1;
+          if (flag.staffName) {
+            byStaff[flag.staffName] = (byStaff[flag.staffName] || 0) + 1;
+          }
+        }
+
+        const topStaff = Object.entries(byStaff)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([name, count]) => `${name} (${count})`)
+          .join(', ');
+
+        return `⚠️ Attendance Issues (last ${days} days)${status === 'pending' ? ' - Pending Review' : ''}:
+📊 Total Flags: ${flags.length}
+
+By Type:
+${Object.entries(byType).map(([t, c]) => `  • ${t}: ${c}`).join('\n')}
+
+By Severity:
+${Object.entries(bySeverity).map(([s, c]) => `  • ${s}: ${c}`).join('\n')}
+
+${topStaff ? `Most Flagged: ${topStaff}` : ''}`;
       }
 
       case 'create_shift': {
