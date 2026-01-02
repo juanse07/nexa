@@ -1177,7 +1177,7 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
   }
 
   // Model preference for Groq ('llama' or 'gpt-oss')
-  String _modelPreference = 'llama'; // Default to Llama 3.1 8B (faster, cheaper)
+  String _modelPreference = 'gpt-oss'; // Default to GPT-OSS 20B (supports function calling)
 
   /// Get current AI provider
   String get aiProviderName => _aiProvider;
@@ -1217,7 +1217,7 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
       'temperature': 0.7,
       'maxTokens': 500,
       'provider': _aiProvider,
-      'model': modelMap[_modelPreference] ?? 'llama-3.1-8b-instant',
+      'model': modelMap[_modelPreference] ?? 'openai/gpt-oss-20b',
     };
 
     final headers = {
