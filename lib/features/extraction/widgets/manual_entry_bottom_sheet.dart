@@ -7,6 +7,7 @@ import '../../../shared/services/error_display_service.dart';
 import '../services/clients_service.dart';
 import '../services/event_service.dart';
 import '../services/google_places_service.dart';
+import '../services/roles_service.dart';
 import 'modern_address_field.dart';
 
 /// A lightweight bottom sheet for quick event creation without AI extraction.
@@ -21,6 +22,7 @@ class ManualEntryBottomSheet extends StatefulWidget {
 class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
   final EventService _eventService = EventService();
   final ClientsService _clientsService = ClientsService();
+  final RolesService _rolesService = RolesService();
 
   // Form controllers
   final _clientNameCtrl = TextEditingController();
@@ -49,21 +51,15 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
   List<String> _clientNames = [];
   bool _loadingClients = true;
 
-  // Common positions for quick selection
-  static const _commonPositions = [
-    'Bartender',
-    'Server',
-    'Busser',
-    'Host',
-    'Event Staff',
-    'Cook',
-    'Security',
-  ];
+  // Roles for position selection (loaded from API)
+  List<String> _availableRoles = [];
+  bool _loadingRoles = true;
 
   @override
   void initState() {
     super.initState();
     _loadClients();
+    _loadRoles();
   }
 
   Future<void> _loadClients() async {
@@ -81,6 +77,25 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
     } catch (e) {
       if (mounted) {
         setState(() => _loadingClients = false);
+      }
+    }
+  }
+
+  Future<void> _loadRoles() async {
+    try {
+      final roles = await _rolesService.fetchRoles();
+      if (mounted) {
+        setState(() {
+          _availableRoles = roles
+              .map((r) => r['name']?.toString() ?? '')
+              .where((name) => name.isNotEmpty)
+              .toList();
+          _loadingRoles = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingRoles = false);
       }
     }
   }
@@ -788,12 +803,46 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
   }
 
   Widget _buildRolesChips() {
+    if (_loadingRoles) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.grey.shade400,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Loading roles...',
+              style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_availableRoles.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Text(
+          'No roles available. Add roles in Settings.',
+          style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+        ),
+      );
+    }
+
     final selectedRoles = _roles.map((r) => r['role']?.toString().toLowerCase()).toSet();
 
     return Wrap(
       spacing: 8,
       runSpacing: 8,
-      children: _commonPositions.map((role) {
+      children: _availableRoles.map((role) {
         final isSelected = selectedRoles.contains(role.toLowerCase());
         return FilterChip(
           label: Text(role),
