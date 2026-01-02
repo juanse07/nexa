@@ -20,7 +20,6 @@ import {
   isValidCoordinate,
   DEFAULT_GEOFENCE_RADIUS_METERS,
 } from '../utils/geolocation';
-import { awardClockInPoints } from '../services/gamificationService';
 import { FlaggedAttendanceModel, FlagType, FlagSeverity } from '../models/flaggedAttendance';
 
 const router = Router();
@@ -2848,25 +2847,8 @@ router.post('/events/:id/clock-in', requireAuth, async (req, res) => {
       return res.status(404).json({ message: 'Event not found' });
     }
 
-    // Award gamification points for punctual clock-in
-    let gamification: any = null;
-    try {
-      const gamificationResult = await awardClockInPoints(userKey, event, clockInTime);
-      if (gamificationResult) {
-        gamification = {
-          pointsEarned: gamificationResult.pointsEarned,
-          reason: gamificationResult.reason,
-          newStreak: gamificationResult.newStreak,
-          isNewRecord: gamificationResult.isNewRecord,
-          totalPoints: gamificationResult.totalPoints,
-          bonusPoints: gamificationResult.bonusPoints,
-          bonusReason: gamificationResult.bonusReason,
-        };
-      }
-    } catch (gamErr) {
-      // Don't fail the clock-in if gamification fails
-      console.error('[clock-in] gamification failed:', gamErr);
-    }
+    // Gamification points (future feature - disabled for now)
+    const gamification: any = null;
 
     return res.status(200).json({
       message: 'Clocked in',
