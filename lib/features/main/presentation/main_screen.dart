@@ -8,6 +8,7 @@ import '../../../services/terminology_provider.dart';
 // ===== END HOME DASHBOARD IMPORT =====
 import '../../extraction/presentation/extraction_screen.dart';
 import '../../chat/presentation/conversations_screen.dart';
+import '../../attendance/presentation/attendance_dashboard_screen.dart';
 import '../../users/presentation/pages/settings_page.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
@@ -60,6 +61,7 @@ class _MainScreenState extends State<MainScreen>
       initialScreenIndex: 4,
       hideNavigationRail: true,
     ), // Catalog screen (now index 2)
+    const AttendanceDashboardScreen(), // Attendance tab (index 3)
   ];
 
   @override
@@ -271,6 +273,7 @@ class _MainScreenState extends State<MainScreen>
               _buildNavButton(0, Icons.view_module, context.watch<TerminologyProvider>().plural), // Was index 2, now 0
               _buildNavButton(1, Icons.chat_bubble_outline, 'Chat'), // Was index 3, now 1
               _buildNavButton(2, Icons.inventory_2, 'Catalog'), // Was index 4, now 2
+              _buildNavButton(3, Icons.fact_check_outlined, 'Attendance'), // Attendance tab (index 3)
             ],
           ),
         ),
@@ -394,6 +397,7 @@ class _MainScreenState extends State<MainScreen>
           _buildRailItem(0, Icons.view_module, context.watch<TerminologyProvider>().plural), // Was index 2, now 0
           _buildRailItem(1, Icons.chat_bubble_outline, 'Chat'), // Was index 3, now 1
           _buildRailItem(2, Icons.inventory_2, 'Catalog'), // Was index 4, now 2
+          _buildRailItem(3, Icons.fact_check_outlined, 'Attendance'), // Attendance tab (index 3)
           const Spacer(),
           // Settings at bottom
           _buildRailItem(-1, Icons.settings, 'Settings'),

@@ -6,11 +6,34 @@ export interface RoleRequirement {
   call_time?: string;
 }
 
+export interface ClockLocation {
+  latitude: number;
+  longitude: number;
+  accuracy?: number;
+  source: 'manual' | 'geofence' | 'voice_assistant' | 'bulk_manager';
+}
+
 export interface AttendanceSession {
   // Digital clock-in/out (reference only)
   clockInAt: Date;
   clockOutAt?: Date;
   estimatedHours?: number;
+
+  // Location tracking for geofence validation
+  clockInLocation?: ClockLocation;
+  clockOutLocation?: {
+    latitude: number;
+    longitude: number;
+    accuracy?: number;
+  };
+
+  // Auto clock-out tracking
+  autoClockOut?: boolean;
+  autoClockOutReason?: 'shift_end_buffer' | 'forgot_clock_out' | 'manager_override';
+
+  // Manager override for bulk clock-in
+  overrideBy?: string;  // Manager userKey who performed bulk clock-in
+  overrideNote?: string;
 
   // Official hours from client sign-in sheet (source of truth)
   sheetSignInTime?: Date;
@@ -161,6 +184,42 @@ const AcceptedStaffMemberSchema = new Schema<AcceptedStaffMember>(
             clockInAt: { type: Date, required: true },
             clockOutAt: { type: Date },
             estimatedHours: { type: Number },
+            // Location tracking for geofence validation
+            clockInLocation: {
+              type: new Schema(
+                {
+                  latitude: { type: Number, required: true },
+                  longitude: { type: Number, required: true },
+                  accuracy: { type: Number },
+                  source: {
+                    type: String,
+                    enum: ['manual', 'geofence', 'voice_assistant', 'bulk_manager'],
+                    default: 'manual',
+                  },
+                },
+                { _id: false }
+              ),
+            },
+            clockOutLocation: {
+              type: new Schema(
+                {
+                  latitude: { type: Number, required: true },
+                  longitude: { type: Number, required: true },
+                  accuracy: { type: Number },
+                },
+                { _id: false }
+              ),
+            },
+            // Auto clock-out tracking
+            autoClockOut: { type: Boolean, default: false },
+            autoClockOutReason: {
+              type: String,
+              enum: ['shift_end_buffer', 'forgot_clock_out', 'manager_override'],
+            },
+            // Manager override for bulk clock-in
+            overrideBy: { type: String, trim: true },
+            overrideNote: { type: String, trim: true },
+            // Hours from sign-in sheet
             sheetSignInTime: { type: Date },
             sheetSignOutTime: { type: Date },
             approvedHours: { type: Number },

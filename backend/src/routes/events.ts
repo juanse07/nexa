@@ -14,8 +14,137 @@ import { resolveManagerForRequest } from '../utils/manager';
 import { emitToManager, emitToTeams, emitToUser } from '../socket/server';
 import { notificationService } from '../services/notificationService';
 import { UserModel } from '../models/user';
+import {
+  isWithinGeofence,
+  formatDistance,
+  isValidCoordinate,
+  DEFAULT_GEOFENCE_RADIUS_METERS,
+} from '../utils/geolocation';
+import { awardClockInPoints } from '../services/gamificationService';
+import { FlaggedAttendanceModel, FlagType, FlagSeverity } from '../models/flaggedAttendance';
 
 const router = Router();
+
+/**
+ * Check for unusual attendance patterns and create flags for manager review.
+ * Flags are created asynchronously and don't block the clock-out response.
+ */
+async function checkUnusualPatterns(
+  event: any,
+  userKey: string,
+  attendanceRecord: any,
+  staffInfo: any
+): Promise<void> {
+  const flags: Array<{ type: FlagType; severity: FlagSeverity; reason: string }> = [];
+
+  const clockInTime = new Date(attendanceRecord.clockInAt);
+  const clockOutTime = new Date(attendanceRecord.clockOutAt);
+  const hoursWorked = (clockOutTime.getTime() - clockInTime.getTime()) / (1000 * 60 * 60);
+  const clockOutHour = clockOutTime.getHours();
+
+  // Calculate expected duration from event times
+  let expectedHours: number | undefined;
+  if (event.start_time && event.end_time) {
+    const [startH, startM] = event.start_time.split(':').map(Number);
+    const [endH, endM] = event.end_time.split(':').map(Number);
+    if (!isNaN(startH) && !isNaN(endH)) {
+      expectedHours = (endH + endM / 60) - (startH + startM / 60);
+      if (expectedHours < 0) expectedHours += 24; // Handle overnight shifts
+    }
+  }
+
+  // Flag 1: Unusual clock-out hours (11 PM - 5 AM)
+  if (clockOutHour >= 23 || clockOutHour < 5) {
+    flags.push({
+      type: 'unusual_hours',
+      severity: clockOutHour >= 2 && clockOutHour < 5 ? 'high' : 'medium',
+      reason: `Clock-out at unusual hour: ${clockOutTime.toLocaleTimeString()}`,
+    });
+  }
+
+  // Flag 2: Excessive duration (more than expected + 3 hours, or > 12 hours)
+  if (expectedHours && hoursWorked > expectedHours + 3) {
+    flags.push({
+      type: 'excessive_duration',
+      severity: hoursWorked > expectedHours + 5 ? 'high' : 'medium',
+      reason: `Worked ${hoursWorked.toFixed(1)}h vs expected ${expectedHours.toFixed(1)}h`,
+    });
+  } else if (hoursWorked > 12) {
+    flags.push({
+      type: 'excessive_duration',
+      severity: hoursWorked > 16 ? 'high' : 'medium',
+      reason: `Worked ${hoursWorked.toFixed(1)} hours (over 12h limit)`,
+    });
+  }
+
+  // Flag 3: Very late clock-out (more than 4 hours after expected end time)
+  if (event.end_time && event.date) {
+    const [endH, endM] = event.end_time.split(':').map(Number);
+    if (!isNaN(endH) && !isNaN(endM)) {
+      const expectedEnd = new Date(event.date);
+      expectedEnd.setHours(endH, endM, 0, 0);
+      const hoursLate = (clockOutTime.getTime() - expectedEnd.getTime()) / (1000 * 60 * 60);
+      if (hoursLate > 4) {
+        flags.push({
+          type: 'late_clock_out',
+          severity: hoursLate > 8 ? 'high' : 'medium',
+          reason: `Clocked out ${hoursLate.toFixed(1)} hours after shift end`,
+        });
+      }
+    }
+  }
+
+  // Create flags in database and notify manager
+  for (const flag of flags) {
+    try {
+      await FlaggedAttendanceModel.create({
+        eventId: event._id,
+        managerId: event.managerId,
+        userKey,
+        staffName: staffInfo?.name || `${staffInfo?.first_name || ''} ${staffInfo?.last_name || ''}`.trim() || userKey,
+        eventName: event.event_name || event.shift_name,
+        eventDate: event.date ? new Date(event.date) : undefined,
+        flagType: flag.type,
+        severity: flag.severity,
+        details: {
+          clockInAt: clockInTime,
+          clockOutAt: clockOutTime,
+          expectedDurationHours: expectedHours,
+          actualDurationHours: hoursWorked,
+          clockInLocation: attendanceRecord.clockInLocation,
+          clockOutLocation: attendanceRecord.clockOutLocation,
+          venueLocation: event.venue_latitude && event.venue_longitude
+            ? { latitude: event.venue_latitude, longitude: event.venue_longitude }
+            : undefined,
+        },
+        status: 'pending',
+      });
+
+      // Send notification to manager (using sendToUser with manager's user key)
+      if (event.managerId) {
+        try {
+          const flagManager = await ManagerModel.findById(event.managerId);
+          if (flagManager?.subject && flagManager?.provider) {
+            const managerUserKey = `${flagManager.provider}:${flagManager.subject}`;
+            await notificationService.sendToUser(
+              managerUserKey,
+              `⚠️ Attendance Flag: ${flag.severity.toUpperCase()}`,
+              `${staffInfo?.name || userKey}: ${flag.reason}`,
+              {
+                type: 'event',  // Use existing notification type
+                eventId: String(event._id),
+              }
+            );
+          }
+        } catch (notifyErr) {
+          console.error('[checkUnusualPatterns] Failed to notify manager:', notifyErr);
+        }
+      }
+    } catch (err) {
+      console.error('[checkUnusualPatterns] Failed to create flag:', err);
+    }
+  }
+}
 
 const roleSchema = z.object({
   role: z.string().min(1, 'role is required'),
@@ -1477,6 +1606,288 @@ router.delete('/events/:id', requireAuth, async (req, res) => {
   }
 });
 
+// ============================================================================
+// ATTENDANCE DASHBOARD ENDPOINTS (Must be defined BEFORE /events/:id)
+// These routes have literal paths that would otherwise be caught by :id param
+// ============================================================================
+
+// Get attendance report for manager dashboard
+router.get('/events/attendance-report', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    if (!manager) {
+      return res.status(403).json({ message: 'Manager access required' });
+    }
+
+    const { startDate, endDate, eventId } = req.query;
+
+    // Build filter for events
+    const eventFilter: any = { managerId: manager._id };
+
+    if (startDate && typeof startDate === 'string') {
+      eventFilter.date = { ...eventFilter.date, $gte: new Date(startDate) };
+    }
+    if (endDate && typeof endDate === 'string') {
+      eventFilter.date = { ...eventFilter.date, $lte: new Date(endDate) };
+    }
+    if (eventId && typeof eventId === 'string' && mongoose.Types.ObjectId.isValid(eventId)) {
+      eventFilter._id = new mongoose.Types.ObjectId(eventId);
+    }
+
+    // Fetch events with attendance data
+    const events = await EventModel.find(eventFilter, {
+      _id: 1,
+      event_name: 1,
+      date: 1,
+      accepted_staff: 1,
+    }).lean();
+
+    // Extract all attendance records with staff info
+    const report: any[] = [];
+    for (const event of events) {
+      const acceptedStaff = (event.accepted_staff || []) as any[];
+      for (const staff of acceptedStaff) {
+        const attendance = (staff.attendance || []) as any[];
+        for (const record of attendance) {
+          if (record.clockInAt) {
+            const clockInAt = new Date(record.clockInAt);
+            const clockOutAt = record.clockOutAt ? new Date(record.clockOutAt) : null;
+            const hoursWorked = clockOutAt
+              ? (clockOutAt.getTime() - clockInAt.getTime()) / (1000 * 60 * 60)
+              : null;
+
+            report.push({
+              eventId: String(event._id),
+              eventName: event.event_name,
+              eventDate: event.date,
+              userKey: staff.userKey,
+              staffName: staff.name || `${staff.first_name || ''} ${staff.last_name || ''}`.trim() || 'Unknown',
+              role: staff.role,
+              picture: staff.picture,
+              email: staff.email,
+              clockInAt: record.clockInAt,
+              clockOutAt: record.clockOutAt,
+              hoursWorked: hoursWorked !== null ? Math.round(hoursWorked * 100) / 100 : null,
+              autoClockOut: record.autoClockOut || false,
+              clockInLocation: record.clockInLocation,
+              clockOutLocation: record.clockOutLocation,
+            });
+          }
+        }
+      }
+    }
+
+    // Sort by clock-in time (most recent first)
+    report.sort((a, b) => new Date(b.clockInAt).getTime() - new Date(a.clockInAt).getTime());
+
+    return res.json({ report });
+  } catch (err) {
+    console.error('[attendance-report] GET failed:', err);
+    return res.status(500).json({ message: 'Failed to generate attendance report' });
+  }
+});
+
+// Helper function to format elapsed time
+function formatElapsedTime(ms: number): string {
+  const hours = Math.floor(ms / (1000 * 60 * 60));
+  const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${minutes}m`;
+}
+
+// Get all staff currently clocked in across manager's events
+router.get('/events/currently-clocked-in', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    if (!manager) {
+      return res.status(403).json({ message: 'Manager access required' });
+    }
+
+    // Get all events for this manager from the last 48 hours
+    const cutoffDate = new Date();
+    cutoffDate.setHours(cutoffDate.getHours() - 48);
+
+    const events = await EventModel.find(
+      {
+        managerId: manager._id,
+        date: { $gte: cutoffDate },
+      },
+      {
+        _id: 1,
+        event_name: 1,
+        date: 1,
+        accepted_staff: 1,
+        venue_address: 1,
+      }
+    ).lean();
+
+    const clockedInStaff: any[] = [];
+
+    for (const event of events) {
+      const acceptedStaff = (event.accepted_staff || []) as any[];
+
+      for (const staff of acceptedStaff) {
+        const attendance = (staff.attendance || []) as any[];
+
+        // Find active clock-in (has clockInAt but no clockOutAt)
+        const activeSession = attendance.find(
+          (a: any) => a.clockInAt && !a.clockOutAt
+        );
+
+        if (activeSession) {
+          const clockInTime = new Date(activeSession.clockInAt);
+          const elapsed = Date.now() - clockInTime.getTime();
+
+          clockedInStaff.push({
+            userKey: staff.userKey,
+            name: staff.name || `${staff.first_name || ''} ${staff.last_name || ''}`.trim() || 'Unknown',
+            picture: staff.picture,
+            role: staff.role,
+            email: staff.email,
+            eventId: String(event._id),
+            eventName: event.event_name,
+            venueAddress: event.venue_address,
+            clockInTime: activeSession.clockInAt,
+            elapsedMs: elapsed,
+            elapsedFormatted: formatElapsedTime(elapsed),
+            clockInLocation: activeSession.clockInLocation,
+          });
+        }
+      }
+    }
+
+    // Sort by clock-in time (most recent first)
+    clockedInStaff.sort(
+      (a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime()
+    );
+
+    return res.json({
+      count: clockedInStaff.length,
+      staff: clockedInStaff,
+    });
+  } catch (err) {
+    console.error('[currently-clocked-in] GET failed:', err);
+    return res.status(500).json({ message: 'Failed to fetch currently clocked-in staff' });
+  }
+});
+
+// Get attendance analytics for dashboard hero header
+router.get('/events/attendance-analytics', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    if (!manager) {
+      return res.status(403).json({ message: 'Manager access required' });
+    }
+
+    const { startDate, endDate } = req.query;
+
+    // Default to last 7 days
+    const end = endDate ? new Date(endDate as string) : new Date();
+    const start = startDate
+      ? new Date(startDate as string)
+      : new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    // Get all events in date range
+    const events = await EventModel.find(
+      {
+        managerId: manager._id,
+        date: { $gte: start, $lte: end },
+      },
+      {
+        _id: 1,
+        event_name: 1,
+        date: 1,
+        accepted_staff: 1,
+      }
+    ).lean();
+
+    let currentlyWorking = 0;
+    let totalHoursToday = 0;
+    const dailyHours: { [date: string]: number } = {};
+
+    // Initialize daily hours for all days in range
+    const currentDate = new Date(start);
+    while (currentDate <= end) {
+      const dateKey = currentDate.toISOString().split('T')[0] as string;
+      dailyHours[dateKey] = 0;
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+
+    for (const event of events) {
+      const acceptedStaff = (event.accepted_staff || []) as any[];
+      const eventDate = event.date ? new Date(event.date).toISOString().split('T')[0] : null;
+
+      for (const staff of acceptedStaff) {
+        const attendance = (staff.attendance || []) as any[];
+
+        for (const record of attendance) {
+          if (!record.clockInAt) continue;
+
+          const clockIn = new Date(record.clockInAt);
+          const clockInDate = clockIn.toISOString().split('T')[0] as string;
+          const clockOut = record.clockOutAt ? new Date(record.clockOutAt) : null;
+
+          // Count currently working (clocked in, not clocked out)
+          if (!clockOut) {
+            currentlyWorking++;
+          }
+
+          // Calculate hours worked
+          const endTime = clockOut || new Date();
+          const hoursWorked = (endTime.getTime() - clockIn.getTime()) / (1000 * 60 * 60);
+
+          // Add to daily totals
+          if (clockInDate in dailyHours) {
+            dailyHours[clockInDate]! += hoursWorked;
+          }
+
+          // Add to today's total
+          if (clockInDate === today) {
+            totalHoursToday += hoursWorked;
+          }
+        }
+      }
+    }
+
+    // Get pending flags count
+    const pendingFlagsCount = await FlaggedAttendanceModel.countDocuments({
+      managerId: manager._id,
+      status: 'pending',
+    });
+
+    // Format daily hours as array
+    const weeklyHours = Object.entries(dailyHours)
+      .map(([date, hours]) => ({
+        date,
+        hours: Math.round(hours * 10) / 10,
+        dayOfWeek: new Date(date).toLocaleDateString('en-US', { weekday: 'short' }),
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    return res.json({
+      currentlyWorking,
+      todayTotalHours: Math.round(totalHoursToday * 10) / 10,
+      pendingFlags: pendingFlagsCount,
+      weeklyHours,
+      dateRange: {
+        start: start.toISOString(),
+        end: end.toISOString(),
+      },
+    });
+  } catch (err) {
+    console.error('[attendance-analytics] GET failed:', err);
+    return res.status(500).json({ message: 'Failed to fetch attendance analytics' });
+  }
+});
+
+// ============================================================================
+// END ATTENDANCE DASHBOARD ENDPOINTS
+// ============================================================================
+
 // Get a single event by ID
 router.get('/events/:id', requireAuth, async (req, res) => {
   try {
@@ -2334,7 +2745,15 @@ router.get('/events/:id/attendance/me', requireAuth, async (req, res) => {
   }
 });
 
-// Clock in to an event
+// Zod schema for clock-in request with location
+const clockInSchema = z.object({
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  accuracy: z.number().positive().optional(),
+  source: z.enum(['manual', 'geofence', 'voice_assistant', 'bulk_manager']).optional(),
+});
+
+// Clock in to an event (with optional server-side geofence validation)
 router.post('/events/:id/clock-in', requireAuth, async (req, res) => {
   try {
     const eventId = req.params.id ?? '';
@@ -2346,8 +2765,51 @@ router.post('/events/:id/clock-in', requireAuth, async (req, res) => {
     }
     const userKey = `${(req as any).authUser.provider}:${(req as any).authUser.sub}`;
 
+    // Parse location from request body
+    const parseResult = clockInSchema.safeParse(req.body);
+    const { latitude, longitude, accuracy, source } = parseResult.success
+      ? parseResult.data
+      : { latitude: undefined, longitude: undefined, accuracy: undefined, source: undefined };
+
     const event = await EventModel.findById(eventId).lean();
     if (!event) return res.status(404).json({ message: 'Event not found' });
+
+    // Server-side geofence validation (if venue and user location are available)
+    if (
+      event.venue_latitude &&
+      event.venue_longitude &&
+      latitude !== undefined &&
+      longitude !== undefined &&
+      isValidCoordinate(latitude, longitude) &&
+      isValidCoordinate(event.venue_latitude, event.venue_longitude)
+    ) {
+      // Get manager's configured geofence radius (or use default)
+      const manager = await ManagerModel.findById(event.managerId).lean();
+      const geofenceRadius =
+        (manager as any)?.clockInConfig?.geofenceRadiusMeters ?? DEFAULT_GEOFENCE_RADIUS_METERS;
+
+      const { isInside, distanceMeters } = isWithinGeofence(
+        latitude,
+        longitude,
+        event.venue_latitude,
+        event.venue_longitude,
+        geofenceRadius
+      );
+
+      if (!isInside) {
+        return res.status(403).json({
+          message: `You are ${formatDistance(distanceMeters)} from the venue. Please be within ${formatDistance(geofenceRadius)} to clock in.`,
+          code: 'GEOFENCE_VIOLATION',
+          distanceMeters,
+          requiredRadiusMeters: geofenceRadius,
+          venueLocation: {
+            latitude: event.venue_latitude,
+            longitude: event.venue_longitude,
+          },
+        });
+      }
+    }
+
     const accepted = (event.accepted_staff || []) as any[];
     const idx = accepted.findIndex((m: any) => (m?.userKey || '') === userKey);
     if (idx === -1) {
@@ -2365,7 +2827,19 @@ router.post('/events/:id/clock-in', requireAuth, async (req, res) => {
     }
 
     const clockInTime = new Date();
-    const newAttendance = [...attendance, { clockInAt: clockInTime }];
+
+    // Build attendance record with optional location
+    const newAttendanceRecord: any = { clockInAt: clockInTime };
+    if (latitude !== undefined && longitude !== undefined && isValidCoordinate(latitude, longitude)) {
+      newAttendanceRecord.clockInLocation = {
+        latitude,
+        longitude,
+        accuracy: accuracy ?? undefined,
+        source: source ?? 'manual',
+      };
+    }
+
+    const newAttendance = [...attendance, newAttendanceRecord];
     const result = await EventModel.updateOne(
       { _id: new mongoose.Types.ObjectId(eventId), 'accepted_staff.userKey': userKey },
       { $set: { 'accepted_staff.$.attendance': newAttendance, updatedAt: new Date() } }
@@ -2374,11 +2848,35 @@ router.post('/events/:id/clock-in', requireAuth, async (req, res) => {
       return res.status(404).json({ message: 'Event not found' });
     }
 
+    // Award gamification points for punctual clock-in
+    let gamification: any = null;
+    try {
+      const gamificationResult = await awardClockInPoints(userKey, event, clockInTime);
+      if (gamificationResult) {
+        gamification = {
+          pointsEarned: gamificationResult.pointsEarned,
+          reason: gamificationResult.reason,
+          newStreak: gamificationResult.newStreak,
+          isNewRecord: gamificationResult.isNewRecord,
+          totalPoints: gamificationResult.totalPoints,
+          bonusPoints: gamificationResult.bonusPoints,
+          bonusReason: gamificationResult.bonusReason,
+        };
+      }
+    } catch (gamErr) {
+      // Don't fail the clock-in if gamification fails
+      console.error('[clock-in] gamification failed:', gamErr);
+    }
+
     return res.status(200).json({
       message: 'Clocked in',
       status: 'clocked_in',
       clockInAt: clockInTime,
-      attendance: newAttendance
+      attendance: newAttendance,
+      // Include geofence status for client feedback
+      geofenceValidated: !!(event.venue_latitude && event.venue_longitude && latitude && longitude),
+      // Include gamification data if points were awarded
+      gamification,
     });
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -2387,7 +2885,16 @@ router.post('/events/:id/clock-in', requireAuth, async (req, res) => {
   }
 });
 
-// Clock out from an event
+// Zod schema for clock-out request with location and auto-clock-out fields
+const clockOutSchema = z.object({
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  accuracy: z.number().positive().optional(),
+  autoClockOut: z.boolean().optional(),
+  autoClockOutReason: z.enum(['shift_end_buffer', 'forgot_clock_out', 'manager_override']).optional(),
+});
+
+// Clock out from an event (with optional location storage)
 router.post('/events/:id/clock-out', requireAuth, async (req, res) => {
   try {
     const eventId = req.params.id ?? '';
@@ -2398,6 +2905,12 @@ router.post('/events/:id/clock-out', requireAuth, async (req, res) => {
       return res.status(401).json({ message: 'Unauthorized' });
     }
     const userKey = `${(req as any).authUser.provider}:${(req as any).authUser.sub}`;
+
+    // Parse location and auto-clock-out fields from request body
+    const parseResult = clockOutSchema.safeParse(req.body);
+    const { latitude, longitude, accuracy, autoClockOut, autoClockOutReason } = parseResult.success
+      ? parseResult.data
+      : { latitude: undefined, longitude: undefined, accuracy: undefined, autoClockOut: undefined, autoClockOutReason: undefined };
 
     const event = await EventModel.findById(eventId).lean();
     if (!event) return res.status(404).json({ message: 'Event not found' });
@@ -2413,7 +2926,35 @@ router.post('/events/:id/clock-out', requireAuth, async (req, res) => {
       return res.status(409).json({ message: 'Not clocked in' });
     }
 
-    const newAttendance = attendance.slice(0, -1).concat({ ...last, clockOutAt: new Date() });
+    const clockOutTime = new Date();
+
+    // Build updated attendance record with location
+    const updatedLast: any = {
+      ...last,
+      clockOutAt: clockOutTime,
+    };
+
+    // Add clock-out location if provided
+    if (latitude !== undefined && longitude !== undefined && isValidCoordinate(latitude, longitude)) {
+      updatedLast.clockOutLocation = {
+        latitude,
+        longitude,
+        accuracy: accuracy ?? undefined,
+      };
+    }
+
+    // Mark as auto clock-out if specified
+    if (autoClockOut) {
+      updatedLast.autoClockOut = true;
+      updatedLast.autoClockOutReason = autoClockOutReason ?? 'shift_end_buffer';
+    }
+
+    // Calculate estimated hours worked
+    const clockInTime = new Date(last.clockInAt);
+    const hoursWorked = (clockOutTime.getTime() - clockInTime.getTime()) / (1000 * 60 * 60);
+    updatedLast.estimatedHours = Math.round(hoursWorked * 100) / 100;
+
+    const newAttendance = attendance.slice(0, -1).concat(updatedLast);
     const result = await EventModel.updateOne(
       { _id: new mongoose.Types.ObjectId(eventId), 'accepted_staff.userKey': userKey },
       { $set: { 'accepted_staff.$.attendance': newAttendance, updatedAt: new Date() } }
@@ -2422,11 +2963,173 @@ router.post('/events/:id/clock-out', requireAuth, async (req, res) => {
       return res.status(404).json({ message: 'Event not found' });
     }
 
-    return res.status(200).json({ message: 'Clocked out', attendance: newAttendance });
+    // Check for unusual patterns asynchronously (don't block the response)
+    checkUnusualPatterns(event, userKey, updatedLast, accepted[idx]).catch((err) => {
+      console.error('[clock-out] pattern check failed:', err);
+    });
+
+    return res.status(200).json({
+      message: autoClockOut ? 'Auto clocked out' : 'Clocked out',
+      attendance: newAttendance,
+      hoursWorked: updatedLast.estimatedHours,
+      autoClockOut: autoClockOut ?? false,
+    });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[clock-out] failed', err);
     return res.status(500).json({ message: 'Failed to clock out' });
+  }
+});
+
+// Zod schema for bulk clock-in request
+const bulkClockInSchema = z.object({
+  userKeys: z.array(z.string().min(1)).min(1, 'At least one user key is required'),
+  note: z.string().max(500).optional(),
+  timestamp: z.string().datetime().optional(),
+});
+
+// Bulk clock-in for managers (clock in multiple staff at once)
+router.post('/events/:id/bulk-clock-in', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    if (!manager) {
+      return res.status(403).json({ message: 'Manager access required' });
+    }
+
+    const eventId = req.params.id ?? '';
+    if (!mongoose.Types.ObjectId.isValid(eventId)) {
+      return res.status(400).json({ message: 'Invalid event id' });
+    }
+
+    // Validate request body
+    const parseResult = bulkClockInSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({
+        message: 'Invalid request',
+        errors: parseResult.error.errors,
+      });
+    }
+
+    const { userKeys, note, timestamp } = parseResult.data;
+    const clockInTime = timestamp ? new Date(timestamp) : new Date();
+
+    // Verify manager owns this event
+    const event = await EventModel.findOne({
+      _id: new mongoose.Types.ObjectId(eventId),
+      managerId: manager._id,
+    }).lean();
+
+    if (!event) {
+      return res.status(404).json({ message: 'Event not found or access denied' });
+    }
+
+    const managerKey = `${manager.provider}:${manager.subject}`;
+    const acceptedStaff = (event.accepted_staff || []) as any[];
+    const results: Array<{
+      userKey: string;
+      status: 'success' | 'error' | 'already_clocked_in' | 'not_accepted';
+      message?: string;
+      staffName?: string;
+    }> = [];
+
+    // Process each staff member
+    for (const userKey of userKeys) {
+      const staffIdx = acceptedStaff.findIndex((s: any) => s?.userKey === userKey);
+
+      if (staffIdx === -1) {
+        results.push({
+          userKey,
+          status: 'not_accepted',
+          message: 'Staff member not accepted for this event',
+        });
+        continue;
+      }
+
+      const staff = acceptedStaff[staffIdx];
+      const attendance = (staff.attendance || []) as any[];
+      const lastAttendance = attendance.length > 0 ? attendance[attendance.length - 1] : null;
+
+      // Check if already clocked in
+      if (lastAttendance && !lastAttendance.clockOutAt) {
+        results.push({
+          userKey,
+          status: 'already_clocked_in',
+          message: 'Already clocked in',
+          staffName: staff.name || `${staff.first_name || ''} ${staff.last_name || ''}`.trim(),
+        });
+        continue;
+      }
+
+      // Create new attendance record with manager override
+      const newAttendanceRecord = {
+        clockInAt: clockInTime,
+        clockInLocation: {
+          latitude: event.venue_latitude || 0,
+          longitude: event.venue_longitude || 0,
+          source: 'bulk_manager' as const,
+        },
+        overrideBy: managerKey,
+        overrideNote: note || 'Bulk clock-in by manager',
+      };
+
+      const newAttendance = [...attendance, newAttendanceRecord];
+
+      // Update staff's attendance
+      await EventModel.updateOne(
+        {
+          _id: new mongoose.Types.ObjectId(eventId),
+          'accepted_staff.userKey': userKey,
+        },
+        {
+          $set: {
+            'accepted_staff.$.attendance': newAttendance,
+            updatedAt: new Date(),
+          },
+        }
+      );
+
+      results.push({
+        userKey,
+        status: 'success',
+        staffName: staff.name || `${staff.first_name || ''} ${staff.last_name || ''}`.trim(),
+      });
+
+      // Send notification to staff member
+      try {
+        const [provider, subject] = userKey.split(':');
+        const user = await UserModel.findOne({ provider, subject }).lean();
+        if (user) {
+          const eventName = event.event_name || event.shift_name || 'your shift';
+          await notificationService.sendToUser(
+            String(user._id),
+            '✅ Clocked In by Manager',
+            `Your manager has clocked you in to "${eventName}".${note ? ` Note: ${note}` : ''}`,
+            {
+              type: 'event',
+              eventId: String(event._id),
+              action: 'bulk_clock_in',
+            },
+            'user'
+          );
+        }
+      } catch (notifyErr) {
+        console.error(`[bulk-clock-in] Failed to notify ${userKey}:`, notifyErr);
+      }
+    }
+
+    const successCount = results.filter((r) => r.status === 'success').length;
+
+    return res.status(200).json({
+      message: `Successfully clocked in ${successCount} of ${userKeys.length} staff members`,
+      results,
+      total: userKeys.length,
+      successful: successCount,
+      clockInTime,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[bulk-clock-in] failed', err);
+    return res.status(500).json({ message: 'Failed to perform bulk clock-in' });
   }
 });
 
@@ -3003,6 +3706,186 @@ router.get('/events/debug/my-past-events', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[DEBUG] Error:', err);
     return res.status(500).json({ message: 'Failed to debug events' });
+  }
+});
+
+// ============================================================================
+// FLAGGED ATTENDANCE MANAGEMENT ENDPOINTS
+// ============================================================================
+
+// Get flagged attendance entries for manager review
+router.get('/events/flagged-attendance', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    if (!manager) {
+      return res.status(403).json({ message: 'Manager access required' });
+    }
+
+    const { status, severity, limit = '50' } = req.query;
+
+    const filter: any = { managerId: manager._id };
+    if (status && typeof status === 'string') {
+      filter.status = status;
+    }
+    if (severity && typeof severity === 'string') {
+      filter.severity = severity;
+    }
+
+    const flagged = await FlaggedAttendanceModel.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit as string, 10))
+      .lean();
+
+    return res.json({ flagged });
+  } catch (err) {
+    console.error('[flagged-attendance] GET failed:', err);
+    return res.status(500).json({ message: 'Failed to fetch flagged attendance' });
+  }
+});
+
+// Review a flagged attendance entry (approve/dismiss)
+const reviewFlagSchema = z.object({
+  status: z.enum(['approved', 'dismissed', 'investigating']),
+  reviewNotes: z.string().max(500).optional(),
+});
+
+router.patch('/events/flagged-attendance/:flagId', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    if (!manager) {
+      return res.status(403).json({ message: 'Manager access required' });
+    }
+
+    const { flagId } = req.params;
+    if (!flagId || !mongoose.Types.ObjectId.isValid(flagId)) {
+      return res.status(400).json({ message: 'Invalid flag ID' });
+    }
+
+    const parseResult = reviewFlagSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ message: 'Invalid request', details: parseResult.error.issues });
+    }
+
+    const { status, reviewNotes } = parseResult.data;
+    const managerKey = `${manager.provider}:${manager.subject}`;
+
+    const result = await FlaggedAttendanceModel.findOneAndUpdate(
+      {
+        _id: new mongoose.Types.ObjectId(flagId),
+        managerId: manager._id,
+      },
+      {
+        $set: {
+          status,
+          reviewedBy: managerKey,
+          reviewedAt: new Date(),
+          reviewNotes: reviewNotes || undefined,
+        },
+      },
+      { new: true }
+    );
+
+    if (!result) {
+      return res.status(404).json({ message: 'Flagged attendance not found' });
+    }
+
+    return res.json({ message: 'Review submitted', flag: result });
+  } catch (err) {
+    console.error('[flagged-attendance] PATCH failed:', err);
+    return res.status(500).json({ message: 'Failed to review flagged attendance' });
+  }
+});
+
+// Force clock-out a staff member (manager override)
+router.post('/events/:id/force-clock-out/:userKey', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    if (!manager) {
+      return res.status(403).json({ message: 'Manager access required' });
+    }
+
+    const { id, userKey } = req.params;
+    const { note } = req.body;
+
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid event ID' });
+    }
+
+    if (!userKey) {
+      return res.status(400).json({ message: 'User key is required' });
+    }
+
+    const event = await EventModel.findOne({
+      _id: new mongoose.Types.ObjectId(id),
+      managerId: manager._id,
+    });
+
+    if (!event) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    // Find the staff member
+    const staffIndex = event.accepted_staff?.findIndex(
+      (s: any) => s.userKey === userKey
+    );
+
+    if (staffIndex === undefined || staffIndex === -1) {
+      return res.status(404).json({ message: 'Staff member not found in this event' });
+    }
+
+    const staff = event.accepted_staff![staffIndex] as any;
+    const attendance = staff.attendance || [];
+
+    // Find active session
+    const activeSessionIndex = attendance.findIndex(
+      (a: any) => a.clockInAt && !a.clockOutAt
+    );
+
+    if (activeSessionIndex === -1) {
+      return res.status(400).json({ message: 'Staff is not currently clocked in' });
+    }
+
+    // Update the attendance session
+    const now = new Date();
+    const updatePath = `accepted_staff.${staffIndex}.attendance.${activeSessionIndex}`;
+
+    const result = await EventModel.updateOne(
+      { _id: event._id },
+      {
+        $set: {
+          [`${updatePath}.clockOutAt`]: now,
+          [`${updatePath}.autoClockOut`]: true,
+          [`${updatePath}.autoClockOutReason`]: 'manager_override',
+          [`${updatePath}.overrideBy`]: String(manager._id),
+          [`${updatePath}.overrideNote`]: note || 'Force clock-out by manager',
+        },
+      }
+    );
+
+    if (result.modifiedCount === 0) {
+      return res.status(500).json({ message: 'Failed to update attendance' });
+    }
+
+    // Notify the staff member
+    try {
+      await notificationService.sendToUser(
+        userKey,
+        'You have been clocked out',
+        `A manager has clocked you out from ${event.event_name}.${note ? ` Note: ${note}` : ''}`,
+        { type: 'event', eventId: String(event._id) }  // Use existing notification type
+      );
+    } catch (notifyErr) {
+      console.warn('[force-clock-out] Failed to send notification:', notifyErr);
+    }
+
+    return res.json({
+      message: 'Staff clocked out successfully',
+      clockOutAt: now,
+      staffName: staff.name || `${staff.first_name || ''} ${staff.last_name || ''}`.trim(),
+    });
+  } catch (err) {
+    console.error('[force-clock-out] POST failed:', err);
+    return res.status(500).json({ message: 'Failed to force clock-out' });
   }
 });
 
