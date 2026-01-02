@@ -566,6 +566,79 @@ const AI_TOOLS = [
     }
   },
   {
+    name: 'delete_role',
+    description: 'Delete a role/position type from the manager\'s account. Use this when the manager wants to remove a role, especially duplicate or unused roles. WARNING: This will also delete all tariffs associated with this role.',
+    parameters: {
+      type: 'object',
+      properties: {
+        role_name: {
+          type: 'string',
+          description: 'The exact name of the role to delete'
+        }
+      },
+      required: ['role_name']
+    }
+  },
+  {
+    name: 'merge_roles',
+    description: 'Merge two roles by transferring all tariffs from the source role to the target role, then deleting the source. Use this to clean up duplicate roles (e.g., "server" typo should be merged into "Server").',
+    parameters: {
+      type: 'object',
+      properties: {
+        source_role_name: {
+          type: 'string',
+          description: 'The name of the role to merge FROM (this one will be deleted after merge)'
+        },
+        target_role_name: {
+          type: 'string',
+          description: 'The name of the role to merge INTO (this one will be kept)'
+        }
+      },
+      required: ['source_role_name', 'target_role_name']
+    }
+  },
+  {
+    name: 'delete_tariff',
+    description: 'Delete a specific tariff/pricing rate for a client-role combination. Use this when the manager wants to remove a pricing rate.',
+    parameters: {
+      type: 'object',
+      properties: {
+        client_name: {
+          type: 'string',
+          description: 'The name of the client'
+        },
+        role_name: {
+          type: 'string',
+          description: 'The name of the role'
+        }
+      },
+      required: ['client_name', 'role_name']
+    }
+  },
+  {
+    name: 'get_roles_list',
+    description: 'Get the list of all roles/position types in the manager\'s account. Use this when the user asks about roles, wants to see all roles, or needs to reference role names.',
+    parameters: {
+      type: 'object',
+      properties: {},
+      required: []
+    }
+  },
+  {
+    name: 'get_tariffs_list',
+    description: 'Get the list of all tariffs/pricing rates in the manager\'s account. Shows which roles have rates set for which clients.',
+    parameters: {
+      type: 'object',
+      properties: {
+        client_name: {
+          type: ['string', 'null'],
+          description: 'Optional: Filter tariffs by specific client name'
+        }
+      },
+      required: []
+    }
+  },
+  {
     name: 'create_shift',
     description: 'Create a new event/shift (crear evento/turno). Use when user wants to: create event, make shift, add job, schedule staff, create trabajo, crear evento, agendar personal. IMPORTANT: Managers only care about CALL TIME (when staff should arrive), NOT guest arrival time. Call time is the staff arrival time. 🚨 CRITICAL: ALL EVENTS MUST BE IN THE FUTURE - never create events for past dates.',
     parameters: {
@@ -1160,6 +1233,226 @@ async function executeFunctionCall(
         } else {
           return `✅ Successfully updated tariff for ${client_name} - ${role_name}: $${rate} ${currency}/hour`;
         }
+      }
+
+      case 'delete_role': {
+        const { role_name } = functionArgs;
+
+        // Find role by name (case-insensitive)
+        const role = await RoleModel.findOne({
+          managerId,
+          normalizedName: role_name.toLowerCase()
+        }).lean();
+
+        if (!role) {
+          return `❌ Role "${role_name}" not found. Please check the spelling and try again.`;
+        }
+
+        // Check if role is used in any events
+        const eventsWithRole = await EventModel.countDocuments({
+          managerId,
+          'roles.role': new RegExp(`^${role.name}$`, 'i')
+        });
+
+        // Delete associated tariffs first
+        const deletedTariffs = await TariffModel.deleteMany({
+          managerId,
+          roleId: role._id
+        });
+
+        // Delete the role
+        await RoleModel.deleteOne({ _id: role._id });
+
+        let result = `✅ Successfully deleted role "${role.name}"`;
+        if (deletedTariffs.deletedCount > 0) {
+          result += `\n   Also removed ${deletedTariffs.deletedCount} associated tariff(s)`;
+        }
+        if (eventsWithRole > 0) {
+          result += `\n   ⚠️ Note: ${eventsWithRole} event(s) still reference this role`;
+        }
+
+        return result;
+      }
+
+      case 'merge_roles': {
+        const { source_role_name, target_role_name } = functionArgs;
+
+        // Find source role (the one to be merged and deleted)
+        const sourceRole = await RoleModel.findOne({
+          managerId,
+          normalizedName: source_role_name.toLowerCase()
+        }).lean();
+
+        if (!sourceRole) {
+          return `❌ Source role "${source_role_name}" not found. Please check the spelling.`;
+        }
+
+        // Find target role (the one to keep)
+        const targetRole = await RoleModel.findOne({
+          managerId,
+          normalizedName: target_role_name.toLowerCase()
+        }).lean();
+
+        if (!targetRole) {
+          return `❌ Target role "${target_role_name}" not found. Please check the spelling.`;
+        }
+
+        if (sourceRole._id.toString() === targetRole._id.toString()) {
+          return `❌ Cannot merge a role with itself. Please specify two different roles.`;
+        }
+
+        // Update events to use target role instead of source
+        const eventsUpdated = await EventModel.updateMany(
+          {
+            managerId,
+            'roles.role': new RegExp(`^${sourceRole.name}$`, 'i')
+          },
+          {
+            $set: { 'roles.$[elem].role': targetRole.name }
+          },
+          {
+            arrayFilters: [{ 'elem.role': new RegExp(`^${sourceRole.name}$`, 'i') }]
+          }
+        );
+
+        // Transfer tariffs from source to target (if they don't already exist for target)
+        const sourceTariffs = await TariffModel.find({
+          managerId,
+          roleId: sourceRole._id
+        }).lean();
+
+        let tariffsTransferred = 0;
+        for (const tariff of sourceTariffs) {
+          // Check if target already has this tariff for the same client
+          const existingTariff = await TariffModel.findOne({
+            managerId,
+            clientId: tariff.clientId,
+            roleId: targetRole._id
+          }).lean();
+
+          if (!existingTariff) {
+            // Transfer tariff to target role
+            await TariffModel.create({
+              managerId,
+              clientId: tariff.clientId,
+              roleId: targetRole._id,
+              rate: tariff.rate,
+              currency: tariff.currency
+            });
+            tariffsTransferred++;
+          }
+        }
+
+        // Delete source role's tariffs
+        await TariffModel.deleteMany({
+          managerId,
+          roleId: sourceRole._id
+        });
+
+        // Delete source role
+        await RoleModel.deleteOne({ _id: sourceRole._id });
+
+        let result = `✅ Successfully merged "${sourceRole.name}" into "${targetRole.name}"`;
+        if (eventsUpdated.modifiedCount > 0) {
+          result += `\n   📋 ${eventsUpdated.modifiedCount} event(s) updated`;
+        }
+        if (tariffsTransferred > 0) {
+          result += `\n   💰 ${tariffsTransferred} tariff(s) transferred`;
+        }
+        result += `\n   🗑️ "${sourceRole.name}" has been deleted`;
+
+        return result;
+      }
+
+      case 'delete_tariff': {
+        const { client_name, role_name } = functionArgs;
+
+        // Find client
+        const client = await ClientModel.findOne({
+          managerId,
+          normalizedName: client_name.toLowerCase()
+        }).lean();
+
+        if (!client) {
+          return `❌ Client "${client_name}" not found.`;
+        }
+
+        // Find role
+        const role = await RoleModel.findOne({
+          managerId,
+          normalizedName: role_name.toLowerCase()
+        }).lean();
+
+        if (!role) {
+          return `❌ Role "${role_name}" not found.`;
+        }
+
+        // Find and delete the tariff
+        const deletedTariff = await TariffModel.findOneAndDelete({
+          managerId,
+          clientId: client._id,
+          roleId: role._id
+        }).lean();
+
+        if (!deletedTariff) {
+          return `❌ No tariff found for ${client_name} - ${role_name}. Nothing to delete.`;
+        }
+
+        return `✅ Successfully deleted tariff for ${client.name} - ${role.name} (was $${deletedTariff.rate} ${deletedTariff.currency}/hour)`;
+      }
+
+      case 'get_roles_list': {
+        const roles = await RoleModel.find({ managerId })
+          .select('name')
+          .sort({ name: 1 })
+          .lean();
+
+        if (roles.length === 0) {
+          return 'No roles found in your account. You can create roles as needed.';
+        }
+
+        const roleList = roles.map(r => r.name).join(', ');
+        return `You have ${roles.length} role(s): ${roleList}`;
+      }
+
+      case 'get_tariffs_list': {
+        const { client_name } = functionArgs;
+
+        let filter: any = { managerId };
+
+        // If client_name provided, filter by client
+        if (client_name) {
+          const client = await ClientModel.findOne({
+            managerId,
+            normalizedName: client_name.toLowerCase()
+          }).lean();
+
+          if (!client) {
+            return `❌ Client "${client_name}" not found.`;
+          }
+          filter.clientId = client._id;
+        }
+
+        const tariffs = await TariffModel.find(filter)
+          .populate('clientId', 'name')
+          .populate('roleId', 'name')
+          .sort({ 'clientId.name': 1, 'roleId.name': 1 })
+          .lean();
+
+        if (tariffs.length === 0) {
+          if (client_name) {
+            return `No tariffs found for client "${client_name}".`;
+          }
+          return 'No tariffs found in your account. You can create tariffs using create_tariff.';
+        }
+
+        const tariffList = tariffs.map(t => {
+          const clientName = (t.clientId as any)?.name || 'Unknown';
+          const roleName = (t.roleId as any)?.name || 'Unknown';
+          return `${clientName} - ${roleName}: $${t.rate} ${t.currency}/hour`;
+        }).join('\n');
+
+        return `You have ${tariffs.length} tariff(s):\n${tariffList}`;
       }
 
       case 'create_shift': {
