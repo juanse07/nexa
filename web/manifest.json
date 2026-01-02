@@ -1,11 +1,11 @@
 {
-    "name": "Tie Manager",
-    "short_name": "Tie Manager",
+    "name": "FlowShift Manager",
+    "short_name": "FlowShift",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "Tie Event Management Platform",
+    "description": "FlowShift - Workforce Scheduling Platform by PyMESoft",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

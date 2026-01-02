@@ -3,15 +3,18 @@ import { OAuth2Client } from 'google-auth-library';
 import * as jose from 'jose';
 import jwt from 'jsonwebtoken';
 import { ENV } from '../config/env';
+import { firebaseAuth } from '../config/firebase';
 import { UserModel } from '../models/user';
 import { ManagerModel } from '../models/manager';
+import { requireAuth, AuthenticatedUser } from '../middleware/requireAuth';
 
 type VerifiedProfile = {
-  provider: 'google' | 'apple';
+  provider: 'google' | 'apple' | 'phone';
   subject: string;
   email?: string | undefined;
   name?: string | undefined;
   picture?: string | undefined;
+  phoneNumber?: string | undefined;
 };
 
 const router = Router();
@@ -55,6 +58,7 @@ function issueAppJwt(profile: VerifiedProfile, managerId?: string): string {
     email: profile.email,
     name: profile.name,
     picture: profile.picture,
+    phoneNumber: profile.phoneNumber,
     ...(managerId && { managerId }),
   } as const;
   return jwt.sign(payload, JWT_SECRET, { algorithm: 'HS256', expiresIn: '7d' });
@@ -328,6 +332,348 @@ router.post('/manager/apple', async (req, res) => {
     // eslint-disable-next-line no-console
     console.warn('[auth] Manager Apple verification failed:', err);
     res.status(401).json({ message: 'Apple auth failed' });
+  }
+});
+
+// ============================================================================
+// PHONE AUTHENTICATION ENDPOINTS
+// ============================================================================
+
+async function verifyFirebasePhoneToken(firebaseIdToken: string): Promise<VerifiedProfile> {
+  if (!firebaseAuth) {
+    throw new Error('Firebase Admin SDK not initialized. Check FIREBASE_* environment variables.');
+  }
+
+  const decodedToken = await firebaseAuth.verifyIdToken(firebaseIdToken);
+
+  if (!decodedToken.phone_number) {
+    throw new Error('Firebase token does not contain a phone number');
+  }
+
+  return {
+    provider: 'phone',
+    subject: decodedToken.uid, // Firebase UID
+    phoneNumber: decodedToken.phone_number,
+    email: undefined,
+    name: undefined,
+    picture: undefined,
+  };
+}
+
+// Staff phone authentication
+router.post('/phone', async (req, res) => {
+  try {
+    if (!JWT_SECRET) return res.status(500).json({ message: 'Server missing JWT secret' });
+
+    const firebaseIdToken = (req.body?.firebaseIdToken ?? '') as string;
+    if (!firebaseIdToken) {
+      return res.status(400).json({ message: 'firebaseIdToken is required' });
+    }
+
+    const profile = await verifyFirebasePhoneToken(firebaseIdToken);
+
+    // Check if user exists by phone number OR by provider+subject
+    let user = await UserModel.findOne({
+      $or: [
+        { provider: 'phone', subject: profile.subject },
+        { auth_phone_number: profile.phoneNumber },
+      ],
+    });
+
+    if (!user) {
+      // Create new user with phone as primary auth
+      user = await UserModel.create({
+        provider: 'phone',
+        subject: profile.subject,
+        auth_phone_number: profile.phoneNumber,
+        phone_number: profile.phoneNumber, // Also set as profile phone
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    } else {
+      // User exists - update auth_phone_number if not set
+      if (!user.auth_phone_number) {
+        user.auth_phone_number = profile.phoneNumber;
+        await user.save();
+      }
+    }
+
+    // Issue JWT using the user's original provider/subject (for linked accounts)
+    const token = issueAppJwt({
+      provider: user.provider,
+      subject: user.subject,
+      email: user.email,
+      name: user.name,
+      picture: user.picture,
+      phoneNumber: profile.phoneNumber,
+    });
+
+    res.json({ token, user: profile });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[auth] Phone verification failed:', err);
+    const message = (err as Error).message || 'Phone auth failed';
+    res.status(401).json({ message });
+  }
+});
+
+// Manager phone authentication
+router.post('/manager/phone', async (req, res) => {
+  try {
+    if (!JWT_SECRET) return res.status(500).json({ message: 'Server missing JWT secret' });
+
+    const firebaseIdToken = (req.body?.firebaseIdToken ?? '') as string;
+    if (!firebaseIdToken) {
+      return res.status(400).json({ message: 'firebaseIdToken is required' });
+    }
+
+    const profile = await verifyFirebasePhoneToken(firebaseIdToken);
+
+    // Check if manager exists by phone number OR by provider+subject
+    let manager = await ManagerModel.findOne({
+      $or: [
+        { provider: 'phone', subject: profile.subject },
+        { auth_phone_number: profile.phoneNumber },
+      ],
+    });
+
+    if (!manager) {
+      // Create new manager with phone as primary auth
+      manager = await ManagerModel.create({
+        provider: 'phone',
+        subject: profile.subject,
+        auth_phone_number: profile.phoneNumber,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    } else {
+      // Manager exists - update auth_phone_number if not set
+      if (!manager.auth_phone_number) {
+        manager.auth_phone_number = profile.phoneNumber;
+        await manager.save();
+      }
+    }
+
+    // Issue JWT with managerId
+    const token = issueAppJwt(
+      {
+        provider: manager.provider,
+        subject: manager.subject,
+        email: manager.email,
+        name: manager.name,
+        picture: manager.picture,
+        phoneNumber: profile.phoneNumber,
+      },
+      String(manager._id)
+    );
+
+    res.json({ token, user: profile });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[auth] Manager phone verification failed:', err);
+    const message = (err as Error).message || 'Phone auth failed';
+    res.status(401).json({ message });
+  }
+});
+
+// Link phone number to existing account (requires authentication)
+router.post('/link-phone', requireAuth, async (req, res) => {
+  try {
+    const authUser = (req as any).authUser as AuthenticatedUser;
+    const firebaseIdToken = (req.body?.firebaseIdToken ?? '') as string;
+
+    if (!firebaseIdToken) {
+      return res.status(400).json({ message: 'firebaseIdToken is required' });
+    }
+
+    const phoneProfile = await verifyFirebasePhoneToken(firebaseIdToken);
+
+    // Check if this phone is already linked to another account
+    const existingUser = await UserModel.findOne({
+      auth_phone_number: phoneProfile.phoneNumber,
+      $or: [{ provider: { $ne: authUser.provider } }, { subject: { $ne: authUser.sub } }],
+    });
+
+    if (existingUser) {
+      return res.status(409).json({
+        message: 'This phone number is already linked to another account',
+      });
+    }
+
+    // Link phone to current user
+    const updated = await UserModel.findOneAndUpdate(
+      { provider: authUser.provider, subject: authUser.sub },
+      {
+        $set: {
+          auth_phone_number: phoneProfile.phoneNumber,
+          updatedAt: new Date(),
+        },
+        $addToSet: {
+          linked_providers: {
+            provider: 'phone',
+            subject: phoneProfile.subject,
+            linked_at: new Date(),
+          },
+        },
+      },
+      { new: true }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Phone number linked successfully',
+      phoneNumber: phoneProfile.phoneNumber,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[auth] Link phone failed:', err);
+    const message = (err as Error).message || 'Failed to link phone number';
+    res.status(500).json({ message });
+  }
+});
+
+// Unlink phone number from account (requires authentication)
+router.post('/unlink-phone', requireAuth, async (req, res) => {
+  try {
+    const authUser = (req as any).authUser as AuthenticatedUser;
+
+    const user = await UserModel.findOne({
+      provider: authUser.provider,
+      subject: authUser.sub,
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Cannot unlink if phone is the primary auth method
+    if (user.provider === 'phone') {
+      return res.status(400).json({
+        message: 'Cannot unlink phone - it is your primary login method',
+      });
+    }
+
+    await UserModel.updateOne(
+      { _id: user._id },
+      {
+        $unset: { auth_phone_number: 1 },
+        $pull: { linked_providers: { provider: 'phone' } },
+        $set: { updatedAt: new Date() },
+      }
+    );
+
+    res.json({ success: true, message: 'Phone number unlinked' });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[auth] Unlink phone failed:', err);
+    res.status(500).json({ message: 'Failed to unlink phone number' });
+  }
+});
+
+// Manager link phone
+router.post('/manager/link-phone', requireAuth, async (req, res) => {
+  try {
+    const authUser = (req as any).authUser as AuthenticatedUser;
+    const firebaseIdToken = (req.body?.firebaseIdToken ?? '') as string;
+
+    if (!authUser.managerId) {
+      return res.status(403).json({ message: 'Manager access required' });
+    }
+
+    if (!firebaseIdToken) {
+      return res.status(400).json({ message: 'firebaseIdToken is required' });
+    }
+
+    const phoneProfile = await verifyFirebasePhoneToken(firebaseIdToken);
+
+    // Check if this phone is already linked to another manager
+    const existingManager = await ManagerModel.findOne({
+      auth_phone_number: phoneProfile.phoneNumber,
+      _id: { $ne: authUser.managerId },
+    });
+
+    if (existingManager) {
+      return res.status(409).json({
+        message: 'This phone number is already linked to another account',
+      });
+    }
+
+    // Link phone to current manager
+    const updated = await ManagerModel.findByIdAndUpdate(
+      authUser.managerId,
+      {
+        $set: {
+          auth_phone_number: phoneProfile.phoneNumber,
+          updatedAt: new Date(),
+        },
+        $addToSet: {
+          linked_providers: {
+            provider: 'phone',
+            subject: phoneProfile.subject,
+            linked_at: new Date(),
+          },
+        },
+      },
+      { new: true }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ message: 'Manager not found' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Phone number linked successfully',
+      phoneNumber: phoneProfile.phoneNumber,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[auth] Manager link phone failed:', err);
+    const message = (err as Error).message || 'Failed to link phone number';
+    res.status(500).json({ message });
+  }
+});
+
+// Manager unlink phone
+router.post('/manager/unlink-phone', requireAuth, async (req, res) => {
+  try {
+    const authUser = (req as any).authUser as AuthenticatedUser;
+
+    if (!authUser.managerId) {
+      return res.status(403).json({ message: 'Manager access required' });
+    }
+
+    const manager = await ManagerModel.findById(authUser.managerId);
+
+    if (!manager) {
+      return res.status(404).json({ message: 'Manager not found' });
+    }
+
+    // Cannot unlink if phone is the primary auth method
+    if (manager.provider === 'phone') {
+      return res.status(400).json({
+        message: 'Cannot unlink phone - it is your primary login method',
+      });
+    }
+
+    await ManagerModel.updateOne(
+      { _id: manager._id },
+      {
+        $unset: { auth_phone_number: 1 },
+        $pull: { linked_providers: { provider: 'phone' } },
+        $set: { updatedAt: new Date() },
+      }
+    );
+
+    res.json({ success: true, message: 'Phone number unlinked' });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[auth] Manager unlink phone failed:', err);
+    res.status(500).json({ message: 'Failed to unlink phone number' });
   }
 });
 

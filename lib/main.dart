@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 import 'package:nexa/app.dart';
 import 'package:nexa/core/config/environment.dart';
@@ -45,6 +46,23 @@ Future<void> main() async {
       print('Environment loaded successfully for web');
     } else {
       AppLogger.instance.i('Environment loaded successfully');
+    }
+
+    // Initialize Firebase (for phone auth)
+    try {
+      await Firebase.initializeApp();
+      if (kIsWeb) {
+        print('Firebase initialized successfully');
+      } else {
+        AppLogger.instance.i('Firebase initialized successfully');
+      }
+    } catch (e) {
+      // Firebase may already be initialized or not configured
+      if (kIsWeb) {
+        print('Firebase initialization skipped: $e');
+      } else {
+        AppLogger.instance.w('Firebase initialization skipped', error: e);
+      }
     }
 
     // Configure dependency injection

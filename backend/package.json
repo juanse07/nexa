@@ -28,6 +28,7 @@
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
     "express-rate-limit": "^8.0.1",
+    "firebase-admin": "^13.6.0",
     "form-data": "^4.0.4",
     "geoip-lite": "^1.4.10",
     "google-auth-library": "^10.2.1",

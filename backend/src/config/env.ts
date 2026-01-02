@@ -25,4 +25,8 @@ export const ENV = {
   appleServiceId: parseCommaSeparated(process.env.APPLE_SERVICE_ID),
   // Admin
   adminKey: process.env.ADMIN_KEY || '',
+  // Firebase Admin SDK (for phone auth)
+  firebaseProjectId: process.env.FIREBASE_PROJECT_ID || '',
+  firebaseClientEmail: process.env.FIREBASE_CLIENT_EMAIL || '',
+  firebasePrivateKey: process.env.FIREBASE_PRIVATE_KEY || '',
 };

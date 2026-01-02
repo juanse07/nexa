@@ -9,14 +9,23 @@ import 'package:nexa/features/auth/data/services/auth_service.dart';
 import 'package:nexa/features/auth/presentation/pages/login_page.dart';
 import 'package:nexa/features/users/presentation/pages/manager_onboarding_page.dart';
 import 'package:nexa/shared/presentation/theme/theme.dart';
+import 'package:nexa/shared/presentation/splash/splash_screen.dart';
 import 'package:nexa/l10n/app_localizations.dart';
 import 'package:nexa/services/terminology_provider.dart';
 
-/// The root widget of the Nexa application.
+/// The root widget of the FlowShift Manager application.
 ///
 /// Configures the MaterialApp with theme, routing, and localization settings.
-class NexaApp extends StatelessWidget {
+/// Shows a premium splash screen on app launch before transitioning to the main content.
+class NexaApp extends StatefulWidget {
   const NexaApp({super.key});
+
+  @override
+  State<NexaApp> createState() => _NexaAppState();
+}
+
+class _NexaAppState extends State<NexaApp> {
+  bool _splashComplete = false;
 
   static Future<String?> _validateAndGetToken() async {
     if (kIsWeb) {
@@ -54,12 +63,18 @@ class NexaApp extends StatelessWidget {
     return token;
   }
 
+  void _onSplashComplete() {
+    setState(() {
+      _splashComplete = true;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (_) => TerminologyProvider(),
       child: MaterialApp(
-        title: 'Tie Manager',
+        title: 'FlowShift Manager',
         debugShowCheckedModeBanner: false,
 
       // Localization configuration
@@ -79,23 +94,30 @@ class NexaApp extends StatelessWidget {
       darkTheme: AppTheme.darkTheme(),
       themeMode: ThemeMode.light,
 
-      // Initial route - check authentication
-      home: FutureBuilder<String?>(
-        future: _validateAndGetToken(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Scaffold(
-              body: Center(
-                child: CircularProgressIndicator(),
-              ),
-            );
-          }
+      // Initial route - show splash, then check authentication
+      home: _splashComplete
+          ? FutureBuilder<String?>(
+              future: _validateAndGetToken(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Scaffold(
+                    body: Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
+                }
 
-          // If JWT exists, go to main app, otherwise login
-          final hasToken = snapshot.data != null && snapshot.data!.isNotEmpty;
-          return hasToken ? const ManagerOnboardingGate() : const LoginPage();
-        },
-      ),
+                // If JWT exists, go to main app, otherwise login
+                final hasToken = snapshot.data != null && snapshot.data!.isNotEmpty;
+                return hasToken ? const ManagerOnboardingGate() : const LoginPage();
+              },
+            )
+          : Scaffold(
+              body: FlowShiftSplashScreen(
+                variant: 'MANAGER',
+                onComplete: _onSplashComplete,
+              ),
+            ),
 
       // Performance optimizations
       builder: (BuildContext context, Widget? child) {

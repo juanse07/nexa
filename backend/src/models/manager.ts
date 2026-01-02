@@ -1,14 +1,22 @@
 import mongoose, { Document, Model, Schema } from 'mongoose';
 
 export interface ManagerDocument extends Document {
-  provider: 'google' | 'apple';
+  provider: 'google' | 'apple' | 'phone';
   subject: string;
   email?: string;
   name?: string; // original OAuth full name
   first_name?: string;
   last_name?: string;
+  auth_phone_number?: string; // verified phone for authentication (E.164 format)
   picture?: string; // optional override picture
   app_id?: string; // optional 9-digit app id
+
+  // Linked authentication methods (for account linking)
+  linked_providers?: Array<{
+    provider: 'google' | 'apple' | 'phone';
+    subject: string;
+    linked_at: Date;
+  }>;
 
   // OneSignal fields
   oneSignalUserId?: string;
@@ -55,14 +63,22 @@ export interface ManagerDocument extends Document {
 
 const ManagerSchema = new Schema<ManagerDocument>(
   {
-    provider: { type: String, required: true, enum: ['google', 'apple'] },
+    provider: { type: String, required: true, enum: ['google', 'apple', 'phone'] },
     subject: { type: String, required: true },
     email: { type: String, trim: true },
     name: { type: String, trim: true },
     first_name: { type: String, trim: true },
     last_name: { type: String, trim: true },
+    auth_phone_number: { type: String, trim: true }, // E.164 format for phone auth
     picture: { type: String, trim: true },
     app_id: { type: String, trim: true },
+
+    // Linked authentication methods
+    linked_providers: [{
+      provider: { type: String, required: true, enum: ['google', 'apple', 'phone'] },
+      subject: { type: String, required: true },
+      linked_at: { type: Date, default: Date.now },
+    }],
 
     // OneSignal fields
     oneSignalUserId: { type: String, sparse: true },
@@ -117,6 +133,7 @@ const ManagerSchema = new Schema<ManagerDocument>(
 ManagerSchema.index({ provider: 1, subject: 1 }, { unique: true });
 ManagerSchema.index({ app_id: 1 }, { unique: false, sparse: true });
 ManagerSchema.index({ qonversion_user_id: 1 }, { unique: false, sparse: true });
+ManagerSchema.index({ auth_phone_number: 1 }, { unique: true, sparse: true }); // Phone auth lookup
 
 export const ManagerModel: Model<ManagerDocument> =
   mongoose.models.Manager || mongoose.model<ManagerDocument>('Manager', ManagerSchema);
