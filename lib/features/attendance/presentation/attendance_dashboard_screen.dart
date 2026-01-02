@@ -273,7 +273,7 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
           slivers: [
             // Hero header with collapsing behavior
             SliverAppBar(
-              expandedHeight: 200,
+              expandedHeight: 180,
               floating: false,
               pinned: true,
               backgroundColor: const Color(0xFF1A237E),
@@ -284,15 +284,17 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
                   onFlagsTap: _navigateToFlaggedAttendance,
                   isLoading: _isLoading,
                 ),
-                collapseMode: CollapseMode.pin,
+                collapseMode: CollapseMode.parallax,
               ),
               title: const Text(
                 'Attendance',
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
+                  fontSize: 18,
                 ),
               ),
+              centerTitle: false,
               actions: [
                 IconButton(
                   onPressed: _showFilterSheet,

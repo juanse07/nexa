@@ -35,42 +35,14 @@ class AttendanceHeroHeader extends StatelessWidget {
       child: SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          padding: const EdgeInsets.fromLTRB(16, 60, 16, 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              // Title row with filter button
-              Row(
-                children: [
-                  const PulseIndicator(
-                    color: Colors.greenAccent,
-                    size: 10,
-                  ),
-                  const SizedBox(width: 12),
-                  const Text(
-                    'Live Attendance',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    onPressed: onFilterTap,
-                    icon: const Icon(
-                      Icons.tune_rounded,
-                      color: Colors.white70,
-                    ),
-                    tooltip: 'Filters',
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-
-              // Stat cards row
+              // Stat cards row - positioned at bottom of hero
               SizedBox(
-                height: 90,
+                height: 100,
                 child: Row(
                   children: [
                     Expanded(
@@ -82,16 +54,16 @@ class AttendanceHeroHeader extends StatelessWidget {
                         showPulse: analytics.currentlyWorking > 0,
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: _StatCard(
                         value: isLoading ? '--' : analytics.todayTotalHours.toStringAsFixed(1),
-                        label: 'Hours Today',
+                        label: 'Hours',
                         icon: Icons.access_time_rounded,
                         iconColor: Colors.amber,
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: GestureDetector(
                         onTap: onFlagsTap,
@@ -138,14 +110,14 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(12),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: Colors.white.withOpacity(0.2),
             ),
@@ -153,26 +125,27 @@ class _StatCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Row(
                 children: [
-                  Icon(icon, color: iconColor, size: 18),
+                  Icon(icon, color: iconColor, size: 16),
                   if (showPulse) ...[
-                    const SizedBox(width: 6),
-                    PulseIndicator(color: iconColor, size: 6),
+                    const SizedBox(width: 4),
+                    PulseIndicator(color: iconColor, size: 5),
                   ],
                   if (showBadge) ...[
                     const Spacer(),
                     Container(
-                      width: 8,
-                      height: 8,
+                      width: 6,
+                      height: 6,
                       decoration: BoxDecoration(
                         color: Colors.redAccent,
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
                             color: Colors.redAccent.withOpacity(0.5),
-                            blurRadius: 4,
+                            blurRadius: 3,
                           ),
                         ],
                       ),
@@ -180,13 +153,14 @@ class _StatCard extends StatelessWidget {
                   ],
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
               Text(
                 value,
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 24,
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
+                  height: 1.1,
                 ),
               ),
               const SizedBox(height: 2),
@@ -194,8 +168,9 @@ class _StatCard extends StatelessWidget {
                 label,
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.7),
-                  fontSize: 12,
+                  fontSize: 11,
                 ),
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),

@@ -157,6 +157,37 @@ router.patch('/users/me', requireAuth, async (req, res) => {
   }
 });
 
+// Get user's gamification stats (points, streaks)
+router.get('/users/me/gamification', requireAuth, async (req, res) => {
+  try {
+    const authUser = (req as any).authUser;
+    if (!authUser?.provider || !authUser?.sub) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const user = await UserModel.findOne({
+      provider: authUser.provider,
+      subject: authUser.sub,
+    }).lean();
+
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Return gamification stats with defaults for missing data
+    return res.json({
+      totalPoints: user.gamification?.totalPoints ?? 0,
+      currentStreak: user.gamification?.currentStreak ?? 0,
+      longestStreak: user.gamification?.longestStreak ?? 0,
+      lastPunctualClockIn: user.gamification?.lastPunctualClockIn ?? null,
+      streakStartDate: user.gamification?.streakStartDate ?? null,
+      recentHistory: (user.gamification?.pointsHistory ?? []).slice(-20),
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[users] GET /me/gamification failed', err);
+    return res.status(500).json({ message: 'Failed to fetch gamification stats' });
+  }
+});
+
 // Get user by provider and subject (OAuth identity)
 // SECURITY: Managers can only lookup users who are active members of their teams
 router.get('/users/by-identity', requireManagerAuth, async (req: AuthenticatedRequest, res) => {
