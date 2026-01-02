@@ -494,6 +494,38 @@ const AI_TOOLS = [
     }
   },
   {
+    name: 'delete_client',
+    description: 'Delete a client from the manager\'s account. Use this when the manager wants to remove a client, especially duplicate or mistakenly created clients. WARNING: This will also delete all tariffs associated with this client.',
+    parameters: {
+      type: 'object',
+      properties: {
+        client_name: {
+          type: 'string',
+          description: 'The exact name of the client to delete'
+        }
+      },
+      required: ['client_name']
+    }
+  },
+  {
+    name: 'merge_clients',
+    description: 'Merge two clients by transferring all events and tariffs from the source client to the target client, then deleting the source. Use this to clean up duplicate clients (e.g., "serenpety" typo should be merged into "Serendipity").',
+    parameters: {
+      type: 'object',
+      properties: {
+        source_client_name: {
+          type: 'string',
+          description: 'The name of the client to merge FROM (this one will be deleted after merge)'
+        },
+        target_client_name: {
+          type: 'string',
+          description: 'The name of the client to merge INTO (this one will be kept)'
+        }
+      },
+      required: ['source_client_name', 'target_client_name']
+    }
+  },
+  {
     name: 'create_role',
     description: 'Create a new role/position type for events (e.g., Server, Bartender, Chef). Use this when the manager wants to add a new role type.',
     parameters: {
@@ -928,6 +960,132 @@ async function executeFunctionCall(
         });
 
         return `✅ Successfully created client "${created.name}" (ID: ${created._id})`;
+      }
+
+      case 'delete_client': {
+        const { client_name } = functionArgs;
+
+        // Find client by name (case-insensitive)
+        const client = await ClientModel.findOne({
+          managerId,
+          normalizedName: client_name.toLowerCase()
+        }).lean();
+
+        if (!client) {
+          return `❌ Client "${client_name}" not found. Please check the spelling and try again.`;
+        }
+
+        // Check if client has events associated
+        const eventCount = await EventModel.countDocuments({
+          managerId,
+          client_name: new RegExp(`^${client.name}$`, 'i')
+        });
+
+        // Delete associated tariffs first
+        const deletedTariffs = await TariffModel.deleteMany({
+          managerId,
+          clientId: client._id
+        });
+
+        // Delete the client
+        await ClientModel.deleteOne({ _id: client._id });
+
+        let result = `✅ Successfully deleted client "${client.name}"`;
+        if (deletedTariffs.deletedCount > 0) {
+          result += `\n   Also removed ${deletedTariffs.deletedCount} associated tariff(s)`;
+        }
+        if (eventCount > 0) {
+          result += `\n   ⚠️ Note: ${eventCount} event(s) still reference this client name`;
+        }
+
+        return result;
+      }
+
+      case 'merge_clients': {
+        const { source_client_name, target_client_name } = functionArgs;
+
+        // Find source client (the one to be merged and deleted)
+        const sourceClient = await ClientModel.findOne({
+          managerId,
+          normalizedName: source_client_name.toLowerCase()
+        }).lean();
+
+        if (!sourceClient) {
+          return `❌ Source client "${source_client_name}" not found. Please check the spelling.`;
+        }
+
+        // Find target client (the one to keep)
+        const targetClient = await ClientModel.findOne({
+          managerId,
+          normalizedName: target_client_name.toLowerCase()
+        }).lean();
+
+        if (!targetClient) {
+          return `❌ Target client "${target_client_name}" not found. Please check the spelling.`;
+        }
+
+        if (sourceClient._id.toString() === targetClient._id.toString()) {
+          return `❌ Cannot merge a client with itself. Please specify two different clients.`;
+        }
+
+        // Transfer events from source to target
+        const eventsUpdated = await EventModel.updateMany(
+          {
+            managerId,
+            client_name: new RegExp(`^${sourceClient.name}$`, 'i')
+          },
+          {
+            $set: { client_name: targetClient.name }
+          }
+        );
+
+        // Transfer tariffs from source to target (if they don't already exist for target)
+        const sourceTariffs = await TariffModel.find({
+          managerId,
+          clientId: sourceClient._id
+        }).lean();
+
+        let tariffsTransferred = 0;
+        for (const tariff of sourceTariffs) {
+          // Check if target already has this tariff
+          const existingTariff = await TariffModel.findOne({
+            managerId,
+            clientId: targetClient._id,
+            roleId: tariff.roleId
+          }).lean();
+
+          if (!existingTariff) {
+            // Transfer tariff to target client
+            await TariffModel.create({
+              managerId,
+              clientId: targetClient._id,
+              roleId: tariff.roleId,
+              rate: tariff.rate,
+              currency: tariff.currency
+            });
+            tariffsTransferred++;
+          }
+        }
+
+        // Delete source client's tariffs
+        await TariffModel.deleteMany({
+          managerId,
+          clientId: sourceClient._id
+        });
+
+        // Delete source client
+        await ClientModel.deleteOne({ _id: sourceClient._id });
+
+        let result = `✅ Successfully merged "${sourceClient.name}" into "${targetClient.name}"`;
+        if (eventsUpdated.modifiedCount > 0) {
+          result += `\n   📋 ${eventsUpdated.modifiedCount} event(s) transferred`;
+        }
+        if (tariffsTransferred > 0) {
+          result += `\n   💰 ${tariffsTransferred} tariff(s) transferred`;
+        }
+        result += `\n   🗑️ "${sourceClient.name}" has been deleted`;
+
+        return result;
       }
 
       case 'create_role': {
