@@ -7,6 +7,7 @@ import '../services/event_service.dart';
 import '../services/google_places_service.dart';
 import '../widgets/modern_address_field.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
+import 'package:nexa/shared/widgets/web_content_wrapper.dart';
 
 class PendingEditScreen extends StatefulWidget {
   final Map<String, dynamic> draft;
@@ -325,10 +326,11 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
           ),
         ],
       ),
-      body: AbsorbPointer(
-        absorbing: _saving,
-        child: ListView(
-          padding: const EdgeInsets.all(20),
+      body: WebContentWrapper.form(
+        child: AbsorbPointer(
+          absorbing: _saving,
+          child: ListView(
+            padding: const EdgeInsets.all(20),
           children: [
             // Basics Section
             _sectionHeader('Basics'),
@@ -493,8 +495,10 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
               ),
             ),
             const SizedBox(height: 40),
-          ],
+            ],
+          ),
         ),
+      ),
       ),
     );
   }

@@ -5,6 +5,7 @@ import '../../extraction/services/roles_service.dart';
 import '../../extraction/widgets/modern_address_field.dart';
 import '../../extraction/services/google_places_service.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
+import 'package:nexa/shared/widgets/web_content_wrapper.dart';
 
 class EventEditScreen extends StatefulWidget {
   final Map<String, dynamic> event;
@@ -310,11 +311,12 @@ class _EventEditScreenState extends State<EventEditScreen> {
           ),
         ],
       ),
-      body: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
+      body: WebContentWrapper.form(
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Event Information
@@ -473,8 +475,10 @@ class _EventEditScreenState extends State<EventEditScreen> {
                       ),
               ),
             ],
+            ),
           ),
         ),
+      ),
       ),
     );
   }
