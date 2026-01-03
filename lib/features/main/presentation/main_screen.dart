@@ -340,7 +340,7 @@ class _MainScreenState extends State<MainScreen>
         gradient: const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [AppColors.tealInfo, AppColors.oceanBlue],
+          colors: [AppColors.navySpaceCadet, AppColors.oceanBlue],
         ),
         boxShadow: [
           BoxShadow(
@@ -363,15 +363,20 @@ class _MainScreenState extends State<MainScreen>
                     color: Colors.white.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(
-                    Icons.home_work,
-                    color: Colors.white,
-                    size: 32,
+                  child: Image.asset(
+                    'assets/logo_icon_square_transparent.png',
+                    width: 32,
+                    height: 32,
+                    errorBuilder: (context, error, stackTrace) => const Icon(
+                      Icons.sync_alt,
+                      color: Colors.white,
+                      size: 32,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
                 const Text(
-                  'Nexa',
+                  'Flowshift',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 24,
