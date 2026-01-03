@@ -499,7 +499,6 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
           ),
         ),
       ),
-      ),
     );
   }
 
