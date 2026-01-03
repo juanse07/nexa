@@ -364,7 +364,7 @@ class _MainScreenState extends State<MainScreen>
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Image.asset(
-                    'assets/logo_icon_square_transparent.png',
+                    'assets/logo_icon_square.png',
                     width: 32,
                     height: 32,
                     errorBuilder: (context, error, stackTrace) => const Icon(
