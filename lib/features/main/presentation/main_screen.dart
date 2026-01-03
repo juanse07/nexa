@@ -9,6 +9,7 @@ import '../../../services/terminology_provider.dart';
 import '../../extraction/presentation/extraction_screen.dart';
 import '../../chat/presentation/conversations_screen.dart';
 import '../../attendance/presentation/attendance_dashboard_screen.dart';
+import '../../statistics/presentation/statistics_dashboard_screen.dart';
 import '../../users/presentation/pages/settings_page.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
@@ -62,6 +63,7 @@ class _MainScreenState extends State<MainScreen>
       hideNavigationRail: true,
     ), // Catalog screen (now index 2)
     const AttendanceDashboardScreen(), // Attendance tab (index 3)
+    const StatisticsDashboardScreen(), // Statistics tab (index 4)
   ];
 
   @override
@@ -274,6 +276,7 @@ class _MainScreenState extends State<MainScreen>
               _buildNavButton(1, Icons.chat_bubble_outline, 'Chat'), // Was index 3, now 1
               _buildNavButton(2, Icons.inventory_2, 'Catalog'), // Was index 4, now 2
               _buildNavButton(3, Icons.fact_check_outlined, 'Attendance'), // Attendance tab (index 3)
+              _buildNavButton(4, Icons.bar_chart, 'Stats'), // Statistics tab (index 4)
             ],
           ),
         ),

@@ -30,6 +30,7 @@ import notificationsRouter from './routes/notifications';
 import eventChatRouter from './routes/eventChat';
 import privacyRouter from './routes/privacy';
 import venuesRouter from './routes/venues';
+import statisticsRouter from './routes/statistics';
 import { notificationScheduler } from './services/notificationScheduler';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
@@ -99,6 +100,7 @@ async function createServer() {
   app.use('/api', subscriptionRouter);
   app.use('/api', placesRouter);
   app.use('/api', venuesRouter);
+  app.use('/api', statisticsRouter); // Statistics and export endpoints
 
   // Privacy and legal pages (served at root, not under /api)
   app.use(privacyRouter);
