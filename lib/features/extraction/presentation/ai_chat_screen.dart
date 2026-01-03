@@ -171,28 +171,25 @@ class _AIChatScreenState extends State<AIChatScreen>
 
   /// Show bottom sheet to choose camera, gallery, documents, manual entry, or bulk import
   Future<void> _showImageSourceSelector() async {
-    if (kIsWeb) {
-      // Web doesn't support camera, just pick from files
-      await _pickImagesFromGallery();
-      return;
-    }
-
     await showModalBottomSheet(
       context: context,
       builder: (context) => SafeArea(
         child: Wrap(
           children: [
-            ListTile(
-              leading: const Icon(Icons.camera_alt),
-              title: const Text('Take Photo'),
-              onTap: () {
-                Navigator.pop(context);
-                _pickImageFromCamera();
-              },
-            ),
+            // Camera option only available on mobile
+            if (!kIsWeb) ...[
+              ListTile(
+                leading: const Icon(Icons.camera_alt),
+                title: const Text('Take Photo'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickImageFromCamera();
+                },
+              ),
+            ],
             ListTile(
               leading: const Icon(Icons.photo_library),
-              title: const Text('Choose from Gallery'),
+              title: Text(kIsWeb ? 'Upload Image' : 'Choose from Gallery'),
               onTap: () {
                 Navigator.pop(context);
                 _pickImagesFromGallery();
