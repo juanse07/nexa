@@ -75,12 +75,17 @@ function getDateRange(period: string, startDate?: string, endDate?: string): { s
 function calculateHours(startTime?: string, endTime?: string): number {
   if (!startTime || !endTime) return 0;
 
-  const [startH, startM] = startTime.split(':').map(Number);
-  const [endH, endM] = endTime.split(':').map(Number);
+  const startParts = startTime.split(':').map(Number);
+  const endParts = endTime.split(':').map(Number);
+
+  const startH = startParts[0] ?? 0;
+  const startM = startParts[1] ?? 0;
+  const endH = endParts[0] ?? 0;
+  const endM = endParts[1] ?? 0;
 
   if (isNaN(startH) || isNaN(endH)) return 0;
 
-  let hours = (endH + (endM || 0) / 60) - (startH + (startM || 0) / 60);
+  let hours = (endH + endM / 60) - (startH + startM / 60);
   if (hours < 0) hours += 24; // Handle overnight shifts
 
   return hours;
@@ -401,12 +406,14 @@ router.get('/statistics/staff/performance', requireAuth, async (req: Request, re
 
       // Check if clocked in on time (within 15 minutes of start)
       const clockInTime = new Date(attendance.clockInAt);
-      const [startH, startM] = ((event as any).start_time as string).split(':').map(Number);
+      const timeParts = ((event as any).start_time as string).split(':').map(Number);
+      const startH = timeParts[0] ?? 0;
+      const startM = timeParts[1] ?? 0;
 
       if (!isNaN(startH) && !isNaN(startM)) {
         const eventDate = new Date((event as any).date);
         const scheduledStart = new Date(eventDate);
-        scheduledStart.setHours(startH, startM || 0, 0, 0);
+        scheduledStart.setHours(startH, startM, 0, 0);
 
         const diffMinutes = (clockInTime.getTime() - scheduledStart.getTime()) / (1000 * 60);
 
@@ -750,12 +757,14 @@ router.get('/statistics/manager/top-performers', requireAuth, async (req: Reques
         // Check punctuality
         if (attendance?.clockInAt && (event as any).start_time) {
           const clockIn = new Date(attendance.clockInAt);
-          const [startH, startM] = ((event as any).start_time as string).split(':').map(Number);
+          const punctParts = ((event as any).start_time as string).split(':').map(Number);
+          const startH = punctParts[0] ?? 0;
+          const startM = punctParts[1] ?? 0;
 
           if (!isNaN(startH)) {
             const eventDate = new Date((event as any).date);
             const scheduledStart = new Date(eventDate);
-            scheduledStart.setHours(startH, startM || 0, 0, 0);
+            scheduledStart.setHours(startH, startM, 0, 0);
 
             const diffMinutes = (clockIn.getTime() - scheduledStart.getTime()) / (1000 * 60);
             if (diffMinutes >= -30 && diffMinutes <= 15) {
