@@ -224,6 +224,13 @@ class ChatScreenStateProvider with ChangeNotifier {
   /// Get current event data
   Map<String, dynamic> get currentEventData => chatService.currentEventData;
 
+  /// Add a message to chat and notify listeners (ensures UI rebuild)
+  /// Use this instead of chatService.addMessage() when you need immediate UI update
+  void addMessageAndNotify(ChatMessage message) {
+    chatService.addMessage(message);
+    notifyListeners();
+  }
+
   /// Start a new conversation
   void startNewConversation() {
     chatService.startNewConversation();

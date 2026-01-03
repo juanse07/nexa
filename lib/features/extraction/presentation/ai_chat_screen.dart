@@ -1068,6 +1068,12 @@ class _AIChatScreenState extends State<AIChatScreen>
                               final terminology = context.read<TerminologyProvider>().plural;
                               await _stateProvider.chatService.sendMessage(message, terminology: terminology);
 
+                              // Debug: Check state after AI response
+                              print('[AIChatScreen] After sendMessage:');
+                              print('[AIChatScreen]   eventComplete: ${_stateProvider.chatService.eventComplete}');
+                              print('[AIChatScreen]   currentEventData: ${_stateProvider.currentEventData}');
+                              print('[AIChatScreen]   currentEventData.isNotEmpty: ${_stateProvider.currentEventData.isNotEmpty}');
+
                               // Show confirmation card if event is complete
                               if (_stateProvider.chatService.eventComplete && _stateProvider.currentEventData.isNotEmpty) {
                                 print('[AIChatScreen] Event complete detected - showing confirmation card...');
@@ -1078,7 +1084,8 @@ class _AIChatScreenState extends State<AIChatScreen>
                                   content: '[CONFIRMATION_CARD]',
                                 );
 
-                                _stateProvider.chatService.addMessage(confirmationMsg);
+                                // Use addMessageAndNotify to ensure UI rebuilds immediately (fixes web issue)
+                                _stateProvider.addMessageAndNotify(confirmationMsg);
 
                                 // Start confirmation timer with countdown
                                 _startConfirmationTimer();
@@ -1268,7 +1275,8 @@ class _AIChatScreenState extends State<AIChatScreen>
                   content: '[CONFIRMATION_CARD]',
                 );
 
-                _stateProvider.chatService.addMessage(confirmationMsg);
+                // Use addMessageAndNotify to ensure UI rebuilds immediately (fixes web issue)
+                _stateProvider.addMessageAndNotify(confirmationMsg);
 
                 // Start confirmation timer with countdown
                 _startConfirmationTimer();
