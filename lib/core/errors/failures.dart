@@ -25,7 +25,7 @@ class ServerFailure extends Failure {
   const ServerFailure([
     String message = ErrorMessages.serverNotResponding,
     this.statusCode,
-  ]) : super(message, [statusCode]);
+  ]) : super(message);
 
   /// The HTTP status code
   final int? statusCode;
@@ -56,7 +56,7 @@ class ValidationFailure extends Failure {
   const ValidationFailure([
     String message = ErrorMessages.invalidData,
     this.errors,
-  ]) : super(message, [errors]);
+  ]) : super(message);
 
   /// Map of field names to validation error messages
   final Map<String, List<String>>? errors;

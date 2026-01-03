@@ -75,7 +75,38 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
         iconTheme: const IconThemeData(color: AppColors.charcoal),
       ),
       body: _buildBody(),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showContactPicker,
+        backgroundColor: AppColors.tealInfo,
+        child: const Icon(Icons.add_comment, color: Colors.white),
+      ),
     );
+  }
+
+  void _showContactPicker() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _ContactPickerSheet(
+        onContactSelected: (contact) {
+          Navigator.pop(context);
+          _openNewChat(contact);
+        },
+      ),
+    );
+  }
+
+  void _openNewChat(Map<String, dynamic> contact) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => ChatScreen(
+          targetId: contact['userKey'] as String,
+          targetName: contact['name'] as String? ?? 'Unknown',
+          targetPicture: contact['picture'] as String?,
+        ),
+      ),
+    ).then((_) => _loadConversations());
   }
 
   Widget _buildBody() {
@@ -439,6 +470,299 @@ class _AIChatTile extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Bottom sheet for selecting a contact to start a new chat
+class _ContactPickerSheet extends StatefulWidget {
+  const _ContactPickerSheet({
+    required this.onContactSelected,
+  });
+
+  final void Function(Map<String, dynamic> contact) onContactSelected;
+
+  @override
+  State<_ContactPickerSheet> createState() => _ContactPickerSheetState();
+}
+
+class _ContactPickerSheetState extends State<_ContactPickerSheet> {
+  final ChatService _chatService = ChatService();
+  final TextEditingController _searchController = TextEditingController();
+  List<Map<String, dynamic>> _contacts = [];
+  List<Map<String, dynamic>> _filteredContacts = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadContacts();
+    _searchController.addListener(_filterContacts);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadContacts() async {
+    try {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+
+      final contacts = await _chatService.fetchContacts();
+
+      setState(() {
+        _contacts = contacts;
+        _filteredContacts = contacts;
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  void _filterContacts() {
+    final query = _searchController.text.toLowerCase();
+    setState(() {
+      if (query.isEmpty) {
+        _filteredContacts = _contacts;
+      } else {
+        _filteredContacts = _contacts.where((contact) {
+          final name = (contact['name'] as String? ?? '').toLowerCase();
+          final email = (contact['email'] as String? ?? '').toLowerCase();
+          return name.contains(query) || email.contains(query);
+        }).toList();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.75,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          // Handle bar
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          // Header
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                const Text(
+                  'New Chat',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.charcoal,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+          ),
+          // Search field
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search contacts...',
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey[300]!),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey[300]!),
+                ),
+                filled: true,
+                fillColor: Colors.grey[50],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Content
+          Expanded(
+            child: _buildContent(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContent() {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 48, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              'Failed to load contacts',
+              style: TextStyle(color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: _loadContacts,
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_filteredContacts.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.people_outline, size: 64, color: Colors.grey[300]),
+            const SizedBox(height: 16),
+            Text(
+              _searchController.text.isNotEmpty
+                  ? 'No contacts match your search'
+                  : 'No team members yet',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey[600],
+              ),
+            ),
+            if (_searchController.text.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Add members to your team to start chatting',
+                  style: TextStyle(color: Colors.grey[500]),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.separated(
+      itemCount: _filteredContacts.length,
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (context, index) {
+        final contact = _filteredContacts[index];
+        return _ContactTile(
+          contact: contact,
+          onTap: () => widget.onContactSelected(contact),
+        );
+      },
+    );
+  }
+}
+
+/// Individual contact tile in the picker
+class _ContactTile extends StatelessWidget {
+  const _ContactTile({
+    required this.contact,
+    required this.onTap,
+  });
+
+  final Map<String, dynamic> contact;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = contact['name'] as String? ?? 'Unknown';
+    final email = contact['email'] as String? ?? '';
+    final picture = contact['picture'] as String?;
+    final hasConversation = contact['hasConversation'] as bool? ?? false;
+
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            UserAvatar(
+              imageUrl: picture,
+              fullName: name,
+              radius: 24,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (email.isNotEmpty)
+                    Text(
+                      email,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            if (hasConversation)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.tealInfo.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  'Active',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.tealInfo,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            const SizedBox(width: 8),
+            Icon(
+              Icons.chat_bubble_outline,
+              color: AppColors.tealInfo,
+              size: 20,
             ),
           ],
         ),
