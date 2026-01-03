@@ -33,6 +33,7 @@ import 'bulk_extraction_screen.dart';
 import '../../main/presentation/main_screen.dart';
 import 'dart:async';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
+import 'package:nexa/shared/widgets/web_content_wrapper.dart';
 
 class AIChatScreen extends StatefulWidget {
   final bool startNewConversation;
@@ -832,14 +833,15 @@ class _AIChatScreenState extends State<AIChatScreen>
                           child: CircularProgressIndicator(),
                         ),
                       )
-                    : SliverPadding(
-                        padding: const EdgeInsets.only(
-                          left: 16,
-                          right: 16,
-                          top: 16,
-                          bottom: 140, // Add bottom padding for input area and chips visibility
-                        ),
-                        sliver: SliverList(
+                    : SliverWebContentWrapper.chat(
+                        sliver: SliverPadding(
+                          padding: const EdgeInsets.only(
+                            left: 16,
+                            right: 16,
+                            top: 16,
+                            bottom: 140, // Add bottom padding for input area and chips visibility
+                          ),
+                          sliver: SliverList(
                           delegate: SliverChildBuilderDelegate(
                             (context, index) {
                               final message = messages[index];
@@ -905,6 +907,7 @@ class _AIChatScreenState extends State<AIChatScreen>
                           ),
                         ),
                       ),
+                    ),
               ],
             ),
 
@@ -1001,11 +1004,11 @@ class _AIChatScreenState extends State<AIChatScreen>
                             ),
                           );
                         }
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ),
 
             // Fixed input area positioned at bottom
             if (messages.isNotEmpty)
@@ -1014,14 +1017,6 @@ class _AIChatScreenState extends State<AIChatScreen>
                 right: 0,
                 bottom: 0,
                 child: Container(
-                  padding: EdgeInsets.fromLTRB(
-                    12,
-                    4,
-                    12,
-                    MediaQuery.of(context).padding.bottom > 0
-                      ? MediaQuery.of(context).padding.bottom
-                      : 8, // Bottom padding for safe area
-                  ),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     boxShadow: [
@@ -1032,7 +1027,17 @@ class _AIChatScreenState extends State<AIChatScreen>
                       ),
                     ],
                   ),
-                  child: Column(
+                  child: WebContentWrapper.chat(
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        12,
+                        4,
+                        12,
+                        MediaQuery.of(context).padding.bottom > 0
+                          ? MediaQuery.of(context).padding.bottom
+                          : 8, // Bottom padding for safe area
+                      ),
+                      child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                         // Image preview cards
@@ -1106,6 +1111,8 @@ class _AIChatScreenState extends State<AIChatScreen>
                           isLoading: _stateProvider.isLoading,
                         ),
                     ],
+                      ),
+                    ),
                   ),
                 ),
               ),

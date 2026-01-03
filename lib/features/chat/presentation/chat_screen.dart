@@ -14,6 +14,7 @@ import '../../../features/extraction/services/roles_service.dart';
 import '../../../features/users/presentation/pages/user_events_screen.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
 import 'package:nexa/shared/widgets/initials_avatar.dart';
+import 'package:nexa/shared/widgets/web_content_wrapper.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
@@ -814,16 +815,20 @@ class _ChatScreenState extends State<ChatScreen> {
       body: Stack(
         children: <Widget>[
           // Message list with extra bottom padding for input
-          Padding(
-            padding: const EdgeInsets.only(bottom: 80), // Space for input
-            child: _buildMessageList(),
+          WebContentWrapper.chat(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 80), // Space for input
+              child: _buildMessageList(),
+            ),
           ),
           // Fixed bottom input (no animation)
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
-            child: _buildMessageInput(),
+            child: WebContentWrapper.chat(
+              child: _buildMessageInput(),
+            ),
           ),
         ],
       ),

@@ -66,6 +66,7 @@ import 'ai_chat_screen.dart';
 import '../../../core/widgets/section_navigation_dropdown.dart';
 import '../../../core/widgets/web_tab_navigation.dart';
 import '../../main/presentation/main_screen.dart';
+import 'package:nexa/shared/widgets/web_content_wrapper.dart';
 
 class ExtractionScreen extends StatefulWidget {
   final int initialIndex; // For Post a Job tab chips
@@ -1547,20 +1548,21 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   List<Widget> _buildSliverContent() {
-    switch (_selectedIndex) {
-      case 0: // Post a Job tab (uncommented for Manual Entry access)
-        return _buildCreateSlivers();
-      case 1: // Events tab
-        return _buildEventsSlivers();
-      case 2: // Chat tab
-        return _buildChatSlivers();
-      case 3: // Hours tab
-        return _buildHoursSlivers();
-      case 4: // Catalog tab
-        return _buildCatalogSlivers();
-      default:
-        return [];
+    final slivers = switch (_selectedIndex) {
+      0 => _buildCreateSlivers(), // Post a Job tab (uncommented for Manual Entry access)
+      1 => _buildEventsSlivers(), // Events tab
+      2 => _buildChatSlivers(), // Chat tab
+      3 => _buildHoursSlivers(), // Hours tab
+      4 => _buildCatalogSlivers(), // Catalog tab
+      _ => <Widget>[],
+    };
+
+    // On web, wrap each sliver with centered max-width constraint
+    if (kIsWeb) {
+      return slivers.map((sliver) => SliverWebContentWrapper.chat(sliver: sliver)).toList();
     }
+
+    return slivers;
   }
 
   List<Widget> _buildPinnedHeaders() {

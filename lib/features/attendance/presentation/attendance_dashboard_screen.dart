@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:nexa/shared/widgets/web_content_wrapper.dart';
 import '../models/attendance_dashboard_models.dart';
 import '../services/attendance_dashboard_service.dart';
 import 'widgets/attendance_hero_header.dart';
@@ -321,16 +323,16 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
             ),
 
             // Live staff grid
-            SliverToBoxAdapter(
+            _wrapSliver(SliverToBoxAdapter(
               child: LiveStaffGrid(
                 staff: _clockedInStaff,
                 onStaffTap: _showStaffQuickActions,
                 isLoading: _isLoading,
               ),
-            ),
+            )),
 
             // Weekly hours chart
-            SliverToBoxAdapter(
+            _wrapSliver(SliverToBoxAdapter(
               child: WeeklyHoursChart(
                 data: _analytics.weeklyHours,
                 isLoading: _isLoading,
@@ -339,10 +341,10 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
                   debugPrint('Tapped on ${dayData.date}');
                 },
               ),
-            ),
+            )),
 
             // Section header for attendance list
-            SliverToBoxAdapter(
+            _wrapSliver(SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                 child: Row(
@@ -365,19 +367,19 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
                   ],
                 ),
               ),
-            ),
+            )),
 
             // Attendance records list
             if (_isLoading)
-              SliverToBoxAdapter(
+              _wrapSliver(SliverToBoxAdapter(
                 child: _buildLoadingList(),
-              )
+              ))
             else if (_attendanceRecords.isEmpty)
-              SliverToBoxAdapter(
+              _wrapSliver(SliverToBoxAdapter(
                 child: _buildEmptyState(),
-              )
+              ))
             else
-              SliverList(
+              _wrapSliver(SliverList(
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
                     final record = _attendanceRecords[index];
@@ -399,7 +401,7 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
                   },
                   childCount: _attendanceRecords.length,
                 ),
-              ),
+              )),
 
             // Bottom padding
             const SliverToBoxAdapter(
@@ -417,6 +419,14 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
         label: const Text('Export'),
       ),
     );
+  }
+
+  /// Wrap sliver with WebContentWrapper on web for centered max-width content
+  Widget _wrapSliver(Widget sliver) {
+    if (kIsWeb) {
+      return SliverWebContentWrapper.chat(sliver: sliver);
+    }
+    return sliver;
   }
 
   Widget _buildLoadingList() {

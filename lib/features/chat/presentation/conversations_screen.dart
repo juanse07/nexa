@@ -7,6 +7,7 @@ import 'chat_screen.dart';
 import '../../extraction/presentation/ai_chat_screen.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
 import 'package:nexa/shared/widgets/initials_avatar.dart';
+import 'package:nexa/shared/widgets/web_content_wrapper.dart';
 
 class ConversationsScreen extends StatefulWidget {
   const ConversationsScreen({super.key});
@@ -74,7 +75,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
         ),
         iconTheme: const IconThemeData(color: AppColors.charcoal),
       ),
-      body: _buildBody(),
+      body: WebContentWrapper.list(child: _buildBody()),
       floatingActionButton: FloatingActionButton(
         onPressed: _showContactPicker,
         backgroundColor: AppColors.tealInfo,
