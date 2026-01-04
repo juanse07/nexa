@@ -2929,21 +2929,42 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
           return res.status(401).json({ message: 'Manager ID required for function calls' });
         }
 
-        // Execute tool calls in parallel
+        // Execute tool calls in parallel with error handling
         const toolResults = await Promise.all(
           assistantMessage.tool_calls.map(async (toolCall: any) => {
             const functionName = toolCall.function.name;
-            const functionArgs = JSON.parse(toolCall.function.arguments);
 
-            console.log(`[Groq] Executing ${functionName}:`, functionArgs);
+            try {
+              // Parse arguments with error handling for malformed JSON
+              let functionArgs: any;
+              try {
+                functionArgs = JSON.parse(toolCall.function.arguments);
+              } catch (parseError: any) {
+                console.error(`[Groq] Failed to parse tool arguments for ${functionName}:`, toolCall.function.arguments);
+                return {
+                  role: 'tool',
+                  tool_call_id: toolCall.id,
+                  content: `Error: Failed to parse function arguments. The AI provided malformed JSON: ${parseError.message}`
+                };
+              }
 
-            const result = await executeFunctionCall(functionName, functionArgs, managerId);
+              console.log(`[Groq] Executing ${functionName}:`, functionArgs);
 
-            return {
-              role: 'tool',
-              tool_call_id: toolCall.id,
-              content: result
-            };
+              const result = await executeFunctionCall(functionName, functionArgs, managerId);
+
+              return {
+                role: 'tool',
+                tool_call_id: toolCall.id,
+                content: result
+              };
+            } catch (execError: any) {
+              console.error(`[Groq] Tool execution failed for ${functionName}:`, execError);
+              return {
+                role: 'tool',
+                tool_call_id: toolCall.id,
+                content: `Error executing ${functionName}: ${execError.message}`
+              };
+            }
           })
         );
 

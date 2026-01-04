@@ -1985,27 +1985,48 @@ Example: "February" in December 2025 → February 2026`;
       if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
         console.log(`[Groq] ${assistantMessage.tool_calls.length} tool call(s) requested`);
 
-        // Execute tool calls in parallel
+        // Execute tool calls in parallel with error handling
         const toolResults = await Promise.all(
           assistantMessage.tool_calls.map(async (toolCall: any) => {
             const functionName = toolCall.function.name;
-            const functionArgs = JSON.parse(toolCall.function.arguments);
 
-            console.log(`[Groq] Executing ${functionName}:`, functionArgs);
+            try {
+              // Parse arguments with error handling for malformed JSON
+              let functionArgs: any;
+              try {
+                functionArgs = JSON.parse(toolCall.function.arguments);
+              } catch (parseError: any) {
+                console.error(`[Groq] Failed to parse tool arguments for ${functionName}:`, toolCall.function.arguments);
+                return {
+                  role: 'tool',
+                  tool_call_id: toolCall.id,
+                  content: JSON.stringify({ error: `Failed to parse function arguments: ${parseError.message}` })
+                };
+              }
 
-            const result = await executeStaffFunction(
-              functionName,
-              functionArgs,
-              userId!,
-              userKey!,
-              subscriptionTier || 'free'
-            );
+              console.log(`[Groq] Executing ${functionName}:`, functionArgs);
 
-            return {
-              role: 'tool',
-              tool_call_id: toolCall.id,
-              content: JSON.stringify(result)
-            };
+              const result = await executeStaffFunction(
+                functionName,
+                functionArgs,
+                userId!,
+                userKey!,
+                subscriptionTier || 'free'
+              );
+
+              return {
+                role: 'tool',
+                tool_call_id: toolCall.id,
+                content: JSON.stringify(result)
+              };
+            } catch (execError: any) {
+              console.error(`[Groq] Tool execution failed for ${functionName}:`, execError);
+              return {
+                role: 'tool',
+                tool_call_id: toolCall.id,
+                content: JSON.stringify({ error: `Error executing ${functionName}: ${execError.message}` })
+              };
+            }
           })
         );
 
