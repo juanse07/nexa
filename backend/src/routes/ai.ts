@@ -2947,30 +2947,85 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
           })
         );
 
-        // Second request with tool results
+        // Second request with tool results - with retry logic for tool_use_failed errors
         const messagesWithToolResults = [
           ...processedMessages,
           assistantMessage,
           ...toolResults
         ];
 
-        const secondResponse = await axios.post(
-          'https://api.groq.com/openai/v1/chat/completions',
-          {
-            model: requestBody.model, // Use same model as first request
-            messages: messagesWithToolResults,
-            temperature: requestBody.temperature,
-            max_tokens: requestBody.max_tokens,
-          },
-          { headers, validateStatus: () => true, timeout: 60000 }
-        );
+        // Helper to make second request with retry on tool_use_failed
+        const makeSecondRequest = async (messages: any[], attempt: number = 1): Promise<string> => {
+          const maxRetries = 3;
 
-        if (secondResponse.status >= 300) {
-          console.error('[Groq] Second API call error:', secondResponse.status);
-          throw new Error(`Second API call failed: ${secondResponse.statusText}`);
-        }
+          const response = await axios.post(
+            'https://api.groq.com/openai/v1/chat/completions',
+            {
+              model: requestBody.model,
+              messages,
+              temperature: requestBody.temperature,
+              max_tokens: requestBody.max_tokens,
+            },
+            { headers, validateStatus: () => true, timeout: 60000 }
+          );
 
-        const finalContent = secondResponse.data.choices?.[0]?.message?.content;
+          // Check for tool_use_failed error
+          if (response.status === 400 && response.data?.error?.code === 'tool_use_failed') {
+            console.log(`[Groq] tool_use_failed on attempt ${attempt}, retrying with natural language instruction...`);
+
+            if (attempt >= maxRetries) {
+              // Final fallback: strip tool context and ask for natural language response
+              const fallbackMessages = [
+                ...processedMessages,
+                {
+                  role: 'assistant',
+                  content: `I executed the requested function(s) and got results. Here's a summary of what I found:\n\n${toolResults.map((tr: any) => tr.content).join('\n\n')}`
+                },
+                {
+                  role: 'user',
+                  content: 'Please present this information naturally and conversationally. Do not call any functions.'
+                }
+              ];
+
+              const fallbackResponse = await axios.post(
+                'https://api.groq.com/openai/v1/chat/completions',
+                {
+                  model: requestBody.model,
+                  messages: fallbackMessages,
+                  temperature: requestBody.temperature,
+                  max_tokens: requestBody.max_tokens,
+                },
+                { headers, validateStatus: () => true, timeout: 60000 }
+              );
+
+              if (fallbackResponse.status >= 300) {
+                throw new Error(`Fallback request failed: ${fallbackResponse.statusText}`);
+              }
+
+              return fallbackResponse.data.choices?.[0]?.message?.content || '';
+            }
+
+            // Retry with an explicit instruction to respond naturally
+            const retryMessages = [
+              ...messages,
+              {
+                role: 'user',
+                content: 'Please respond with a natural language summary of the results. Do not call any additional functions.'
+              }
+            ];
+
+            return makeSecondRequest(retryMessages, attempt + 1);
+          }
+
+          if (response.status >= 300) {
+            console.error('[Groq] Second API call error:', response.status, response.data);
+            throw new Error(`Second API call failed: ${response.statusText}`);
+          }
+
+          return response.data.choices?.[0]?.message?.content || '';
+        };
+
+        const finalContent = await makeSecondRequest(messagesWithToolResults);
 
         if (!finalContent) {
           throw new Error('No content in second response');
