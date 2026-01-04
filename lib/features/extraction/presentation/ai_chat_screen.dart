@@ -34,6 +34,7 @@ import '../../main/presentation/main_screen.dart';
 import 'dart:async';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
 import 'package:nexa/shared/widgets/web_content_wrapper.dart';
+import 'package:nexa/core/navigation/route_error_manager.dart';
 
 class AIChatScreen extends StatefulWidget {
   final bool startNewConversation;
@@ -253,10 +254,9 @@ class _AIChatScreenState extends State<AIChatScreen>
   /// Navigate to the bulk import screen
   void _navigateToBulkImport() {
     HapticFeedback.selectionClick();
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => const BulkExtractionScreen(),
-      ),
+    RouteErrorManager.instance.navigateSafely(
+      context,
+      () => const BulkExtractionScreen(),
     );
   }
 
@@ -538,31 +538,30 @@ class _AIChatScreenState extends State<AIChatScreen>
 
     // Navigate to edit screen with current event data
     // Using a temporary ID since this is not yet saved
-    final result = await Navigator.of(context).push<Map<String, dynamic>>(
-      MaterialPageRoute(
-        builder: (context) => _InlineEventEditScreen(
-          eventData: eventData,
-          onSave: (updatedData) {
-            // Detect which fields were edited
-            final changedFields = <String>[];
-            for (final key in updatedData.keys) {
-              final original = originalData[key]?.toString() ?? '';
-              final updated = updatedData[key]?.toString() ?? '';
-              if (original != updated) {
-                changedFields.add(key);
-              }
+    final result = await RouteErrorManager.instance.navigateSafely<Map<String, dynamic>>(
+      context,
+      () => _InlineEventEditScreen(
+        eventData: eventData,
+        onSave: (updatedData) {
+          // Detect which fields were edited
+          final changedFields = <String>[];
+          for (final key in updatedData.keys) {
+            final original = originalData[key]?.toString() ?? '';
+            final updated = updatedData[key]?.toString() ?? '';
+            if (original != updated) {
+              changedFields.add(key);
             }
+          }
 
-            if (changedFields.isNotEmpty) {
-              _wasEdited = true;
-              _editedFields = [..._editedFields, ...changedFields];
-              print('[AIChatScreen] User edited fields: ${changedFields.join(', ')}');
-            }
+          if (changedFields.isNotEmpty) {
+            _wasEdited = true;
+            _editedFields = [..._editedFields, ...changedFields];
+            print('[AIChatScreen] User edited fields: ${changedFields.join(', ')}');
+          }
 
-            // Update the state provider with edited data
-            _stateProvider.updateEventData(updatedData);
-          },
-        ),
+          // Update the state provider with edited data
+          _stateProvider.updateEventData(updatedData);
+        },
       ),
     );
 
@@ -697,11 +696,10 @@ class _AIChatScreenState extends State<AIChatScreen>
                     icon: const Icon(Icons.arrow_back, color: AppColors.charcoal),
                     onPressed: () {
                       // Navigate back to Jobs section (Pending tab)
-                      Navigator.of(context).pushAndRemoveUntil(
-                        MaterialPageRoute<void>(
-                          builder: (context) => const MainScreen(initialIndex: 0),
-                        ),
-                        (route) => false,
+                      RouteErrorManager.instance.navigateSafely(
+                        context,
+                        () => const MainScreen(initialIndex: 0),
+                        clearStack: true,
                       );
                     },
                   ),
@@ -723,12 +721,11 @@ class _AIChatScreenState extends State<AIChatScreen>
                         // Navigate to ExtractionScreen with uncommented dashboard
                         // Since dashboard is at index 0 but commented, we use initialScreenIndex: 0
                         // and uncomment it temporarily, OR we navigate to the form directly
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (context) => const ExtractionScreen(
-                              initialScreenIndex: 0, // Dashboard with tabs
-                              initialIndex: 2, // Manual Entry tab (0=Upload, 1=AI Chat, 2=Manual)
-                            ),
+                        RouteErrorManager.instance.navigateSafely(
+                          context,
+                          () => const ExtractionScreen(
+                            initialScreenIndex: 0, // Dashboard with tabs
+                            initialIndex: 2, // Manual Entry tab (0=Upload, 1=AI Chat, 2=Manual)
                           ),
                         );
                       },

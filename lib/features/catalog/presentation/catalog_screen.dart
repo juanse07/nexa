@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/widgets/section_navigation_dropdown.dart';
+import '../../../core/navigation/route_error_manager.dart';
 import '../../teams/presentation/pages/teams_management_page.dart';
 import '../../extraction/presentation/ai_chat_screen.dart';
 import '../../extraction/presentation/extraction_screen.dart';
@@ -49,8 +50,10 @@ class _CatalogScreenState extends State<CatalogScreen> {
     switch (section) {
       case 'Jobs':
         // Navigate to Jobs tab (MainScreen index 2)
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const MainScreen(initialIndex: 2)),
+        await RouteErrorManager.instance.navigateSafely(
+          context,
+          () => const MainScreen(initialIndex: 2),
+          replace: true,
         );
         break;
       case 'Clients':
@@ -58,8 +61,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
         break;
       case 'Teams':
         // Navigate to Teams Management (separate screen, not a main tab)
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const TeamsManagementPage()),
+        await RouteErrorManager.instance.navigateSafely(
+          context,
+          () => const TeamsManagementPage(),
         );
         break;
       case 'Catalog':
@@ -67,19 +71,20 @@ class _CatalogScreenState extends State<CatalogScreen> {
         break;
       case 'AI Chat':
         // Navigate to AI Chat screen (separate screen, not a main tab)
-        final result = await Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const AIChatScreen()),
+        final result = await RouteErrorManager.instance.navigateSafely(
+          context,
+          () => const AIChatScreen(),
         );
         // Handle "Check Pending" navigation
         if (result != null && result is Map && result['action'] == 'show_pending') {
           if (!mounted) return;
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-              builder: (_) => const ExtractionScreen(
-                initialScreenIndex: 1, // Jobs/Events tab
-                initialEventsTabIndex: 0, // Pending sub-tab
-              ),
+          await RouteErrorManager.instance.navigateSafely(
+            context,
+            () => const ExtractionScreen(
+              initialScreenIndex: 1, // Jobs/Events tab
+              initialEventsTabIndex: 0, // Pending sub-tab
             ),
+            replace: true,
           );
         }
         break;
@@ -87,8 +92,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
   }
 
   void _openTeamsManagementPage() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const TeamsManagementPage()),
+    RouteErrorManager.instance.navigateSafely(
+      context,
+      () => const TeamsManagementPage(),
     );
   }
 
@@ -114,9 +120,10 @@ class _CatalogScreenState extends State<CatalogScreen> {
     if (confirmed == true && mounted) {
       await AuthService.signOut();
       if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const LoginPage()),
-        (route) => false,
+      await RouteErrorManager.instance.navigateSafely(
+        context,
+        () => const LoginPage(),
+        clearStack: true,
       );
     }
   }
@@ -128,12 +135,14 @@ class _CatalogScreenState extends State<CatalogScreen> {
       position: PopupMenuPosition.under,
       onSelected: (value) async {
         if (value == 'profile') {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const ManagerProfilePage()),
+          await RouteErrorManager.instance.navigateSafely(
+            context,
+            () => const ManagerProfilePage(),
           );
         } else if (value == 'settings') {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const SettingsPage()),
+          await RouteErrorManager.instance.navigateSafely(
+            context,
+            () => const SettingsPage(),
           );
         } else if (value == 'teams') {
           _openTeamsManagementPage();
