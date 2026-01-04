@@ -2016,67 +2016,76 @@ Example: "February" in December 2025 → February 2026`;
           ...toolResults
         ];
 
-        // Helper to make second request with retry on tool_use_failed
-        const makeSecondRequest = async (messages: any[], attempt: number = 1): Promise<string> => {
-          const maxRetries = 3;
-
+        // Helper to make second request with fallback on tool_use_failed
+        const makeSecondRequest = async (): Promise<string> => {
           const response = await axios.post(
             'https://api.groq.com/openai/v1/chat/completions',
             {
               model: requestBody.model,
-              messages,
+              messages: messagesWithToolResults,
               temperature: requestBody.temperature,
               max_tokens: requestBody.max_tokens,
             },
             { headers, validateStatus: () => true, timeout: 60000 }
           );
 
-          // Check for tool_use_failed error
+          // Check for tool_use_failed error - immediately use fallback (stripping tool context)
           if (response.status === 400 && response.data?.error?.code === 'tool_use_failed') {
-            console.log(`[Groq] tool_use_failed on attempt ${attempt}, retrying with natural language instruction...`);
+            console.log('[Groq] tool_use_failed detected, using fallback without tool context...');
 
-            if (attempt >= maxRetries) {
-              // Final fallback: strip tool context and ask for natural language response
-              const fallbackMessages = [
-                ...processedMessages,
-                {
-                  role: 'assistant',
-                  content: `I executed the requested function(s) and got results. Here's a summary of what I found:\n\n${toolResults.map((tr: any) => tr.content).join('\n\n')}`
-                },
-                {
-                  role: 'user',
-                  content: 'Please present this information naturally and conversationally. Do not call any functions.'
-                }
-              ];
-
-              const fallbackResponse = await axios.post(
-                'https://api.groq.com/openai/v1/chat/completions',
-                {
-                  model: requestBody.model,
-                  messages: fallbackMessages,
-                  temperature: requestBody.temperature,
-                  max_tokens: requestBody.max_tokens,
-                },
-                { headers, validateStatus: () => true, timeout: 60000 }
-              );
-
-              if (fallbackResponse.status >= 300) {
-                throw new Error(`Fallback request failed: ${fallbackResponse.statusText}`);
+            // Format tool results nicely for the fallback
+            const toolResultsSummary = toolResults.map((tr: any) => {
+              try {
+                const parsed = typeof tr.content === 'string' ? JSON.parse(tr.content) : tr.content;
+                return JSON.stringify(parsed, null, 2);
+              } catch {
+                return tr.content;
               }
+            }).join('\n\n');
 
-              return fallbackResponse.data.choices?.[0]?.message?.content || '';
-            }
-
-            // Retry with an explicit instruction to respond naturally
-            const retryMessages = [
-              ...messages,
+            // Fallback: Strip ALL tool-related content, present results as context
+            const fallbackMessages = [
+              // Keep system message if present
+              ...processedMessages.filter((m: any) => m.role === 'system'),
+              // Add user's original request
+              ...processedMessages.filter((m: any) => m.role === 'user').slice(-1),
+              // Add assistant response with the tool results embedded
+              {
+                role: 'assistant',
+                content: `I looked up the information you requested. Here's what I found:\n\n${toolResultsSummary}`
+              },
+              // Ask for a natural presentation
               {
                 role: 'user',
-                content: 'Please respond with a natural language summary of the results. Do not call any additional functions.'
+                content: 'Great, please summarize this information in a natural, conversational way. Present it clearly for the user.'
               }
             ];
 
-            return makeSecondRequest(retryMessages, attempt + 1);
+            console.log('[Groq] Fallback messages count:', fallbackMessages.length);
+
+            const fallbackResponse = await axios.post(
+              'https://api.groq.com/openai/v1/chat/completions',
+              {
+                model: requestBody.model,
+                messages: fallbackMessages,
+                temperature: requestBody.temperature,
+                max_tokens: requestBody.max_tokens,
+              },
+              { headers, validateStatus: () => true, timeout: 60000 }
+            );
+
+            console.log('[Groq] Fallback response status:', fallbackResponse.status);
+
+            if (fallbackResponse.status >= 300) {
+              console.error('[Groq] Fallback also failed:', fallbackResponse.data);
+              // Last resort: return the tool results directly formatted
+              return `Here's what I found:\n\n${toolResultsSummary}`;
+            }
+
+            const fallbackContent = fallbackResponse.data.choices?.[0]?.message?.content;
+            console.log('[Groq] Fallback content length:', fallbackContent?.length || 0);
+
+            return fallbackContent || `Here's what I found:\n\n${toolResultsSummary}`;
           }
 
           if (response.status >= 300) {
@@ -2084,10 +2093,12 @@ Example: "February" in December 2025 → February 2026`;
             throw new Error(`Second API call failed: ${response.statusText}`);
           }
 
-          return response.data.choices?.[0]?.message?.content || '';
+          const content = response.data.choices?.[0]?.message?.content;
+          console.log('[Groq] Second request content length:', content?.length || 0);
+          return content || '';
         };
 
-        const finalContent = await makeSecondRequest(messagesWithToolResults);
+        const finalContent = await makeSecondRequest();
 
         if (!finalContent) {
           throw new Error('No content in second response');
