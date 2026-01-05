@@ -982,22 +982,22 @@ class _AIChatScreenState extends State<AIChatScreen>
                                 children: [
                                   _buildSuggestionChip(
                                     '📋 New ${terminology[0].toUpperCase()}${terminology.substring(1)}',
-                                    'Help me to create a new $terminology and ask me for confirmation to save',
+                                    'I want to create a new $terminology. I\'ll give you the client, date, call time, and roles.',
                                   ),
                                   const SizedBox(width: 8),
                                   _buildSuggestionChip(
                                     '🏢 New Client',
-                                    'Add new client',
+                                    'I want to add a new client to the system.',
                                   ),
                                   const SizedBox(width: 8),
                                   _buildSuggestionChip(
                                     '👤 New Role',
-                                    'Create new staff role',
+                                    'I want to create a new staff role.',
                                   ),
                                   const SizedBox(width: 8),
                                   _buildSuggestionChip(
                                     '💵 New Tariff',
-                                    'Set up new tariff. Tell me: rate, role, and client.',
+                                    'I want to set up a new pay rate. I\'ll tell you the client, role, and hourly rate.',
                                   ),
                                 ],
                               ),
