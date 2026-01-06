@@ -202,6 +202,9 @@ router.post(
       }
 
       const { eventId } = req.params;
+      if (!eventId) {
+        return res.status(400).json({ message: 'Event ID is required' });
+      }
 
       // Verify the event belongs to this manager
       const event = await EventModel.findOne({
