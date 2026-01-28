@@ -39,10 +39,11 @@ class AuthService {
   static String get _apiBaseUrl {
     final base = AppConfig.instance.baseUrl;
 
-    var raw = base.isNotEmpty ? base : 'http://127.0.0.1:4000';
+    // Use production URL as fallback (never localhost in release builds)
+    var raw = base.isNotEmpty ? base : 'https://api.nexapymesoft.com';
 
-    // Android emulator needs special localhost mapping
-    if (!kIsWeb && Platform.isAndroid) {
+    // Android emulator needs special localhost mapping (debug only)
+    if (kDebugMode && !kIsWeb && Platform.isAndroid) {
       if (raw.contains('127.0.0.1')) {
         raw = raw.replaceAll('127.0.0.1', '10.0.2.2');
       }

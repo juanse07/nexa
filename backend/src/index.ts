@@ -31,6 +31,7 @@ import eventChatRouter from './routes/eventChat';
 import privacyRouter from './routes/privacy';
 import venuesRouter from './routes/venues';
 import statisticsRouter from './routes/statistics';
+import uploadRouter from './routes/upload';
 import { notificationScheduler } from './services/notificationScheduler';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
@@ -101,6 +102,7 @@ async function createServer() {
   app.use('/api', placesRouter);
   app.use('/api', venuesRouter);
   app.use('/api', statisticsRouter); // Statistics and export endpoints
+  app.use('/api/upload', uploadRouter); // File upload routes
 
   // Privacy and legal pages (served at root, not under /api)
   app.use(privacyRouter);

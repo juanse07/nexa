@@ -3,7 +3,6 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get_it/get_it.dart';
 import 'package:nexa/core/network/api_client.dart';
 import 'package:nexa/features/users/data/services/manager_service.dart';
-import 'package:nexa/shared/presentation/theme/app_colors.dart';
 import 'package:nexa/shared/widgets/initials_avatar.dart';
 
 class ManagerProfilePage extends StatefulWidget {
@@ -158,5 +157,3 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
     );
   }
 }
-
-

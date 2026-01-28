@@ -11,6 +11,7 @@ import '../../chat/presentation/conversations_screen.dart';
 import '../data/services/home_stats_service.dart';
 import '../../../../services/terminology_provider.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
+import 'package:nexa/core/navigation/route_error_manager.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -161,8 +162,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   /// Navigate with smooth fade transition
   Future<void> _navigateWithFade(Widget destination) async {
-    final result = await Navigator.of(context).push<dynamic>(
-      PageRouteBuilder<dynamic>(
+    final result = await RouteErrorManager.instance.navigateWithRouteSafely<dynamic>(
+      context,
+      () => PageRouteBuilder<dynamic>(
         pageBuilder: (context, animation, secondaryAnimation) => destination,
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           const begin = Offset(0.03, 0.03); // Subtle upward slide
@@ -187,13 +189,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     // Handle "Check Pending" navigation from AI Chat
     if (result != null && result is Map && result['action'] == 'show_pending') {
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => const ExtractionScreen(
-            initialScreenIndex: 1, // Jobs/Events tab
-            initialEventsTabIndex: 0, // Pending sub-tab
-          ),
+      await RouteErrorManager.instance.navigateSafely(
+        context,
+        () => const ExtractionScreen(
+          initialScreenIndex: 1, // Jobs/Events tab
+          initialEventsTabIndex: 0, // Pending sub-tab
         ),
+        replace: true,
       );
     }
   }
@@ -206,8 +208,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     // Check if filter matches current terminology (Jobs/Shifts/Events)
     if (filter == terminology || filter == 'Jobs' || filter == 'Shifts' || filter == 'Events') {
       // Navigate to Jobs/Shifts/Events tab (MainScreen index 2)
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const MainScreen(initialIndex: 2)),
+      await RouteErrorManager.instance.navigateSafely(
+        context,
+        () => const MainScreen(initialIndex: 2),
+        replace: true,
       );
       return;
     }
@@ -215,37 +219,43 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     switch (filter) {
       case 'Clients':
         // Navigate to Catalog tab (MainScreen index 4)
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const MainScreen(initialIndex: 4)),
+        await RouteErrorManager.instance.navigateSafely(
+          context,
+          () => const MainScreen(initialIndex: 4),
+          replace: true,
         );
         break;
       case 'Teams':
         // Navigate to Teams Management (separate screen, not a main tab)
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const TeamsManagementPage()),
+        await RouteErrorManager.instance.navigateSafely(
+          context,
+          () => const TeamsManagementPage(),
         );
         break;
       case 'Catalog':
         // Navigate to Catalog tab (MainScreen index 4)
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const MainScreen(initialIndex: 4)),
+        await RouteErrorManager.instance.navigateSafely(
+          context,
+          () => const MainScreen(initialIndex: 4),
+          replace: true,
         );
         break;
       case 'AI Chat':
         // Navigate to AI Chat screen (separate screen, not a main tab)
-        final result = await Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const AIChatScreen(startNewConversation: true)),
+        final result = await RouteErrorManager.instance.navigateSafely(
+          context,
+          () => const AIChatScreen(startNewConversation: true),
         );
         // Handle "Check Pending" navigation
         if (result != null && result is Map && result['action'] == 'show_pending') {
           if (!mounted) return;
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-              builder: (_) => const ExtractionScreen(
-                initialScreenIndex: 1, // Jobs/Events tab
-                initialEventsTabIndex: 0, // Pending sub-tab
-              ),
+          await RouteErrorManager.instance.navigateSafely(
+            context,
+            () => const ExtractionScreen(
+              initialScreenIndex: 1, // Jobs/Events tab
+              initialEventsTabIndex: 0, // Pending sub-tab
             ),
+            replace: true,
           );
         }
         break;
@@ -297,15 +307,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         // If navigating to Create tab (index 1) with a specific tabIndex
         if (index == 1 && tabIndex != null) {
           // Navigate directly to ExtractionScreen with the specific tab
-          Navigator.of(context).push<void>(
-            MaterialPageRoute<void>(
-              builder: (context) => ExtractionScreen(initialIndex: tabIndex),
-            ),
+          RouteErrorManager.instance.navigateSafely<void>(
+            context,
+            () => ExtractionScreen(initialIndex: tabIndex),
           );
         } else {
-          // Navigate to the main screen tab
-          Navigator.of(context).pushReplacement<void, void>(
-            PageRouteBuilder<void>(
+          // Navigate to the main screen tab with no transition
+          RouteErrorManager.instance.navigateWithRouteSafely<void>(
+            context,
+            () => PageRouteBuilder<void>(
               pageBuilder: (context, animation, secondaryAnimation) =>
                   MainScreen(initialIndex: index),
               transitionDuration: Duration.zero,

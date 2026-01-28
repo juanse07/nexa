@@ -1985,54 +1985,141 @@ Example: "February" in December 2025 → February 2026`;
       if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
         console.log(`[Groq] ${assistantMessage.tool_calls.length} tool call(s) requested`);
 
-        // Execute tool calls in parallel
+        // Execute tool calls in parallel with error handling
         const toolResults = await Promise.all(
           assistantMessage.tool_calls.map(async (toolCall: any) => {
             const functionName = toolCall.function.name;
-            const functionArgs = JSON.parse(toolCall.function.arguments);
 
-            console.log(`[Groq] Executing ${functionName}:`, functionArgs);
+            try {
+              // Parse arguments with error handling for malformed JSON
+              let functionArgs: any;
+              try {
+                functionArgs = JSON.parse(toolCall.function.arguments);
+              } catch (parseError: any) {
+                console.error(`[Groq] Failed to parse tool arguments for ${functionName}:`, toolCall.function.arguments);
+                return {
+                  role: 'tool',
+                  tool_call_id: toolCall.id,
+                  content: JSON.stringify({ error: `Failed to parse function arguments: ${parseError.message}` })
+                };
+              }
 
-            const result = await executeStaffFunction(
-              functionName,
-              functionArgs,
-              userId!,
-              userKey!,
-              subscriptionTier || 'free'
-            );
+              console.log(`[Groq] Executing ${functionName}:`, functionArgs);
 
-            return {
-              role: 'tool',
-              tool_call_id: toolCall.id,
-              content: JSON.stringify(result)
-            };
+              const result = await executeStaffFunction(
+                functionName,
+                functionArgs,
+                userId!,
+                userKey!,
+                subscriptionTier || 'free'
+              );
+
+              return {
+                role: 'tool',
+                tool_call_id: toolCall.id,
+                content: JSON.stringify(result)
+              };
+            } catch (execError: any) {
+              console.error(`[Groq] Tool execution failed for ${functionName}:`, execError);
+              return {
+                role: 'tool',
+                tool_call_id: toolCall.id,
+                content: JSON.stringify({ error: `Error executing ${functionName}: ${execError.message}` })
+              };
+            }
           })
         );
 
-        // Second request with tool results
+        // Second request with tool results - with retry logic for tool_use_failed errors
         const messagesWithToolResults = [
           ...processedMessages,
           assistantMessage,
           ...toolResults
         ];
 
-        const secondResponse = await axios.post(
-          'https://api.groq.com/openai/v1/chat/completions',
-          {
-            model: requestBody.model, // Use same model as first request
-            messages: messagesWithToolResults,
-            temperature: requestBody.temperature,
-            max_tokens: requestBody.max_tokens,
-          },
-          { headers, validateStatus: () => true, timeout: 60000 }
-        );
+        // Helper to make second request with fallback on tool_use_failed
+        const makeSecondRequest = async (): Promise<string> => {
+          const response = await axios.post(
+            'https://api.groq.com/openai/v1/chat/completions',
+            {
+              model: requestBody.model,
+              messages: messagesWithToolResults,
+              temperature: requestBody.temperature,
+              max_tokens: requestBody.max_tokens,
+            },
+            { headers, validateStatus: () => true, timeout: 60000 }
+          );
 
-        if (secondResponse.status >= 300) {
-          console.error('[Groq] Second API call error:', secondResponse.status);
-          throw new Error(`Second API call failed: ${secondResponse.statusText}`);
-        }
+          // Check for tool_use_failed error - immediately use fallback (stripping tool context)
+          if (response.status === 400 && response.data?.error?.code === 'tool_use_failed') {
+            console.log('[Groq] tool_use_failed detected, using fallback without tool context...');
 
-        const finalContent = secondResponse.data.choices?.[0]?.message?.content;
+            // Format tool results nicely for the fallback
+            const toolResultsSummary = toolResults.map((tr: any) => {
+              try {
+                const parsed = typeof tr.content === 'string' ? JSON.parse(tr.content) : tr.content;
+                return JSON.stringify(parsed, null, 2);
+              } catch {
+                return tr.content;
+              }
+            }).join('\n\n');
+
+            // Fallback: Strip ALL tool-related content, present results as context
+            const fallbackMessages = [
+              // Keep system message if present
+              ...processedMessages.filter((m: any) => m.role === 'system'),
+              // Add user's original request
+              ...processedMessages.filter((m: any) => m.role === 'user').slice(-1),
+              // Add assistant response with the tool results embedded
+              {
+                role: 'assistant',
+                content: `I looked up the information you requested. Here's what I found:\n\n${toolResultsSummary}`
+              },
+              // Ask for a natural presentation
+              {
+                role: 'user',
+                content: 'Great, please summarize this information in a natural, conversational way. Present it clearly for the user.'
+              }
+            ];
+
+            console.log('[Groq] Fallback messages count:', fallbackMessages.length);
+
+            const fallbackResponse = await axios.post(
+              'https://api.groq.com/openai/v1/chat/completions',
+              {
+                model: requestBody.model,
+                messages: fallbackMessages,
+                temperature: requestBody.temperature,
+                max_tokens: requestBody.max_tokens,
+              },
+              { headers, validateStatus: () => true, timeout: 60000 }
+            );
+
+            console.log('[Groq] Fallback response status:', fallbackResponse.status);
+
+            if (fallbackResponse.status >= 300) {
+              console.error('[Groq] Fallback also failed:', fallbackResponse.data);
+              // Last resort: return the tool results directly formatted
+              return `Here's what I found:\n\n${toolResultsSummary}`;
+            }
+
+            const fallbackContent = fallbackResponse.data.choices?.[0]?.message?.content;
+            console.log('[Groq] Fallback content length:', fallbackContent?.length || 0);
+
+            return fallbackContent || `Here's what I found:\n\n${toolResultsSummary}`;
+          }
+
+          if (response.status >= 300) {
+            console.error('[Groq] Second API call error:', response.status, response.data);
+            throw new Error(`Second API call failed: ${response.statusText}`);
+          }
+
+          const content = response.data.choices?.[0]?.message?.content;
+          console.log('[Groq] Second request content length:', content?.length || 0);
+          return content || '';
+        };
+
+        const finalContent = await makeSecondRequest();
 
         if (!finalContent) {
           throw new Error('No content in second response');

@@ -45,7 +45,7 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
-	<!-- Google Sign-In URL Scheme -->
+	<!-- URL Schemes for Google Sign-In and Firebase Phone Auth -->
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -53,8 +53,14 @@
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<!-- REVERSED_CLIENT_ID for Google Sign-In -->
+				<!-- REVERSED_CLIENT_ID for Google Sign-In (nexastaffproject) -->
 				<string>com.googleusercontent.apps.832253199298-30pclv5ijm4etnciqh6en9b5l1iqddj0</string>
+				<!-- REVERSED_CLIENT_ID for Firebase Phone Auth (nexa-8e252) -->
+				<string>com.googleusercontent.apps.263339707561-dlqfbhuuc672u7acunk4fhkp3bqql0v1</string>
+				<!-- Firebase Phone Auth reCAPTCHA URL scheme (bundle ID) -->
+				<string>com.pymesoft.nexa</string>
+				<!-- Firebase Phone Auth ENCODED_APP_ID (required for reCAPTCHA) -->
+				<string>app-1-263339707561-ios-c05cfbf49695b65ce9edb8</string>
 			</array>
 		</dict>
 	</array>

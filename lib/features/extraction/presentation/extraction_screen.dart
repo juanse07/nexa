@@ -27,6 +27,7 @@ import '../../../core/widgets/custom_sliver_app_bar.dart';
 import '../../../core/widgets/pinned_header_delegate.dart';
 import '../../../core/utils/responsive_layout.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/navigation/route_error_manager.dart';
 import '../services/clients_service.dart';
 import '../services/draft_service.dart';
 import '../services/event_service.dart';
@@ -1452,33 +1453,41 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           });
         } else {
           // Navigate to Jobs tab from other sections
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const MainScreen(initialIndex: 2)),
+          await RouteErrorManager.instance.navigateSafely(
+            context,
+            () => const MainScreen(initialIndex: 2),
+            replace: true,
           );
         }
         break;
       case 'Clients':
         // Navigate to Catalog tab (MainScreen index 4)
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const MainScreen(initialIndex: 4)),
+        await RouteErrorManager.instance.navigateSafely(
+          context,
+          () => const MainScreen(initialIndex: 4),
+          replace: true,
         );
         break;
       case 'Teams':
         // Navigate to Teams Management (separate screen, not a main tab)
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const TeamsManagementPage()),
+        await RouteErrorManager.instance.navigateSafely(
+          context,
+          () => const TeamsManagementPage(),
         );
         break;
       case 'Catalog':
         // Navigate to Catalog tab (MainScreen index 4)
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const MainScreen(initialIndex: 4)),
+        await RouteErrorManager.instance.navigateSafely(
+          context,
+          () => const MainScreen(initialIndex: 4),
+          replace: true,
         );
         break;
       case 'AI Chat':
         // Navigate to AI Chat screen (separate screen, not a main tab)
-        final result = await Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const AIChatScreen()),
+        final result = await RouteErrorManager.instance.navigateSafely(
+          context,
+          () => const AIChatScreen(),
         );
         // Handle "Check Pending" navigation
         if (result != null && result is Map && result['action'] == 'show_pending') {
@@ -2930,9 +2939,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
       // Navigate to login page and remove all previous routes
       if (context.mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const LoginPage()),
-          (route) => false,
+        await RouteErrorManager.instance.navigateSafely(
+          context,
+          () => const LoginPage(),
+          clearStack: true,
         );
       }
     }
