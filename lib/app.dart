@@ -29,7 +29,8 @@ class _NexaAppState extends State<NexaApp> {
 
   static Future<String?> _validateAndGetToken() async {
     if (kIsWeb) {
-      print('[APP] Validating token on web...');
+      print('[APP] Nexa v1.0.1 - Validating token on web...');
+      print('[APP] Build timestamp: ${DateTime.now().toIso8601String()}');
     }
 
     final token = await AuthService.getJwt();
