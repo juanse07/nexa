@@ -3,6 +3,11 @@
  * This file runs before all tests to set up an in-memory MongoDB instance
  */
 
+// Set environment variables BEFORE any imports so ENV singleton picks them up
+process.env.NODE_ENV = 'test';
+process.env.BACKEND_JWT_SECRET = 'test-jwt-secret-for-testing';
+process.env.ALLOWED_ORIGINS = 'http://localhost:3000';
+
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
 
@@ -21,8 +26,6 @@ beforeAll(async () => {
 
   // Connect to the in-memory database
   await mongoose.connect(mongoUri);
-
-  console.log('✅ MongoDB Memory Server connected');
 });
 
 // Cleanup after all tests
@@ -34,8 +37,6 @@ afterAll(async () => {
   if (mongoServer) {
     await mongoServer.stop();
   }
-
-  console.log('✅ MongoDB Memory Server stopped');
 });
 
 // Clear all collections after each test

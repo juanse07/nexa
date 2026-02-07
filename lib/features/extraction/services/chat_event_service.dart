@@ -21,12 +21,14 @@ class ChatMessage {
   final String content;
   final DateTime timestamp;
   final AIProvider? provider;
+  final String? reasoning;
 
   ChatMessage({
     required this.role,
     required this.content,
     DateTime? timestamp,
     this.provider,
+    this.reasoning,
   }) : timestamp = timestamp ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
@@ -38,6 +40,7 @@ class ChatMessage {
         'role': role,
         'content': content,
         'timestamp': timestamp.toIso8601String(),
+        if (reasoning != null) 'reasoning': reasoning,
       };
 
   factory ChatMessage.fromStorageJson(Map<String, dynamic> json) {
@@ -45,6 +48,7 @@ class ChatMessage {
       role: json['role'] as String,
       content: json['content'] as String,
       timestamp: DateTime.parse(json['timestamp'] as String),
+      reasoning: json['reasoning'] as String?,
     );
   }
 }
@@ -816,10 +820,11 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
     ];
 
     // Call backend API
-    final response = await _callBackendAI(messages);
+    final aiResponse = await _callBackendAI(messages);
 
     // Parse response
-    String content = response;
+    String content = aiResponse.content;
+    final String? reasoning = aiResponse.reasoning;
     if (content.contains('EVENT_COMPLETE')) {
       _eventComplete = true;
       // Extract JSON from response
@@ -1026,7 +1031,7 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
     final userFacingContent = _extractUserFriendlyMessage(content);
 
     // Add ONLY the friendly message to conversation history (not the JSON)
-    final assistantMsg = ChatMessage(role: 'assistant', content: userFacingContent, provider: AIProvider.groq);
+    final assistantMsg = ChatMessage(role: 'assistant', content: userFacingContent, provider: AIProvider.groq, reasoning: reasoning);
     _conversationHistory.add(assistantMsg);
 
     return assistantMsg;
@@ -1194,7 +1199,7 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
   }
 
   /// Call backend AI chat API
-  Future<String> _callBackendAI(
+  Future<({String content, String? reasoning})> _callBackendAI(
     List<Map<String, dynamic>> messages,
   ) async {
     // Get auth token
@@ -1248,14 +1253,18 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
     try {
       final content = decoded['content'] as String;
       final provider = decoded['provider'] as String?;
+      final reasoning = decoded['reasoning'] as String?;
       final usage = decoded['usage'];
 
       print('Response from: ${provider ?? _aiProvider}');
+      if (reasoning != null) {
+        print('Reasoning received: ${reasoning.length} chars');
+      }
       if (usage != null) {
         print('Token usage: $usage');
       }
 
-      return content;
+      return (content: content, reasoning: reasoning);
     } catch (_) {
       throw Exception('Failed to parse AI response');
     }

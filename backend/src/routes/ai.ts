@@ -996,6 +996,75 @@ const AI_TOOLS = [
       },
       required: []
     }
+  },
+  {
+    name: 'update_event',
+    description: 'Update an existing event/shift. Use when user wants to modify event details (venue, date, time, roles, notes, etc.). REQUIRES event_id - get it from search_shifts first. Only include fields that need to change.',
+    parameters: {
+      type: 'object',
+      properties: {
+        event_id: {
+          type: 'string',
+          description: 'The event ID (from search_shifts results). Required to identify which event to update.'
+        },
+        client_name: {
+          type: ['string', 'null'],
+          description: 'New client name'
+        },
+        date: {
+          type: ['string', 'null'],
+          description: 'New date in ISO format YYYY-MM-DD'
+        },
+        call_time: {
+          type: ['string', 'null'],
+          description: 'New call time in 24h format (e.g., "16:00")'
+        },
+        end_time: {
+          type: ['string', 'null'],
+          description: 'New end time in 24h format (e.g., "23:00")'
+        },
+        venue_name: {
+          type: ['string', 'null'],
+          description: 'New venue name'
+        },
+        venue_address: {
+          type: ['string', 'null'],
+          description: 'New venue address'
+        },
+        roles: {
+          type: ['array', 'null'],
+          description: 'New staff roles (replaces existing roles)',
+          items: {
+            type: 'object',
+            properties: {
+              role: { type: 'string' },
+              count: { type: 'number' }
+            }
+          }
+        },
+        uniform: {
+          type: ['string', 'null'],
+          description: 'New uniform/dress code'
+        },
+        notes: {
+          type: ['string', 'null'],
+          description: 'New notes/instructions'
+        },
+        contact_name: {
+          type: ['string', 'null'],
+          description: 'New contact person name'
+        },
+        contact_phone: {
+          type: ['string', 'null'],
+          description: 'New contact phone number'
+        },
+        headcount_total: {
+          type: ['number', 'null'],
+          description: 'New guest headcount'
+        }
+      },
+      required: ['event_id']
+    }
   }
 ];
 
@@ -1163,7 +1232,7 @@ async function executeFunctionCall(
         }
 
         const results = events.map(e =>
-          `${e.event_name} - Client: ${e.client_name}, Date: ${e.date}, Venue: ${e.venue_name || 'TBD'}, Status: ${e.status || 'pending'}`
+          `[ID: ${e._id}] ${e.event_name || e.shift_name || 'Unnamed'} - Client: ${e.client_name}, Date: ${e.date}, Venue: ${e.venue_name || 'TBD'}, Status: ${e.status || 'pending'}`
         ).join('\n');
 
         return `Found ${events.length} shift(s):\n${results}`;
@@ -2515,6 +2584,81 @@ ${topStaff ? `Most Flagged: ${topStaff}` : ''}`;
         return `Found ${venues.length} venue(s) from your history:\n${results}`;
       }
 
+      case 'update_event': {
+        const { event_id, ...updates } = functionArgs;
+
+        if (!event_id) {
+          return `❌ Missing event_id. Use search_shifts first to find the event, then use the [ID: ...] value.`;
+        }
+
+        // Validate event_id is a valid ObjectId
+        if (!mongoose.Types.ObjectId.isValid(event_id)) {
+          return `❌ Invalid event ID "${event_id}". Use search_shifts to find the correct event ID.`;
+        }
+
+        // Find the event first
+        const existingEvent = await EventModel.findOne({
+          _id: new mongoose.Types.ObjectId(event_id),
+          managerId
+        }).lean();
+
+        if (!existingEvent) {
+          return `❌ Event not found (ID: ${event_id}). It may belong to a different account or the ID is incorrect.`;
+        }
+
+        // Build update object from provided fields only
+        const updateData: any = {};
+        if (updates.client_name) updateData.client_name = updates.client_name;
+        if (updates.date) updateData.date = new Date(updates.date);
+        if (updates.call_time) updateData.start_time = updates.call_time;
+        if (updates.end_time) updateData.end_time = updates.end_time;
+        if (updates.venue_name) updateData.venue_name = updates.venue_name;
+        if (updates.venue_address) updateData.venue_address = updates.venue_address;
+        if (updates.roles) updateData.roles = updates.roles;
+        if (updates.uniform) updateData.uniform = updates.uniform;
+        if (updates.notes) updateData.notes = updates.notes;
+        if (updates.contact_name) updateData.contact_name = updates.contact_name;
+        if (updates.contact_phone) updateData.contact_phone = updates.contact_phone;
+        if (updates.headcount_total) updateData.headcount_total = updates.headcount_total;
+
+        if (Object.keys(updateData).length === 0) {
+          return `❌ No fields to update. Please specify what you want to change.`;
+        }
+
+        // Update shift_name if client or date changed
+        if (updates.client_name || updates.date) {
+          const clientName = updates.client_name || existingEvent.client_name;
+          const eventDate = updates.date ? new Date(updates.date) : existingEvent.date;
+          if (clientName && eventDate) {
+            updateData.shift_name = `${clientName} - ${new Date(eventDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+          }
+        }
+
+        updateData.updatedAt = new Date();
+
+        await EventModel.updateOne(
+          { _id: new mongoose.Types.ObjectId(event_id), managerId },
+          { $set: updateData }
+        );
+
+        // Build summary of what was updated
+        const changedFields: string[] = [];
+        if (updates.client_name) changedFields.push(`👥 Client → ${updates.client_name}`);
+        if (updates.date) changedFields.push(`📅 Date → ${updates.date}`);
+        if (updates.call_time) changedFields.push(`⏰ Call Time → ${updates.call_time}`);
+        if (updates.end_time) changedFields.push(`⏱️ End Time → ${updates.end_time}`);
+        if (updates.venue_name) changedFields.push(`📍 Venue → ${updates.venue_name}`);
+        if (updates.venue_address) changedFields.push(`📍 Address → ${updates.venue_address}`);
+        if (updates.roles) changedFields.push(`👔 Roles updated (${updates.roles.length} role(s))`);
+        if (updates.uniform) changedFields.push(`👕 Uniform → ${updates.uniform}`);
+        if (updates.notes) changedFields.push(`📝 Notes updated`);
+        if (updates.contact_name) changedFields.push(`📞 Contact → ${updates.contact_name}`);
+        if (updates.contact_phone) changedFields.push(`📞 Phone → ${updates.contact_phone}`);
+        if (updates.headcount_total) changedFields.push(`👥 Headcount → ${updates.headcount_total}`);
+
+        return `✅ Successfully updated event (ID: ${event_id})\n${changedFields.join('\n')}`;
+      }
+
       default:
         return `Unknown function: ${functionName}`;
     }
@@ -2739,7 +2883,7 @@ async function handleGroqRequest(
 
   // Use GPT-OSS-20B for function calling (131K context, OpenAI-compatible tools)
   const groqModel = model || 'openai/gpt-oss-20b';  // 20B params, 131K context, 65K max output
-  const isReasoningModel = false;
+  const isReasoningModel = groqModel.includes('gpt-oss');
 
   console.log(`[Groq] Manager using model: ${groqModel}`);
 
@@ -2856,14 +3000,16 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
     model: groqModel,
     messages: processedMessages,
     temperature: isReasoningModel ? 0.6 : temperature, // Higher temp for reasoning
-    max_tokens: isReasoningModel ? maxTokens * 2 : maxTokens, // More tokens for reasoning
+    max_tokens: isReasoningModel ? Math.max(maxTokens * 8, 4000) : maxTokens, // Reasoning needs large budget (thinking + answer)
     tools: groqTools,
     tool_choice: 'auto'
   };
 
   // Add reasoning parameters for gpt-oss models
   if (isReasoningModel) {
-    requestBody.reasoning_format = 'hidden'; // Hide reasoning, show only final answer
+    requestBody.reasoning_format = 'parsed'; // Return reasoning in separate field
+    requestBody.reasoning_effort = 'high';
+    console.log(`[Groq] Using reasoning mode with ${requestBody.max_tokens} max tokens`);
   }
 
   const headers = {
@@ -2879,10 +3025,13 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
     try {
       console.log(`[Groq] Attempt ${attempt}/${maxRetries} - Calling /v1/chat/completions...`);
 
+      // Extended timeout for reasoning models (120s vs 60s)
+      const timeout = isReasoningModel ? 120000 : 60000;
+
       const response = await axios.post(
         'https://api.groq.com/openai/v1/chat/completions',
         requestBody,
-        { headers, validateStatus: () => true, timeout: 60000 }
+        { headers, validateStatus: () => true, timeout }
       );
 
       console.log('[Groq] Response status:', response.status);
@@ -2920,6 +3069,10 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
       }
 
       const assistantMessage = choice.message;
+
+      // Capture reasoning from first request (Groq uses 'reasoning' field)
+      const firstRequestReasoning = assistantMessage.reasoning || null;
+      if (firstRequestReasoning) console.log('[Groq] Reasoning received:', firstRequestReasoning.length, 'chars');
 
       // Handle tool calls (including parallel calls for llama)
       if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
@@ -2968,55 +3121,68 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
           })
         );
 
-        // Second request with tool results - with retry logic for tool_use_failed errors
-        const messagesWithToolResults = [
+        // Multi-step tool calling loop (supports chaining e.g. get_clients_list → create_shift)
+        let currentMessages = [
           ...processedMessages,
           assistantMessage,
           ...toolResults
         ];
+        const allToolsUsed = [...assistantMessage.tool_calls.map((tc: any) => tc.function.name)];
+        const maxToolSteps = 3;
+        const secondTimeout = isReasoningModel ? 120000 : 60000;
 
-        // Helper to make second request with fallback on tool_use_failed
-        const makeSecondRequest = async (): Promise<string> => {
+        let finalContent = '';
+        let finalReasoning: string | null = null;
+
+        for (let step = 0; step < maxToolSteps; step++) {
+          console.log(`[Groq] Follow-up request step ${step + 1}/${maxToolSteps}...`);
+
           const response = await axios.post(
             'https://api.groq.com/openai/v1/chat/completions',
             {
               model: requestBody.model,
-              messages: messagesWithToolResults,
+              messages: currentMessages,
               temperature: requestBody.temperature,
               max_tokens: requestBody.max_tokens,
+              tools: groqTools,
+              tool_choice: 'auto',
+              // NOTE: Omit reasoning params on follow-up requests with tool results
+              // to avoid tool_use_failed errors from Groq
             },
-            { headers, validateStatus: () => true, timeout: 60000 }
+            { headers, validateStatus: () => true, timeout: secondTimeout }
           );
 
-          // Check for tool_use_failed error - immediately use fallback (stripping tool context)
+          // Handle tool_use_failed - use context-aware fallback
           if (response.status === 400 && response.data?.error?.code === 'tool_use_failed') {
-            console.log('[Groq] tool_use_failed detected, using fallback without tool context...');
+            console.log('[Groq] tool_use_failed detected, using context-aware fallback...');
 
-            // Format tool results nicely for the fallback
-            const toolResultsSummary = toolResults.map((tr: any) => {
-              try {
-                const parsed = typeof tr.content === 'string' ? JSON.parse(tr.content) : tr.content;
-                return JSON.stringify(parsed, null, 2);
-              } catch {
-                return tr.content;
-              }
-            }).join('\n\n');
+            // Collect ALL tool results accumulated so far
+            const allToolResultsSummary = currentMessages
+              .filter((m: any) => m.role === 'tool')
+              .map((tr: any) => {
+                try {
+                  const parsed = typeof tr.content === 'string' ? JSON.parse(tr.content) : tr.content;
+                  return JSON.stringify(parsed, null, 2);
+                } catch {
+                  return tr.content;
+                }
+              }).join('\n\n');
 
-            // Fallback: Strip ALL tool-related content, present results as context
+            // Get the user's original request to preserve intent
+            const originalUserMessage = processedMessages
+              .filter((m: any) => m.role === 'user')
+              .slice(-1)[0]?.content || '';
+
             const fallbackMessages = [
-              // Keep system message if present
               ...processedMessages.filter((m: any) => m.role === 'system'),
-              // Add user's original request
               ...processedMessages.filter((m: any) => m.role === 'user').slice(-1),
-              // Add assistant response with the tool results embedded
               {
                 role: 'assistant',
-                content: `I looked up the information you requested. Here's what I found:\n\n${toolResultsSummary}`
+                content: `I looked up the relevant data:\n\n${allToolResultsSummary}`
               },
-              // Ask for a natural presentation
               {
                 role: 'user',
-                content: 'Great, please summarize this information in a natural, conversational way. Present it clearly for the user.'
+                content: `Based on that data, please complete my original request. My request was: "${originalUserMessage}". If I asked you to create something (event, job, client, role), proceed with creating it and confirm what you created. Do NOT just summarize the data - actually respond to what I asked for.`
               }
             ];
 
@@ -3030,55 +3196,113 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
                 temperature: requestBody.temperature,
                 max_tokens: requestBody.max_tokens,
               },
-              { headers, validateStatus: () => true, timeout: 60000 }
+              { headers, validateStatus: () => true, timeout: secondTimeout }
             );
 
             console.log('[Groq] Fallback response status:', fallbackResponse.status);
 
             if (fallbackResponse.status >= 300) {
               console.error('[Groq] Fallback also failed:', fallbackResponse.data);
-              // Last resort: return the tool results directly formatted
-              return `Here's what I found:\n\n${toolResultsSummary}`;
+              finalContent = `Here's what I found:\n\n${allToolResultsSummary}`;
+              finalReasoning = null;
+            } else {
+              const fm = fallbackResponse.data.choices?.[0]?.message;
+              finalContent = fm?.content || `Here's what I found:\n\n${allToolResultsSummary}`;
+              finalReasoning = fm?.reasoning || null;
+              console.log('[Groq] Fallback content length:', finalContent.length);
             }
-
-            const fallbackContent = fallbackResponse.data.choices?.[0]?.message?.content;
-            console.log('[Groq] Fallback content length:', fallbackContent?.length || 0);
-
-            return fallbackContent || `Here's what I found:\n\n${toolResultsSummary}`;
+            break;
           }
 
           if (response.status >= 300) {
-            console.error('[Groq] Second API call error:', response.status, response.data);
-            throw new Error(`Second API call failed: ${response.statusText}`);
+            console.error('[Groq] Follow-up API call error:', response.status, response.data);
+            throw new Error(`Follow-up API call failed: ${response.statusText}`);
           }
 
-          const content = response.data.choices?.[0]?.message?.content;
-          console.log('[Groq] Second request content length:', content?.length || 0);
-          return content || '';
-        };
+          const message = response.data.choices?.[0]?.message;
 
-        const finalContent = await makeSecondRequest();
+          // Check for additional tool calls - execute and loop
+          if (message?.tool_calls && message.tool_calls.length > 0) {
+            console.log(`[Groq] Step ${step + 2}: ${message.tool_calls.length} additional tool call(s)`);
+
+            const additionalResults = await Promise.all(
+              message.tool_calls.map(async (toolCall: any) => {
+                const functionName = toolCall.function.name;
+                try {
+                  let functionArgs: any;
+                  try {
+                    functionArgs = JSON.parse(toolCall.function.arguments);
+                  } catch (parseError: any) {
+                    console.error(`[Groq] Failed to parse tool arguments for ${functionName}:`, toolCall.function.arguments);
+                    return {
+                      role: 'tool',
+                      tool_call_id: toolCall.id,
+                      content: `Error: Failed to parse arguments: ${parseError.message}`
+                    };
+                  }
+
+                  console.log(`[Groq] Executing ${functionName}:`, functionArgs);
+                  allToolsUsed.push(functionName);
+                  const result = await executeFunctionCall(functionName, functionArgs, managerId);
+                  return {
+                    role: 'tool',
+                    tool_call_id: toolCall.id,
+                    content: result
+                  };
+                } catch (execError: any) {
+                  console.error(`[Groq] Tool execution failed for ${functionName}:`, execError);
+                  return {
+                    role: 'tool',
+                    tool_call_id: toolCall.id,
+                    content: `Error executing ${functionName}: ${execError.message}`
+                  };
+                }
+              })
+            );
+
+            currentMessages = [
+              ...currentMessages,
+              message,
+              ...additionalResults
+            ];
+            continue; // Loop for next tool call round
+          }
+
+          // No more tool calls - we have final content
+          finalContent = message?.content || '';
+          finalReasoning = message?.reasoning || null;
+          console.log('[Groq] Final content length:', finalContent.length);
+          if (finalReasoning) console.log('[Groq] Final reasoning length:', finalReasoning.length);
+          break;
+        }
 
         if (!finalContent) {
-          throw new Error('No content in second response');
+          throw new Error('No content after tool call processing');
         }
 
         return res.json({
           content: finalContent,
+          reasoning: finalReasoning || firstRequestReasoning || null,
           provider: 'groq',
           model: requestBody.model,
-          toolsUsed: assistantMessage.tool_calls.map((tc: any) => tc.function.name)
+          toolsUsed: allToolsUsed
         });
       }
 
       // No tool calls, return content directly
       const content = assistantMessage.content;
+      const reasoningContent = assistantMessage.reasoning || null;
       if (!content) {
         throw new Error('No content in response');
       }
 
+      if (reasoningContent) {
+        console.log('[Groq] Reasoning content length:', reasoningContent.length);
+      }
+
       return res.json({
         content,
+        reasoning: reasoningContent,
         provider: 'groq',
         model: requestBody.model
       });

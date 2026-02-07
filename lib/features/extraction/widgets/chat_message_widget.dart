@@ -6,7 +6,7 @@ import '../services/chat_event_service.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 /// Widget to display a single chat message bubble
-class ChatMessageWidget extends StatelessWidget {
+class ChatMessageWidget extends StatefulWidget {
   final ChatMessage message;
   final String? userProfilePicture;
   final void Function(String)? onLinkTap;
@@ -18,14 +18,16 @@ class ChatMessageWidget extends StatelessWidget {
     this.userProfilePicture,
   });
 
+  @override
+  State<ChatMessageWidget> createState() => _ChatMessageWidgetState();
+}
+
+class _ChatMessageWidgetState extends State<ChatMessageWidget> {
+  bool _reasoningExpanded = false;
+
   /// Strips JSON command blocks from message content for display
   /// These blocks are used by the backend but shouldn't be shown to users
   String _stripJsonBlocks(String content) {
-    // Pattern to match command blocks like:
-    // EVENT_COMPLETE { ... }
-    // TARIFF_CREATE { ... }
-    // CLIENT_CREATE { ... }
-    // EVENT_UPDATE { ... }
     final commandPattern = RegExp(
       r'\n*(EVENT_COMPLETE|TARIFF_CREATE|CLIENT_CREATE|EVENT_UPDATE)\s*\{[\s\S]*?\}(?:\s*\})*',
       multiLine: true,
@@ -34,9 +36,77 @@ class ChatMessageWidget extends StatelessWidget {
     return content.replaceAll(commandPattern, '').trim();
   }
 
+  Widget _buildReasoningSection() {
+    if (widget.message.reasoning == null || widget.message.reasoning!.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          onTap: () => setState(() => _reasoningExpanded = !_reasoningExpanded),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '\u{1F9E0}',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'View thinking',
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  _reasoningExpanded ? Icons.expand_less : Icons.expand_more,
+                  size: 16,
+                  color: Colors.grey.shade600,
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_reasoningExpanded) ...[
+          const SizedBox(height: 6),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Text(
+              widget.message.reasoning!,
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                fontSize: 12,
+                height: 1.4,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
+        ],
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isUser = message.role == 'user';
+    final isUser = widget.message.role == 'user';
     final timeFormat = DateFormat('HH:mm');
 
     return Padding(
@@ -69,7 +139,6 @@ class ChatMessageWidget extends StatelessWidget {
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    // Outer circle shape
                     Container(
                       width: 14,
                       height: 14,
@@ -81,9 +150,8 @@ class ChatMessageWidget extends StatelessWidget {
                         shape: BoxShape.circle,
                       ),
                     ),
-                    // Inner diamond shape
                     Transform.rotate(
-                      angle: 0.785398, // 45 degrees
+                      angle: 0.785398,
                       child: Container(
                         width: 7,
                         height: 7,
@@ -98,7 +166,6 @@ class ChatMessageWidget extends StatelessWidget {
                         ),
                       ),
                     ),
-                    // Connecting lines
                     Positioned(
                       top: 6,
                       child: Container(
@@ -132,8 +199,8 @@ class ChatMessageWidget extends StatelessWidget {
                     gradient: isUser
                         ? const LinearGradient(
                             colors: [
-                              AppColors.navySpaceCadet, // Navy blue
-                              AppColors.oceanBlue, // Ocean blue
+                              AppColors.navySpaceCadet,
+                              AppColors.oceanBlue,
                             ],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
@@ -156,21 +223,26 @@ class ChatMessageWidget extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: _buildMessageContent(isUser),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (!isUser) _buildReasoningSection(),
+                      _buildMessageContent(isUser),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      timeFormat.format(message.timestamp),
+                      timeFormat.format(widget.message.timestamp),
                       style: TextStyle(
                         color: Colors.grey.shade500,
                         fontSize: 11,
                       ),
                     ),
-                    // Show AI provider badge for assistant messages
-                    if (!isUser && message.provider != null) ...[
+                    if (!isUser && widget.message.provider != null) ...[
                       const SizedBox(width: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -178,23 +250,23 @@ class ChatMessageWidget extends StatelessWidget {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: message.provider == AIProvider.claude
+                          color: widget.message.provider == AIProvider.claude
                               ? Colors.orange.shade100
-                              : message.provider == AIProvider.groq
+                              : widget.message.provider == AIProvider.groq
                                   ? Colors.yellow.shade100
                                   : Colors.blue.shade100,
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          message.provider == AIProvider.claude
+                          widget.message.provider == AIProvider.claude
                               ? 'Claude'
-                              : message.provider == AIProvider.groq
+                              : widget.message.provider == AIProvider.groq
                                   ? 'Valerio'
                                   : 'GPT-4',
                           style: TextStyle(
-                            color: message.provider == AIProvider.claude
+                            color: widget.message.provider == AIProvider.claude
                                 ? Colors.orange.shade900
-                                : message.provider == AIProvider.groq
+                                : widget.message.provider == AIProvider.groq
                                     ? Colors.yellow.shade900
                                     : Colors.blue.shade900,
                             fontSize: 9,
@@ -217,11 +289,11 @@ class ChatMessageWidget extends StatelessWidget {
                 color: AppColors.techBlue,
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: userProfilePicture != null && userProfilePicture!.isNotEmpty
+              child: widget.userProfilePicture != null && widget.userProfilePicture!.isNotEmpty
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(16),
                       child: Image.network(
-                        userProfilePicture!,
+                        widget.userProfilePicture!,
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) {
                           return const Icon(
@@ -255,7 +327,7 @@ class ChatMessageWidget extends StatelessWidget {
   /// Build message content with support for clickable links
   Widget _buildMessageContent(bool isUser) {
     // Strip JSON command blocks before displaying
-    final content = _stripJsonBlocks(message.content);
+    final content = _stripJsonBlocks(widget.message.content);
     final linkPattern = RegExp(r'\[LINK:([^\]]+)\]');
     final match = linkPattern.firstMatch(content);
 
@@ -308,7 +380,7 @@ class ChatMessageWidget extends StatelessWidget {
           ),
         // Clickable link
         GestureDetector(
-          onTap: () => onLinkTap?.call(linkText),
+          onTap: () => widget.onLinkTap?.call(linkText),
           child: Text(
             linkText,
             style: TextStyle(

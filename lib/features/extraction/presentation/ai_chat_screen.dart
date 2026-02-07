@@ -836,7 +836,7 @@ class _AIChatScreenState extends State<AIChatScreen>
                             left: 16,
                             right: 16,
                             top: 16,
-                            bottom: 140, // Add bottom padding for input area and chips visibility
+                            bottom: 100, // Bottom padding for input area
                           ),
                           sliver: SliverList(
                           delegate: SliverChildBuilderDelegate(
@@ -876,6 +876,7 @@ class _AIChatScreenState extends State<AIChatScreen>
                               final chatMessage = ChatMessage(
                                 role: (message['role'] as String?) ?? 'user',
                                 content: (message['content'] as String?) ?? '',
+                                reasoning: message['reasoning'] as String?,
                               );
 
                               return Padding(
@@ -940,73 +941,6 @@ class _AIChatScreenState extends State<AIChatScreen>
             ),
               ),
 
-            // Floating chips layer (positioned over messages, hides on scroll)
-            if (!_stateProvider.isLoading && _stateProvider.selectedImages.isEmpty && _stateProvider.selectedDocuments.isEmpty)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 60 + (MediaQuery.of(context).padding.bottom > 0
-                  ? MediaQuery.of(context).padding.bottom
-                  : 8),
-                child: AnimatedSlide(
-                  duration: const Duration(milliseconds: 200),
-                  offset: _showChips ? Offset.zero : const Offset(0, 1),
-                  child: AnimatedOpacity(
-                    duration: const Duration(milliseconds: 200),
-                    opacity: _showChips ? 1.0 : 0.0,
-                    child: IgnorePointer(
-                      ignoring: !_showChips,
-                      child: Builder(
-                        builder: (context) {
-                          final terminology = context.read<TerminologyProvider>().singular;
-                          return Container(
-                            padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.transparent,
-                                  AppColors.surfaceLight.withOpacity(0.3),
-                                  AppColors.surfaceLight.withOpacity(0.6),
-                                ],
-                                stops: const [0.0, 0.5, 1.0],
-                              ),
-                            ),
-                            child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: Row(
-                                children: [
-                                  _buildSuggestionChip(
-                                    '📋 New ${terminology[0].toUpperCase()}${terminology.substring(1)}',
-                                    'Create a new $terminology. I\'ll provide the details.',
-                                  ),
-                                  const SizedBox(width: 8),
-                                  _buildSuggestionChip(
-                                    '🏢 New Client',
-                                    'I want to add a new client',
-                                  ),
-                                  const SizedBox(width: 8),
-                                  _buildSuggestionChip(
-                                    '👤 New Role',
-                                    'Create a new staff role for my team',
-                                  ),
-                                  const SizedBox(width: 8),
-                                  _buildSuggestionChip(
-                                    '💵 New Tariff',
-                                    'I need to set up a new pay rate',
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        }
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-
             // Fixed input area positioned at bottom
             if (messages.isNotEmpty)
               Positioned(
@@ -1057,6 +991,46 @@ class _AIChatScreenState extends State<AIChatScreen>
                               onRemove: () => _removeDocument(documentFile),
                             );
                           }),
+
+                        // Quick action chips (integrated above input)
+                        if (!_stateProvider.isLoading && _stateProvider.selectedImages.isEmpty && _stateProvider.selectedDocuments.isEmpty)
+                          AnimatedSize(
+                            duration: const Duration(milliseconds: 200),
+                            child: _showChips ? Builder(
+                              builder: (context) {
+                                final terminology = context.read<TerminologyProvider>().singular;
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 6),
+                                  child: SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    child: Row(
+                                      children: [
+                                        _buildSuggestionChip(
+                                          'New ${terminology[0].toUpperCase()}${terminology.substring(1)}',
+                                          'Create a new $terminology. I\'ll provide the details.',
+                                        ),
+                                        const SizedBox(width: 6),
+                                        _buildSuggestionChip(
+                                          'New Client',
+                                          'I want to add a new client',
+                                        ),
+                                        const SizedBox(width: 6),
+                                        _buildSuggestionChip(
+                                          'New Role',
+                                          'Create a new staff role for my team',
+                                        ),
+                                        const SizedBox(width: 6),
+                                        _buildSuggestionChip(
+                                          'New Tariff',
+                                          'I need to set up a new pay rate',
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ) : const SizedBox.shrink(),
+                          ),
 
                         // Chat input
                         ChatInputWidget(
@@ -1236,33 +1210,11 @@ class _AIChatScreenState extends State<AIChatScreen>
 
   /// Build a suggestion chip for quick actions
   Widget _buildSuggestionChip(String label, String query) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Colors.white.withOpacity(0.7),
-            Colors.white.withOpacity(0.5),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.8),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
+    return Material(
+      color: Colors.grey[100],
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
           onTap: () async {
             _stateProvider.setLoading(true);
 
@@ -1299,19 +1251,18 @@ class _AIChatScreenState extends State<AIChatScreen>
             }
           },
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             child: Text(
               label,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: AppColors.charcoal,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey[700],
               ),
             ),
           ),
         ),
-      ),
-    );
+      );
   }
 }
 

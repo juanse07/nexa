@@ -13,7 +13,10 @@
     "typecheck": "tsc --noEmit",
     "create-test-users": "node scripts/create-test-users.js",
     "test:concurrent": "node scripts/simulate-concurrent-acceptance.js",
-    "test:duplicate": "node scripts/quick-duplicate-test.js"
+    "test:duplicate": "node scripts/quick-duplicate-test.js",
+    "test:load:acceptance": "k6 run load-tests/event-acceptance.k6.js",
+    "test:load:soak": "k6 run load-tests/api-soak.k6.js",
+    "test:load:auth": "k6 run load-tests/auth-stress.k6.js"
   },
   "keywords": [],
   "author": "",

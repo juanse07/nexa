@@ -217,6 +217,7 @@ class ChatScreenStateProvider with ChangeNotifier {
       return {
         'role': chatMsg.role ?? 'user',
         'content': chatMsg.content ?? '',
+        if (chatMsg.reasoning != null) 'reasoning': chatMsg.reasoning,
       };
     }).toList().cast<Map<String, dynamic>>();
   }

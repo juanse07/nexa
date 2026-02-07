@@ -36,7 +36,7 @@ import { notificationScheduler } from './services/notificationScheduler';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 
-async function createServer() {
+export async function createServer() {
   const app = express();
 
   // CORS
@@ -228,4 +228,7 @@ async function start() {
   }
 }
 
-void start();
+// Only start the server when running directly (not when imported for testing)
+if (process.env.NODE_ENV !== 'test') {
+  void start();
+}

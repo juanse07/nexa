@@ -1817,7 +1817,7 @@ async function handleStaffGroqRequest(
 
   // Use GPT-OSS-20B for function calling (131K context, OpenAI-compatible tools)
   const groqModel = model || 'openai/gpt-oss-20b';  // 20B params, 131K context, 65K max output
-  const isReasoningModel = false;
+  const isReasoningModel = groqModel.includes('gpt-oss');
 
   console.log(`[Groq] Staff using model: ${groqModel}`);
 
@@ -1909,14 +1909,15 @@ Example: "February" in December 2025 → February 2026`;
     model: groqModel,
     messages: processedMessages,
     temperature: isReasoningModel ? 0.5 : temperature, // Lower temp for reasoning stability
-    max_tokens: isReasoningModel ? 4000 : maxTokens,    // Much higher for reasoning models
+    max_tokens: isReasoningModel ? Math.max(maxTokens * 8, 4000) : maxTokens, // Reasoning needs large budget (thinking + answer)
     tools: groqTools,
     tool_choice: 'auto'
   };
 
   // Add reasoning parameters for gpt-oss models
   if (isReasoningModel) {
-    requestBody.reasoning_format = 'hidden'; // Hide reasoning tokens, show only final answer
+    requestBody.reasoning_format = 'parsed'; // Return reasoning in separate field
+    requestBody.reasoning_effort = 'high';
     console.log(`[Groq] Using reasoning mode with ${requestBody.max_tokens} max tokens`);
   }
 
@@ -1981,6 +1982,10 @@ Example: "February" in December 2025 → February 2026`;
 
       const assistantMessage = choice.message;
 
+      // Capture reasoning from first request (Groq uses 'reasoning' field)
+      const firstRequestReasoning = assistantMessage.reasoning || null;
+      if (firstRequestReasoning) console.log('[Groq] Reasoning received:', firstRequestReasoning.length, 'chars');
+
       // Handle tool calls (including parallel calls for llama)
       if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
         console.log(`[Groq] ${assistantMessage.tool_calls.length} tool call(s) requested`);
@@ -2030,55 +2035,66 @@ Example: "February" in December 2025 → February 2026`;
           })
         );
 
-        // Second request with tool results - with retry logic for tool_use_failed errors
-        const messagesWithToolResults = [
+        // Multi-step tool calling loop (supports chaining e.g. get_schedule → check_availability)
+        let currentMessages = [
           ...processedMessages,
           assistantMessage,
           ...toolResults
         ];
+        const allToolsUsed = [...assistantMessage.tool_calls.map((tc: any) => tc.function.name)];
+        const maxToolSteps = 3;
+        const secondTimeout = isReasoningModel ? 120000 : 60000;
 
-        // Helper to make second request with fallback on tool_use_failed
-        const makeSecondRequest = async (): Promise<string> => {
+        let finalContent = '';
+        let finalReasoning: string | null = null;
+
+        for (let step = 0; step < maxToolSteps; step++) {
+          console.log(`[Groq] Follow-up request step ${step + 1}/${maxToolSteps}...`);
+
           const response = await axios.post(
             'https://api.groq.com/openai/v1/chat/completions',
             {
               model: requestBody.model,
-              messages: messagesWithToolResults,
+              messages: currentMessages,
               temperature: requestBody.temperature,
               max_tokens: requestBody.max_tokens,
+              tools: groqTools,
+              tool_choice: 'auto',
+              // NOTE: Omit reasoning params on follow-up requests with tool results
+              // to avoid tool_use_failed errors from Groq
             },
-            { headers, validateStatus: () => true, timeout: 60000 }
+            { headers, validateStatus: () => true, timeout: secondTimeout }
           );
 
-          // Check for tool_use_failed error - immediately use fallback (stripping tool context)
+          // Handle tool_use_failed - use context-aware fallback
           if (response.status === 400 && response.data?.error?.code === 'tool_use_failed') {
-            console.log('[Groq] tool_use_failed detected, using fallback without tool context...');
+            console.log('[Groq] tool_use_failed detected, using context-aware fallback...');
 
-            // Format tool results nicely for the fallback
-            const toolResultsSummary = toolResults.map((tr: any) => {
-              try {
-                const parsed = typeof tr.content === 'string' ? JSON.parse(tr.content) : tr.content;
-                return JSON.stringify(parsed, null, 2);
-              } catch {
-                return tr.content;
-              }
-            }).join('\n\n');
+            const allToolResultsSummary = currentMessages
+              .filter((m: any) => m.role === 'tool')
+              .map((tr: any) => {
+                try {
+                  const parsed = typeof tr.content === 'string' ? JSON.parse(tr.content) : tr.content;
+                  return JSON.stringify(parsed, null, 2);
+                } catch {
+                  return tr.content;
+                }
+              }).join('\n\n');
 
-            // Fallback: Strip ALL tool-related content, present results as context
+            const originalUserMessage = processedMessages
+              .filter((m: any) => m.role === 'user')
+              .slice(-1)[0]?.content || '';
+
             const fallbackMessages = [
-              // Keep system message if present
               ...processedMessages.filter((m: any) => m.role === 'system'),
-              // Add user's original request
               ...processedMessages.filter((m: any) => m.role === 'user').slice(-1),
-              // Add assistant response with the tool results embedded
               {
                 role: 'assistant',
-                content: `I looked up the information you requested. Here's what I found:\n\n${toolResultsSummary}`
+                content: `I looked up the relevant data:\n\n${allToolResultsSummary}`
               },
-              // Ask for a natural presentation
               {
                 role: 'user',
-                content: 'Great, please summarize this information in a natural, conversational way. Present it clearly for the user.'
+                content: `Based on that data, please complete my original request. My request was: "${originalUserMessage}". If I asked about my schedule, shifts, or availability, present the information clearly. Do NOT just summarize the data - actually respond to what I asked for.`
               }
             ];
 
@@ -2092,55 +2108,119 @@ Example: "February" in December 2025 → February 2026`;
                 temperature: requestBody.temperature,
                 max_tokens: requestBody.max_tokens,
               },
-              { headers, validateStatus: () => true, timeout: 60000 }
+              { headers, validateStatus: () => true, timeout: secondTimeout }
             );
 
             console.log('[Groq] Fallback response status:', fallbackResponse.status);
 
             if (fallbackResponse.status >= 300) {
               console.error('[Groq] Fallback also failed:', fallbackResponse.data);
-              // Last resort: return the tool results directly formatted
-              return `Here's what I found:\n\n${toolResultsSummary}`;
+              finalContent = `Here's what I found:\n\n${allToolResultsSummary}`;
+              finalReasoning = null;
+            } else {
+              const fm = fallbackResponse.data.choices?.[0]?.message;
+              finalContent = fm?.content || `Here's what I found:\n\n${allToolResultsSummary}`;
+              finalReasoning = fm?.reasoning || null;
+              console.log('[Groq] Fallback content length:', finalContent.length);
             }
-
-            const fallbackContent = fallbackResponse.data.choices?.[0]?.message?.content;
-            console.log('[Groq] Fallback content length:', fallbackContent?.length || 0);
-
-            return fallbackContent || `Here's what I found:\n\n${toolResultsSummary}`;
+            break;
           }
 
           if (response.status >= 300) {
-            console.error('[Groq] Second API call error:', response.status, response.data);
-            throw new Error(`Second API call failed: ${response.statusText}`);
+            console.error('[Groq] Follow-up API call error:', response.status, response.data);
+            throw new Error(`Follow-up API call failed: ${response.statusText}`);
           }
 
-          const content = response.data.choices?.[0]?.message?.content;
-          console.log('[Groq] Second request content length:', content?.length || 0);
-          return content || '';
-        };
+          const message = response.data.choices?.[0]?.message;
 
-        const finalContent = await makeSecondRequest();
+          // Check for additional tool calls - execute and loop
+          if (message?.tool_calls && message.tool_calls.length > 0) {
+            console.log(`[Groq] Step ${step + 2}: ${message.tool_calls.length} additional tool call(s)`);
+
+            const additionalResults = await Promise.all(
+              message.tool_calls.map(async (toolCall: any) => {
+                const functionName = toolCall.function.name;
+                try {
+                  let functionArgs: any;
+                  try {
+                    functionArgs = JSON.parse(toolCall.function.arguments);
+                  } catch (parseError: any) {
+                    console.error(`[Groq] Failed to parse tool arguments for ${functionName}:`, toolCall.function.arguments);
+                    return {
+                      role: 'tool',
+                      tool_call_id: toolCall.id,
+                      content: `Error: Failed to parse arguments: ${parseError.message}`
+                    };
+                  }
+
+                  console.log(`[Groq] Executing ${functionName}:`, functionArgs);
+                  allToolsUsed.push(functionName);
+                  const result = await executeStaffFunction(
+                    functionName,
+                    functionArgs,
+                    userId!,
+                    userKey!,
+                    subscriptionTier || 'free'
+                  );
+                  return {
+                    role: 'tool',
+                    tool_call_id: toolCall.id,
+                    content: JSON.stringify(result)
+                  };
+                } catch (execError: any) {
+                  console.error(`[Groq] Tool execution failed for ${functionName}:`, execError);
+                  return {
+                    role: 'tool',
+                    tool_call_id: toolCall.id,
+                    content: JSON.stringify({ error: `Error executing ${functionName}: ${execError.message}` })
+                  };
+                }
+              })
+            );
+
+            currentMessages = [
+              ...currentMessages,
+              message,
+              ...additionalResults
+            ];
+            continue;
+          }
+
+          // No more tool calls - we have final content
+          finalContent = message?.content || '';
+          finalReasoning = message?.reasoning || null;
+          console.log('[Groq] Final content length:', finalContent.length);
+          if (finalReasoning) console.log('[Groq] Final reasoning length:', finalReasoning.length);
+          break;
+        }
 
         if (!finalContent) {
-          throw new Error('No content in second response');
+          throw new Error('No content after tool call processing');
         }
 
         return res.json({
           content: finalContent,
+          reasoning: finalReasoning || firstRequestReasoning || null,
           provider: 'groq',
           model: requestBody.model,
-          toolsUsed: assistantMessage.tool_calls.map((tc: any) => tc.function.name)
+          toolsUsed: allToolsUsed
         });
       }
 
       // No tool calls, return content directly
       const content = assistantMessage.content;
+      const reasoningContent = assistantMessage.reasoning || null;
       if (!content) {
         throw new Error('No content in response');
       }
 
+      if (reasoningContent) {
+        console.log('[Groq] Reasoning content length:', reasoningContent.length);
+      }
+
       return res.json({
         content,
+        reasoning: reasoningContent,
         provider: 'groq',
         model: requestBody.model
       });

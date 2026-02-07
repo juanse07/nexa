@@ -69,6 +69,9 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
   // Shimmer effect for typing animation
   bool _showShimmer = false;
 
+  // Reasoning expand/collapse state
+  bool _reasoningExpanded = false;
+
   // Track if animation has already played
   static final Set<String> _animatedMessages = {};
   bool _hasAnimated = false;
@@ -269,7 +272,13 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
                       ),
                       child: _isTyping
                           ? _buildTypingIndicator()
-                          : _buildMessageContent(isUser),
+                          : Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (!isUser) _buildReasoningSection(),
+                                _buildMessageContent(isUser),
+                              ],
+                            ),
                     ),
                     if (!_isTyping) ...[
                       const SizedBox(height: 4),
@@ -301,6 +310,74 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildReasoningSection() {
+    if (widget.message.reasoning == null || widget.message.reasoning!.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          onTap: () => setState(() => _reasoningExpanded = !_reasoningExpanded),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '\u{1F9E0}',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'View thinking',
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  _reasoningExpanded ? Icons.expand_less : Icons.expand_more,
+                  size: 16,
+                  color: Colors.grey.shade600,
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_reasoningExpanded) ...[
+          const SizedBox(height: 6),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Text(
+              widget.message.reasoning!,
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                fontSize: 12,
+                height: 1.4,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
+        ],
+        const SizedBox(height: 8),
+      ],
     );
   }
 
