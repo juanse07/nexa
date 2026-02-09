@@ -79,7 +79,7 @@ class PayrollSummaryCard extends StatelessWidget {
                     child: const Text(
                       'View All',
                       style: TextStyle(
-                        color: Color(0xFF6366F1),
+                        color: Color(0xFF1E3A8A),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -124,7 +124,7 @@ class PayrollSummaryCard extends StatelessWidget {
                     label: 'Avg/Staff',
                     value: '\$${_formatNumber(summary.averagePerStaff)}',
                     icon: Icons.person,
-                    color: const Color(0xFF8B5CF6),
+                    color: const Color(0xFF1E3A8A),
                   ),
                 ),
               ],

@@ -278,7 +278,7 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
               expandedHeight: 180,
               floating: false,
               pinned: true,
-              backgroundColor: const Color(0xFF1A237E),
+              backgroundColor: const Color(0xFF212C4A),
               flexibleSpace: FlexibleSpaceBar(
                 background: AttendanceHeroHeader(
                   analytics: _analytics,
@@ -411,12 +411,15 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
         ),
       ),
 
-      // Floating action button for export
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showExportOptions,
-        backgroundColor: const Color(0xFF667eea),
-        icon: const Icon(Icons.download_rounded),
-        label: const Text('Export'),
+      // Floating action button for export — extra bottom margin to clear MainScreen's overlaid nav bar
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 70),
+        child: FloatingActionButton.extended(
+          onPressed: _showExportOptions,
+          backgroundColor: const Color(0xFF212C4A),
+          icon: const Icon(Icons.download_rounded),
+          label: const Text('Export'),
+        ),
       ),
     );
   }

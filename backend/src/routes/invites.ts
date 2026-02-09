@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { Router } from 'express';
 import mongoose from 'mongoose';
 import { z } from 'zod';
@@ -18,7 +19,18 @@ const router = Router();
 
 const redeemInviteSchema = z.object({
   shortCode: z.string().min(6).max(6),
+  password: z.string().optional(),
 });
+
+async function verifyPassword(password: string, hash: string): Promise<boolean> {
+  const [salt, key] = hash.split(':');
+  return new Promise((resolve, reject) => {
+    crypto.scrypt(password, salt, 64, (err, derivedKey) => {
+      if (err) reject(err);
+      else resolve(derivedKey.toString('hex') === key);
+    });
+  });
+}
 
 // Validate invite code (unauthenticated - for preview)
 router.get('/invites/validate/:shortCode', inviteValidateLimiter, async (req, res) => {
@@ -101,6 +113,7 @@ router.get('/invites/validate/:shortCode', inviteValidateLimiter, async (req, re
       memberCount,
       expiresAt: invite.expiresAt,
       requiresApproval: invite.requireApproval,
+      hasPassword: !!invite.passwordHash,
       usesRemaining:
         invite.maxUses ? invite.maxUses - invite.usedCount : null,
     });
@@ -132,7 +145,7 @@ router.post('/invites/redeem', inviteRedeemLimiter, requireAuth, async (req, res
       });
     }
 
-    const { shortCode } = parsed.data;
+    const { shortCode, password } = parsed.data;
 
     if (!isValidShortCodeFormat(shortCode)) {
       return res.status(400).json({ message: 'Invalid invite code format' });
@@ -169,6 +182,20 @@ router.post('/invites/redeem', inviteRedeemLimiter, requireAuth, async (req, res
       return res.status(410).json({
         message: 'Invite has reached maximum number of uses',
       });
+    }
+
+    // Verify password if required
+    if (invite.passwordHash) {
+      if (!password) {
+        return res.status(403).json({
+          message: 'This invite requires a password',
+          requiresPassword: true,
+        });
+      }
+      const passwordValid = await verifyPassword(password, invite.passwordHash);
+      if (!passwordValid) {
+        return res.status(403).json({ message: 'Incorrect password' });
+      }
     }
 
     // Get team
@@ -240,7 +267,8 @@ router.post('/invites/redeem', inviteRedeemLimiter, requireAuth, async (req, res
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
 
-    // Increment used count
+    // Increment used count and log usage
+    const userKey = `${authUser.provider}:${authUser.sub}`;
     await TeamInviteModel.updateOne(
       { _id: invite._id },
       {
@@ -249,6 +277,13 @@ router.post('/invites/redeem', inviteRedeemLimiter, requireAuth, async (req, res
           // Mark as accepted if it was pending
           status: invite.status === 'pending' ? 'accepted' : invite.status,
           acceptedAt: new Date(),
+        },
+        $push: {
+          usageLog: {
+            userKey,
+            userName: authUser.name,
+            joinedAt: new Date(),
+          },
         },
       }
     );

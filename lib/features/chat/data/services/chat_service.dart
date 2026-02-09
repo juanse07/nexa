@@ -265,6 +265,35 @@ class ChatService {
     }
   }
 
+  /// Fetch peer managers (other managers) for the contact picker
+  Future<List<Map<String, dynamic>>> fetchPeerManagers() async {
+    final token = await AuthService.getJwt();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+
+    final baseUrl = AppConfig.instance.baseUrl;
+    final url = Uri.parse('$baseUrl/chat/peer-managers');
+
+    final response = await http.get(
+      url,
+      headers: <String, String>{
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body) as Map<String, dynamic>;
+      return (data['managers'] as List<dynamic>? ?? [])
+          .cast<Map<String, dynamic>>();
+    } else {
+      // Non-critical: return empty if endpoint not available
+      print('[ChatService] peer-managers returned ${response.statusCode}');
+      return [];
+    }
+  }
+
   /// Send an event invitation to a user
   Future<ChatMessage> sendEventInvitation({
     required String targetId,

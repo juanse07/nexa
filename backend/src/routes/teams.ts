@@ -80,6 +80,7 @@ const createInviteLinkSchema = z.object({
   expiresInDays: z.number().int().min(1).max(90).optional(),
   maxUses: z.number().int().min(1).max(1000).optional().nullable(),
   requireApproval: z.boolean().optional().default(false),
+  password: z.string().min(4).max(50).optional(),
 });
 
 const defaultInviteExpiryDays = 14;
@@ -995,7 +996,20 @@ router.post('/teams/:teamId/invites/create-link', inviteCreateLimiter, requireAu
       });
     }
 
-    const { expiresInDays, maxUses, requireApproval } = parsed.data;
+    const { expiresInDays, maxUses, requireApproval, password } = parsed.data;
+
+    // Hash password if provided (using Node crypto.scrypt)
+    let passwordHash: string | undefined;
+    if (password) {
+      const salt = crypto.randomBytes(16).toString('hex');
+      const hash = await new Promise<string>((resolve, reject) => {
+        crypto.scrypt(password, salt, 64, (err, derivedKey) => {
+          if (err) reject(err);
+          else resolve(`${salt}:${derivedKey.toString('hex')}`);
+        });
+      });
+      passwordHash = hash;
+    }
 
     // Generate unique short code
     const shortCode = await generateUniqueShortCode();
@@ -1022,6 +1036,8 @@ router.post('/teams/:teamId/invites/create-link', inviteCreateLimiter, requireAu
       maxUses: maxUses ?? null,
       usedCount: 0,
       requireApproval: requireApproval ?? false,
+      passwordHash,
+      usageLog: [],
       expiresAt,
     });
 
@@ -1057,6 +1073,7 @@ ${expiryText}`;
       maxUses: invite.maxUses,
       usedCount: invite.usedCount,
       requireApproval: invite.requireApproval,
+      hasPassword: !!passwordHash,
     });
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -1105,6 +1122,8 @@ router.get('/teams/:teamId/invites/links', requireAuth, async (req, res) => {
       usedCount: invite.usedCount,
       maxUses: invite.maxUses,
       requireApproval: invite.requireApproval,
+      hasPassword: !!invite.passwordHash,
+      usageCount: invite.usageLog?.length ?? 0,
       expiresAt: invite.expiresAt,
       createdAt: invite.createdAt,
     }));
@@ -1340,6 +1359,73 @@ router.get('/teams/my/invites', requireAuth, async (req, res) => {
     return res.json({ invites: payload });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to load invites' });
+  }
+});
+
+// Revoke an invite link
+router.patch('/teams/:teamId/invites/:inviteId/revoke', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const { teamId: teamIdParam, inviteId: inviteIdParam } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(teamIdParam || '') || !mongoose.Types.ObjectId.isValid(inviteIdParam || '')) {
+      return res.status(400).json({ message: 'Invalid identifiers' });
+    }
+
+    const invite = await TeamInviteModel.findOneAndUpdate(
+      {
+        _id: new mongoose.Types.ObjectId(inviteIdParam),
+        teamId: new mongoose.Types.ObjectId(teamIdParam),
+        managerId,
+        inviteType: 'link',
+        status: 'pending',
+      },
+      { $set: { status: 'cancelled', updatedAt: new Date() } },
+      { new: true }
+    ).lean();
+
+    if (!invite) {
+      return res.status(404).json({ message: 'Invite link not found or already revoked' });
+    }
+
+    return res.json({ message: 'Invite link revoked', inviteId: String(invite._id) });
+  } catch (err) {
+    console.error('[teams] PATCH /teams/:teamId/invites/:inviteId/revoke failed', err);
+    return res.status(500).json({ message: 'Failed to revoke invite link' });
+  }
+});
+
+// Get usage audit log for an invite link
+router.get('/teams/:teamId/invites/:inviteId/usage', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const { teamId: teamIdParam, inviteId: inviteIdParam } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(teamIdParam || '') || !mongoose.Types.ObjectId.isValid(inviteIdParam || '')) {
+      return res.status(400).json({ message: 'Invalid identifiers' });
+    }
+
+    const invite = await TeamInviteModel.findOne({
+      _id: new mongoose.Types.ObjectId(inviteIdParam),
+      teamId: new mongoose.Types.ObjectId(teamIdParam),
+      managerId,
+    }).lean();
+
+    if (!invite) {
+      return res.status(404).json({ message: 'Invite not found' });
+    }
+
+    return res.json({
+      inviteId: String(invite._id),
+      shortCode: invite.shortCode,
+      usageLog: invite.usageLog ?? [],
+      usedCount: invite.usedCount,
+    });
+  } catch (err) {
+    console.error('[teams] GET /teams/:teamId/invites/:inviteId/usage failed', err);
+    return res.status(500).json({ message: 'Failed to fetch usage log' });
   }
 });
 

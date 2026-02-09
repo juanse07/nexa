@@ -175,12 +175,14 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
           int? expiresInDays,
           int? maxUses,
           bool requireApproval = false,
+          String? password,
         }) async {
           return await _teamsService.createInviteLink(
             teamId: widget.teamId,
             expiresInDays: expiresInDays,
             maxUses: maxUses,
             requireApproval: requireApproval,
+            password: password,
           );
         },
       ),
@@ -189,6 +191,86 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
     if (result == true && mounted) {
       // Refresh data to show new invite in the list
       await _loadData();
+    }
+  }
+
+  Future<void> _revokeInviteLink(String inviteId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Revoke Invite Link'),
+        content: const Text('This will prevent anyone from using this link to join. Continue?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Revoke', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await _teamsService.revokeInviteLink(widget.teamId, inviteId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Invite link revoked')),
+        );
+        await _loadData();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _showUsageLog(String inviteId) async {
+    try {
+      final data = await _teamsService.fetchInviteUsage(widget.teamId, inviteId);
+      final usageLog = (data['usageLog'] as List<dynamic>?) ?? [];
+
+      if (!mounted) return;
+
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('Usage Log (${usageLog.length})'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: usageLog.isEmpty
+                ? const Text('No usage recorded yet.')
+                : ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: usageLog.length,
+                    itemBuilder: (_, i) {
+                      final entry = usageLog[i] as Map<String, dynamic>;
+                      final name = entry['userName'] ?? entry['userKey'] ?? 'Unknown';
+                      final joinedAt = entry['joinedAt']?.toString() ?? '';
+                      return ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.person, size: 20),
+                        title: Text(name.toString()),
+                        subtitle: Text(joinedAt),
+                      );
+                    },
+                  ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading usage: $e')),
+        );
+      }
     }
   }
 
@@ -729,11 +811,13 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
           ),
           const SizedBox(height: 8),
           ..._inviteLinks.map((link) {
+            final inviteId = (link['id'] ?? '').toString();
             final shortCode = (link['shortCode'] ?? '').toString();
             final usedCount = link['usedCount'] as int? ?? 0;
             final maxUses = link['maxUses'] as int?;
             final status = (link['status'] ?? '').toString();
-            final expiresAt = link['expiresAt']?.toString();
+            final hasPassword = link['hasPassword'] as bool? ?? false;
+            final usageCount = link['usageCount'] as int? ?? usedCount;
 
             String usageText;
             if (maxUses != null) {
@@ -749,14 +833,51 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
                   backgroundColor: Colors.blue,
                   child: Icon(Icons.link, color: Colors.white),
                 ),
-                title: Text('Code: $shortCode'),
-                subtitle: Text('$usageText • Status: $status'),
+                title: Row(
+                  children: [
+                    Text('Code: $shortCode'),
+                    if (hasPassword) ...[
+                      const SizedBox(width: 6),
+                      const Icon(Icons.lock, size: 14, color: Colors.orange),
+                    ],
+                  ],
+                ),
+                subtitle: Row(
+                  children: [
+                    Expanded(child: Text('$usageText • Status: $status')),
+                    if (usageCount > 0)
+                      GestureDetector(
+                        onTap: () => _showUsageLog(inviteId),
+                        child: Text(
+                          '$usageCount joins',
+                          style: const TextStyle(
+                            color: Colors.blue,
+                            decoration: TextDecoration.underline,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
                 trailing: status == 'pending'
-                    ? IconButton(
-                        onPressed: () async {
-                          // You can add revoke functionality here if needed
+                    ? PopupMenuButton<String>(
+                        onSelected: (value) async {
+                          if (value == 'revoke') {
+                            await _revokeInviteLink(inviteId);
+                          }
                         },
-                        icon: const Icon(Icons.more_vert),
+                        itemBuilder: (_) => [
+                          const PopupMenuItem(
+                            value: 'revoke',
+                            child: Row(
+                              children: [
+                                Icon(Icons.cancel, color: Colors.red, size: 18),
+                                SizedBox(width: 8),
+                                Text('Revoke'),
+                              ],
+                            ),
+                          ),
+                        ],
                       )
                     : null,
               ),

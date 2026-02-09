@@ -197,7 +197,7 @@ class _FlaggedAttendanceScreenState extends State<FlaggedAttendanceScreen> {
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
         title: const Text('Flagged Attendance'),
-        backgroundColor: const Color(0xFF1A237E),
+        backgroundColor: const Color(0xFF212C4A),
         foregroundColor: Colors.white,
         actions: [
           IconButton(
@@ -250,8 +250,8 @@ class _FlaggedAttendanceScreenState extends State<FlaggedAttendanceScreen> {
           _loadFlaggedAttendance();
         }
       },
-      selectedColor: const Color(0xFF667eea).withOpacity(0.2),
-      checkmarkColor: const Color(0xFF667eea),
+      selectedColor: const Color(0xFF1E3A8A).withOpacity(0.2),
+      checkmarkColor: const Color(0xFF1E3A8A),
     );
   }
 

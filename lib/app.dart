@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -26,6 +27,25 @@ class NexaApp extends StatefulWidget {
 
 class _NexaAppState extends State<NexaApp> {
   bool _splashComplete = false;
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+  StreamSubscription<void>? _logoutSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _logoutSubscription = AuthService.onForcedLogout.listen((_) {
+      _navigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginPage()),
+        (_) => false,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _logoutSubscription?.cancel();
+    super.dispose();
+  }
 
   static Future<String?> _validateAndGetToken() async {
     if (kIsWeb) {
@@ -75,6 +95,7 @@ class _NexaAppState extends State<NexaApp> {
     return ChangeNotifierProvider(
       create: (_) => TerminologyProvider(),
       child: MaterialApp(
+        navigatorKey: _navigatorKey,
         title: 'FlowShift Manager',
         debugShowCheckedModeBanner: false,
 

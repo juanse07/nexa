@@ -221,6 +221,7 @@ class TeamsService {
     int? expiresInDays,
     int? maxUses,
     bool requireApproval = false,
+    String? password,
   }) async {
     try {
       final response = await _apiClient.post(
@@ -229,6 +230,7 @@ class TeamsService {
           if (expiresInDays != null) 'expiresInDays': expiresInDays,
           if (maxUses != null) 'maxUses': maxUses,
           'requireApproval': requireApproval,
+          if (password != null) 'password': password,
         },
       );
       if (_isSuccess(response.statusCode)) {
@@ -259,6 +261,34 @@ class TeamsService {
       throw Exception('Failed to fetch invite links (${response.statusCode})');
     } on DioException catch (e) {
       throw Exception('Failed to fetch invite links: ${e.message}');
+    }
+  }
+
+  /// Revoke an invite link
+  Future<void> revokeInviteLink(String teamId, String inviteId) async {
+    try {
+      final response = await _apiClient.patch(
+        '/teams/$teamId/invites/$inviteId/revoke',
+        data: {},
+      );
+      if (!_isSuccess(response.statusCode)) {
+        throw Exception('Failed to revoke invite link (${response.statusCode})');
+      }
+    } on DioException catch (e) {
+      throw Exception('Failed to revoke invite link: ${e.message}');
+    }
+  }
+
+  /// Fetch usage audit log for an invite link
+  Future<Map<String, dynamic>> fetchInviteUsage(String teamId, String inviteId) async {
+    try {
+      final response = await _apiClient.get('/teams/$teamId/invites/$inviteId/usage');
+      if (_isSuccess(response.statusCode)) {
+        return Map<String, dynamic>.from(response.data as Map);
+      }
+      throw Exception('Failed to fetch invite usage (${response.statusCode})');
+    } on DioException catch (e) {
+      throw Exception('Failed to fetch invite usage: ${e.message}');
     }
   }
 

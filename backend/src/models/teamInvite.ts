@@ -3,20 +3,28 @@ import mongoose, { Document, Model, Schema } from 'mongoose';
 export type TeamInviteStatus = 'pending' | 'accepted' | 'declined' | 'cancelled' | 'expired';
 export type TeamInviteType = 'targeted' | 'link';
 
+export interface InviteUsageEntry {
+  userKey: string;
+  userName?: string;
+  joinedAt: Date;
+}
+
 export interface TeamInviteDocument extends Document {
   teamId: mongoose.Types.ObjectId;
   managerId: mongoose.Types.ObjectId;
   invitedBy?: mongoose.Types.ObjectId;
   token: string;
-  shortCode?: string; // NEW: 6-character code for shareable links
-  inviteType: TeamInviteType; // NEW: 'targeted' for email invites, 'link' for shareable
+  shortCode?: string; // 6-character code for shareable links
+  inviteType: TeamInviteType; // 'targeted' for email invites, 'link' for shareable
   email?: string;
   provider?: string;
   subject?: string;
   status: TeamInviteStatus;
-  maxUses?: number; // NEW: null/undefined = unlimited, or set limit
-  usedCount: number; // NEW: Track redemptions
-  requireApproval: boolean; // NEW: Manager must approve after join
+  maxUses?: number; // null/undefined = unlimited, or set limit
+  usedCount: number; // Track redemptions
+  requireApproval: boolean; // Manager must approve after join
+  passwordHash?: string; // bcrypt hash of optional password
+  usageLog: InviteUsageEntry[]; // Audit log of who joined via this link
   expiresAt?: Date;
   acceptedAt?: Date;
   claimedByKey?: string;
@@ -40,9 +48,11 @@ const TeamInviteSchema = new Schema<TeamInviteDocument>(
       enum: ['pending', 'accepted', 'declined', 'cancelled', 'expired'],
       default: 'pending',
     },
-    maxUses: { type: Number, default: null }, // NEW: null = unlimited
-    usedCount: { type: Number, default: 0 }, // NEW
-    requireApproval: { type: Boolean, default: false }, // NEW
+    maxUses: { type: Number, default: null }, // null = unlimited
+    usedCount: { type: Number, default: 0 },
+    requireApproval: { type: Boolean, default: false },
+    passwordHash: { type: String },
+    usageLog: { type: [{ userKey: String, userName: String, joinedAt: { type: Date, default: Date.now } }], default: [] },
     expiresAt: { type: Date },
     acceptedAt: { type: Date },
     claimedByKey: { type: String, trim: true },

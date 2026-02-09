@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io' show Platform;
@@ -35,6 +36,28 @@ class AuthService {
   static const _jwtStorageKey = 'auth_jwt';
   static const _storage = FlutterSecureStorage();
   static const _requestTimeout = Duration(seconds: 30);
+
+  /// Stream that emits when a forced logout occurs (e.g., 401 response).
+  /// The root widget should listen to this and navigate to login.
+  static final StreamController<void> _forcedLogoutController =
+      StreamController<void>.broadcast();
+  static Stream<void> get onForcedLogout => _forcedLogoutController.stream;
+
+  static DateTime? _lastForcedLogout;
+
+  /// Called by ErrorInterceptor on 401. Clears tokens and emits on the stream.
+  /// Debounced to prevent multiple 401s from triggering multiple logouts.
+  static Future<void> forceLogout() async {
+    final now = DateTime.now();
+    if (_lastForcedLogout != null &&
+        now.difference(_lastForcedLogout!).inSeconds < 5) {
+      return; // Debounce: ignore if last forced logout was <5s ago
+    }
+    _lastForcedLogout = now;
+    _log('Forced logout triggered (401)');
+    await signOut();
+    _forcedLogoutController.add(null);
+  }
 
   static String get _apiBaseUrl {
     final base = AppConfig.instance.baseUrl;

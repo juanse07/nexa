@@ -23,12 +23,12 @@ class StatsHeroHeader extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+          colors: [Color(0xFF212C4A), Color(0xFF1E3A8A)],
         ),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF6366F1).withOpacity(0.3),
+            color: const Color(0xFF212C4A).withOpacity(0.3),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),

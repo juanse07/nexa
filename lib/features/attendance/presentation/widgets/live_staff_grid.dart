@@ -186,7 +186,7 @@ class _StaffAvatarCard extends StatelessWidget {
               ringWidth: 2,
               child: CircleAvatar(
                 radius: 28,
-                backgroundColor: const Color(0xFF667eea),
+                backgroundColor: const Color(0xFF1E3A8A),
                 backgroundImage: staff.picture != null
                     ? NetworkImage(staff.picture!)
                     : null,
@@ -325,7 +325,7 @@ class StaffQuickActionsSheet extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 28,
-                  backgroundColor: const Color(0xFF667eea),
+                  backgroundColor: const Color(0xFF1E3A8A),
                   backgroundImage: staff.picture != null
                       ? NetworkImage(staff.picture!)
                       : null,

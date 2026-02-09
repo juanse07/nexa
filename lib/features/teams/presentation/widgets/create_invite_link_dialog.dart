@@ -14,6 +14,7 @@ class CreateInviteLinkDialog extends StatefulWidget {
     int? expiresInDays,
     int? maxUses,
     bool requireApproval,
+    String? password,
   }) onCreateLink;
 
   @override
@@ -25,9 +26,16 @@ class _CreateInviteLinkDialogState extends State<CreateInviteLinkDialog> {
   int _expiresInDays = 7;
   int? _maxUses;
   bool _requireApproval = false;
+  final _passwordCtrl = TextEditingController();
   bool _loading = false;
   Map<String, dynamic>? _createdLink;
   String? _error;
+
+  @override
+  void dispose() {
+    _passwordCtrl.dispose();
+    super.dispose();
+  }
 
   Future<void> _createLink() async {
     setState(() {
@@ -36,10 +44,12 @@ class _CreateInviteLinkDialogState extends State<CreateInviteLinkDialog> {
     });
 
     try {
+      final password = _passwordCtrl.text.trim();
       final result = await widget.onCreateLink(
         expiresInDays: _expiresInDays,
         maxUses: _maxUses,
         requireApproval: _requireApproval,
+        password: password.isNotEmpty ? password : null,
       );
 
       setState(() {
@@ -140,6 +150,23 @@ class _CreateInviteLinkDialogState extends State<CreateInviteLinkDialog> {
               subtitle: const Text('You must approve members after they join'),
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
+            ),
+            const SizedBox(height: 8),
+
+            // Password protection
+            const Text(
+              'Password (optional):',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            TextField(
+              controller: _passwordCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(
+                hintText: 'Leave empty for no password',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.lock_outline),
+              ),
             ),
 
             if (_error != null)

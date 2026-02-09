@@ -50,12 +50,12 @@ class _ExportOptionsSheetState extends State<ExportOptionsSheet> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF6366F1).withOpacity(0.1),
+                      color: const Color(0xFF212C4A).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(
                       Icons.download,
-                      color: Color(0xFF6366F1),
+                      color: Color(0xFF212C4A),
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -210,7 +210,7 @@ class _ExportOptionsSheetState extends State<ExportOptionsSheet> {
                     );
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6366F1),
+                    backgroundColor: const Color(0xFF212C4A),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
@@ -289,10 +289,10 @@ class _FormatOption extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF6366F1).withOpacity(0.05) : Colors.grey.shade50,
+          color: isSelected ? const Color(0xFF212C4A).withOpacity(0.05) : Colors.grey.shade50,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected ? const Color(0xFF6366F1) : Colors.grey.shade200,
+            color: isSelected ? const Color(0xFF212C4A) : Colors.grey.shade200,
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -301,14 +301,14 @@ class _FormatOption extends StatelessWidget {
             Icon(
               icon,
               size: 28,
-              color: isSelected ? const Color(0xFF6366F1) : Colors.grey.shade600,
+              color: isSelected ? const Color(0xFF212C4A) : Colors.grey.shade600,
             ),
             const SizedBox(height: 8),
             Text(
               label,
               style: TextStyle(
                 fontWeight: FontWeight.w600,
-                color: isSelected ? const Color(0xFF6366F1) : Colors.black87,
+                color: isSelected ? const Color(0xFF212C4A) : Colors.black87,
               ),
             ),
             Text(
@@ -348,10 +348,10 @@ class _ReportTypeOption extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF6366F1).withOpacity(0.05) : Colors.white,
+          color: isSelected ? const Color(0xFF212C4A).withOpacity(0.05) : Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected ? const Color(0xFF6366F1) : Colors.grey.shade200,
+            color: isSelected ? const Color(0xFF212C4A) : Colors.grey.shade200,
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -361,14 +361,14 @@ class _ReportTypeOption extends StatelessWidget {
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? const Color(0xFF6366F1).withOpacity(0.1)
+                    ? const Color(0xFF212C4A).withOpacity(0.1)
                     : Colors.grey.shade100,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
                 icon,
                 size: 20,
-                color: isSelected ? const Color(0xFF6366F1) : Colors.grey.shade600,
+                color: isSelected ? const Color(0xFF212C4A) : Colors.grey.shade600,
               ),
             ),
             const SizedBox(width: 12),
@@ -380,7 +380,7 @@ class _ReportTypeOption extends StatelessWidget {
                     label,
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
-                      color: isSelected ? const Color(0xFF6366F1) : Colors.black87,
+                      color: isSelected ? const Color(0xFF212C4A) : Colors.black87,
                     ),
                   ),
                   Text(
@@ -396,7 +396,7 @@ class _ReportTypeOption extends StatelessWidget {
             if (isSelected)
               const Icon(
                 Icons.check_circle,
-                color: Color(0xFF6366F1),
+                color: Color(0xFF212C4A),
                 size: 22,
               ),
           ],

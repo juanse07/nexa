@@ -165,7 +165,7 @@ class _AttendanceFilterSheetState extends State<AttendanceFilterSheet> {
                     Navigator.pop(context);
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF667eea),
+                    backgroundColor: const Color(0xFF1E3A8A),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -229,10 +229,10 @@ class _AttendanceFilterSheetState extends State<AttendanceFilterSheet> {
               }
             }
           },
-          selectedColor: const Color(0xFF667eea).withOpacity(0.2),
-          checkmarkColor: const Color(0xFF667eea),
+          selectedColor: const Color(0xFF1E3A8A).withOpacity(0.2),
+          checkmarkColor: const Color(0xFF1E3A8A),
           labelStyle: TextStyle(
-            color: isSelected ? const Color(0xFF667eea) : Colors.grey[700],
+            color: isSelected ? const Color(0xFF1E3A8A) : Colors.grey[700],
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
           ),
         );
@@ -272,7 +272,7 @@ class _AttendanceFilterSheetState extends State<AttendanceFilterSheet> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
-              primary: Color(0xFF667eea),
+              primary: Color(0xFF1E3A8A),
             ),
           ),
           child: child!,
@@ -358,7 +358,7 @@ class _AttendanceFilterSheetState extends State<AttendanceFilterSheet> {
   Color _getStatusColor(AttendanceStatus status) {
     switch (status) {
       case AttendanceStatus.all:
-        return const Color(0xFF667eea);
+        return const Color(0xFF1E3A8A);
       case AttendanceStatus.working:
         return Colors.green;
       case AttendanceStatus.completed:

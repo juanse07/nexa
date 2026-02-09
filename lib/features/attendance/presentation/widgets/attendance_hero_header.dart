@@ -18,9 +18,9 @@ class AttendanceHeroHeader extends StatelessWidget {
     this.isLoading = false,
   });
 
-  // Theme colors
-  static const _navyBlue = Color(0xFF1A237E);
-  static const _purpleAccent = Color(0xFF667eea);
+  // Brand colors (matches Jobs/Catalog screens)
+  static const _navyBlue = Color(0xFF212C4A);
+  static const _oceanBlue = Color(0xFF1E3A8A);
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +29,7 @@ class AttendanceHeroHeader extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [_navyBlue, _purpleAccent],
+          colors: [_navyBlue, _navyBlue, _oceanBlue],
         ),
       ),
       child: SafeArea(
@@ -201,7 +201,7 @@ class SliverAttendanceHeroHeader extends StatelessWidget {
       expandedHeight: 200,
       floating: false,
       pinned: true,
-      backgroundColor: const Color(0xFF1A237E),
+      backgroundColor: const Color(0xFF212C4A),
       flexibleSpace: FlexibleSpaceBar(
         background: AttendanceHeroHeader(
           analytics: analytics,

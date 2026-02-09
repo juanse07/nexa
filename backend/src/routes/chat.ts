@@ -819,6 +819,51 @@ router.get('/managers', requireAuth, async (req, res) => {
 });
 
 /**
+ * GET /chat/peer-managers
+ * For managers: Get list of other managers who share teams (peer managers)
+ * Used by manager app to show other managers in the contact picker
+ */
+router.get('/peer-managers', requireAuth, async (req, res) => {
+  try {
+    const { managerId } = (req as AuthenticatedRequest).authUser;
+
+    if (!managerId) {
+      return res.status(403).json({ error: 'Manager authentication required' });
+    }
+
+    const managerObjectId = new mongoose.Types.ObjectId(managerId);
+
+    // Find teams this manager owns
+    const { TeamModel } = await import('../models/team');
+    const myTeams = await TeamModel.find({ managerId: managerObjectId }).lean();
+    const myTeamIds = myTeams.map(t => t._id);
+
+    if (myTeamIds.length === 0) {
+      return res.json({ managers: [] });
+    }
+
+    // Find other managers who also have teams with shared team members
+    // For now, just return all managers except self (can refine later)
+    const peerManagers = await ManagerModel.find({
+      _id: { $ne: managerObjectId }
+    }).lean();
+
+    const result = peerManagers.map(m => ({
+      userKey: `manager:${m._id.toString()}`,
+      name: m.name || [m.first_name, m.last_name].filter(Boolean).join(' ') || 'Manager',
+      email: m.email,
+      picture: m.picture,
+      role: 'Manager',
+    }));
+
+    return res.json({ managers: result });
+  } catch (error) {
+    console.error('Error fetching peer managers:', error);
+    return res.status(500).json({ error: 'Failed to fetch peer managers' });
+  }
+});
+
+/**
  * GET /chat/debug/check-conversations
  * Debug endpoint to check for conversations with missing managerIds
  */

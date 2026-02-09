@@ -1,8 +1,13 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get_it/get_it.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:nexa/core/network/api_client.dart';
 import 'package:nexa/features/users/data/services/manager_service.dart';
+import 'package:nexa/services/file_upload_service.dart';
 import 'package:nexa/shared/widgets/initials_avatar.dart';
 
 class ManagerProfilePage extends StatefulWidget {
@@ -19,8 +24,11 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
   final _pictureCtrl = TextEditingController();
 
   late final ManagerService _service;
+  late final FileUploadService _uploadService;
+  final _imagePicker = ImagePicker();
   bool _loading = true;
   bool _saving = false;
+  bool _uploading = false;
   String? _error;
 
   @override
@@ -29,6 +37,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
     final api = GetIt.I<ApiClient>();
     final storage = GetIt.I<FlutterSecureStorage>();
     _service = ManagerService(api, storage);
+    _uploadService = FileUploadService(api);
     _load();
   }
 
@@ -46,6 +55,38 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
       setState(() {
         _error = 'Failed to load profile. This may be due to backend deployment. Please try again in a few minutes.';
         _loading = false;
+      });
+    }
+  }
+
+  Future<void> _pickAndUploadImage() async {
+    try {
+      final picked = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 85,
+      );
+      if (picked == null) return;
+
+      setState(() => _uploading = true);
+
+      String url;
+      if (kIsWeb) {
+        final bytes = await picked.readAsBytes();
+        url = await _uploadService.uploadProfilePictureBytes(bytes, picked.name);
+      } else {
+        url = await _uploadService.uploadProfilePicture(File(picked.path));
+      }
+
+      setState(() {
+        _pictureCtrl.text = url;
+        _uploading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _uploading = false;
+        _error = 'Failed to upload image: $e';
       });
     }
   }
@@ -137,10 +178,19 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
                     keyboardType: TextInputType.number,
                     maxLength: 9,
                   ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _pictureCtrl,
-                    decoration: const InputDecoration(labelText: 'Picture URL (optional)'),
+                  const SizedBox(height: 4),
+                  // Collapsible URL field for manual entry
+                  ExpansionTile(
+                    title: const Text('Picture URL (advanced)', style: TextStyle(fontSize: 14, color: Colors.grey)),
+                    tilePadding: EdgeInsets.zero,
+                    childrenPadding: EdgeInsets.zero,
+                    children: [
+                      TextField(
+                        controller: _pictureCtrl,
+                        decoration: const InputDecoration(labelText: 'Picture URL'),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -149,11 +199,51 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
   }
 
   Widget _buildAvatar() {
-    return InitialsAvatar(
-      imageUrl: _pictureCtrl.text.trim(),
-      firstName: _firstNameCtrl.text.trim(),
-      lastName: _lastNameCtrl.text.trim(),
-      radius: 48,
+    return GestureDetector(
+      onTap: _uploading ? null : _pickAndUploadImage,
+      child: Stack(
+        children: [
+          InitialsAvatar(
+            imageUrl: _pictureCtrl.text.trim(),
+            firstName: _firstNameCtrl.text.trim(),
+            lastName: _lastNameCtrl.text.trim(),
+            radius: 48,
+          ),
+          if (_uploading)
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.black45,
+                  shape: BoxShape.circle,
+                ),
+                child: const Center(
+                  child: SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 3,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  ),
+                ),
+              ),
+            )
+          else
+            Positioned(
+              bottom: 0,
+              right: 0,
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+                child: const Icon(Icons.camera_alt, size: 16, color: Colors.white),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

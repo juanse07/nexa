@@ -422,42 +422,27 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
   }
 
   Widget _buildAiAvatar() {
-    return AnimatedContainer(
+    return AnimatedScale(
+      scale: _isTyping ? 1.1 : 1.0,
       duration: const Duration(milliseconds: 300),
-      width: 32,
-      height: 32,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: _isTyping
-            ? [const Color(0xFF26C6DA), const Color(0xFF00838F)]
-            : [AppColors.tealInfo, AppColors.oceanBlue],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.tealInfo.withValues(alpha: _isTyping ? 0.5 : 0.3),
-            blurRadius: _isTyping ? 10 : 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Center(
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            // AI icon (simplified for animation performance)
-            AnimatedScale(
-              scale: _isTyping ? 1.1 : 1.0,
-              duration: const Duration(milliseconds: 300),
-              child: const Icon(
-                Icons.auto_awesome,
-                color: Colors.white,
-                size: 18,
-              ),
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: _isTyping ? 0.2 : 0.1),
+              blurRadius: _isTyping ? 10 : 6,
+              offset: const Offset(0, 2),
             ),
           ],
+        ),
+        child: ClipOval(
+          child: Image.asset(
+            'assets/ai_assistant_logo.png',
+            fit: BoxFit.cover,
+          ),
         ),
       ),
     );

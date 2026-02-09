@@ -15,8 +15,8 @@ class WeeklyHoursChart extends StatelessWidget {
     this.isLoading = false,
   });
 
-  static const _navyBlue = Color(0xFF1A237E);
-  static const _purpleAccent = Color(0xFF667eea);
+  static const _navyBlue = Color(0xFF212C4A);
+  static const _oceanBlue = Color(0xFF1E3A8A);
 
   @override
   Widget build(BuildContext context) {
@@ -191,9 +191,9 @@ class WeeklyHoursChart extends StatelessWidget {
                           begin: Alignment.bottomCenter,
                           end: Alignment.topCenter,
                           colors: isToday
-                              ? [_purpleAccent, _navyBlue]
+                              ? [_oceanBlue, _navyBlue]
                               : [
-                                  _purpleAccent.withOpacity(0.6),
+                                  _oceanBlue.withOpacity(0.6),
                                   _navyBlue.withOpacity(0.6),
                                 ],
                         ),

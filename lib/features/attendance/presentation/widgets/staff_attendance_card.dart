@@ -37,7 +37,7 @@ class StaffAttendanceCard extends StatelessWidget {
         children: [
           SlidableAction(
             onPressed: (_) => onViewHistory(),
-            backgroundColor: const Color(0xFF667eea),
+            backgroundColor: const Color(0xFF1E3A8A),
             foregroundColor: Colors.white,
             icon: Icons.history,
             label: 'History',
@@ -100,7 +100,7 @@ class StaffAttendanceCard extends StatelessWidget {
                   // Avatar
                   CircleAvatar(
                     radius: 24,
-                    backgroundColor: const Color(0xFF667eea),
+                    backgroundColor: const Color(0xFF1E3A8A),
                     backgroundImage: record.picture != null
                         ? NetworkImage(record.picture!)
                         : null,

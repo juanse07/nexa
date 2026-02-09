@@ -182,7 +182,7 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
         title: const Text('Bulk Clock-In'),
-        backgroundColor: const Color(0xFF1A237E),
+        backgroundColor: const Color(0xFF212C4A),
         foregroundColor: Colors.white,
         actions: [
           TextButton(
@@ -293,7 +293,7 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
                           ? null
                           : _performBulkClockIn,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF667eea),
+                        backgroundColor: const Color(0xFF1E3A8A),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -349,7 +349,7 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
           children: [
             CircleAvatar(
               radius: 24,
-              backgroundColor: const Color(0xFF667eea),
+              backgroundColor: const Color(0xFF1E3A8A),
               backgroundImage: picture != null ? NetworkImage(picture) : null,
               child: picture == null
                   ? Text(
@@ -410,7 +410,7 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
                 onChanged: userKey == null
                     ? null
                     : (value) => _toggleSelection(userKey),
-                activeColor: const Color(0xFF667eea),
+                activeColor: const Color(0xFF1E3A8A),
               ),
       ),
     );

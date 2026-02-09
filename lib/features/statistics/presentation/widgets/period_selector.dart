@@ -80,7 +80,7 @@ class PeriodSelector extends StatelessWidget {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
-              primary: Color(0xFF6366F1),
+              primary: Color(0xFF212C4A),
               onPrimary: Colors.white,
               surface: Colors.white,
               onSurface: Colors.black87,
@@ -118,15 +118,15 @@ class _PeriodChip extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF6366F1) : Colors.white,
+          color: isSelected ? const Color(0xFF212C4A) : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? const Color(0xFF6366F1) : Colors.grey.shade300,
+            color: isSelected ? const Color(0xFF212C4A) : Colors.grey.shade300,
           ),
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: const Color(0xFF6366F1).withOpacity(0.3),
+                    color: const Color(0xFF212C4A).withOpacity(0.3),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),

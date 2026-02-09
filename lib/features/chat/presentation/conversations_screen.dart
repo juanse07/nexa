@@ -76,10 +76,13 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
         iconTheme: const IconThemeData(color: AppColors.charcoal),
       ),
       body: WebContentWrapper.list(child: _buildBody()),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showContactPicker,
-        backgroundColor: AppColors.tealInfo,
-        child: const Icon(Icons.add_comment, color: Colors.white),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 70),
+        child: FloatingActionButton(
+          onPressed: _showContactPicker,
+          backgroundColor: AppColors.tealInfo,
+          child: const Icon(Icons.add_comment, color: Colors.white),
+        ),
       ),
     );
   }
@@ -360,76 +363,24 @@ class _AIChatTile extends StatelessWidget {
         ),
         child: Row(
           children: <Widget>[
-            // Valerio Avatar with custom geometric icon
+            // Valerio Avatar - AI mascot logo
             Container(
               width: 56,
               height: 56,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [AppColors.tealInfo, AppColors.oceanBlue],
-                ),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.tealInfo.withOpacity(0.3),
+                    color: Colors.black.withOpacity(0.1),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
                 ],
               ),
-              child: Center(
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    // Outer hexagon shape
-                    Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.4),
-                          width: 1.5,
-                        ),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    // Inner diamond shape
-                    Transform.rotate(
-                      angle: 0.785398, // 45 degrees
-                      child: Container(
-                        width: 12,
-                        height: 12,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 2,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    // Connecting lines
-                    Positioned(
-                      top: 10,
-                      child: Container(
-                        width: 1,
-                        height: 6,
-                        color: Colors.white.withOpacity(0.6),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 10,
-                      child: Container(
-                        width: 1,
-                        height: 6,
-                        color: Colors.white.withOpacity(0.6),
-                      ),
-                    ),
-                  ],
+              child: ClipOval(
+                child: Image.asset(
+                  'assets/ai_assistant_logo.png',
+                  fit: BoxFit.cover,
                 ),
               ),
             ),
@@ -519,11 +470,35 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
         _error = null;
       });
 
-      final contacts = await _chatService.fetchContacts();
+      // Fetch team members and peer managers in parallel
+      final results = await Future.wait([
+        _chatService.fetchContacts(),
+        _chatService.fetchPeerManagers().catchError((_) => <Map<String, dynamic>>[]),
+      ]);
+
+      final teamMembers = results[0];
+      final peerManagers = results[1];
+
+      // Deduplicate by userKey and merge
+      final seen = <String>{};
+      final allContacts = <Map<String, dynamic>>[];
+
+      for (final contact in teamMembers) {
+        final key = contact['userKey'] as String? ?? '';
+        if (key.isNotEmpty && seen.add(key)) {
+          allContacts.add(contact);
+        }
+      }
+      for (final manager in peerManagers) {
+        final key = manager['userKey'] as String? ?? '';
+        if (key.isNotEmpty && seen.add(key)) {
+          allContacts.add(manager);
+        }
+      }
 
       setState(() {
-        _contacts = contacts;
-        _filteredContacts = contacts;
+        _contacts = allContacts;
+        _filteredContacts = allContacts;
         _loading = false;
       });
     } catch (e) {
@@ -708,6 +683,8 @@ class _ContactTile extends StatelessWidget {
     final email = contact['email'] as String? ?? '';
     final picture = contact['picture'] as String?;
     final hasConversation = contact['hasConversation'] as bool? ?? false;
+    final role = contact['role'] as String?;
+    final isManager = role == 'Manager';
 
     return InkWell(
       onTap: onTap,
@@ -725,12 +702,37 @@ class _ContactTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    name,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          name,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (isManager) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF6366F1).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            'Manager',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Color(0xFF6366F1),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                   if (email.isNotEmpty)
                     Text(

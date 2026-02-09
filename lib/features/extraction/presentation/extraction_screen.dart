@@ -1633,12 +1633,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             ),
           ),
         ];
-      case 1: // Events tab - pin the tab navigation
+      case 1: // Events tab - pin the chip bar navigation
         return [
           SliverPersistentHeader(
             pinned: true,
             delegate: PinnedHeaderDelegate(
-              height: 56.0,
+              height: 50.0,
               safeAreaPadding: topPadding,
               child: Container(
                 color: Colors.white,
@@ -1656,41 +1656,21 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         ),
                       ],
                     ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: kIsWeb
-                              ? WebTabNavigation(
-                                  tabs: const [
-                                    WebTab(text: 'Pending'),
-                                    WebTab(text: 'Posted'),
-                                    WebTab(text: 'Full'),
-                                    WebTab(text: 'Completed'),
-                                  ],
-                                  selectedIndex: _eventsTabController.index,
-                                  onTabSelected: (index) {
-                                    setState(() {
-                                      _eventsTabController.animateTo(index);
-                                    });
-                                  },
-                                  selectedColor: ExColors.techBlue, // Yellow
-                                )
-                              : TabBar(
-                                  controller: _eventsTabController,
-                                  tabs: const [
-                                    Tab(text: 'Pending'),
-                                    Tab(text: 'Posted'),
-                                    Tab(text: 'Full'),
-                                    Tab(text: 'Completed'),
-                                  ],
-                                  labelColor: ExColors.techBlue,
-                                  unselectedLabelColor: Colors.grey,
-                                  indicatorColor: ExColors.yellow,
-                                  isScrollable: true,
-                                  tabAlignment: TabAlignment.start,
-                                ),
-                        ),
+                    child: _buildFilterChipBar(
+                      labels: ['Pending', 'Posted', 'Full', 'Completed'],
+                      counts: [
+                        _eventsPending?.length ?? 0,
+                        _eventsAvailable?.length ?? 0,
+                        _eventsFull?.length ?? 0,
+                        _eventsCompleted?.length ?? 0,
                       ],
+                      selectedIndex: _eventsTabController.index,
+                      onSelected: (index) {
+                        setState(() {
+                          _eventsTabController.animateTo(index);
+                        });
+                      },
+                      activeColor: ExColors.navySpaceCadet,
                     ),
                   ),
                 ),
@@ -1785,12 +1765,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         ];
       case 3: // Hours tab - no pinned header needed
         return [];
-      case 4: // Catalog tab - pin the tab navigation
+      case 4: // Catalog tab - pin the chip bar navigation
         return [
           SliverPersistentHeader(
             pinned: true,
             delegate: PinnedHeaderDelegate(
-              height: 56.0,
+              height: 50.0,
               safeAreaPadding: topPadding,
               child: Container(
                 color: Colors.white,
@@ -1808,32 +1788,21 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         ),
                       ],
                     ),
-                    child: kIsWeb
-                        ? WebTabNavigation(
-                            tabs: const [
-                              WebTab(text: 'Clients'),
-                              WebTab(text: 'Roles'),
-                              WebTab(text: 'Tariffs'),
-                            ],
-                            selectedIndex: _catalogTabController.index,
-                            onTabSelected: (index) {
-                              setState(() {
-                                _catalogTabController.animateTo(index);
-                              });
-                            },
-                            selectedColor: ExColors.yellow, // Yellow
-                          )
-                        : TabBar(
-                            controller: _catalogTabController,
-                            tabs: const [
-                              Tab(text: 'Clients'),
-                              Tab(text: 'Roles'),
-                              Tab(text: 'Tariffs'),
-                            ],
-                            labelColor: ExColors.yellow, // Yellow
-                            unselectedLabelColor: Colors.grey,
-                            indicatorColor: ExColors.yellow, // Yellow
-                          ),
+                    child: _buildFilterChipBar(
+                      labels: ['Clients', 'Roles', 'Tariffs'],
+                      counts: [
+                        _clients?.length ?? 0,
+                        _roles?.length ?? 0,
+                        _tariffs?.length ?? 0,
+                      ],
+                      selectedIndex: _catalogTabController.index,
+                      onSelected: (index) {
+                        setState(() {
+                          _catalogTabController.animateTo(index);
+                        });
+                      },
+                      activeColor: ExColors.navySpaceCadet,
+                    ),
                   ),
                 ),
               ),
@@ -1977,7 +1946,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 if (_selectedIndex != 4)
                   SliverToBoxAdapter(
                     child: SizedBox(
-                      height: statusBarHeight + 200, // Dynamic based on device + header height
+                      height: statusBarHeight + 120, // Dynamic based on device + header height
                     ),
                   ),
                 ..._buildSliverContent(),
@@ -2303,246 +2272,94 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     // }
     // ===== END DASHBOARD TAB SELECTOR =====
 
-    // Events/Jobs tab - floating header card
+    // Events/Jobs tab - compact chip bar
     if (_selectedIndex == 1) {
       final pendingCount = _eventsPending?.length ?? 0;
       final availableCount = _eventsAvailable?.length ?? 0;
       final fullCount = _eventsFull?.length ?? 0;
       final pastCount = _eventsCompleted?.length ?? 0;
-      final totalEvents = pendingCount + availableCount + fullCount;
 
-      return Container(
-        margin: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: ExtractionTheme.header,
-                // gradient: LinearGradient(
-                //   colors: [
-                //     Color(0x3874d6), // Navy (Space cadet)
-                //     ExColors.oceanBlue, // Ocean blue
-                //     ExColors.techBlue, // Lighter blue
-                //   ],
-                //   begin: Alignment.topLeft,
-                //   end: Alignment.bottomRight,
-                // ),
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(16),
-                  topRight: Radius.circular(16),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(Icons.event_note, color: ExColors.yellow, size: 24), // Yellow icon
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${context.read<TerminologyProvider>().plural} Management',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '$totalEvents total • $pendingCount pending • $availableCount available • $fullCount full',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.9),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(16),
-                  bottomRight: Radius.circular(16),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: kIsWeb
-                        ? WebTabNavigation(
-                            tabs: const [
-                              WebTab(text: 'Pending'),
-                              WebTab(text: 'Posted'),
-                              WebTab(text: 'Full'),
-                              WebTab(text: 'Completed'),
-                            ],
-                            selectedIndex: _eventsTabController.index,
-                            onTabSelected: (index) {
-                              setState(() {
-                                _eventsTabController.animateTo(index);
-                              });
-                            },
-                            selectedColor: ExColors.techBlue, // Yellow
-                          )
-                        : TabBar(
-                            controller: _eventsTabController,
-                            tabs: const [
-                              Tab(text: 'Pending'),
-                              Tab(text: 'Posted'),
-                              Tab(text: 'Full'),
-                              Tab(text: 'Completed'),
-                            ],
-                            labelColor: ExColors.techBlue,
-                            unselectedLabelColor: Colors.grey,
-                            indicatorColor: ExColors.techBlue,
-                            isScrollable: true,
-                            tabAlignment: TabAlignment.start,
-                          ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+      return _buildFilterChipBar(
+        labels: ['Pending', 'Posted', 'Full', 'Completed'],
+        counts: [pendingCount, availableCount, fullCount, pastCount],
+        selectedIndex: _eventsTabController.index,
+        onSelected: (index) {
+          setState(() {
+            _eventsTabController.animateTo(index);
+          });
+        },
+        activeColor: ExColors.navySpaceCadet,
       );
     }
 
-    // Catalog tab - floating header card
+    // Catalog tab - compact chip bar
     if (_selectedIndex == 4) {
       final clientsCount = _clients?.length ?? 0;
       final rolesCount = _roles?.length ?? 0;
       final tariffsCount = _tariffs?.length ?? 0;
 
-      return Container(
-        margin: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [ExColors.coralRed, ExColors.coralOrange], // Coral gradient
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(16),
-                  topRight: Radius.circular(16),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(Icons.inventory_2, color: Colors.white, size: 24),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Catalog Management',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '$clientsCount clients • $rolesCount roles • $tariffsCount tariffs',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.9),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(16),
-                  bottomRight: Radius.circular(16),
-                ),
-              ),
-              child: kIsWeb
-                  ? WebTabNavigation(
-                      tabs: const [
-                        WebTab(text: 'Clients'),
-                        WebTab(text: 'Roles'),
-                        WebTab(text: 'Tariffs'),
-                      ],
-                      selectedIndex: _catalogTabController.index,
-                      onTabSelected: (index) {
-                        setState(() {
-                          _catalogTabController.animateTo(index);
-                        });
-                      },
-                      selectedColor: ExColors.yellow, // Yellow
-                    )
-                  : TabBar(
-                      controller: _catalogTabController,
-                      tabs: const [
-                        Tab(text: 'Clients'),
-                        Tab(text: 'Roles'),
-                        Tab(text: 'Tariffs'),
-                      ],
-                      labelColor: ExColors.yellow, // Yellow
-                      unselectedLabelColor: Colors.grey,
-                      indicatorColor: ExColors.yellow, // Yellow
-                    ),
-            ),
-          ],
-        ),
+      return _buildFilterChipBar(
+        labels: ['Clients', 'Roles', 'Tariffs'],
+        counts: [clientsCount, rolesCount, tariffsCount],
+        selectedIndex: _catalogTabController.index,
+        onSelected: (index) {
+          setState(() {
+            _catalogTabController.animateTo(index);
+          });
+        },
+        activeColor: ExColors.navySpaceCadet,
       );
     }
 
     return const SizedBox.shrink();
+  }
+
+  Widget _buildFilterChipBar({
+    required List<String> labels,
+    required List<int> counts,
+    required int selectedIndex,
+    required ValueChanged<int> onSelected,
+    required Color activeColor,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: List.generate(labels.length, (index) {
+            final isActive = index == selectedIndex;
+            return Padding(
+              padding: EdgeInsets.only(right: index < labels.length - 1 ? 8 : 0),
+              child: GestureDetector(
+                onTap: () => onSelected(index),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isActive ? activeColor : Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isActive ? activeColor : const Color(0xFFE0E0E0),
+                    ),
+                    boxShadow: isActive
+                        ? [BoxShadow(color: activeColor.withOpacity(0.3), blurRadius: 4, offset: const Offset(0, 2))]
+                        : null,
+                  ),
+                  child: Text(
+                    '${labels[index]} (${counts[index]})',
+                    style: TextStyle(
+                      color: isActive ? Colors.white : ExColors.textPrimary,
+                      fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
+        ),
+      ),
+    );
   }
 
   Widget _buildDesktopLayout(BuildContext context) {
@@ -5070,10 +4887,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   List<Widget> _buildCatalogSlivers() {
+    final statusBarHeight = MediaQuery.of(context).padding.top;
     return [
-      // Top padding to position catalog content below floating header
+      // Top padding to position catalog content below floating header + chip bar
       SliverToBoxAdapter(
-        child: SizedBox(height: 240), // Extra space to move cards down more
+        child: SizedBox(height: statusBarHeight + 120), // Dynamic: status bar + toolbar + chip bar
       ),
       SliverFillRemaining(
         child: Stack(
@@ -5918,10 +5736,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(
-          top: 36,    // Add top padding so buttons aren't hidden behind header
+          top: 16,
           left: 20,
           right: 20,
-          bottom: 20,
+          bottom: 100, // Clear bottom nav bar
         ),
         children: [
           if (kIsWeb)
@@ -5996,10 +5814,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(
-          top: 36,    // Add top padding so buttons aren't hidden behind header
+          top: 16,
           left: 20,
           right: 20,
-          bottom: 20,
+          bottom: 100, // Clear bottom nav bar
         ),
         children: [
           if (kIsWeb)
@@ -6082,10 +5900,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(
-          top: 36,    // Add top padding so buttons aren't hidden behind header
+          top: 16,
           left: 20,
           right: 20,
-          bottom: 20,
+          bottom: 100, // Clear bottom nav bar
         ),
         children: [
           if (kIsWeb)

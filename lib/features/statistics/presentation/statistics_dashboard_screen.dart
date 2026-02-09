@@ -171,9 +171,9 @@ class _StatisticsDashboardScreenState extends State<StatisticsDashboardScreen> {
     final content = Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        title: const Text('Statistics'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
+        title: const Text('Stats'),
+        backgroundColor: const Color(0xFF212C4A),
+        foregroundColor: Colors.white,
         elevation: 0,
         actions: [
           if (_isExporting)
@@ -235,20 +235,23 @@ class _StatisticsDashboardScreenState extends State<StatisticsDashboardScreen> {
                 ],
               ),
             ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _isExporting ? null : _showExportOptions,
-        icon: _isExporting
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              )
-            : const Icon(Icons.download),
-        label: Text(_isExporting ? 'Exporting...' : 'Export'),
-        backgroundColor: const Color(0xFF6366F1),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 70),
+        child: FloatingActionButton.extended(
+          onPressed: _isExporting ? null : _showExportOptions,
+          icon: _isExporting
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                )
+              : const Icon(Icons.download),
+          label: Text(_isExporting ? 'Exporting...' : 'Export'),
+          backgroundColor: const Color(0xFF212C4A),
+        ),
       ),
     );
 

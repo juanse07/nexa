@@ -3,6 +3,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:logger/logger.dart';
 import 'package:nexa/core/constants/api_constants.dart';
 import 'package:nexa/core/constants/storage_keys.dart';
+import 'package:nexa/features/auth/data/services/auth_service.dart';
 
 /// Logging interceptor for Dio requests and responses
 class LoggingInterceptor extends Interceptor {
@@ -97,8 +98,8 @@ class ErrorInterceptor extends Interceptor {
       case DioExceptionType.badResponse:
         final statusCode = err.response?.statusCode;
         if (statusCode == ApiConstants.statusUnauthorized) {
-          _logger.w('Unauthorized error - token may be expired');
-          // Here you could trigger a token refresh or logout
+          _logger.w('Unauthorized error - token expired, forcing logout');
+          AuthService.forceLogout();
         } else if (statusCode == ApiConstants.statusForbidden) {
           _logger.w('Forbidden error - insufficient permissions');
         } else if (statusCode == ApiConstants.statusNotFound) {
