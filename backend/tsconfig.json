@@ -50,6 +50,8 @@
     "node_modules",
     "dist",
     "coverage",
+    "scripts",
+    "load-tests",
     "**/*.test.ts",
     "**/*.spec.ts",
     "src/tests"
