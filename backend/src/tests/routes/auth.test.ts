@@ -2,6 +2,32 @@ import { getTestApp, createAuthenticatedManager, createAuthenticatedStaffUser, g
 import { UserModel } from '../../models/user';
 import { ManagerModel } from '../../models/manager';
 
+// Provide test Google Client IDs so audience check passes
+jest.mock('../../config/env', () => ({
+  ENV: {
+    port: 4000,
+    mongoUri: 'mongodb://localhost:27017/test',
+    nodeEnv: 'test',
+    allowedOrigins: '',
+    jwtSecret: 'test-jwt-secret-for-testing',
+    googleClientIdIos: ['test-ios-client-id'],
+    googleClientIdAndroid: ['test-android-client-id'],
+    googleClientIdWeb: ['test-web-client-id'],
+    googleServerClientId: [],
+    appleBundleId: ['com.test.app'],
+    appleServiceId: ['com.test.service'],
+    adminKey: '',
+    firebaseProjectId: '',
+    firebaseClientEmail: '',
+    firebasePrivateKey: '',
+    r2AccountId: '',
+    r2AccessKeyId: '',
+    r2SecretAccessKey: '',
+    r2BucketName: 'test-bucket',
+    r2PublicUrl: '',
+  },
+}));
+
 // Mock external auth providers
 jest.mock('google-auth-library', () => ({
   OAuth2Client: jest.fn().mockImplementation(() => ({
