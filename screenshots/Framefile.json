@@ -1,0 +1,59 @@
+{
+  "device_frame_version": "latest",
+  "default": {
+    "title": {
+      "font_size": 48,
+      "font": "SF Pro Display",
+      "color": "#FFFFFF"
+    },
+    "background": "#2C3E50",
+    "padding": 50,
+    "show_complete_frame": true,
+    "stack_title": false,
+    "title_below_image": false
+  },
+  "data": [
+    {
+      "filter": "01_events",
+      "title": {
+        "text": "Manage All Your Events"
+      }
+    },
+    {
+      "filter": "02_chat",
+      "title": {
+        "text": "Team Communication"
+      }
+    },
+    {
+      "filter": "03_catalog",
+      "title": {
+        "text": "Staff & Role Catalog"
+      }
+    },
+    {
+      "filter": "04_attendance",
+      "title": {
+        "text": "Real-Time Attendance"
+      }
+    },
+    {
+      "filter": "05_statistics",
+      "title": {
+        "text": "Insightful Analytics"
+      }
+    },
+    {
+      "filter": "06_event_detail",
+      "title": {
+        "text": "Complete Event Details"
+      }
+    },
+    {
+      "filter": "07_ai_chat",
+      "title": {
+        "text": "AI-Powered Assistant"
+      }
+    }
+  ]
+}

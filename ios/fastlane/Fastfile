@@ -1,0 +1,48 @@
+default_platform(:ios)
+
+platform :ios do
+  desc "Capture App Store screenshots on multiple iOS simulators"
+  lane :screenshots do
+    # Target simulators — App Store requires 6.7", 6.1", and iPad 12.9"
+    devices = [
+      "iPhone 15 Pro Max",  # 6.7"
+      "iPhone 15 Pro",       # 6.1"
+      "iPad Pro 12.9-inch (6th generation)",
+    ]
+
+    devices.each do |device|
+      UI.message("📸 Capturing screenshots on #{device}...")
+
+      # Boot simulator
+      sh("xcrun simctl boot '#{device}' 2>/dev/null || true")
+
+      # Set clean status bar (9:41, full battery, full signal)
+      sh("xcrun simctl status_bar '#{device}' override " \
+         "--time '9:41' " \
+         "--batteryState charged " \
+         "--batteryLevel 100 " \
+         "--cellularMode active " \
+         "--cellularBars 4 " \
+         "--wifiBars 3 " \
+         "--operatorName '' ")
+
+      # Run the screenshot integration test
+      sh("cd '#{ENV['PWD']}/..' && " \
+         "flutter test integration_test/screenshots/screenshot_test.dart " \
+         "-d '#{device}'")
+
+      # Clear status bar override
+      sh("xcrun simctl status_bar '#{device}' clear 2>/dev/null || true")
+    end
+
+    UI.success("✅ All iOS screenshots captured!")
+  end
+
+  desc "Apply device frames to screenshots"
+  lane :frame do
+    frameit(
+      path: "../screenshots/store",
+      white: true,
+    )
+  end
+end
