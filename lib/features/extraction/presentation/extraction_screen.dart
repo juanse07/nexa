@@ -67,7 +67,6 @@ import '../../chat/data/services/chat_service.dart';
 import '../../chat/domain/entities/conversation.dart';
 import '../../chat/presentation/chat_screen.dart';
 import 'ai_chat_screen.dart';
-import '../../attendance/services/attendance_service.dart';
 import '../../../core/widgets/section_navigation_dropdown.dart';
 import '../../../core/widgets/web_tab_navigation.dart';
 import '../../main/presentation/main_screen.dart';
@@ -7356,304 +7355,61 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             ).then((_) => _loadStaff());
           },
           child: Container(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: Colors.grey.shade100),
             ),
+            clipBehavior: Clip.hardEdge,
             child: Row(
               children: [
                 UserAvatar(
                   imageUrl: picture,
                   fullName: name,
                   email: email,
-                  radius: 22,
+                  radius: 18,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        name.isEmpty ? 'Unknown' : name,
+                        '${name.isEmpty ? 'Unknown' : name}${isFav ? ' ⭐' : ''}',
                         style: const TextStyle(
-                          fontSize: 15,
+                          fontSize: 14,
                           fontWeight: FontWeight.w600,
                           color: ExColors.textPrimary,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          if (roles.isNotEmpty)
-                            ...roles.take(2).map((r) => Padding(
-                                  padding: const EdgeInsets.only(right: 4),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: ExColors.techBlue.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Text(
-                                      r.toString(),
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w500,
-                                        color: ExColors.techBlue,
-                                      ),
-                                    ),
-                                  ),
-                                )),
-                          if (roles.length > 2)
-                            Text(
-                              '+${roles.length - 2}',
-                              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-                            ),
-                          if (shiftCount > 0) ...[
-                            const SizedBox(width: 8),
-                            Text(
-                              '$shiftCount shifts',
-                              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-                            ),
-                          ],
-                        ],
+                      const SizedBox(height: 2),
+                      Text(
+                        [
+                          if (roles.isNotEmpty) roles.take(2).join(', '),
+                          if (roles.length > 2) '+${roles.length - 2}',
+                          if (shiftCount > 0) '$shiftCount shifts',
+                          if ((staff['groups'] as List<dynamic>?)?.isNotEmpty == true)
+                            '${(staff['groups'] as List<dynamic>).length} groups',
+                        ].join(' · '),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
                 ),
-                if ((staff['groups'] as List<dynamic>?)?.isNotEmpty == true)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 4),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.deepPurple.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.group_work, size: 12, color: Colors.deepPurple.shade400),
-                          const SizedBox(width: 2),
-                          Text(
-                            '${(staff['groups'] as List<dynamic>).length}',
-                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.deepPurple.shade400),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                if (isFav)
-                  const Padding(
-                    padding: EdgeInsets.only(right: 4),
-                    child: Icon(Icons.star, color: Colors.amber, size: 20),
-                  ),
-                IconButton(
-                  icon: const Icon(Icons.login, size: 20),
-                  color: ExColors.successDark,
-                  tooltip: 'Clock In',
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                  onPressed: () => _quickClockInStaff(staff),
-                ),
-                Icon(Icons.chevron_right, color: Colors.grey.shade400, size: 22),
+                Icon(Icons.chevron_right, color: Colors.grey.shade400, size: 18),
               ],
             ),
           ),
         ),
       ),
-    );
-  }
-
-  Future<void> _quickClockInStaff(Map<String, dynamic> staff) async {
-    final userKey = staff['userKey'] as String?;
-    if (userKey == null || userKey.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Staff member has no userKey')),
-        );
-      }
-      return;
-    }
-
-    final staffName = staff['name'] as String? ??
-        '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'.trim();
-
-    // Show loading indicator
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const SizedBox(
-                width: 16, height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-              ),
-              const SizedBox(width: 12),
-              Text('Looking up events for $staffName...'),
-            ],
-          ),
-          duration: const Duration(seconds: 10),
-        ),
-      );
-    }
-
-    try {
-      final allEvents = await _eventService.fetchUserEvents(userKey);
-
-      // Filter to today's events where staff is accepted
-      final now = DateTime.now();
-      final todayStart = DateTime(now.year, now.month, now.day);
-      final todayEnd = todayStart.add(const Duration(days: 1));
-
-      final todayEvents = allEvents.where((e) {
-        final rawDate = e['date'];
-        if (rawDate is! String || rawDate.isEmpty) return false;
-        try {
-          final eventDate = DateTime.parse(rawDate);
-          if (eventDate.isBefore(todayStart) || !eventDate.isBefore(todayEnd)) {
-            return false;
-          }
-        } catch (_) {
-          return false;
-        }
-        // Check staff is in accepted_staff with response == 'accepted'
-        final accepted = e['accepted_staff'] as List<dynamic>?;
-        if (accepted == null) return false;
-        return accepted.any((s) {
-          if (s is! Map<String, dynamic>) return false;
-          return s['userKey'] == userKey && s['response'] == 'accepted';
-        });
-      }).toList();
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-
-      if (todayEvents.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No events today for $staffName')),
-        );
-        return;
-      }
-
-      if (todayEvents.length == 1) {
-        await _performClockIn(todayEvents.first, userKey, staffName);
-      } else {
-        await _showEventPickerForClockIn(todayEvents, userKey, staffName);
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}')),
-      );
-    }
-  }
-
-  Future<void> _performClockIn(
-    Map<String, dynamic> event,
-    String userKey,
-    String staffName,
-  ) async {
-    final eventId = event['_id']?.toString() ?? '';
-    if (eventId.isEmpty) return;
-
-    final result = await AttendanceService.bulkClockIn(
-      eventId: eventId,
-      userKeys: [userKey],
-    );
-
-    if (!mounted) return;
-
-    if (result == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Clock-in failed. Please try again.')),
-      );
-      return;
-    }
-
-    final results = result['results'] as List<dynamic>?;
-    if (results != null && results.isNotEmpty) {
-      final first = results.first as Map<String, dynamic>;
-      final status = first['status'] as String?;
-      if (status == 'already_clocked_in') {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$staffName is already clocked in')),
-        );
-      } else if (status == 'success') {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('$staffName clocked in successfully'),
-            backgroundColor: ExColors.successDark,
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(first['message']?.toString() ?? 'Clock-in failed')),
-        );
-      }
-    }
-  }
-
-  Future<void> _showEventPickerForClockIn(
-    List<Map<String, dynamic>> events,
-    String userKey,
-    String staffName,
-  ) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) {
-        bool isClockingIn = false;
-        return StatefulBuilder(
-          builder: (ctx, setSheetState) {
-            return Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Clock in $staffName — pick event',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  if (isClockingIn)
-                    const Center(child: CircularProgressIndicator())
-                  else
-                    ...events.map((e) {
-                      final eventName = e['event_name']?.toString() ??
-                          e['shift_name']?.toString() ??
-                          'Untitled Event';
-                      final venue = e['venue_name']?.toString() ?? '';
-                      final startTime = e['start_time']?.toString() ?? '';
-                      return ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.event, color: ExColors.techBlue),
-                        title: Text(eventName),
-                        subtitle: Text(
-                          [venue, startTime].where((s) => s.isNotEmpty).join(' · '),
-                        ),
-                        onTap: () async {
-                          setSheetState(() => isClockingIn = true);
-                          await _performClockIn(e, userKey, staffName);
-                          if (ctx.mounted) Navigator.of(ctx).pop();
-                        },
-                      );
-                    }),
-                ],
-              ),
-            );
-          },
-        );
-      },
     );
   }
 

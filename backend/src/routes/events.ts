@@ -1822,7 +1822,7 @@ router.get('/events/attendance-analytics', requireAuth, async (req, res) => {
     ).lean();
 
     let currentlyWorking = 0;
-    let totalHoursToday = 0;
+    let totalHoursPeriod = 0;
     const dailyHours: { [date: string]: number } = {};
 
     // Initialize daily hours for all days in range
@@ -1833,39 +1833,52 @@ router.get('/events/attendance-analytics', requireAuth, async (req, res) => {
       currentDate.setDate(currentDate.getDate() + 1);
     }
 
-    const today = new Date().toISOString().split('T')[0];
-
     for (const event of events) {
       const acceptedStaff = (event.accepted_staff || []) as any[];
       const eventDate = event.date ? new Date(event.date).toISOString().split('T')[0] : null;
 
       for (const staff of acceptedStaff) {
+        if (staff.response !== 'accepted' && staff.response !== 'accept') continue;
+
         const attendance = (staff.attendance || []) as any[];
 
-        for (const record of attendance) {
-          if (!record.clockInAt) continue;
+        if (attendance.length > 0) {
+          for (const record of attendance) {
+            if (!record.clockInAt) continue;
 
-          const clockIn = new Date(record.clockInAt);
-          const clockInDate = clockIn.toISOString().split('T')[0] as string;
-          const clockOut = record.clockOutAt ? new Date(record.clockOutAt) : null;
+            const clockIn = new Date(record.clockInAt);
+            const clockInDate = clockIn.toISOString().split('T')[0] as string;
+            const clockOut = record.clockOutAt ? new Date(record.clockOutAt) : null;
 
-          // Count currently working (clocked in, not clocked out)
-          if (!clockOut) {
-            currentlyWorking++;
+            // Count currently working (clocked in, not clocked out)
+            if (!clockOut) {
+              currentlyWorking++;
+            }
+
+            // Calculate hours worked
+            const endTime = clockOut || new Date();
+            const hoursWorked = (endTime.getTime() - clockIn.getTime()) / (1000 * 60 * 60);
+
+            // Add to daily totals
+            if (clockInDate in dailyHours) {
+              dailyHours[clockInDate]! += hoursWorked;
+            }
+
+            totalHoursPeriod += hoursWorked;
           }
-
-          // Calculate hours worked
-          const endTime = clockOut || new Date();
-          const hoursWorked = (endTime.getTime() - clockIn.getTime()) / (1000 * 60 * 60);
-
-          // Add to daily totals
-          if (clockInDate in dailyHours) {
-            dailyHours[clockInDate]! += hoursWorked;
-          }
-
-          // Add to today's total
-          if (clockInDate === today) {
-            totalHoursToday += hoursWorked;
+        } else if (eventDate) {
+          // No attendance records — fall back to scheduled event hours
+          const startTime = (event as any).start_time;
+          const endTime = (event as any).end_time;
+          if (startTime && endTime) {
+            const startParts = startTime.split(':').map(Number);
+            const endParts = endTime.split(':').map(Number);
+            let hours = (endParts[0] + endParts[1] / 60) - (startParts[0] + startParts[1] / 60);
+            if (hours < 0) hours += 24;
+            if (eventDate in dailyHours) {
+              dailyHours[eventDate]! += hours;
+            }
+            totalHoursPeriod += hours;
           }
         }
       }
@@ -1888,7 +1901,7 @@ router.get('/events/attendance-analytics', requireAuth, async (req, res) => {
 
     return res.json({
       currentlyWorking,
-      todayTotalHours: Math.round(totalHoursToday * 10) / 10,
+      todayTotalHours: Math.round(totalHoursPeriod * 10) / 10,
       pendingFlags: pendingFlagsCount,
       weeklyHours,
       dateRange: {

@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { requireAuth } from '../middleware/requireAuth';
 import { EventModel } from '../models/event';
 import { TariffModel } from '../models/tariff';
+import { RoleModel } from '../models/role';
+import { ClientModel } from '../models/client';
 import { UserModel } from '../models/user';
 import { FlaggedAttendanceModel } from '../models/flaggedAttendance';
 import { resolveManagerForRequest } from '../utils/manager';
@@ -482,6 +484,32 @@ router.get('/statistics/manager/summary', requireAuth, async (req: Request, res:
       date: { $gte: start, $lte: end }
     }).lean();
 
+    // Pre-load tariff rate lookup: "clientName|roleName" → rate
+    const [allTariffs, allRoles, allClients] = await Promise.all([
+      TariffModel.find({ managerId: manager._id }).lean(),
+      RoleModel.find({ managerId: manager._id }).lean(),
+      ClientModel.find({ managerId: manager._id }).lean(),
+    ]);
+
+    const roleIdToName: Record<string, string> = {};
+    for (const r of allRoles) {
+      roleIdToName[String(r._id)] = r.name.trim().toLowerCase();
+    }
+    const clientIdToName: Record<string, string> = {};
+    for (const c of allClients) {
+      clientIdToName[String(c._id)] = c.name.trim().toLowerCase();
+    }
+
+    // Build tariff map: "clientNorm|roleNorm" → rate
+    const tariffMap: Record<string, number> = {};
+    for (const t of allTariffs) {
+      const cName = clientIdToName[String(t.clientId)] || '';
+      const rName = roleIdToName[String(t.roleId)] || '';
+      if (cName && rName) {
+        tariffMap[`${cName}|${rName}`] = t.rate;
+      }
+    }
+
     let totalEvents = events.length;
     let completedEvents = 0;
     let cancelledEvents = 0;
@@ -499,15 +527,16 @@ router.get('/statistics/manager/summary', requireAuth, async (req: Request, res:
 
       totalStaffAssignments += acceptedStaff.length;
 
+      const eventClientName = ((event as any).client_name || '').trim().toLowerCase();
+
       for (const staff of acceptedStaff) {
         const attendance = (staff.attendance || [])[0];
         const hours = attendance?.approvedHours ||
           calculateHours((event as any).start_time, (event as any).end_time);
 
-        // Get pay rate
-        const roles = (event as any).roles || [];
-        const roleInfo = roles.find((r: any) => r.role_name === staff.role);
-        const hourlyRate = roleInfo?.pay_rate_info?.amount || 0;
+        // Look up pay rate from tariffs
+        const staffRoleNorm = (staff.role || '').trim().toLowerCase();
+        const hourlyRate = tariffMap[`${eventClientName}|${staffRoleNorm}`] || 0;
 
         totalStaffHours += hours;
         totalPayroll += hourlyRate * hours;
@@ -594,9 +623,34 @@ router.get('/statistics/manager/payroll', requireAuth, async (req: Request, res:
     // Get all completed events in period
     const events = await EventModel.find({
       managerId: manager._id,
-      status: { $in: ['completed', 'in_progress', 'fulfilled'] },
+      status: { $in: ['completed', 'in_progress', 'fulfilled', 'published'] },
       date: { $gte: start, $lte: end }
     }).lean();
+
+    // Pre-load tariff rate lookup
+    const [allTariffs, allRoles, allClients] = await Promise.all([
+      TariffModel.find({ managerId: manager._id }).lean(),
+      RoleModel.find({ managerId: manager._id }).lean(),
+      ClientModel.find({ managerId: manager._id }).lean(),
+    ]);
+
+    const roleIdToName: Record<string, string> = {};
+    for (const r of allRoles) {
+      roleIdToName[String(r._id)] = r.name.trim().toLowerCase();
+    }
+    const clientIdToName: Record<string, string> = {};
+    for (const c of allClients) {
+      clientIdToName[String(c._id)] = c.name.trim().toLowerCase();
+    }
+
+    const tariffMap: Record<string, number> = {};
+    for (const t of allTariffs) {
+      const cName = clientIdToName[String(t.clientId)] || '';
+      const rName = roleIdToName[String(t.roleId)] || '';
+      if (cName && rName) {
+        tariffMap[`${cName}|${rName}`] = t.rate;
+      }
+    }
 
     // Aggregate by staff member
     const staffPayroll: Record<string, {
@@ -615,16 +669,17 @@ router.get('/statistics/manager/payroll', requireAuth, async (req: Request, res:
         (s: any) => s.response === 'accepted' || s.response === 'accept'
       );
 
+      const eventClientName = ((event as any).client_name || '').trim().toLowerCase();
+
       for (const staff of acceptedStaff) {
         const userKey = staff.userKey;
         const attendance = (staff.attendance || [])[0];
         const hours = attendance?.approvedHours ||
           calculateHours((event as any).start_time, (event as any).end_time);
 
-        // Get pay rate
-        const roles = (event as any).roles || [];
-        const roleInfo = roles.find((r: any) => r.role_name === staff.role);
-        const hourlyRate = roleInfo?.pay_rate_info?.amount || 0;
+        // Look up pay rate from tariffs
+        const staffRoleNorm = (staff.role || '').trim().toLowerCase();
+        const hourlyRate = tariffMap[`${eventClientName}|${staffRoleNorm}`] || 0;
 
         if (!staffPayroll[userKey]) {
           staffPayroll[userKey] = {

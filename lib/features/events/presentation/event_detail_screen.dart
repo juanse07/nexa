@@ -5,6 +5,7 @@ import '../../extraction/presentation/pending_publish_screen.dart';
 import '../../extraction/presentation/pending_edit_screen.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
 import '../../attendance/presentation/bulk_clock_in_screen.dart';
+import '../../attendance/services/attendance_service.dart';
 
 class EventDetailScreen extends StatefulWidget {
   final Map<String, dynamic> event;
@@ -268,9 +269,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             // Accepted Staff Section
             if (acceptedStaff.isNotEmpty) ...[
               const SizedBox(height: 24),
-              const Text(
-                'Accepted Staff',
-                style: TextStyle(
+              Text(
+                'Accepted Staff (${acceptedStaff.length})',
+                style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
                   color: AppColors.textDark,
@@ -334,7 +335,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               )
                             : null,
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -370,10 +371,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                           ],
                         ),
                       ),
-                      if (status != null)
+                      if (status != null) ...[
+                        const SizedBox(width: 12),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
+                            horizontal: 10,
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
@@ -389,9 +391,34 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                             ),
                           ),
                         ),
+                        const SizedBox(width: 12),
+                      ],
+                      // Clock-in button for published events with accepted staff
+                      if (event['status'] != 'draft' && userKey != null) ...[
+                        const SizedBox(width: 10),
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () => _confirmAndClockIn(userKey!, displayName),
+                            borderRadius: BorderRadius.circular(6),
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: AppColors.success.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Icon(
+                                Icons.timer_outlined,
+                                size: 18,
+                                color: AppColors.success,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                       // Only show remove button for upcoming events (more elegant)
                       if (isUpcoming && userKey != null) ...[
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 10),
                         Material(
                           color: Colors.transparent,
                           child: InkWell(
@@ -797,6 +824,78 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       return !eventDate.isAfter(todayStart.add(const Duration(days: 1)).subtract(const Duration(milliseconds: 1)));
     } catch (_) {
       return false;
+    }
+  }
+
+  Future<void> _confirmAndClockIn(String userKey, String staffName) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Clock In'),
+        content: Text('Clock in $staffName for this event?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.success,
+            ),
+            child: const Text('Clock In'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    _clockInStaffMember(userKey, staffName);
+  }
+
+  Future<void> _clockInStaffMember(String userKey, String staffName) async {
+    final eventId = event['_id']?.toString() ?? '';
+    if (eventId.isEmpty) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Clocking in $staffName...')),
+    );
+
+    final result = await AttendanceService.bulkClockIn(
+      eventId: eventId,
+      userKeys: [userKey],
+    );
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+    if (result == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Clock-in failed. Please try again.')),
+      );
+      return;
+    }
+
+    final results = result['results'] as List<dynamic>?;
+    if (results != null && results.isNotEmpty) {
+      final first = results.first as Map<String, dynamic>;
+      final status = first['status'] as String?;
+      if (status == 'already_clocked_in') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$staffName is already clocked in')),
+        );
+      } else if (status == 'success') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$staffName clocked in successfully'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(first['message']?.toString() ?? 'Clock-in failed')),
+        );
+      }
     }
   }
 

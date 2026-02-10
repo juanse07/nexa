@@ -323,7 +323,7 @@ router.get('/staff/:userKey', requireAuth, async (req: Request, res: Response) =
       const staffEntry = (event.accepted_staff || []).find((s: any) => s.userKey === userKey);
       return {
         eventId: String(event._id),
-        eventName: event.event_name || event.name || 'Untitled',
+        eventName: event.shift_name || event.event_name || [event.client_name, event.venue_name].filter(Boolean).join(' - ') || 'Untitled',
         date: event.date,
         startTime: event.start_time,
         endTime: event.end_time,
