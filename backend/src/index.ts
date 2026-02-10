@@ -207,8 +207,21 @@ export async function createServer() {
   // Admin: fulfill expired events (fill staff, attendance, tariffs, set completed)
   app.post('/api/admin/fulfill-expired', async (req, res) => {
     try {
-      const provided = (req.headers['x-admin-key'] as string) || (req.query.key as string) || '';
-      if (!ENV.adminKey || provided !== ENV.adminKey) {
+      // Auth: admin key OR valid manager JWT
+      const adminKey = (req.headers['x-admin-key'] as string) || (req.query.key as string) || '';
+      const authHeader = req.headers.authorization || '';
+      let authorized = false;
+      if (ENV.adminKey && adminKey === ENV.adminKey) {
+        authorized = true;
+      } else if (authHeader.startsWith('Bearer ')) {
+        try {
+          const jwt = await import('jsonwebtoken');
+          const token = authHeader.split(' ')[1]!;
+          const decoded = jwt.default.verify(token, ENV.jwtSecret) as any;
+          if (decoded && decoded.managerId) authorized = true;
+        } catch { /* invalid token */ }
+      }
+      if (!authorized) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
 
