@@ -37,6 +37,8 @@ import '../services/google_places_service.dart';
 // import '../services/pending_events_service.dart'; // DEPRECATED: Now using backend draft events
 import '../services/roles_service.dart';
 import '../services/tariffs_service.dart';
+import '../services/staff_service.dart';
+import '../services/group_service.dart';
 import '../services/users_service.dart';
 import '../services/chat_event_service.dart';
 import '../widgets/modern_address_field.dart';
@@ -51,6 +53,7 @@ import 'mixins/event_data_mixin.dart';
 import 'pending_publish_screen.dart';
 import 'package:nexa/shared/widgets/initials_avatar.dart';
 import 'pending_edit_screen.dart';
+import 'staff_detail_screen.dart';
 import '../../users/presentation/pages/manager_profile_page.dart';
 import '../../users/presentation/pages/user_events_screen.dart';
 import '../../events/presentation/event_detail_screen.dart';
@@ -132,6 +135,18 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   List<Map<String, dynamic>>? _clients;
   bool _isClientsLoading = false;
   String? _clientsError;
+
+  // Staff listing state
+  List<Map<String, dynamic>>? _staffMembers;
+  bool _isStaffLoading = false;
+  String? _staffError;
+  String _staffSearchQuery = '';
+  String? _staffFilterRole;
+  String? _staffFilterGroup;
+  bool _staffFilterFavorite = false;
+  List<Map<String, dynamic>> _staffGroups = [];
+  late final StaffService _staffService;
+  late final GroupService _groupService;
 
   final _formKey = GlobalKey<FormState>();
   final _eventNameController = TextEditingController();
@@ -230,7 +245,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     _selectedIndex = widget.initialScreenIndex; // Set main screen tab
     _createTabController = TabController(length: 3, vsync: this, initialIndex: widget.initialIndex);
     _eventsTabController = TabController(length: 4, vsync: this, initialIndex: widget.initialEventsTabIndex);
-    _catalogTabController = TabController(length: 3, vsync: this);
+    _catalogTabController = TabController(length: 4, vsync: this);
     _searchController.addListener(_onSearchChanged);
 
     // Initialize animation controllers for header hide/show
@@ -288,10 +303,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final api = GetIt.I<ApiClient>();
     final storage = GetIt.I<FlutterSecureStorage>();
     _managerService = ManagerService(api, storage);
+    _staffService = StaffService();
+    _groupService = GroupService();
+    _loadStaffGroups();
     _loadEvents();
     _loadClients();
     _loadRoles();
     _loadTariffs();
+    _loadStaff();
     _loadDraftIfAny();
     _loadPendingDrafts();
     _loadProfilePicture();
@@ -1788,11 +1807,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       ],
                     ),
                     child: _buildFilterChipBar(
-                      labels: ['Clients', 'Roles', 'Tariffs'],
+                      labels: ['Clients', 'Roles', 'Tariffs', 'Staff'],
                       counts: [
                         _clients?.length ?? 0,
                         _roles?.length ?? 0,
                         _tariffs?.length ?? 0,
+                        _staffMembers?.length ?? 0,
                       ],
                       selectedIndex: _catalogTabController.index,
                       onSelected: (index) {
@@ -1877,6 +1897,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   _buildClientsInner(),
                   _buildRolesInner(),
                   _buildTariffsInner(),
+                  _buildStaffInner(),
                 ],
               ),
               // Floating Action Button for adding items
@@ -2311,10 +2332,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       final clientsCount = _clients?.length ?? 0;
       final rolesCount = _roles?.length ?? 0;
       final tariffsCount = _tariffs?.length ?? 0;
+      final staffCount = _staffMembers?.length ?? 0;
 
       return _buildFilterChipBar(
-        labels: ['Clients', 'Roles', 'Tariffs'],
-        counts: [clientsCount, rolesCount, tariffsCount],
+        labels: ['Clients', 'Roles', 'Tariffs', 'Staff'],
+        counts: [clientsCount, rolesCount, tariffsCount, staffCount],
         selectedIndex: _catalogTabController.index,
         onSelected: (index) {
           setState(() {
@@ -5266,7 +5288,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           children: [
             TabBarView(
               controller: _catalogTabController,
-              children: [_buildClientsInner(), _buildRolesInner(), _buildTariffsInner()],
+              children: [_buildClientsInner(), _buildRolesInner(), _buildTariffsInner(), _buildStaffInner()],
             ),
             // Floating Action Button further up, white background (turned off look)
             Positioned(
@@ -5306,6 +5328,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         break;
       case 2: // Tariffs tab
         _showCreateTariffDialog();
+        return;
+      case 3: // Staff tab — staff are added via team invites, not catalog
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Staff members are added through team invites'),
+            backgroundColor: ExColors.techBlue,
+          ),
+        );
         return;
     }
 
@@ -6421,10 +6451,408 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     );
   }
 
+  // ============================================================================
+  // STAFF TAB
+  // ============================================================================
+
+  Future<void> _loadStaffGroups() async {
+    try {
+      final groups = await _groupService.fetchGroups();
+      if (mounted) setState(() => _staffGroups = groups);
+    } catch (_) {}
+  }
+
+  Future<void> _loadStaff() async {
+    setState(() {
+      _isStaffLoading = true;
+      _staffError = null;
+    });
+    try {
+      final result = await _staffService.fetchStaff(
+        q: _staffSearchQuery.isNotEmpty ? _staffSearchQuery : null,
+        favorite: _staffFilterFavorite ? true : null,
+        groupId: _staffFilterGroup,
+      );
+      final items = (result['items'] as List<dynamic>?)
+          ?.map((e) => e as Map<String, dynamic>)
+          .toList() ?? [];
+      setState(() {
+        _staffMembers = items;
+        _isStaffLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _staffError = e.toString();
+        _isStaffLoading = false;
+      });
+    }
+  }
+
+  Widget _buildStaffInner() {
+    List<Map<String, dynamic>> items = _staffMembers ?? const [];
+
+    // Client-side role filter
+    if (_staffFilterRole != null && _staffFilterRole!.isNotEmpty) {
+      items = items.where((s) {
+        final roles = (s['roles'] as List<dynamic>?) ?? [];
+        return roles.any((r) => r.toString().toLowerCase() == _staffFilterRole!.toLowerCase());
+      }).toList();
+    }
+
+    // Collect all unique role names for filter chips
+    final allRoles = <String>{};
+    for (final s in _staffMembers ?? []) {
+      final roles = (s['roles'] as List<dynamic>?) ?? [];
+      for (final r in roles) {
+        if (r != null && r.toString().isNotEmpty) allRoles.add(r.toString());
+      }
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadStaff,
+      color: ExColors.techBlue,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(
+          top: 16,
+          left: 20,
+          right: 20,
+          bottom: 100,
+        ),
+        children: [
+          if (kIsWeb)
+            Align(
+              alignment: Alignment.centerRight,
+              child: _maybeWebRefreshButton(
+                onPressed: _loadStaff,
+                label: 'Refresh staff',
+                padding: const EdgeInsets.only(top: 12),
+              ),
+            ),
+          if (kIsWeb) const SizedBox(height: 4),
+          // Search bar
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: TextField(
+              decoration: InputDecoration(
+                hintText: 'Search staff...',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                suffixIcon: _staffSearchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: () {
+                          setState(() => _staffSearchQuery = '');
+                          _loadStaff();
+                        },
+                      )
+                    : null,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: ExColors.techBlue),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                filled: true,
+                fillColor: Colors.white,
+              ),
+              onChanged: (value) {
+                _staffSearchQuery = value;
+              },
+              onSubmitted: (_) => _loadStaff(),
+            ),
+          ),
+          // Role filter chips
+          SizedBox(
+            height: 36,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                _buildStaffFilterChip('All', _staffFilterRole == null && !_staffFilterFavorite && _staffFilterGroup == null, () {
+                  setState(() {
+                    _staffFilterRole = null;
+                    _staffFilterFavorite = false;
+                    _staffFilterGroup = null;
+                  });
+                  _loadStaff();
+                }),
+                const SizedBox(width: 8),
+                _buildStaffFilterChip(
+                  'Favorites',
+                  _staffFilterFavorite,
+                  () {
+                    setState(() {
+                      _staffFilterFavorite = !_staffFilterFavorite;
+                      _staffFilterRole = null;
+                      _staffFilterGroup = null;
+                    });
+                    _loadStaff();
+                  },
+                  icon: Icons.star,
+                ),
+                ..._staffGroups.map((group) {
+                  final gid = (group['id'] ?? '').toString();
+                  final name = (group['name'] ?? '').toString();
+                  final colorHex = group['color'] as String?;
+                  return Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: _buildStaffFilterChip(
+                      name,
+                      _staffFilterGroup == gid,
+                      () {
+                        setState(() {
+                          _staffFilterGroup = _staffFilterGroup == gid ? null : gid;
+                          _staffFilterRole = null;
+                          _staffFilterFavorite = false;
+                        });
+                        _loadStaff();
+                      },
+                      chipColor: _parseHexColor(colorHex),
+                    ),
+                  );
+                }),
+                ...allRoles.map((role) => Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: _buildStaffFilterChip(role, _staffFilterRole == role, () {
+                        setState(() {
+                          _staffFilterRole = _staffFilterRole == role ? null : role;
+                          _staffFilterFavorite = false;
+                          _staffFilterGroup = null;
+                        });
+                      }),
+                    )),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Loading
+          if (_isStaffLoading && items.isEmpty)
+            const Center(child: LoadingIndicator(text: 'Loading staff...')),
+          // Error
+          if (_staffError != null) ...[
+            ErrorBanner(message: _staffError!),
+            const SizedBox(height: 12),
+          ],
+          // Empty
+          if (!_isStaffLoading && items.isEmpty && _staffError == null)
+            Container(
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.grey.shade100, width: 1),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 20,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Icon(Icons.people_outline, size: 48, color: Colors.grey.shade400),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No staff members yet',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.grey.shade700),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Invite team members to get started',
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+                  ),
+                ],
+              ),
+            ),
+          // List
+          ...items.map((s) => _buildStaffListTile(s)),
+        ],
+      ),
+    );
+  }
+
+  Color? _parseHexColor(String? hex) {
+    if (hex == null || hex.isEmpty) return null;
+    try {
+      final cleaned = hex.replaceFirst('#', '');
+      return Color(int.parse('FF$cleaned', radix: 16));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Widget _buildStaffFilterChip(String label, bool isSelected, VoidCallback onTap, {IconData? icon, Color? chipColor}) {
+    final activeColor = chipColor ?? ExColors.navySpaceCadet;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? activeColor : Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: isSelected ? activeColor : (chipColor?.withOpacity(0.5) ?? Colors.grey.shade300),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 14, color: isSelected ? Colors.white : Colors.amber),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: isSelected ? Colors.white : (chipColor ?? ExColors.textSecondary),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStaffListTile(Map<String, dynamic> staff) {
+    final name = staff['name'] as String? ??
+        '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'.trim();
+    final roles = (staff['roles'] as List<dynamic>?) ?? [];
+    final isFav = staff['isFavorite'] == true;
+    final shiftCount = staff['shiftCount'] as int? ?? 0;
+    final picture = staff['picture'] as String?;
+    final email = staff['email'] as String?;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () {
+            Navigator.of(context).push<void>(
+              MaterialPageRoute<void>(
+                builder: (_) => StaffDetailScreen(staff: staff),
+              ),
+            ).then((_) => _loadStaff());
+          },
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.grey.shade100),
+            ),
+            child: Row(
+              children: [
+                UserAvatar(
+                  imageUrl: picture,
+                  fullName: name,
+                  email: email,
+                  radius: 22,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name.isEmpty ? 'Unknown' : name,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: ExColors.textPrimary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          if (roles.isNotEmpty)
+                            ...roles.take(2).map((r) => Padding(
+                                  padding: const EdgeInsets.only(right: 4),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: ExColors.techBlue.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      r.toString(),
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w500,
+                                        color: ExColors.techBlue,
+                                      ),
+                                    ),
+                                  ),
+                                )),
+                          if (roles.length > 2)
+                            Text(
+                              '+${roles.length - 2}',
+                              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                            ),
+                          if (shiftCount > 0) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              '$shiftCount shifts',
+                              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                if ((staff['groups'] as List<dynamic>?)?.isNotEmpty == true)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.deepPurple.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.group_work, size: 12, color: Colors.deepPurple.shade400),
+                          const SizedBox(width: 2),
+                          Text(
+                            '${(staff['groups'] as List<dynamic>).length}',
+                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.deepPurple.shade400),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                if (isFav)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 4),
+                    child: Icon(Icons.star, color: Colors.amber, size: 20),
+                  ),
+                Icon(Icons.chevron_right, color: Colors.grey.shade400, size: 22),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildCatalogTab() {
     return SafeArea(
       child: DefaultTabController(
-        length: 3,
+        length: 4,
         child: Column(
           children: [
             const TabBar(
@@ -6432,6 +6860,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 Tab(text: 'Clients'),
                 Tab(text: 'Roles'),
                 Tab(text: 'Tariffs'),
+                Tab(text: 'Staff'),
               ],
               labelColor: ExColors.techBlue,
               unselectedLabelColor: Colors.grey,
@@ -6442,6 +6871,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   _buildClientsTab(),
                   _buildRolesTab(),
                   _buildTariffsTab(),
+                  _buildStaffInner(),
                 ],
               ),
             ),

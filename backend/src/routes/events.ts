@@ -14,6 +14,7 @@ import { resolveManagerForRequest } from '../utils/manager';
 import { emitToManager, emitToTeams, emitToUser } from '../socket/server';
 import { notificationService } from '../services/notificationService';
 import { UserModel } from '../models/user';
+import { StaffProfileModel } from '../models/staffProfile';
 import {
   isWithinGeofence,
   formatDistance,
@@ -588,6 +589,7 @@ router.post('/events/batch', requireAuth, async (req, res) => {
 const publishEventSchema = z.object({
   audience_user_keys: z.array(z.string()).nullish(),
   audience_team_ids: z.array(z.string()).nullish(),
+  audience_group_ids: z.array(z.string()).nullish(),
   visibilityType: z.enum(['private', 'public', 'private_public']).optional(),
 });
 
@@ -634,8 +636,21 @@ router.post('/events/:id/publish', requireAuth, async (req, res) => {
       });
     }
 
-    const { audience_user_keys, audience_team_ids, visibilityType } = parsed.data;
+    const { audience_user_keys, audience_team_ids, audience_group_ids, visibilityType } = parsed.data;
     const teamIds = await sanitizeTeamIds(managerId, audience_team_ids);
+
+    // Validate group IDs belong to this manager
+    let groupIds: mongoose.Types.ObjectId[] = [];
+    if (audience_group_ids && audience_group_ids.length > 0) {
+      const validIds = audience_group_ids
+        .filter((id) => mongoose.Types.ObjectId.isValid(id))
+        .map((id) => new mongoose.Types.ObjectId(id));
+      if (validIds.length > 0) {
+        const { StaffGroupModel } = await import('../models/staffGroup');
+        const validGroups = await StaffGroupModel.find({ _id: { $in: validIds }, managerId }).lean();
+        groupIds = validGroups.map((g: any) => g._id);
+      }
+    }
 
     // Get all user keys we're publishing to (for notifications and availability checks)
     const targetUserKeys: string[] = [];
@@ -671,6 +686,20 @@ router.post('/events/:id/publish', requireAuth, async (req, res) => {
           }
         }
       }
+    }
+
+    // Expand group members into targetUserKeys
+    if (groupIds.length > 0) {
+      const groupMembers = await StaffProfileModel.find({
+        managerId,
+        groupIds: { $in: groupIds },
+      }).lean();
+      for (const profile of groupMembers) {
+        if (profile.userKey && !targetUserKeys.includes(profile.userKey)) {
+          targetUserKeys.push(profile.userKey);
+        }
+      }
+      console.log('[EVENT PUBLISH DEBUG] Added group members, total targetUserKeys:', targetUserKeys.length);
     }
 
     console.log('[EVENT PUBLISH DEBUG] Final targetUserKeys:', targetUserKeys);
@@ -718,6 +747,7 @@ router.post('/events/:id/publish', requireAuth, async (req, res) => {
     event.publishedBy = manager.email || manager.name || String(managerId);
     event.audience_user_keys = audience_user_keys || [];
     event.audience_team_ids = teamIds;
+    event.audience_group_ids = groupIds;
 
     // Set visibility type (defaults to 'private' if not specified)
     if (visibilityType) {
@@ -734,6 +764,7 @@ router.post('/events/:id/publish', requireAuth, async (req, res) => {
       managerId: String(eventObj.managerId),
       audience_user_keys: (eventObj.audience_user_keys || []).map(String),
       audience_team_ids: (eventObj.audience_team_ids || []).map(String),
+      audience_group_ids: (eventObj.audience_group_ids || []).map(String),
       availabilityWarnings,
     };
 
@@ -1029,6 +1060,7 @@ router.post('/events/:id/unpublish', requireAuth, async (req, res) => {
 const changeVisibilitySchema = z.object({
   visibilityType: z.enum(['private', 'public', 'private_public']),
   audience_team_ids: z.array(z.string()).nullish(),
+  audience_group_ids: z.array(z.string()).nullish(),
 });
 
 router.patch('/events/:id/visibility', requireAuth, async (req, res) => {
@@ -1874,6 +1906,105 @@ router.get('/events/attendance-analytics', requireAuth, async (req, res) => {
 // END ATTENDANCE DASHBOARD ENDPOINTS
 // ============================================================================
 
+// ============================================================================
+// AVAILABILITY ROUTES (must be before /events/:id to avoid route shadowing)
+// ============================================================================
+
+function getUserKey(req: any): string | undefined {
+  const provider = req?.user?.provider;
+  const sub = req?.user?.sub;
+  if (!provider || !sub) return undefined;
+  return `${provider}:${sub}`;
+}
+
+const availabilitySchema = z.object({
+  date: z.string().min(1, 'date is required'),
+  startTime: z.string().min(1, 'startTime is required'),
+  endTime: z.string().min(1, 'endTime is required'),
+  status: z.enum(['available', 'unavailable']),
+});
+
+// Get user's availability blocks
+router.get(['/availability', '/events/availability'], requireAuth, async (req, res) => {
+  try {
+    const userKey = getUserKey(req);
+    if (!userKey) return res.status(401).json({ message: 'User not authenticated' });
+
+    const docs = await AvailabilityModel.find({ userKey }).sort({ date: 1, startTime: 1 }).lean();
+    const mapped = (docs || []).map((d: any) => {
+      const { _id, ...rest } = d;
+      return { id: String(_id), ...rest };
+    });
+    return res.json(mapped);
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to fetch availability' });
+  }
+});
+
+// Create or update an availability block
+router.post(['/availability', '/events/availability'], requireAuth, async (req, res) => {
+  try {
+    const userKey = getUserKey(req);
+    if (!userKey) return res.status(401).json({ message: 'User not authenticated' });
+
+    const parsed = availabilitySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Validation failed', details: parsed.error.format() });
+    }
+    const { date, startTime, endTime, status } = parsed.data;
+
+    const result = await AvailabilityModel.updateOne(
+      { userKey, date, startTime, endTime },
+      { $set: { status, updatedAt: new Date() }, $setOnInsert: { createdAt: new Date(), userKey, date, startTime, endTime } },
+      { upsert: true }
+    );
+
+    if (result.upsertedId) {
+      return res.json({ message: 'Availability created', id: String(result.upsertedId._id) });
+    }
+    const existing = await AvailabilityModel.findOne({ userKey, date, startTime, endTime }, { _id: 1 }).lean();
+    return res.json({ message: 'Availability updated', id: existing ? String(existing._id) : undefined });
+  } catch (err: any) {
+    if (err?.code === 11000) {
+      try {
+        const { date, startTime, endTime, status } = req.body || {};
+        await AvailabilityModel.updateOne(
+          { userKey: getUserKey(req), date, startTime, endTime },
+          { $set: { status, updatedAt: new Date() } }
+        );
+        const existing = await AvailabilityModel.findOne({ userKey: getUserKey(req), date, startTime, endTime }, { _id: 1 }).lean();
+        return res.json({ message: 'Availability updated', id: existing ? String(existing._id) : undefined });
+      } catch (_) {
+        return res.status(500).json({ message: 'Failed to set availability' });
+      }
+    }
+    return res.status(500).json({ message: 'Failed to set availability' });
+  }
+});
+
+// Delete availability block by id
+router.delete(['/availability/:id', '/events/availability/:id'], requireAuth, async (req, res) => {
+  try {
+    const userKey = getUserKey(req);
+    if (!userKey) return res.status(401).json({ message: 'User not authenticated' });
+
+    const availabilityId = req.params.id ?? '';
+    if (!mongoose.Types.ObjectId.isValid(availabilityId)) {
+      return res.status(400).json({ message: 'Invalid availability id' });
+    }
+
+    const result = await AvailabilityModel.deleteOne({ _id: new mongoose.Types.ObjectId(availabilityId), userKey });
+    if (result.deletedCount === 0) return res.status(404).json({ message: 'Availability not found' });
+    return res.json({ message: 'Availability deleted' });
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to delete availability' });
+  }
+});
+
+// ============================================================================
+// END AVAILABILITY ROUTES
+// ============================================================================
+
 // Get a single event by ID
 router.get('/events/:id', requireAuth, async (req, res) => {
   try {
@@ -2601,100 +2732,6 @@ router.post('/events/:id/respond', requireAuth, async (req, res) => {
     // eslint-disable-next-line no-console
     console.error('[respond] failed', err);
     return res.status(500).json({ message: 'Failed to update response' });
-  }
-});
-
-// Availability APIs
-function getUserKey(req: any): string | undefined {
-  const provider = req?.user?.provider;
-  const sub = req?.user?.sub;
-  if (!provider || !sub) return undefined;
-  return `${provider}:${sub}`;
-}
-
-// Get user's availability blocks
-router.get(['/availability', '/events/availability'], requireAuth, async (req, res) => {
-  try {
-    const userKey = getUserKey(req);
-    if (!userKey) return res.status(401).json({ message: 'User not authenticated' });
-
-    const docs = await AvailabilityModel.find({ userKey }).sort({ date: 1, startTime: 1 }).lean();
-    const mapped = (docs || []).map((d: any) => {
-      const { _id, ...rest } = d;
-      return { id: String(_id), ...rest };
-    });
-    return res.json(mapped);
-  } catch (err) {
-    return res.status(500).json({ message: 'Failed to fetch availability' });
-  }
-});
-
-const availabilitySchema = z.object({
-  date: z.string().min(1, 'date is required'),
-  startTime: z.string().min(1, 'startTime is required'),
-  endTime: z.string().min(1, 'endTime is required'),
-  status: z.enum(['available', 'unavailable']),
-});
-
-// Create or update an availability block
-router.post(['/availability', '/events/availability'], requireAuth, async (req, res) => {
-  try {
-    const userKey = getUserKey(req);
-    if (!userKey) return res.status(401).json({ message: 'User not authenticated' });
-
-    const parsed = availabilitySchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ message: 'Validation failed', details: parsed.error.format() });
-    }
-    const { date, startTime, endTime, status } = parsed.data;
-
-    const result = await AvailabilityModel.updateOne(
-      { userKey, date, startTime, endTime },
-      { $set: { status, updatedAt: new Date() }, $setOnInsert: { createdAt: new Date(), userKey, date, startTime, endTime } },
-      { upsert: true }
-    );
-
-    if (result.upsertedId) {
-      return res.json({ message: 'Availability created', id: String(result.upsertedId._id) });
-    }
-    // If not upserted, fetch the existing doc to return id
-    const existing = await AvailabilityModel.findOne({ userKey, date, startTime, endTime }, { _id: 1 }).lean();
-    return res.json({ message: 'Availability updated', id: existing ? String(existing._id) : undefined });
-  } catch (err: any) {
-    // Unique index conflict fallback
-    if (err?.code === 11000) {
-      try {
-        const { date, startTime, endTime, status } = req.body || {};
-        await AvailabilityModel.updateOne(
-          { userKey: getUserKey(req), date, startTime, endTime },
-          { $set: { status, updatedAt: new Date() } }
-        );
-        const existing = await AvailabilityModel.findOne({ userKey: getUserKey(req), date, startTime, endTime }, { _id: 1 }).lean();
-        return res.json({ message: 'Availability updated', id: existing ? String(existing._id) : undefined });
-      } catch (_) {
-        return res.status(500).json({ message: 'Failed to set availability' });
-      }
-    }
-    return res.status(500).json({ message: 'Failed to set availability' });
-  }
-});
-
-// Delete availability block by id
-router.delete(['/availability/:id', '/events/availability/:id'], requireAuth, async (req, res) => {
-  try {
-    const userKey = getUserKey(req);
-    if (!userKey) return res.status(401).json({ message: 'User not authenticated' });
-
-    const availabilityId = req.params.id ?? '';
-    if (!mongoose.Types.ObjectId.isValid(availabilityId)) {
-      return res.status(400).json({ message: 'Invalid availability id' });
-    }
-
-    const result = await AvailabilityModel.deleteOne({ _id: new mongoose.Types.ObjectId(availabilityId), userKey });
-    if (result.deletedCount === 0) return res.status(404).json({ message: 'Availability not found' });
-    return res.json({ message: 'Availability deleted' });
-  } catch (err) {
-    return res.status(500).json({ message: 'Failed to delete availability' });
   }
 });
 

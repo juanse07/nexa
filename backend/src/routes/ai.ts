@@ -17,6 +17,8 @@ import { RoleModel } from '../models/role';
 import { TariffModel } from '../models/tariff';
 import { VenueModel } from '../models/venue';
 import { AIChatSummaryModel } from '../models/aiChatSummary';
+import { ConversationModel } from '../models/conversation';
+import { ChatMessageModel } from '../models/chatMessage';
 import { FlaggedAttendanceModel } from '../models/flaggedAttendance';
 import { UserModel } from '../models/user';
 import { TeamModel } from '../models/team';
@@ -1053,13 +1055,13 @@ const AI_TOOLS = [
   },
   {
     name: 'get_team_members',
-    description: 'Get list of all team members/staff with their roles and current availability status. Use this when user asks about team, staff, or who is available.',
+    description: 'Get list of all active team members/staff with their names and emails. Use this when user asks about team, staff, who is on the team, or needs to find a specific member.',
     parameters: {
       type: 'object',
       properties: {
-        role: {
+        name_filter: {
           type: ['string', 'null'],
-          description: 'Optional: Filter by specific role (e.g., "Server", "Bartender")'
+          description: 'Optional: Filter by name (partial match, case-insensitive)'
         }
       },
       required: []
@@ -1077,6 +1079,38 @@ const AI_TOOLS = [
         }
       },
       required: []
+    }
+  },
+  {
+    name: 'send_message_to_staff',
+    description: 'Send a chat message to a specific team member. Use when manager says "message Juan", "tell Maria she\'s confirmed", "let Alex know about the shift change", etc. Use get_team_members first if you need to find the person\'s name.',
+    parameters: {
+      type: 'object',
+      properties: {
+        staff_name: {
+          type: 'string',
+          description: 'Name of the staff member to message (first name, last name, or full name)'
+        },
+        message: {
+          type: 'string',
+          description: 'The message to send'
+        }
+      },
+      required: ['staff_name', 'message']
+    }
+  },
+  {
+    name: 'send_message_to_all_staff',
+    description: 'Send a message to ALL active team members at once (bulk broadcast). Use when manager says "tell everyone", "notify all staff", "send a message to the whole team", etc. WARNING: This sends to every active team member.',
+    parameters: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          description: 'The message to broadcast to all team members'
+        }
+      },
+      required: ['message']
     }
   },
   {
@@ -1149,6 +1183,94 @@ const AI_TOOLS = [
     }
   }
 ];
+
+/**
+ * Send a chat message from a manager to a staff member
+ * Reusable helper for both individual and bulk messaging
+ */
+async function sendManagerMessage(
+  managerId: mongoose.Types.ObjectId,
+  targetUserKey: string,
+  senderName: string,
+  senderPicture: string | null,
+  message: string
+): Promise<{ success: boolean; conversationId?: string; error?: string }> {
+  try {
+    // Find or create conversation
+    const conversation = await ConversationModel.findOneAndUpdate(
+      { managerId, userKey: targetUserKey },
+      { $setOnInsert: { managerId, userKey: targetUserKey } },
+      { upsert: true, new: true }
+    );
+
+    // Create chat message
+    const chatMessage = await ChatMessageModel.create({
+      conversationId: conversation._id,
+      managerId,
+      userKey: targetUserKey,
+      senderType: 'manager',
+      senderName,
+      senderPicture,
+      message,
+      messageType: 'text',
+      readByManager: true,
+      readByUser: false,
+    });
+
+    // Update conversation metadata
+    await ConversationModel.findByIdAndUpdate(conversation._id, {
+      lastMessageAt: chatMessage.createdAt,
+      lastMessagePreview: message.substring(0, 200),
+      $inc: { unreadCountUser: 1 }
+    });
+
+    // Emit real-time socket notification
+    const messagePayload = {
+      id: String(chatMessage._id),
+      conversationId: String(conversation._id),
+      senderType: 'manager',
+      senderName,
+      senderPicture,
+      message: chatMessage.message,
+      messageType: 'text',
+      readByManager: true,
+      readByUser: false,
+      createdAt: chatMessage.createdAt,
+    };
+    emitToUser(targetUserKey, 'chat:message', messagePayload);
+
+    // Send push notification
+    const user = await UserModel.findOne({
+      $expr: {
+        $eq: [
+          { $concat: ['$provider', ':', '$subject'] },
+          targetUserKey
+        ]
+      }
+    });
+    if (user) {
+      const notifBody = message.length > 100 ? message.substring(0, 100) + '...' : message;
+      await notificationService.sendToUser(
+        (user._id as any).toString(),
+        senderName,
+        notifBody,
+        {
+          type: 'chat',
+          conversationId: String(conversation._id),
+          messageId: String(chatMessage._id),
+          senderName,
+          managerId: managerId.toString()
+        },
+        'user'
+      );
+    }
+
+    return { success: true, conversationId: String(conversation._id) };
+  } catch (error: any) {
+    console.error('[sendManagerMessage] Error:', error);
+    return { success: false, error: error.message };
+  }
+}
 
 /**
  * Execute a function call from the AI model
@@ -2903,29 +3025,32 @@ ${topStaff ? `Most Flagged: ${topStaff}` : ''}`;
       }
 
       case 'get_team_members': {
-        const { role } = functionArgs;
+        // Sanitize: Groq sometimes leaks tool_call metadata into args
+        const { name_filter, role: _leakedRole, ...restArgs } = functionArgs;
+        const ignoredValues = ['assistant', 'user', 'system', 'developer', 'function'];
+        const nameSearch = (name_filter && !ignoredValues.includes(String(name_filter).toLowerCase()))
+          ? name_filter : undefined;
 
-        const filter: any = { managerId };
-        if (role) {
-          filter.roles = { $elemMatch: { $regex: new RegExp(role, 'i') } };
+        const filter: any = { managerId, status: 'active' };
+        if (nameSearch) {
+          filter.name = { $regex: new RegExp(nameSearch, 'i') };
         }
 
         const members = await TeamMemberModel.find(filter)
-          .select('first_name last_name roles email phone')
-          .sort({ last_name: 1, first_name: 1 })
+          .select('name email provider subject')
+          .sort({ name: 1 })
           .lean();
 
         if (members.length === 0) {
-          return `No team members found${role ? ` with role "${role}"` : ''}`;
+          return `No team members found${nameSearch ? ` matching "${nameSearch}"` : ''}. Make sure you have active team members.`;
         }
 
         const results = members.map((m: any) => {
-          const name = `${m.first_name} ${m.last_name}`;
-          const rolesStr = Array.isArray(m.roles) ? m.roles.join(', ') : 'No roles';
-          return `${name} - ${rolesStr}`;
+          const userKey = `${m.provider}:${m.subject}`;
+          return `• ${m.name || m.email || 'Unknown'} (${m.email || 'no email'}) [key: ${userKey}]`;
         }).join('\n');
 
-        return `Found ${members.length} team member(s):\n${results}`;
+        return `Found ${members.length} active team member(s):\n${results}`;
       }
 
       case 'get_venues_history': {
@@ -3030,6 +3155,94 @@ ${topStaff ? `Most Flagged: ${topStaff}` : ''}`;
         if (updates.headcount_total) changedFields.push(`👥 Headcount → ${updates.headcount_total}`);
 
         return `✅ Successfully updated event (ID: ${event_id})\n${changedFields.join('\n')}`;
+      }
+
+      case 'send_message_to_staff': {
+        const { staff_name, message: msgText } = functionArgs;
+        if (!staff_name || !msgText) {
+          return '❌ Both staff_name and message are required.';
+        }
+
+        // Find team member by name (fuzzy match)
+        const nameRegex = new RegExp(staff_name.split(/\s+/).join('.*'), 'i');
+        const members = await TeamMemberModel.find({
+          managerId,
+          status: 'active',
+          $or: [
+            { name: nameRegex },
+            { email: new RegExp(staff_name, 'i') }
+          ]
+        }).lean();
+
+        if (members.length === 0) {
+          return `❌ No team member found matching "${staff_name}". Use get_team_members to see available staff.`;
+        }
+        if (members.length > 1) {
+          const names = members.map((m: any) => m.name || m.email || 'Unknown').join(', ');
+          return `Found ${members.length} matches: ${names}. Please be more specific.`;
+        }
+
+        const member = members[0] as any;
+        const targetUserKey = `${member.provider}:${member.subject}`;
+        const memberName = member.name || member.email || 'Team Member';
+
+        // Get manager info for senderName
+        const mgr = await ManagerModel.findById(managerId).select('first_name last_name name picture').lean();
+        const mgrName = (mgr as any)?.first_name && (mgr as any)?.last_name
+          ? `${(mgr as any).first_name} ${(mgr as any).last_name}`
+          : (mgr as any)?.name || 'Manager';
+        const mgrPicture = (mgr as any)?.picture || null;
+
+        const result = await sendManagerMessage(managerId, targetUserKey, mgrName, mgrPicture, msgText.trim());
+
+        if (!result.success) return `❌ Failed to send message: ${result.error}`;
+        return `✅ Message sent to ${memberName}`;
+      }
+
+      case 'send_message_to_all_staff': {
+        const { message: bulkMsg } = functionArgs;
+        if (!bulkMsg) {
+          return '❌ Message is required.';
+        }
+
+        // Get all active team members under this manager
+        const allMembers = await TeamMemberModel.find({
+          managerId,
+          status: 'active'
+        }).lean();
+
+        if (allMembers.length === 0) {
+          return '❌ No active team members found.';
+        }
+
+        // Deduplicate by provider:subject (a member can be in multiple teams)
+        const uniqueMembers = new Map<string, any>();
+        for (const m of allMembers) {
+          const key = `${(m as any).provider}:${(m as any).subject}`;
+          if (!uniqueMembers.has(key)) {
+            uniqueMembers.set(key, m);
+          }
+        }
+
+        const mgr = await ManagerModel.findById(managerId).select('first_name last_name name picture').lean();
+        const mgrName = (mgr as any)?.first_name && (mgr as any)?.last_name
+          ? `${(mgr as any).first_name} ${(mgr as any).last_name}`
+          : (mgr as any)?.name || 'Manager';
+        const mgrPicture = (mgr as any)?.picture || null;
+
+        let sent = 0;
+        let failed = 0;
+        for (const [userKey, member] of uniqueMembers) {
+          try {
+            await sendManagerMessage(managerId, userKey, mgrName, mgrPicture, bulkMsg.trim());
+            sent++;
+          } catch (err) {
+            console.error(`[send_message_to_all_staff] Failed for ${userKey}:`, err);
+            failed++;
+          }
+        }
+
+        return `✅ Message broadcast: sent to ${sent} staff member(s)${failed > 0 ? `, ${failed} failed` : ''}`;
       }
 
       default:
@@ -3337,6 +3550,15 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
 - For recurring patterns ("every Saturday in March", "3 shifts next week"): use create_events_bulk
 - Present full list summary before creating, ask for confirmation
 - After bulk creation: offer to publish all with publish_events_bulk
+
+💬 MESSAGING STAFF:
+- Individual: Use send_message_to_staff with staff_name and message
+  - If you don't know the exact name, use get_team_members first
+  - Compose a professional message based on what the manager asks
+- Bulk: Use send_message_to_all_staff to broadcast to entire team
+  - ALWAYS confirm before sending bulk: "This will message X team members. Send it?"
+  - Only call after explicit confirmation
+- Messages are delivered as real chat messages with push notifications
 
 🚫 DO NOT output EVENT_COMPLETE, EVENT_UPDATE, or other markers. Use the create_event / update_event tools instead.
 `;

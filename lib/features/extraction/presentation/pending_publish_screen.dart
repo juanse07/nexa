@@ -5,6 +5,7 @@ import 'package:nexa/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/event_service.dart';
+import '../services/group_service.dart';
 import '../services/roles_service.dart';
 import '../services/users_service.dart';
 import '../services/clients_service.dart';
@@ -36,6 +37,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
   final ClientsService _clientsService = ClientsService();
   final TariffsService _tariffsService = TariffsService();
   final TeamsService _teamsService = TeamsService();
+  final GroupService _groupService = GroupService();
   final ChatService _chatService = ChatService();
   StreamSubscription<SocketEvent>? _socketSubscription;
 
@@ -50,6 +52,9 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
   bool _loadingUsers = false;
   final Set<String> _selectedKeys = <String>{};
   final Set<String> _selectedTeamIds = <String>{};
+  final Set<String> _selectedGroupIds = <String>{};
+  List<Map<String, dynamic>> _staffGroups = [];
+  bool _loadingGroups = false;
   final Map<String, Map<String, String>> _keyToUser =
       <String, Map<String, String>>{};
   bool _publishing = false;
@@ -67,6 +72,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
     super.initState();
     _loadRoles();
     _loadTeams();
+    _loadGroups();
     _loadFavorites();
     // Load users immediately since _visibleToEntireTeam is false by default
     _loadUsers(reset: true);
@@ -94,6 +100,16 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
       setState(() => _roles = roles);
     } catch (e) {
       // Silently fail, roles will be empty
+    }
+  }
+
+  Future<void> _loadGroups() async {
+    setState(() => _loadingGroups = true);
+    try {
+      final groups = await _groupService.fetchGroups();
+      if (mounted) setState(() { _staffGroups = groups; _loadingGroups = false; });
+    } catch (e) {
+      if (mounted) setState(() => _loadingGroups = false);
     }
   }
 
@@ -474,6 +490,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
         widget.draftId,
         audienceUserKeys: audienceUserKeys,
         audienceTeamIds: audienceTeamIds,
+        audienceGroupIds: _selectedGroupIds.isNotEmpty ? _selectedGroupIds.toList() : null,
         visibilityType: 'public',
       );
 
@@ -683,6 +700,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                 // No explicit visibility selector - determined by button pressed
                 if (!_visibleToEntireTeam) ...[
                   _buildTeamSelector(),
+                  _buildGroupSelector(),
                   _buildFavoritesSection(),
                   const SizedBox(height: 16),
                   const Text(
@@ -918,6 +936,57 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                       if (teamId.isNotEmpty) _selectedTeamIds.add(teamId);
                     } else {
                       _selectedTeamIds.remove(teamId);
+                    }
+                  });
+                },
+              );
+            }).toList(),
+          ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  Widget _buildGroupSelector() {
+    if (_staffGroups.isEmpty && !_loadingGroups) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Row(
+          children: [
+            Icon(Icons.group_work, size: 18, color: Colors.deepPurple),
+            SizedBox(width: 8),
+            Text(
+              'Staff Groups',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_loadingGroups)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: LinearProgressIndicator(minHeight: 2),
+          )
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _staffGroups.map((group) {
+              final groupId = (group['id'] ?? '').toString();
+              final name = (group['name'] ?? '').toString();
+              final memberCount = (group['memberCount'] as int?) ?? 0;
+              final isSelected = _selectedGroupIds.contains(groupId);
+              return FilterChip(
+                selected: isSelected,
+                label: Text('${name.isEmpty ? 'Untitled' : name} ($memberCount)'),
+                onSelected: (selected) {
+                  setState(() {
+                    if (selected) {
+                      if (groupId.isNotEmpty) _selectedGroupIds.add(groupId);
+                    } else {
+                      _selectedGroupIds.remove(groupId);
                     }
                   });
                 },

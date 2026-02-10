@@ -329,6 +329,7 @@ class EventService {
     String eventId, {
     List<String>? audienceUserKeys,
     List<String>? audienceTeamIds,
+    List<String>? audienceGroupIds,
     String? visibilityType,
   }) async {
     try {
@@ -338,6 +339,9 @@ class EventService {
       }
       if (audienceTeamIds != null) {
         data['audience_team_ids'] = audienceTeamIds;
+      }
+      if (audienceGroupIds != null && audienceGroupIds.isNotEmpty) {
+        data['audience_group_ids'] = audienceGroupIds;
       }
       if (visibilityType != null) {
         data['visibilityType'] = visibilityType;

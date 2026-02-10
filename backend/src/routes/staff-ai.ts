@@ -10,6 +10,11 @@ import { getDateTimeContext, getWelcomeDateContext, getFullSystemContext } from 
 import { EventModel } from '../models/event';
 import { UserModel } from '../models/user';
 import { AvailabilityModel } from '../models/availability';
+import { TeamMemberModel } from '../models/teamMember';
+import { ConversationModel } from '../models/conversation';
+import { ChatMessageModel } from '../models/chatMessage';
+import { ManagerModel } from '../models/manager';
+import { emitToManager } from '../socket/server';
 
 const router = Router();
 
@@ -827,6 +832,57 @@ const STAFF_AI_TOOLS = [
       properties: {}
     }
   },
+  {
+    name: 'compose_message',
+    description: 'Help compose a professional message to send to the manager. Use when staff says "help me write a message", "I need to call off", "tell my manager I\'m running late", "request time off", etc.',
+    parameters: {
+      type: 'object',
+      properties: {
+        scenario: {
+          type: 'string',
+          enum: ['late', 'timeoff', 'calloff', 'question', 'custom'],
+          description: 'Type of message: late (running late), timeoff (requesting days off), calloff (calling off a shift), question (asking manager something), custom (other)'
+        },
+        details: {
+          type: 'string',
+          description: 'User-provided context: reason, dates, shift name, ETA, etc.'
+        }
+      },
+      required: ['scenario', 'details']
+    }
+  },
+  {
+    name: 'send_message_to_manager',
+    description: 'Send a message to the staff member\'s manager via the chat system. Use ONLY after composing a message and getting user confirmation to send. The user must explicitly say "yes send it" or "go ahead".',
+    parameters: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          description: 'The final message text to send to the manager'
+        },
+        manager_id: {
+          type: ['string', 'null'],
+          description: 'Optional specific manager ID. If not provided, sends to first active manager found.'
+        }
+      },
+      required: ['message']
+    }
+  },
+  {
+    name: 'get_shift_details',
+    description: 'Get full details about a specific shift/event including pay info, notes, dress code, and all role details. Use when staff asks "what are the details for...", "how much does it pay", "what should I wear", "any notes for the event".',
+    parameters: {
+      type: 'object',
+      properties: {
+        event_id: {
+          type: 'string',
+          description: 'The event ID to get details for'
+        }
+      },
+      required: ['event_id']
+    }
+  },
 ];
 
 /**
@@ -1642,6 +1698,231 @@ async function executePerformanceLastYear(
 }
 
 /**
+ * Execute compose_message function
+ * Returns structured data so the AI model can compose the message in its response
+ */
+async function executeComposeMessage(
+  userKey: string,
+  scenario: string,
+  details: string
+): Promise<{ success: boolean; message: string; data?: any }> {
+  console.log(`[executeComposeMessage] Scenario: ${scenario}, Details: ${details}`);
+
+  const [provider, subject] = userKey.split(':');
+
+  // Look up all managers this staff member belongs to
+  const teamMembers = await TeamMemberModel.find({
+    provider,
+    subject,
+    status: 'active'
+  }).select('managerId').lean();
+
+  const managerIds = [...new Set(teamMembers.map(tm => tm.managerId.toString()))];
+  const managers = await ManagerModel.find({ _id: { $in: managerIds } })
+    .select('first_name last_name name')
+    .lean();
+
+  const managerList = managers.map((m: any) => ({
+    id: String(m._id),
+    name: m.first_name && m.last_name
+      ? `${m.first_name} ${m.last_name}`
+      : m.name || 'Manager'
+  }));
+
+  return {
+    success: true,
+    message: managerList.length === 1
+      ? `Ready to compose. Manager: ${managerList[0]!.name}`
+      : `Staff has ${managerList.length} managers. Ask which one.`,
+    data: {
+      scenario,
+      details,
+      ready_to_compose: true,
+      managers: managerList,
+    }
+  };
+}
+
+/**
+ * Execute send_message_to_manager function
+ * Sends a chat message from the staff member to their manager
+ */
+async function executeSendMessageToManager(
+  userKey: string,
+  userId: string,
+  messageText: string,
+  managerId?: string | null
+): Promise<{ success: boolean; message: string; data?: any }> {
+  try {
+    console.log(`[executeSendMessageToManager] Sending message for userKey ${userKey}`);
+
+    const [provider, subject] = userKey.split(':');
+
+    // Get the user's name for senderName
+    const user = await UserModel.findById(userId).select('first_name last_name picture').lean();
+    const senderName = user
+      ? `${(user as any).first_name || ''} ${(user as any).last_name || ''}`.trim() || 'Staff Member'
+      : 'Staff Member';
+    const senderPicture = (user as any)?.picture || null;
+
+    // Find manager: use provided ID or look up via TeamMember
+    let targetManagerId: any;
+    if (managerId) {
+      targetManagerId = managerId;
+    } else {
+      const teamMember = await TeamMemberModel.findOne({
+        provider,
+        subject,
+        status: 'active'
+      }).select('managerId').lean();
+
+      if (!teamMember) {
+        return { success: false, message: 'Could not find your manager. You may not be on any active team.' };
+      }
+      targetManagerId = teamMember.managerId;
+    }
+
+    // Verify manager exists
+    const manager = await ManagerModel.findById(targetManagerId).select('first_name last_name name').lean();
+    if (!manager) {
+      return { success: false, message: 'Manager not found' };
+    }
+
+    const managerName = (manager as any).first_name && (manager as any).last_name
+      ? `${(manager as any).first_name} ${(manager as any).last_name}`
+      : (manager as any).name || 'Manager';
+    const managerFirstName = (manager as any).first_name || managerName.split(' ')[0];
+
+    // Replace placeholder names in the message (AI sometimes uses these)
+    let finalMessage = messageText.trim()
+      .replace(/\[Manager Name\]/gi, managerName)
+      .replace(/\[Manager's Name\]/gi, managerName)
+      .replace(/\[manager name\]/gi, managerName)
+      .replace(/\[Your Manager\]/gi, managerName)
+      .replace(/Dear Manager/gi, `Dear ${managerFirstName}`)
+      .replace(/Hi Manager,/gi, `Hi ${managerFirstName},`)
+      .replace(/Hello Manager,/gi, `Hello ${managerFirstName},`);
+
+    // Find or create conversation
+    const conversation = await ConversationModel.findOneAndUpdate(
+      { managerId: targetManagerId, userKey },
+      { $setOnInsert: { managerId: targetManagerId, userKey } },
+      { upsert: true, new: true }
+    );
+
+    // Create chat message
+    const chatMessage = await ChatMessageModel.create({
+      conversationId: conversation._id,
+      managerId: targetManagerId,
+      userKey,
+      senderType: 'user',
+      senderName,
+      senderPicture,
+      message: finalMessage,
+      messageType: 'text',
+      readByManager: false,
+      readByUser: true,
+    });
+
+    // Update conversation metadata
+    await ConversationModel.findByIdAndUpdate(conversation._id, {
+      lastMessageAt: chatMessage.createdAt,
+      lastMessagePreview: finalMessage.substring(0, 200),
+      $inc: { unreadCountManager: 1 }
+    });
+
+    // Emit real-time notification to manager
+    const messagePayload = {
+      id: String(chatMessage._id),
+      conversationId: String(conversation._id),
+      senderType: 'user',
+      senderName,
+      senderPicture,
+      message: chatMessage.message,
+      messageType: 'text',
+      readByManager: false,
+      readByUser: true,
+      createdAt: chatMessage.createdAt,
+    };
+    emitToManager(targetManagerId.toString(), 'chat:message', messagePayload);
+
+    console.log(`[executeSendMessageToManager] Message sent to ${managerName} (${targetManagerId})`);
+
+    return {
+      success: true,
+      message: `Message sent to ${managerName}`,
+      data: { managerName, conversationId: String(conversation._id) }
+    };
+  } catch (error: any) {
+    console.error('[executeSendMessageToManager] Error:', error);
+    return { success: false, message: `Failed to send message: ${error.message}` };
+  }
+}
+
+/**
+ * Execute get_shift_details function
+ * Returns full event details including pay, notes, roles
+ */
+async function executeGetShiftDetails(
+  eventId: string,
+  userKey: string
+): Promise<{ success: boolean; message: string; data?: any }> {
+  try {
+    console.log(`[executeGetShiftDetails] Getting details for event ${eventId}`);
+
+    const event = await EventModel.findById(eventId)
+      .select('event_name client_name date start_time end_time venue_name venue_address city state notes roles accepted_staff status')
+      .lean();
+
+    if (!event) {
+      return { success: false, message: 'Event not found' };
+    }
+
+    const e = event as any;
+
+    // Find user's specific assignment in accepted_staff
+    const userInEvent = e.accepted_staff?.find((staff: any) => staff.userKey === userKey);
+
+    // Find role details matching user's position
+    const userRole = userInEvent?.role || userInEvent?.position;
+    const roleInfo = e.roles?.find((r: any) => r.role_name === userRole || r.role === userRole);
+
+    return {
+      success: true,
+      message: 'Event details found',
+      data: {
+        name: e.event_name,
+        client: e.client_name,
+        date: e.date,
+        time: `${e.start_time} - ${e.end_time}`,
+        venue: e.venue_name,
+        address: e.venue_address,
+        city: e.city,
+        state: e.state,
+        notes: e.notes || null,
+        status: e.status,
+        yourRole: userRole || 'Not assigned',
+        yourStatus: userInEvent?.response || 'unknown',
+        payRate: roleInfo?.pay_rate_info || null,
+        roleDetails: roleInfo ? {
+          name: roleInfo.role_name || roleInfo.role,
+          quantity: roleInfo.quantity,
+          payRate: roleInfo.pay_rate_info,
+        } : null,
+        allRoles: e.roles?.map((r: any) => ({
+          name: r.role_name || r.role,
+          quantity: r.quantity,
+          payRate: r.pay_rate_info,
+        })) || [],
+      }
+    };
+  } catch (error: any) {
+    console.error('[executeGetShiftDetails] Error:', error);
+    return { success: false, message: `Failed to get event details: ${error.message}` };
+  }
+}
+
+/**
  * Execute staff function based on name and arguments
  */
 async function executeStaffFunction(
@@ -1688,6 +1969,15 @@ async function executeStaffFunction(
 
     case 'performance_last_year':
       return await executePerformanceLastYear(userId, userKey);
+
+    case 'compose_message':
+      return await executeComposeMessage(userKey, functionArgs.scenario, functionArgs.details);
+
+    case 'send_message_to_manager':
+      return await executeSendMessageToManager(userKey, userId, functionArgs.message, functionArgs.manager_id);
+
+    case 'get_shift_details':
+      return await executeGetShiftDetails(functionArgs.event_id, userKey);
 
     default:
       return {
@@ -1861,7 +2151,27 @@ When showing schedule information, use this friendly format:
 
 🗓️ DATE HANDLING:
 If user mentions a month that ALREADY PASSED this year → use NEXT year
-Example: "February" in December 2025 → February 2026`;
+Example: "February" in December 2025 → February 2026
+
+📅 AVAILABILITY:
+- Use mark_availability tool directly — it saves to the database immediately
+- After marking, confirm naturally: "Done! Marked you as unavailable for Feb 15-17."
+- Expand date ranges to individual ISO dates: "Feb 15-17" → ["2026-02-15", "2026-02-16", "2026-02-17"]
+
+💬 MESSAGING:
+- When user wants to send a message to their manager (call off, running late, time off, etc.):
+  1. First use compose_message — it returns the manager name(s) and IDs
+  2. Use the ACTUAL manager name in the message (e.g., "Hi Juan," NOT "Hi [Manager Name],"). NEVER use placeholders like [Manager Name]!
+  3. If compose_message returns MULTIPLE managers, ask: "Which manager should I send this to?" and list them by name
+  4. Present the drafted message and ask: "Want me to send this to [manager name]?"
+  5. ONLY call send_message_to_manager after explicit confirmation ("yes", "send it", "go ahead")
+  6. Pass the correct manager_id when calling send_message_to_manager (from compose_message response)
+  7. Never send without asking first!
+
+📋 SHIFT DETAILS:
+- When user asks about specific shift details (pay, notes, what to wear), use get_shift_details
+- If they don't specify which shift, use get_my_schedule first to find it, then get_shift_details
+- Present all details in a friendly, readable format`;
 
   const dateContext = getFullSystemContext(timezone);
 

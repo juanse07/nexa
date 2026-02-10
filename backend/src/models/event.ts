@@ -138,6 +138,7 @@ export interface EventDocument extends Document {
   role_stats?: RoleStat[];
   audience_user_keys?: string[];
   audience_team_ids?: mongoose.Types.ObjectId[];
+  audience_group_ids?: mongoose.Types.ObjectId[];
   invited_staff?: InvitedStaffMember[]; // Role assignments for private event invitations
 
   // Hours approval workflow
@@ -326,6 +327,7 @@ const EventSchema = new Schema<EventDocument>(
     role_stats: { type: [RoleStatSchema], default: [] },
     audience_user_keys: { type: [String], default: [] },
     audience_team_ids: { type: [Schema.Types.ObjectId], ref: 'Team', default: [] },
+    audience_group_ids: { type: [Schema.Types.ObjectId], ref: 'StaffGroup', default: [] },
     invited_staff: { type: [InvitedStaffMemberSchema], default: [] },
 
     // Hours approval workflow

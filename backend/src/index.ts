@@ -31,6 +31,8 @@ import eventChatRouter from './routes/eventChat';
 import privacyRouter from './routes/privacy';
 import venuesRouter from './routes/venues';
 import statisticsRouter from './routes/statistics';
+import staffRouter from './routes/staff';
+import groupsRouter from './routes/groups';
 import uploadRouter from './routes/upload';
 import { notificationScheduler } from './services/notificationScheduler';
 
@@ -102,6 +104,8 @@ export async function createServer() {
   app.use('/api', placesRouter);
   app.use('/api', venuesRouter);
   app.use('/api', statisticsRouter); // Statistics and export endpoints
+  app.use('/api', staffRouter); // Staff management endpoints
+  app.use('/api', groupsRouter); // Staff group management
   app.use('/api/upload', uploadRouter); // File upload routes
 
   // Privacy and legal pages (served at root, not under /api)
