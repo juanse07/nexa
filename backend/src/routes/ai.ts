@@ -19,6 +19,10 @@ import { VenueModel } from '../models/venue';
 import { AIChatSummaryModel } from '../models/aiChatSummary';
 import { FlaggedAttendanceModel } from '../models/flaggedAttendance';
 import { UserModel } from '../models/user';
+import { TeamModel } from '../models/team';
+import { emitToManager, emitToTeams, emitToUser } from '../socket/server';
+import { notificationService } from '../services/notificationService';
+import { computeRoleStats } from '../utils/eventCapacity';
 
 const router = Router();
 
@@ -852,8 +856,8 @@ const AI_TOOLS = [
     }
   },
   {
-    name: 'create_shift',
-    description: 'Create a new event/shift (crear evento/turno). Use when user wants to: create event, make shift, add job, schedule staff, create trabajo, crear evento, agendar personal. IMPORTANT: Managers only care about CALL TIME (when staff should arrive), NOT guest arrival time. Call time is the staff arrival time. 🚨 CRITICAL: ALL EVENTS MUST BE IN THE FUTURE - never create events for past dates.',
+    name: 'create_event',
+    description: 'Create a new event/shift as DRAFT (crear evento/turno). Use when user wants to: create event, make shift, add job, schedule staff, create trabajo, crear evento, agendar personal. IMPORTANT: Managers only care about CALL TIME (when staff should arrive), NOT guest arrival time. Call time is the staff arrival time. 🚨 CRITICAL: ALL EVENTS MUST BE IN THE FUTURE - never create events for past dates. After creating, ALWAYS ask the user if they want to publish it to staff.',
     parameters: {
       type: 'object',
       properties: {
@@ -914,6 +918,84 @@ const AI_TOOLS = [
         }
       },
       required: ['date', 'call_time', 'end_time', 'client_name']
+    }
+  },
+  {
+    name: 'create_events_bulk',
+    description: 'Create multiple events/shifts at once as DRAFTS (max 30). Use for recurring patterns like "every Saturday in March", "3 shifts next week", etc. After creating, offer to publish all with publish_events_bulk.',
+    parameters: {
+      type: 'object',
+      properties: {
+        events: {
+          type: 'array',
+          description: 'Array of event objects (same fields as create_event)',
+          items: {
+            type: 'object',
+            properties: {
+              client_name: { type: 'string' },
+              date: { type: 'string', description: 'YYYY-MM-DD' },
+              call_time: { type: 'string', description: '24h format HH:MM' },
+              end_time: { type: 'string', description: '24h format HH:MM' },
+              venue_name: { type: ['string', 'null'] },
+              venue_address: { type: ['string', 'null'] },
+              roles: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    role: { type: 'string' },
+                    count: { type: 'number' }
+                  }
+                }
+              },
+              uniform: { type: ['string', 'null'] },
+              notes: { type: ['string', 'null'] },
+              contact_name: { type: ['string', 'null'] },
+              contact_phone: { type: ['string', 'null'] },
+              headcount_total: { type: ['number', 'null'] }
+            }
+          }
+        }
+      },
+      required: ['events']
+    }
+  },
+  {
+    name: 'publish_event',
+    description: 'Publish a draft event to all staff teams. Sends push notifications. Use after create_event when user confirms they want to publish. Requires event_id from create_event result.',
+    parameters: {
+      type: 'object',
+      properties: {
+        event_id: {
+          type: 'string',
+          description: 'The event ID returned by create_event'
+        }
+      },
+      required: ['event_id']
+    }
+  },
+  {
+    name: 'publish_events_bulk',
+    description: 'Publish multiple draft events at once. Use after create_events_bulk when user confirms. Partial success is OK — returns per-event results.',
+    parameters: {
+      type: 'object',
+      properties: {
+        event_ids: {
+          type: 'array',
+          description: 'Array of event IDs to publish',
+          items: { type: 'string' }
+        }
+      },
+      required: ['event_ids']
+    }
+  },
+  {
+    name: 'get_teams',
+    description: 'Get list of manager\'s teams. Use when you need to know which teams the manager has, or for context about publishing.',
+    parameters: {
+      type: 'object',
+      properties: {},
+      required: []
     }
   },
   {
@@ -2405,7 +2487,8 @@ ${Object.entries(bySeverity).map(([s, c]) => `  • ${s}: ${c}`).join('\n')}
 ${topStaff ? `Most Flagged: ${topStaff}` : ''}`;
       }
 
-      case 'create_shift': {
+      case 'create_shift':
+      case 'create_event': {
         const {
           client_name,
           date,
@@ -2431,25 +2514,32 @@ ${topStaff ? `Most Flagged: ${topStaff}` : ''}`;
           return `❌ At least one role is required. Please specify the roles needed for this shift.`;
         }
 
-        // Auto-generate shift name from client and date
+        // Validate date is not in the past
         const eventDate = new Date(date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (eventDate < today) {
+          return `❌ Cannot create events in the past. The date ${date} has already passed.`;
+        }
+
+        // Auto-generate shift name from client and date
         const shiftName = `${client_name} - ${eventDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
 
         // Create event document
         const eventData: any = {
           managerId,
           status: 'draft',
-          shift_name: shiftName,  // Use shift_name, not deprecated event_name
+          shift_name: shiftName,
           client_name,
           date: eventDate,
-          start_time: call_time,  // Call time = start time (when staff arrives)
+          start_time: call_time,
           end_time,
-          roles: roles,  // Already validated to have at least 1 role
+          roles: roles,
           accepted_staff: [],
           declined_staff: []
         };
 
-        // Add optional fields (city/state are now truly optional, not hardcoded)
+        // Add optional fields
         if (venue_name) eventData.venue_name = venue_name;
         if (venue_address) eventData.venue_address = venue_address;
         if (uniform) eventData.uniform = uniform;
@@ -2460,7 +2550,20 @@ ${topStaff ? `Most Flagged: ${topStaff}` : ''}`;
 
         const created = await EventModel.create(eventData);
 
-        let summary = `✅ Successfully created event (ID: ${created._id})\n`;
+        // Compute role_stats for the response
+        const role_stats = computeRoleStats(roles, []);
+
+        // Build response payload and emit socket event so frontend refreshes
+        const createdObj = created.toObject();
+        const responsePayload = {
+          ...createdObj,
+          id: String(createdObj._id),
+          managerId: String(createdObj.managerId),
+          role_stats,
+        };
+        emitToManager(String(managerId), 'event:created', responsePayload);
+
+        let summary = `✅ Event created! Event ID: ${created._id}\n`;
         summary += `👥 Client: ${client_name}\n`;
         summary += `📅 Date: ${date}\n`;
         summary += `⏰ Call Time: ${call_time} (staff arrival)\n`;
@@ -2475,9 +2578,279 @@ ${topStaff ? `Most Flagged: ${topStaff}` : ''}`;
         }
         if (uniform) summary += `👕 Uniform: ${uniform}\n`;
         if (headcount_total) summary += `👥 Guest count: ${headcount_total}\n`;
-        summary += `\n📝 Status: DRAFT (ready to publish to staff)`;
+        summary += `\n📝 Status: DRAFT — ask the user if they want to publish it to staff right away.`;
 
         return summary;
+      }
+
+      case 'create_events_bulk': {
+        const { events = [] } = functionArgs;
+
+        if (!Array.isArray(events) || events.length === 0) {
+          return '❌ No events provided. Pass an array of event objects.';
+        }
+        if (events.length > 30) {
+          return `❌ Too many events (${events.length}). Maximum is 30 per bulk operation.`;
+        }
+
+        // Validate all events before creating any
+        const todayBulk = new Date();
+        todayBulk.setHours(0, 0, 0, 0);
+        for (let i = 0; i < events.length; i++) {
+          const ev = events[i];
+          if (!ev.client_name || !ev.date || !ev.call_time || !ev.end_time) {
+            return `❌ Event #${i + 1} missing required fields. Need: client_name, date, call_time, end_time`;
+          }
+          if (!ev.roles || !Array.isArray(ev.roles) || ev.roles.length === 0) {
+            return `❌ Event #${i + 1} needs at least one role.`;
+          }
+          if (new Date(ev.date) < todayBulk) {
+            return `❌ Event #${i + 1} has a past date (${ev.date}). All events must be in the future.`;
+          }
+        }
+
+        // Use a transaction for atomicity
+        const session = await mongoose.startSession();
+        try {
+          session.startTransaction();
+
+          const docs = events.map((ev: any) => {
+            const evDate = new Date(ev.date);
+            const sName = `${ev.client_name} - ${evDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+            const d: any = {
+              managerId,
+              status: 'draft',
+              shift_name: sName,
+              client_name: ev.client_name,
+              date: evDate,
+              start_time: ev.call_time,
+              end_time: ev.end_time,
+              roles: ev.roles,
+              accepted_staff: [],
+              declined_staff: [],
+            };
+            if (ev.venue_name) d.venue_name = ev.venue_name;
+            if (ev.venue_address) d.venue_address = ev.venue_address;
+            if (ev.uniform) d.uniform = ev.uniform;
+            if (ev.notes) d.notes = ev.notes;
+            if (ev.contact_name) d.contact_name = ev.contact_name;
+            if (ev.contact_phone) d.contact_phone = ev.contact_phone;
+            if (ev.headcount_total) d.headcount_total = ev.headcount_total;
+            return d;
+          });
+
+          const created = await EventModel.insertMany(docs, { session });
+          await session.commitTransaction();
+
+          // Emit socket events for each created event
+          const ids: string[] = [];
+          for (const c of created) {
+            const obj = c.toObject();
+            const payload = {
+              ...obj,
+              id: String(obj._id),
+              managerId: String(obj.managerId),
+              role_stats: computeRoleStats(obj.roles || [], []),
+            };
+            emitToManager(String(managerId), 'event:created', payload);
+            ids.push(String(obj._id));
+          }
+
+          let summary = `✅ Created ${created.length} events as DRAFT:\n`;
+          created.forEach((c: any, i: number) => {
+            const d = new Date(c.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            const totalStaff = (c.roles || []).reduce((sum: number, r: any) => sum + (r.count || 0), 0);
+            summary += `  ${i + 1}. ${c.client_name} — ${d} (${totalStaff} staff) — ID: ${c._id}\n`;
+          });
+          summary += `\nEvent IDs: ${ids.join(', ')}\n`;
+          summary += `📝 All are DRAFT — ask the user if they want to publish all of them.`;
+
+          return summary;
+        } catch (txErr: any) {
+          await session.abortTransaction();
+          console.error('[create_events_bulk] Transaction failed:', txErr);
+          return `❌ Failed to create events: ${txErr.message}`;
+        } finally {
+          session.endSession();
+        }
+      }
+
+      case 'publish_event': {
+        const { event_id } = functionArgs;
+
+        if (!event_id || !mongoose.Types.ObjectId.isValid(event_id)) {
+          return '❌ Invalid event_id. Please provide the event ID from create_event.';
+        }
+
+        const event = await EventModel.findOne({
+          _id: new mongoose.Types.ObjectId(event_id),
+          managerId,
+        });
+
+        if (!event) {
+          return '❌ Event not found or not owned by you.';
+        }
+        if (event.status !== 'draft') {
+          return `❌ Cannot publish — event status is '${event.status}'. Only draft events can be published.`;
+        }
+
+        // Get ALL manager's teams and their active members
+        const teams = await TeamModel.find({ managerId }).lean();
+        if (teams.length === 0) {
+          return '❌ You have no teams set up. Create a team and add staff before publishing.';
+        }
+
+        const teamIds = teams.map(t => String(t._id));
+        const teamMembers = await TeamMemberModel.find({
+          teamId: { $in: teamIds.map(id => new mongoose.Types.ObjectId(id)) },
+          status: 'active',
+        }).lean();
+
+        const targetUserKeys: string[] = [];
+        for (const member of teamMembers) {
+          if (member.provider && member.subject) {
+            const userKey = `${member.provider}:${member.subject}`;
+            if (!targetUserKeys.includes(userKey)) {
+              targetUserKeys.push(userKey);
+            }
+          }
+        }
+
+        // Update event to published
+        event.status = 'published';
+        (event as any).publishedAt = new Date();
+        event.audience_team_ids = teamIds.map(id => new mongoose.Types.ObjectId(id)) as any;
+        event.audience_user_keys = targetUserKeys as any;
+        (event as any).visibilityType = 'private';
+        await event.save();
+
+        const eventObj = event.toObject();
+        const pubPayload = {
+          ...eventObj,
+          id: String(eventObj._id),
+          managerId: String(eventObj.managerId),
+          audience_user_keys: targetUserKeys,
+          audience_team_ids: teamIds,
+          role_stats: computeRoleStats((eventObj.roles as any[]) || [], (eventObj.accepted_staff as any[]) || []),
+        };
+
+        // Emit socket events
+        emitToManager(String(managerId), 'event:published', pubPayload);
+        emitToTeams(teamIds, 'event:created', pubPayload);
+        for (const key of targetUserKeys) {
+          emitToUser(key, 'event:created', pubPayload);
+        }
+
+        // Send push notifications — one per role per staff member
+        const roles = (eventObj.roles as any[]) || [];
+        const eventDate = eventObj.date;
+        const startTime = (eventObj as any).start_time;
+        const endTime = (eventObj as any).end_time;
+
+        let formattedDate = '';
+        if (eventDate) {
+          const d = new Date(eventDate as any);
+          formattedDate = `${d.getDate()} ${d.toLocaleDateString('en-US', { month: 'short' })}`;
+        }
+        let timePart = '';
+        if (startTime && endTime) {
+          timePart = `${startTime} - ${endTime}`;
+        }
+
+        const teamIdToName = new Map(teams.map((t: any) => [String(t._id), t.name]));
+        let notifiedCount = 0;
+
+        for (const userKey of targetUserKeys) {
+          try {
+            const [provider, subject] = userKey.split(':');
+            if (!provider || !subject) continue;
+
+            const user = await UserModel.findOne({ provider, subject }).lean();
+            if (!user) continue;
+
+            const terminology = (user as any).eventTerminology || 'shift';
+
+            // Find which team this user belongs to
+            let teamName = 'Your team';
+            const userTeamMembership = await TeamMemberModel.findOne({
+              provider,
+              subject,
+              teamId: { $in: teamIds.map(id => new mongoose.Types.ObjectId(id)) },
+              status: 'active',
+            }).lean();
+            if (userTeamMembership) {
+              teamName = teamIdToName.get(String(userTeamMembership.teamId)) || 'Your team';
+            }
+
+            for (const role of roles) {
+              const roleName = role.role || role.role_name;
+              if (!roleName) continue;
+
+              const capitalizedTerm = terminology.charAt(0).toUpperCase() + terminology.slice(1);
+              const notificationTitle = `🔵 New Open ${capitalizedTerm}`;
+              let notificationBody = `${teamName} posted a new ${terminology} as ${roleName}`;
+              if (formattedDate && timePart) {
+                notificationBody += ` • ${formattedDate}, ${timePart}`;
+              } else if (formattedDate) {
+                notificationBody += ` • ${formattedDate}`;
+              }
+
+              await notificationService.sendToUser(
+                String(user._id),
+                notificationTitle,
+                notificationBody,
+                { type: 'event', eventId: String(eventObj._id), role: roleName },
+                'user'
+              );
+            }
+            notifiedCount++;
+          } catch (err) {
+            console.error(`[publish_event AI] Notification failed for ${userKey}:`, err);
+          }
+        }
+
+        return `✅ Published! ${notifiedCount} staff notified across ${teams.length} team(s).`;
+      }
+
+      case 'publish_events_bulk': {
+        const { event_ids = [] } = functionArgs;
+
+        if (!Array.isArray(event_ids) || event_ids.length === 0) {
+          return '❌ No event IDs provided.';
+        }
+
+        const results: string[] = [];
+        let successCount = 0;
+
+        for (const eid of event_ids) {
+          try {
+            const result = await executeFunctionCall('publish_event', { event_id: eid }, managerId);
+            if (result.startsWith('✅')) {
+              successCount++;
+              results.push(`  ✅ ${eid}: Published`);
+            } else {
+              results.push(`  ❌ ${eid}: ${result}`);
+            }
+          } catch (err: any) {
+            results.push(`  ❌ ${eid}: ${err.message}`);
+          }
+        }
+
+        return `📦 Bulk publish results: ${successCount}/${event_ids.length} published\n${results.join('\n')}`;
+      }
+
+      case 'get_teams': {
+        const teams = await TeamModel.find({ managerId })
+          .select('name _id')
+          .sort({ name: 1 })
+          .lean();
+
+        if (teams.length === 0) {
+          return 'No teams found. Create a team to start organizing your staff.';
+        }
+
+        const teamList = teams.map(t => `• ${t.name} (ID: ${t._id})`).join('\n');
+        return `You have ${teams.length} team(s):\n${teamList}`;
       }
 
       case 'get_clients_list': {
@@ -2951,6 +3324,21 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
 - Present times as "4:00 PM" not "16:00:00"
 - Use bullet points for lists
 - Use markdown: **bold** for important terms
+
+📦 EVENT CREATION (AGENTIC WORKFLOW):
+- When user wants to create an event, collect details conversationally
+- Required: client_name, date, call_time (start_time), end_time, at least 1 role
+- Before creating: present a summary and ask user to confirm
+- Once confirmed: use create_event tool (creates as DRAFT)
+- After creating: ALWAYS ask "Would you like me to publish this to your staff right away?"
+- If user says yes: use publish_event tool with the event_id from create_event result
+
+📦 BULK CREATION:
+- For recurring patterns ("every Saturday in March", "3 shifts next week"): use create_events_bulk
+- Present full list summary before creating, ask for confirmation
+- After bulk creation: offer to publish all with publish_events_bulk
+
+🚫 DO NOT output EVENT_COMPLETE, EVENT_UPDATE, or other markers. Use the create_event / update_event tools instead.
 `;
 
   const dateContext = getFullSystemContext(timezone);
@@ -3121,7 +3509,7 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
           })
         );
 
-        // Multi-step tool calling loop (supports chaining e.g. get_clients_list → create_shift)
+        // Multi-step tool calling loop (supports chaining e.g. get_clients_list → create_event → publish_event)
         let currentMessages = [
           ...processedMessages,
           assistantMessage,
