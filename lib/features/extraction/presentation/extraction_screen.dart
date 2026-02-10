@@ -114,6 +114,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   List<Map<String, dynamic>>? _eventsAvailable;
   List<Map<String, dynamic>>? _eventsFull;
   List<Map<String, dynamic>>? _eventsCompleted;
+  List<Map<String, dynamic>>? _eventsExpired;
 
   // Search & sort state
   final TextEditingController _searchController = TextEditingController();
@@ -1857,10 +1858,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           switch (_eventsTabController.index) {
             case 0:
               print('[RENDER] Showing PENDING: ${filteredPending.length} items');
-              return _eventsInner(filteredPending); // Pending tab
+              return _eventsInner(filteredPending, header: _buildExpiredEventsBanner(_eventsExpired?.length ?? 0)); // Pending tab
             case 1:
               print('[RENDER] Showing POSTED: ${filteredAvailable.length} items');
-              return _eventsInner(filteredAvailable); // Posted tab
+              return _eventsInner(filteredAvailable, header: _buildExpiredEventsBanner(_eventsExpired?.length ?? 0)); // Posted tab
             case 2:
               print('[RENDER] Showing FULL: ${filteredFull.length} items');
               return _eventsInner(filteredFull); // Full tab
@@ -1875,8 +1876,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           return TabBarView(
             controller: _eventsTabController,
             children: [
-              _eventsInner(filteredPending), // Pending tab
-              _eventsInner(filteredAvailable), // Posted tab
+              _eventsInner(filteredPending, header: _buildExpiredEventsBanner(_eventsExpired?.length ?? 0)), // Pending tab
+              _eventsInner(filteredAvailable, header: _buildExpiredEventsBanner(_eventsExpired?.length ?? 0)), // Posted tab
               _eventsInner(filteredFull), // Full tab
               _eventsInner(filteredCompleted), // Completed tab
             ],
@@ -4719,6 +4720,262 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   /// Show past events in a bottom sheet
+  Widget _buildExpiredEventsBanner(int count) {
+    if (count == 0) return const SizedBox.shrink();
+    return GestureDetector(
+      onTap: _showExpiredEvents,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.orange.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: Colors.orange.withValues(alpha: 0.3),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.warning_amber_rounded,
+              color: Colors.orange.shade700,
+              size: 22,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$count expired unfulfilled event${count == 1 ? '' : 's'}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.orange.shade900,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Past events that were never fully staffed',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.orange.shade700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right,
+              color: Colors.orange.shade700,
+              size: 20,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showExpiredEvents() {
+    final expiredEvents = List<Map<String, dynamic>>.from(_eventsExpired ?? []);
+    final parentContext = context;
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (bottomSheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) => DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          builder: (context, scrollController) => Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(20),
+                topRight: Radius.circular(20),
+              ),
+            ),
+            child: Column(
+              children: [
+                // Handle bar
+                Container(
+                  margin: const EdgeInsets.only(top: 12, bottom: 8),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                // Header
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  child: Row(
+                    children: [
+                      Icon(Icons.warning_amber_rounded, size: 24, color: Colors.orange.shade700),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Expired Unfulfilled (${expiredEvents.length})',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      if (expiredEvents.isNotEmpty)
+                        TextButton.icon(
+                          icon: const Icon(Icons.delete_sweep, size: 20, color: ExColors.errorDark),
+                          label: const Text('Delete All', style: TextStyle(color: ExColors.errorDark, fontSize: 13)),
+                          onPressed: () async {
+                            final count = expiredEvents.length;
+                            final confirm = await showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('Delete All Expired Events'),
+                                content: Text('Delete all $count expired event${count == 1 ? '' : 's'}? This cannot be undone.'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context, false),
+                                    child: const Text('Cancel'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context, true),
+                                    child: const Text('Delete All', style: TextStyle(color: ExColors.errorDark)),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (confirm != true) return;
+
+                            try {
+                              for (final event in List<Map<String, dynamic>>.from(expiredEvents)) {
+                                final eventId = (event['_id'] ?? event['id'] ?? '').toString();
+                                if (eventId.isNotEmpty) {
+                                  await _eventService.deleteEvent(eventId);
+                                }
+                              }
+                              await _loadEvents();
+                              if (!mounted) return;
+                              Navigator.pop(bottomSheetContext);
+                              ScaffoldMessenger.of(parentContext).showSnackBar(
+                                SnackBar(content: Text('$count expired event${count == 1 ? '' : 's'} deleted')),
+                              );
+                            } catch (e) {
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(parentContext).showSnackBar(
+                                SnackBar(
+                                  content: Text('Failed to delete: $e'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(bottomSheetContext),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                // Expired events list
+                Expanded(
+                  child: expiredEvents.isEmpty
+                      ? const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.event_busy, size: 64, color: Colors.grey),
+                              SizedBox(height: 16),
+                              Text(
+                                'No expired events',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          controller: scrollController,
+                          padding: const EdgeInsets.all(20),
+                          itemCount: expiredEvents.length,
+                          itemBuilder: (context, index) {
+                            final event = expiredEvents[index];
+                            final eventId = (event['_id'] ?? event['id'] ?? '').toString();
+                            return Dismissible(
+                              key: Key(eventId.isNotEmpty ? eventId : 'expired_$index'),
+                              direction: DismissDirection.endToStart,
+                              background: Container(
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.only(right: 20),
+                                margin: const EdgeInsets.only(bottom: 12),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.shade50,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Icon(Icons.delete, color: Colors.red.shade700),
+                              ),
+                              confirmDismiss: (direction) async {
+                                return await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text('Delete Event'),
+                                    content: const Text('Are you sure you want to delete this expired event?'),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context, false),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context, true),
+                                        child: const Text('Delete', style: TextStyle(color: ExColors.errorDark)),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                              onDismissed: (direction) async {
+                                setSheetState(() {
+                                  expiredEvents.removeAt(index);
+                                });
+                                try {
+                                  await _eventService.deleteEvent(eventId);
+                                  await _loadEvents();
+                                  if (!mounted) return;
+                                  if (expiredEvents.isEmpty) {
+                                    Navigator.pop(bottomSheetContext);
+                                  }
+                                } catch (e) {
+                                  if (!mounted) return;
+                                  ScaffoldMessenger.of(parentContext).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Failed to delete: $e'),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
+                              },
+                              child: _buildEventCard(event, showMargin: true),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showPastEvents() {
     final pastEvents = _eventsCompleted ?? [];
 
@@ -5008,6 +5265,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       final List<Map<String, dynamic>> available = [];
       final List<Map<String, dynamic>> full = [];
       final List<Map<String, dynamic>> past = [];
+      final List<Map<String, dynamic>> expired = [];
 
       for (final e in items) {
         final status = (e['status'] ?? 'draft').toString();
@@ -5062,14 +5320,19 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           print('  → Classified as: FULL (upcoming full event)');
         } else if (status == 'published' || status == 'confirmed' || status == 'in_progress' || status == 'completed') {
           // Published/confirmed/in-progress/completed events that are NOT full
-          // If completed but not full, show in Posted since they were active events
-          available.add(e);
-          if (status == 'completed') {
-            print('  → Classified as: POSTED (completed but not full - needs attention)');
-          } else if (visibilityType == 'private') {
-            print('  → Classified as: POSTED (published - private)');
+          if (isPast) {
+            // Past + not full → expired unfulfilled
+            expired.add(e);
+            print('  → Classified as: EXPIRED (past + not fully staffed)');
           } else {
-            print('  → Classified as: POSTED (published - public)');
+            available.add(e);
+            if (status == 'completed') {
+              print('  → Classified as: POSTED (completed but not full - needs attention)');
+            } else if (visibilityType == 'private') {
+              print('  → Classified as: POSTED (published - private)');
+            } else {
+              print('  → Classified as: POSTED (published - public)');
+            }
           }
         } else if (status == 'cancelled') {
           // Cancelled events go to Pending (as historical record)
@@ -5096,6 +5359,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       available.sort(ascByDate);
       full.sort(ascByDate);
       past.sort((a, b) => ascByDate(b, a)); // most recent first
+      expired.sort((a, b) => ascByDate(b, a)); // most recent first
 
       // IMPORTANT: Include ALL events (including completed) so delta sync
       // can properly merge changes. Previously completed events were excluded
@@ -5105,10 +5369,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         ...available,
         ...full,
         ...past,
+        ...expired,
       ];
 
       // Debug: Log the filtered counts
-      print('[EVENTS DEBUG] Filtered: ${pending.length} pending, ${available.length} posted, ${full.length} full, ${past.length} past');
+      print('[EVENTS DEBUG] Filtered: ${pending.length} pending, ${available.length} posted, ${full.length} full, ${past.length} past, ${expired.length} expired');
       if (full.isNotEmpty) {
         print('[EVENTS DEBUG] Full events: ${full.map((e) => e['name']).toList()}');
       }
@@ -5122,6 +5387,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         _eventsAvailable = available;
         _eventsFull = full;
         _eventsCompleted = past;
+        _eventsExpired = expired;
         _isEventsLoading = false;
       });
 
@@ -5168,9 +5434,20 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         currentTabEvents = pending;
     }
 
+    // Build expired banner for Pending tab (case 0) and Posted tab (case 1)
+    final bool showExpiredBanner = _eventsTabController.index == 0 || _eventsTabController.index == 1;
+    final int expiredCount = _eventsExpired?.length ?? 0;
+
     // Build event cards as individual slivers for proper scrolling
     if (currentTabEvents.isEmpty) {
       return [
+        if (showExpiredBanner && expiredCount > 0)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: _buildExpiredEventsBanner(expiredCount),
+            ),
+          ),
         SliverToBoxAdapter(
           child: Center(
             child: Padding(
@@ -5189,6 +5466,13 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     }
 
     return [
+      if (showExpiredBanner && expiredCount > 0)
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: _buildExpiredEventsBanner(expiredCount),
+          ),
+        ),
       SliverList(
         delegate: SliverChildBuilderDelegate(
           (context, index) {
@@ -5659,7 +5943,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     );
   }
 
-  Widget _eventsInner(List<Map<String, dynamic>> items) {
+  Widget _eventsInner(List<Map<String, dynamic>> items, {Widget? header}) {
     print('[EVENTS INNER] Received ${items.length} items');
     final sortedItems = _sortEvents(items);
     return RefreshIndicator(
@@ -5716,6 +6000,13 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       ),
                     ),
                   ),
+                if (header != null)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                      child: header,
+                    ),
+                  ),
                 SliverPadding(
                   padding: const EdgeInsets.all(20),
                   sliver: SliverGrid(
@@ -5748,6 +6039,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   ),
                 ),
               if (kIsWeb) const SizedBox(height: 12),
+              if (header != null) header,
               if (_eventsError != null) ...[
                 ErrorBanner(message: _eventsError!),
                 const SizedBox(height: 12),
@@ -8428,6 +8720,19 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       timeDisplay = 'Time TBD';
     }
 
+    // Check if event is expired unfulfilled (past + has open positions + not draft/cancelled)
+    bool isExpiredUnfulfilled = false;
+    if (rawDate is String && rawDate.isNotEmpty && status != 'draft' && status != 'cancelled') {
+      try {
+        final d = DateTime.parse(rawDate);
+        final eventDate = DateTime(d.year, d.month, d.day);
+        final todayDate = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+        if (eventDate.isBefore(todayDate) && _hasOpenPositions(e)) {
+          isExpiredUnfulfilled = true;
+        }
+      } catch (_) {}
+    }
+
     // Extract roles for display
     final roles = (e['roles'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     final bool isRolesMissing = roles.isEmpty ||
@@ -8713,6 +9018,39 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                   fontSize: 10,
                                   fontWeight: FontWeight.w500,
                                   color: privacyColor,
+                                  height: 1.2,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      // Expired unfulfilled badge
+                      if (isExpiredUnfulfilled)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: Colors.orange.withValues(alpha: 0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.warning_amber_rounded,
+                                size: 11,
+                                color: Colors.orange.shade700,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Expired',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.orange.shade700,
                                   height: 1.2,
                                 ),
                               ),
