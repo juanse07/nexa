@@ -23,7 +23,7 @@ const redeemInviteSchema = z.object({
 });
 
 async function verifyPassword(password: string, hash: string): Promise<boolean> {
-  const [salt, key] = hash.split(':');
+  const [salt = '', key] = hash.split(':');
   return new Promise((resolve, reject) => {
     crypto.scrypt(password, salt, 64, (err, derivedKey) => {
       if (err) reject(err);
