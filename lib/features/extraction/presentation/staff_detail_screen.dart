@@ -4,6 +4,7 @@ import 'package:nexa/shared/widgets/initials_avatar.dart';
 import '../services/staff_service.dart';
 import '../services/group_service.dart';
 import '../../chat/presentation/chat_screen.dart';
+import '../../users/presentation/pages/user_events_screen.dart';
 import 'theme/extraction_theme.dart';
 
 class StaffDetailScreen extends StatefulWidget {
@@ -315,7 +316,32 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
                 : null,
           ),
         ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _buildActionButton(
+            icon: Icons.event_note_outlined,
+            label: 'Events',
+            onTap: _userKey.isNotEmpty ? _openUserEvents : null,
+          ),
+        ),
       ],
+    );
+  }
+
+  void _openUserEvents() {
+    // UserEventsScreen expects user['provider'] and user['subject']
+    final parts = _userKey.split(':');
+    final userMap = <String, dynamic>{
+      'provider': parts.isNotEmpty ? parts[0] : '',
+      'subject': parts.length > 1 ? parts.sublist(1).join(':') : '',
+      'name': _name,
+      'first_name': widget.staff['first_name'],
+      'last_name': widget.staff['last_name'],
+      'email': _email,
+      'picture': _picture,
+    };
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => UserEventsScreen(user: userMap)),
     );
   }
 

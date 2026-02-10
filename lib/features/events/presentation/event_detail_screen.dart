@@ -4,6 +4,7 @@ import '../../extraction/services/event_service.dart';
 import '../../extraction/presentation/pending_publish_screen.dart';
 import '../../extraction/presentation/pending_edit_screen.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
+import '../../attendance/presentation/bulk_clock_in_screen.dart';
 
 class EventDetailScreen extends StatefulWidget {
   final Map<String, dynamic> event;
@@ -741,6 +742,23 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             ),
           ),
         ),
+        // Clock In Staff button (published events with accepted staff, today or past)
+        if (_shouldShowClockInButton()) ...[
+          const SizedBox(height: 12),
+          ElevatedButton.icon(
+            onPressed: () => _openBulkClockIn(),
+            icon: const Icon(Icons.login, size: 18),
+            label: const Text('Clock In Staff'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.success,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
+        ],
         // Open to All Staff button (only for private events)
         if (privacyStatus == 'private') ...[
           const SizedBox(height: 12),
@@ -759,6 +777,32 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           ),
         ],
       ],
+    );
+  }
+
+  bool _shouldShowClockInButton() {
+    final status = (event['status'] ?? 'draft').toString();
+    if (status != 'published') return false;
+
+    final acceptedStaff = event['accepted_staff'] as List<dynamic>?;
+    if (acceptedStaff == null || acceptedStaff.isEmpty) return false;
+
+    final rawDate = event['date'];
+    if (rawDate is! String || rawDate.isEmpty) return false;
+    try {
+      final eventDate = DateTime.parse(rawDate);
+      final today = DateTime.now();
+      final todayStart = DateTime(today.year, today.month, today.day);
+      // Allow today or past events (not future)
+      return !eventDate.isAfter(todayStart.add(const Duration(days: 1)).subtract(const Duration(milliseconds: 1)));
+    } catch (_) {
+      return false;
+    }
+  }
+
+  void _openBulkClockIn() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => BulkClockInScreen(event: event)),
     );
   }
 

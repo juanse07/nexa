@@ -39,7 +39,7 @@ function getDateRange(period: string): { start: Date; end: Date } {
 function calculateShiftHours(event: any, userKey: string): number {
   const acceptedStaff = event.accepted_staff || [];
   const userInShift = acceptedStaff.find((s: any) => s.userKey === userKey);
-  if (!userInShift || userInShift.response !== 'accepted') return 0;
+  if (!userInShift || (userInShift.response !== 'accepted' && userInShift.response !== 'accept')) return 0;
 
   const attendance = (userInShift.attendance || []) as any[];
   if (attendance.length > 0) {
@@ -211,7 +211,7 @@ router.get('/staff', requireAuth, async (req: Request, res: Response) => {
       {
         $match: {
           'accepted_staff.userKey': { $in: userKeys },
-          'accepted_staff.response': 'accepted',
+          'accepted_staff.response': { $in: ['accepted', 'accept'] },
         },
       },
       {
@@ -312,7 +312,7 @@ router.get('/staff/:userKey', requireAuth, async (req: Request, res: Response) =
     const recentEvents = await EventModel.find({
       managerId,
       'accepted_staff.userKey': userKey,
-      'accepted_staff.response': 'accepted',
+      'accepted_staff.response': { $in: ['accepted', 'accept'] },
       status: { $ne: 'cancelled' },
     })
       .sort({ date: -1 })
@@ -343,7 +343,7 @@ router.get('/staff/:userKey', requireAuth, async (req: Request, res: Response) =
         },
       },
       { $unwind: '$accepted_staff' },
-      { $match: { 'accepted_staff.userKey': userKey, 'accepted_staff.response': 'accepted' } },
+      { $match: { 'accepted_staff.userKey': userKey, 'accepted_staff.response': { $in: ['accepted', 'accept'] } } },
       { $group: { _id: null, roles: { $addToSet: '$accepted_staff.role' } } },
     ]);
 

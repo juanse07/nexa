@@ -1587,60 +1587,19 @@ async function executeFunctionCall(
           return `❌ Cannot merge a client with itself. Please specify two different clients.`;
         }
 
-        // Transfer events from source to target
-        const eventsUpdated = await EventModel.updateMany(
-          {
-            managerId,
-            client_name: new RegExp(`^${sourceClient.name}$`, 'i')
-          },
-          {
-            $set: { client_name: targetClient.name }
-          }
+        const { mergeClients: mergeClientsFn } = await import('../services/catalogMergeService');
+        const mergeResult = await mergeClientsFn(
+          managerId,
+          [sourceClient._id.toString()],
+          targetClient._id.toString()
         );
 
-        // Transfer tariffs from source to target (if they don't already exist for target)
-        const sourceTariffs = await TariffModel.find({
-          managerId,
-          clientId: sourceClient._id
-        }).lean();
-
-        let tariffsTransferred = 0;
-        for (const tariff of sourceTariffs) {
-          // Check if target already has this tariff
-          const existingTariff = await TariffModel.findOne({
-            managerId,
-            clientId: targetClient._id,
-            roleId: tariff.roleId
-          }).lean();
-
-          if (!existingTariff) {
-            // Transfer tariff to target client
-            await TariffModel.create({
-              managerId,
-              clientId: targetClient._id,
-              roleId: tariff.roleId,
-              rate: tariff.rate,
-              currency: tariff.currency
-            });
-            tariffsTransferred++;
-          }
-        }
-
-        // Delete source client's tariffs
-        await TariffModel.deleteMany({
-          managerId,
-          clientId: sourceClient._id
-        });
-
-        // Delete source client
-        await ClientModel.deleteOne({ _id: sourceClient._id });
-
         let result = `✅ Successfully merged "${sourceClient.name}" into "${targetClient.name}"`;
-        if (eventsUpdated.modifiedCount > 0) {
-          result += `\n   📋 ${eventsUpdated.modifiedCount} event(s) transferred`;
+        if (mergeResult.eventsTransferred > 0) {
+          result += `\n   📋 ${mergeResult.eventsTransferred} event(s) transferred`;
         }
-        if (tariffsTransferred > 0) {
-          result += `\n   💰 ${tariffsTransferred} tariff(s) transferred`;
+        if (mergeResult.tariffsTransferred > 0) {
+          result += `\n   💰 ${mergeResult.tariffsTransferred} tariff(s) transferred`;
         }
         result += `\n   🗑️ "${sourceClient.name}" has been deleted`;
 
@@ -1787,63 +1746,19 @@ async function executeFunctionCall(
           return `❌ Cannot merge a role with itself. Please specify two different roles.`;
         }
 
-        // Update events to use target role instead of source
-        const eventsUpdated = await EventModel.updateMany(
-          {
-            managerId,
-            'roles.role': new RegExp(`^${sourceRole.name}$`, 'i')
-          },
-          {
-            $set: { 'roles.$[elem].role': targetRole.name }
-          },
-          {
-            arrayFilters: [{ 'elem.role': new RegExp(`^${sourceRole.name}$`, 'i') }]
-          }
+        const { mergeRoles: mergeRolesFn } = await import('../services/catalogMergeService');
+        const mergeResult = await mergeRolesFn(
+          managerId,
+          [sourceRole._id.toString()],
+          targetRole._id.toString()
         );
 
-        // Transfer tariffs from source to target (if they don't already exist for target)
-        const sourceTariffs = await TariffModel.find({
-          managerId,
-          roleId: sourceRole._id
-        }).lean();
-
-        let tariffsTransferred = 0;
-        for (const tariff of sourceTariffs) {
-          // Check if target already has this tariff for the same client
-          const existingTariff = await TariffModel.findOne({
-            managerId,
-            clientId: tariff.clientId,
-            roleId: targetRole._id
-          }).lean();
-
-          if (!existingTariff) {
-            // Transfer tariff to target role
-            await TariffModel.create({
-              managerId,
-              clientId: tariff.clientId,
-              roleId: targetRole._id,
-              rate: tariff.rate,
-              currency: tariff.currency
-            });
-            tariffsTransferred++;
-          }
-        }
-
-        // Delete source role's tariffs
-        await TariffModel.deleteMany({
-          managerId,
-          roleId: sourceRole._id
-        });
-
-        // Delete source role
-        await RoleModel.deleteOne({ _id: sourceRole._id });
-
         let result = `✅ Successfully merged "${sourceRole.name}" into "${targetRole.name}"`;
-        if (eventsUpdated.modifiedCount > 0) {
-          result += `\n   📋 ${eventsUpdated.modifiedCount} event(s) updated`;
+        if (mergeResult.eventsTransferred > 0) {
+          result += `\n   📋 ${mergeResult.eventsTransferred} event(s) updated`;
         }
-        if (tariffsTransferred > 0) {
-          result += `\n   💰 ${tariffsTransferred} tariff(s) transferred`;
+        if (mergeResult.tariffsTransferred > 0) {
+          result += `\n   💰 ${mergeResult.tariffsTransferred} tariff(s) transferred`;
         }
         result += `\n   🗑️ "${sourceRole.name}" has been deleted`;
 

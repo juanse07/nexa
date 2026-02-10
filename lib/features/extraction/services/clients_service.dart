@@ -85,4 +85,27 @@ class ClientsService {
       throw Exception('Failed to delete client: ${e.message}');
     }
   }
+
+  Future<Map<String, dynamic>> mergeClients({
+    required List<String> sourceIds,
+    required String targetId,
+  }) async {
+    try {
+      final response = await _apiClient.post(
+        '/clients/merge',
+        data: {'sourceIds': sourceIds, 'targetId': targetId},
+      );
+
+      if (response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300) {
+        return response.data as Map<String, dynamic>;
+      }
+      throw Exception(
+        'Failed to merge clients (${response.statusCode}): ${response.data}',
+      );
+    } on DioException catch (e) {
+      throw Exception('Failed to merge clients: ${e.message}');
+    }
+  }
 }

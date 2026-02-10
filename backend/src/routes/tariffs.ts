@@ -6,6 +6,7 @@ import { ClientModel } from '../models/client';
 import { RoleModel } from '../models/role';
 import { TariffModel } from '../models/tariff';
 import { resolveManagerForRequest } from '../utils/manager';
+import { mergeTariffs } from '../services/catalogMergeService';
 
 const router = Router();
 
@@ -96,6 +97,35 @@ router.delete('/tariffs/:id', requireAuth, async (req, res) => {
     return res.json({ message: 'Tariff deleted' });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to delete tariff' });
+  }
+});
+
+// Merge tariffs: delete sources, keep target (simple dedup)
+const mergeSchema = z.object({
+  sourceIds: z.array(z.string().min(1)).min(1),
+  targetId: z.string().min(1),
+});
+
+router.post('/tariffs/merge', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+
+    const parsed = mergeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Validation failed', details: parsed.error.format() });
+    }
+    const { sourceIds, targetId } = parsed.data;
+
+    for (const id of [...sourceIds, targetId]) {
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ message: `Invalid id: ${id}` });
+      }
+    }
+
+    const result = await mergeTariffs(manager._id as mongoose.Types.ObjectId, sourceIds, targetId);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(500).json({ message: err.message || 'Failed to merge tariffs' });
   }
 });
 
