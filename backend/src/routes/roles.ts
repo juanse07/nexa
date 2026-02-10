@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { requireAuth } from '../middleware/requireAuth';
 import { RoleModel } from '../models/role';
 import { resolveManagerForRequest } from '../utils/manager';
+import { mergeRoles } from '../services/catalogMergeService';
 
 const router = Router();
 
@@ -79,6 +80,35 @@ router.delete('/roles/:id', requireAuth, async (req, res) => {
     return res.json({ message: 'Role deleted' });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to delete role' });
+  }
+});
+
+// Merge roles: transfer events/tariffs from sources to target, delete sources
+const mergeSchema = z.object({
+  sourceIds: z.array(z.string().min(1)).min(1),
+  targetId: z.string().min(1),
+});
+
+router.post('/roles/merge', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+
+    const parsed = mergeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Validation failed', details: parsed.error.format() });
+    }
+    const { sourceIds, targetId } = parsed.data;
+
+    for (const id of [...sourceIds, targetId]) {
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ message: `Invalid id: ${id}` });
+      }
+    }
+
+    const result = await mergeRoles(manager._id as mongoose.Types.ObjectId, sourceIds, targetId);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(500).json({ message: err.message || 'Failed to merge roles' });
   }
 });
 

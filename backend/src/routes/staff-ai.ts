@@ -1411,7 +1411,7 @@ async function executePerformanceCurrentMonth(
       const acceptedStaff = (event as any).accepted_staff || [];
       const userInShift = acceptedStaff.find((staff: any) => staff.userKey === userKey);
 
-      if (userInShift && userInShift.response === 'accepted') {
+      if (userInShift && (userInShift.response === 'accepted' || userInShift.response === 'accept')) {
         const position = userInShift.role || 'Staff';
 
         // Calculate hours from start_time and end_time
@@ -1513,7 +1513,7 @@ async function executePerformanceLastMonth(
       const acceptedStaff = (event as any).accepted_staff || [];
       const userInShift = acceptedStaff.find((staff: any) => staff.userKey === userKey);
 
-      if (userInShift && userInShift.response === 'accepted') {
+      if (userInShift && (userInShift.response === 'accepted' || userInShift.response === 'accept')) {
         const position = userInShift.role || 'Staff';
 
         // Calculate hours from start_time and end_time
@@ -1615,7 +1615,7 @@ async function executePerformanceLastYear(
       const acceptedStaff = (event as any).accepted_staff || [];
       const userInShift = acceptedStaff.find((staff: any) => staff.userKey === userKey);
 
-      if (userInShift && userInShift.response === 'accepted') {
+      if (userInShift && (userInShift.response === 'accepted' || userInShift.response === 'accept')) {
         const position = userInShift.role || 'Staff';
         const eventDate = new Date((event as any).date);
         const monthKey = `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, '0')}`;

@@ -156,7 +156,7 @@ router.get('/statistics/staff/summary', requireAuth, async (req: Request, res: R
       const acceptedStaff = (event as any).accepted_staff || [];
       const userInShift = acceptedStaff.find((staff: any) => staff.userKey === userKey);
 
-      if (userInShift && userInShift.response === 'accepted') {
+      if (userInShift && (userInShift.response === 'accepted' || userInShift.response === 'accept')) {
         const role = userInShift.role || 'Staff';
         const venue = (event as any).venue_name || 'Unknown Venue';
 
@@ -494,7 +494,7 @@ router.get('/statistics/manager/summary', requireAuth, async (req: Request, res:
       if ((event as any).status === 'cancelled') cancelledEvents++;
 
       const acceptedStaff = ((event as any).accepted_staff || []).filter(
-        (s: any) => s.response === 'accepted'
+        (s: any) => s.response === 'accepted' || s.response === 'accept'
       );
 
       totalStaffAssignments += acceptedStaff.length;
@@ -536,7 +536,7 @@ router.get('/statistics/manager/summary', requireAuth, async (req: Request, res:
     for (const event of events) {
       const headcount = (event as any).headcount_total || 0;
       const accepted = ((event as any).accepted_staff || []).filter(
-        (s: any) => s.response === 'accepted'
+        (s: any) => s.response === 'accepted' || s.response === 'accept'
       ).length;
       if (headcount > 0 && accepted >= headcount) fullyStaffedEvents++;
     }
@@ -612,7 +612,7 @@ router.get('/statistics/manager/payroll', requireAuth, async (req: Request, res:
 
     for (const event of events) {
       const acceptedStaff = ((event as any).accepted_staff || []).filter(
-        (s: any) => s.response === 'accepted'
+        (s: any) => s.response === 'accepted' || s.response === 'accept'
       );
 
       for (const staff of acceptedStaff) {
@@ -724,7 +724,7 @@ router.get('/statistics/manager/top-performers', requireAuth, async (req: Reques
 
     for (const event of events) {
       const acceptedStaff = ((event as any).accepted_staff || []).filter(
-        (s: any) => s.response === 'accepted'
+        (s: any) => s.response === 'accepted' || s.response === 'accept'
       );
 
       for (const staff of acceptedStaff) {
@@ -1058,7 +1058,7 @@ router.get('/exports/team-report', requireAuth, async (req: Request, res: Respon
 
       for (const event of events) {
         const acceptedStaff = ((event as any).accepted_staff || []).filter(
-          (s: any) => s.response === 'accepted'
+          (s: any) => s.response === 'accepted' || s.response === 'accept'
         );
 
         for (const staff of acceptedStaff) {
@@ -1143,7 +1143,7 @@ router.get('/exports/team-report', requireAuth, async (req: Request, res: Respon
 
       for (const event of events) {
         const acceptedStaff = ((event as any).accepted_staff || []).filter(
-          (s: any) => s.response === 'accepted'
+          (s: any) => s.response === 'accepted' || s.response === 'accept'
         );
 
         for (const staff of acceptedStaff) {

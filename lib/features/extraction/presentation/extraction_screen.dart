@@ -67,6 +67,7 @@ import '../../chat/data/services/chat_service.dart';
 import '../../chat/domain/entities/conversation.dart';
 import '../../chat/presentation/chat_screen.dart';
 import 'ai_chat_screen.dart';
+import '../../attendance/services/attendance_service.dart';
 import '../../../core/widgets/section_navigation_dropdown.dart';
 import '../../../core/widgets/web_tab_navigation.dart';
 import '../../main/presentation/main_screen.dart';
@@ -199,6 +200,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   Timer? _updateTimer;
   StreamSubscription<SocketEvent>? _socketSubscription;
 
+  // Merge mode state
+  bool _isMergeMode = false;
+  final Set<String> _mergeSelectedIds = {};
+  bool _isMerging = false;
+
   // Animation controllers for header hide/show effect
   late AnimationController _headerController;
   late Animation<double> _headerAnimation;
@@ -288,6 +294,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       // Show header when switching tabs
       if (_catalogTabController.indexIsChanging) {
         _showHeader();
+        // Exit merge mode when switching catalog sub-tabs
+        if (_isMergeMode) {
+          _exitMergeMode();
+        }
       }
       if (kIsWeb) {
         setState(() {});
@@ -522,6 +532,224 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       _headerController.reverse();
     }
   }
+
+  // ── Merge mode helpers ──────────────────────────────────────────────
+  void _toggleMergeMode() {
+    setState(() {
+      _isMergeMode = !_isMergeMode;
+      if (!_isMergeMode) _mergeSelectedIds.clear();
+    });
+  }
+
+  void _toggleMergeSelection(String id) {
+    setState(() {
+      if (_mergeSelectedIds.contains(id)) {
+        _mergeSelectedIds.remove(id);
+      } else {
+        _mergeSelectedIds.add(id);
+      }
+    });
+  }
+
+  void _exitMergeMode() {
+    setState(() {
+      _isMergeMode = false;
+      _mergeSelectedIds.clear();
+    });
+  }
+
+  Future<void> _executeMerge(String targetId) async {
+    final tabIndex = _catalogTabController.index;
+    final sourceIds = _mergeSelectedIds.where((id) => id != targetId).toList();
+    if (sourceIds.isEmpty) return;
+
+    setState(() => _isMerging = true);
+    try {
+      switch (tabIndex) {
+        case 0:
+          await _clientsService.mergeClients(sourceIds: sourceIds, targetId: targetId);
+          break;
+        case 1:
+          await _rolesService.mergeRoles(sourceIds: sourceIds, targetId: targetId);
+          break;
+        case 2:
+          await _tariffsService.mergeTariffs(sourceIds: sourceIds, targetId: targetId);
+          break;
+      }
+      _exitMergeMode();
+      // Reload all catalog data
+      await Future.wait([_loadClients(), _loadRoles(), _loadTariffs()]);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Merged ${sourceIds.length + 1} items successfully'),
+          backgroundColor: ExColors.successDark,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Merge failed: $e'),
+          backgroundColor: ExColors.errorDark,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isMerging = false);
+    }
+  }
+
+  void _showMergeTargetDialog() {
+    final tabIndex = _catalogTabController.index;
+    final selectedIds = _mergeSelectedIds.toList();
+
+    // Build item list from the selected IDs
+    List<Map<String, dynamic>> selectedItems = [];
+    if (tabIndex == 0) {
+      selectedItems = (_clients ?? []).where((c) => selectedIds.contains((c['id'] ?? '').toString())).toList();
+    } else if (tabIndex == 1) {
+      selectedItems = (_roles ?? []).where((r) => selectedIds.contains((r['id'] ?? '').toString())).toList();
+    } else if (tabIndex == 2) {
+      selectedItems = (_tariffs ?? []).where((t) => selectedIds.contains((t['id'] ?? '').toString())).toList();
+    }
+
+    if (selectedItems.length < 2) return;
+
+    String? chosenTargetId;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: ExColors.techBlue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.call_merge, color: ExColors.techBlue, size: 20),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(child: Text('Select item to keep', style: TextStyle(fontSize: 18))),
+              ],
+            ),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Tap the item you want to KEEP. Others will be merged into it and deleted.',
+                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 16),
+                  ...selectedItems.map((item) {
+                    final id = (item['id'] ?? '').toString();
+                    final isTarget = chosenTargetId == id;
+                    String label;
+                    if (tabIndex == 2) {
+                      // Tariff: show client / role - rate
+                      final clientId = (item['clientId'] ?? '').toString();
+                      final roleId = (item['roleId'] ?? '').toString();
+                      final clientName = (_clients ?? []).firstWhere(
+                        (c) => (c['id'] ?? '') == clientId,
+                        orElse: () => const {},
+                      )['name']?.toString() ?? 'Unknown';
+                      final roleName = (_roles ?? []).firstWhere(
+                        (r) => (r['id'] ?? '') == roleId,
+                        orElse: () => const {},
+                      )['name']?.toString() ?? 'Unknown';
+                      final rate = (item['rate'] ?? 0).toString();
+                      final currency = (item['currency'] ?? 'USD').toString();
+                      label = '$clientName / $roleName — \$$rate $currency/hr';
+                    } else {
+                      label = (item['name'] ?? '').toString();
+                    }
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () => setDialogState(() => chosenTargetId = id),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: isTarget ? ExColors.techBlue.withOpacity(0.08) : Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isTarget ? ExColors.techBlue : Colors.grey.shade300,
+                              width: isTarget ? 2 : 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  label,
+                                  style: TextStyle(
+                                    fontWeight: isTarget ? FontWeight.w700 : FontWeight.w500,
+                                    fontSize: 14,
+                                    color: isTarget ? ExColors.techBlue : ExColors.charcoal,
+                                  ),
+                                ),
+                              ),
+                              if (isTarget)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: ExColors.successDark,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Text(
+                                    'KEEP',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: chosenTargetId == null || _isMerging
+                    ? null
+                    : () {
+                        Navigator.of(ctx).pop();
+                        _executeMerge(chosenTargetId!);
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ExColors.techBlue,
+                  foregroundColor: Colors.white,
+                ),
+                child: _isMerging
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text('Merge'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+  // ── End merge mode helpers ─────────────────────────────────────────
 
   Future<void> _openTeamsManagementPage() async {
     await Navigator.of(
@@ -1806,21 +2034,42 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         ),
                       ],
                     ),
-                    child: _buildFilterChipBar(
-                      labels: ['Clients', 'Roles', 'Tariffs', 'Staff'],
-                      counts: [
-                        _clients?.length ?? 0,
-                        _roles?.length ?? 0,
-                        _tariffs?.length ?? 0,
-                        _staffMembers?.length ?? 0,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _buildFilterChipBar(
+                            labels: ['Clients', 'Roles', 'Tariffs', 'Staff'],
+                            counts: [
+                              _clients?.length ?? 0,
+                              _roles?.length ?? 0,
+                              _tariffs?.length ?? 0,
+                              _staffMembers?.length ?? 0,
+                            ],
+                            selectedIndex: _catalogTabController.index,
+                            onSelected: (index) {
+                              setState(() {
+                                _catalogTabController.animateTo(index);
+                              });
+                            },
+                            activeColor: ExColors.navySpaceCadet,
+                          ),
+                        ),
+                        if (_catalogTabController.index < 3)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: IconButton(
+                              icon: Icon(
+                                _isMergeMode ? Icons.close : Icons.call_merge,
+                                color: _isMergeMode ? ExColors.errorDark : ExColors.techBlue,
+                                size: 22,
+                              ),
+                              tooltip: _isMergeMode ? 'Exit merge mode' : 'Merge duplicates',
+                              onPressed: _toggleMergeMode,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                            ),
+                          ),
                       ],
-                      selectedIndex: _catalogTabController.index,
-                      onSelected: (index) {
-                        setState(() {
-                          _catalogTabController.animateTo(index);
-                        });
-                      },
-                      activeColor: ExColors.navySpaceCadet,
                     ),
                   ),
                 ),
@@ -1900,21 +2149,45 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   _buildStaffInner(),
                 ],
               ),
-              // Floating Action Button for adding items
-              Positioned(
-                bottom: 120,
-                right: 20,
-                child: FloatingActionButton(
-                  onPressed: _showAddItemDialog,
-                  backgroundColor: Colors.white.withOpacity(0.9),
-                  elevation: 4,
-                  child: const Icon(
-                    Icons.add,
-                    color: ExColors.yellow,
-                    size: 28,
+              // Floating Action Button for adding items (hide during merge mode)
+              if (!_isMergeMode)
+                Positioned(
+                  bottom: 120,
+                  right: 20,
+                  child: FloatingActionButton(
+                    onPressed: _showAddItemDialog,
+                    backgroundColor: Colors.white.withOpacity(0.9),
+                    elevation: 4,
+                    child: const Icon(
+                      Icons.add,
+                      color: ExColors.yellow,
+                      size: 28,
+                    ),
                   ),
                 ),
-              ),
+              // Merge action button
+              if (_isMergeMode && _mergeSelectedIds.length >= 2)
+                Positioned(
+                  bottom: 120,
+                  left: 20,
+                  right: 20,
+                  child: Center(
+                    child: ElevatedButton.icon(
+                      onPressed: _isMerging ? null : _showMergeTargetDialog,
+                      icon: _isMerging
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.call_merge),
+                      label: Text('Merge ${_mergeSelectedIds.length} items'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: ExColors.techBlue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                        elevation: 6,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           );
         }
@@ -2334,16 +2607,37 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       final tariffsCount = _tariffs?.length ?? 0;
       final staffCount = _staffMembers?.length ?? 0;
 
-      return _buildFilterChipBar(
-        labels: ['Clients', 'Roles', 'Tariffs', 'Staff'],
-        counts: [clientsCount, rolesCount, tariffsCount, staffCount],
-        selectedIndex: _catalogTabController.index,
-        onSelected: (index) {
-          setState(() {
-            _catalogTabController.animateTo(index);
-          });
-        },
-        activeColor: ExColors.navySpaceCadet,
+      return Row(
+        children: [
+          Expanded(
+            child: _buildFilterChipBar(
+              labels: ['Clients', 'Roles', 'Tariffs', 'Staff'],
+              counts: [clientsCount, rolesCount, tariffsCount, staffCount],
+              selectedIndex: _catalogTabController.index,
+              onSelected: (index) {
+                setState(() {
+                  _catalogTabController.animateTo(index);
+                });
+              },
+              activeColor: ExColors.navySpaceCadet,
+            ),
+          ),
+          if (_catalogTabController.index < 3)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: IconButton(
+                icon: Icon(
+                  _isMergeMode ? Icons.close : Icons.call_merge,
+                  color: _isMergeMode ? ExColors.errorDark : ExColors.techBlue,
+                  size: 22,
+                ),
+                tooltip: _isMergeMode ? 'Exit merge mode' : 'Merge duplicates',
+                onPressed: _toggleMergeMode,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              ),
+            ),
+        ],
       );
     }
 
@@ -5290,21 +5584,45 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               controller: _catalogTabController,
               children: [_buildClientsInner(), _buildRolesInner(), _buildTariffsInner(), _buildStaffInner()],
             ),
-            // Floating Action Button further up, white background (turned off look)
-            Positioned(
-              bottom: 120,
-              right: 20,
-              child: FloatingActionButton(
-                onPressed: _showAddItemDialog,
-                backgroundColor: Colors.white.withOpacity(0.8), // Semi-transparent white background
-                elevation: 2,
-                child: const Icon(
-                  Icons.add,
-                  color: Colors.grey, // Grey icon
-                  size: 24,
+            // Floating Action Button (hide during merge mode)
+            if (!_isMergeMode)
+              Positioned(
+                bottom: 120,
+                right: 20,
+                child: FloatingActionButton(
+                  onPressed: _showAddItemDialog,
+                  backgroundColor: Colors.white.withOpacity(0.8),
+                  elevation: 2,
+                  child: const Icon(
+                    Icons.add,
+                    color: Colors.grey,
+                    size: 24,
+                  ),
                 ),
               ),
-            ),
+            // Merge action button
+            if (_isMergeMode && _mergeSelectedIds.length >= 2)
+              Positioned(
+                bottom: 120,
+                left: 20,
+                right: 20,
+                child: Center(
+                  child: ElevatedButton.icon(
+                    onPressed: _isMerging ? null : _showMergeTargetDialog,
+                    icon: _isMerging
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.call_merge),
+                    label: Text('Merge ${_mergeSelectedIds.length} items'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: ExColors.techBlue,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                      elevation: 6,
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -6840,12 +7158,210 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     padding: EdgeInsets.only(right: 4),
                     child: Icon(Icons.star, color: Colors.amber, size: 20),
                   ),
+                IconButton(
+                  icon: const Icon(Icons.login, size: 20),
+                  color: ExColors.successDark,
+                  tooltip: 'Clock In',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  onPressed: () => _quickClockInStaff(staff),
+                ),
                 Icon(Icons.chevron_right, color: Colors.grey.shade400, size: 22),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Future<void> _quickClockInStaff(Map<String, dynamic> staff) async {
+    final userKey = staff['userKey'] as String?;
+    if (userKey == null || userKey.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Staff member has no userKey')),
+        );
+      }
+      return;
+    }
+
+    final staffName = staff['name'] as String? ??
+        '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'.trim();
+
+    // Show loading indicator
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const SizedBox(
+                width: 16, height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              ),
+              const SizedBox(width: 12),
+              Text('Looking up events for $staffName...'),
+            ],
+          ),
+          duration: const Duration(seconds: 10),
+        ),
+      );
+    }
+
+    try {
+      final allEvents = await _eventService.fetchUserEvents(userKey);
+
+      // Filter to today's events where staff is accepted
+      final now = DateTime.now();
+      final todayStart = DateTime(now.year, now.month, now.day);
+      final todayEnd = todayStart.add(const Duration(days: 1));
+
+      final todayEvents = allEvents.where((e) {
+        final rawDate = e['date'];
+        if (rawDate is! String || rawDate.isEmpty) return false;
+        try {
+          final eventDate = DateTime.parse(rawDate);
+          if (eventDate.isBefore(todayStart) || !eventDate.isBefore(todayEnd)) {
+            return false;
+          }
+        } catch (_) {
+          return false;
+        }
+        // Check staff is in accepted_staff with response == 'accepted'
+        final accepted = e['accepted_staff'] as List<dynamic>?;
+        if (accepted == null) return false;
+        return accepted.any((s) {
+          if (s is! Map<String, dynamic>) return false;
+          return s['userKey'] == userKey && s['response'] == 'accepted';
+        });
+      }).toList();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+      if (todayEvents.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No events today for $staffName')),
+        );
+        return;
+      }
+
+      if (todayEvents.length == 1) {
+        await _performClockIn(todayEvents.first, userKey, staffName);
+      } else {
+        await _showEventPickerForClockIn(todayEvents, userKey, staffName);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: ${e.toString()}')),
+      );
+    }
+  }
+
+  Future<void> _performClockIn(
+    Map<String, dynamic> event,
+    String userKey,
+    String staffName,
+  ) async {
+    final eventId = event['_id']?.toString() ?? '';
+    if (eventId.isEmpty) return;
+
+    final result = await AttendanceService.bulkClockIn(
+      eventId: eventId,
+      userKeys: [userKey],
+    );
+
+    if (!mounted) return;
+
+    if (result == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Clock-in failed. Please try again.')),
+      );
+      return;
+    }
+
+    final results = result['results'] as List<dynamic>?;
+    if (results != null && results.isNotEmpty) {
+      final first = results.first as Map<String, dynamic>;
+      final status = first['status'] as String?;
+      if (status == 'already_clocked_in') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$staffName is already clocked in')),
+        );
+      } else if (status == 'success') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$staffName clocked in successfully'),
+            backgroundColor: ExColors.successDark,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(first['message']?.toString() ?? 'Clock-in failed')),
+        );
+      }
+    }
+  }
+
+  Future<void> _showEventPickerForClockIn(
+    List<Map<String, dynamic>> events,
+    String userKey,
+    String staffName,
+  ) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        bool isClockingIn = false;
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Clock in $staffName — pick event',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (isClockingIn)
+                    const Center(child: CircularProgressIndicator())
+                  else
+                    ...events.map((e) {
+                      final eventName = e['event_name']?.toString() ??
+                          e['shift_name']?.toString() ??
+                          'Untitled Event';
+                      final venue = e['venue_name']?.toString() ?? '';
+                      final startTime = e['start_time']?.toString() ?? '';
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.event, color: ExColors.techBlue),
+                        title: Text(eventName),
+                        subtitle: Text(
+                          [venue, startTime].where((s) => s.isNotEmpty).join(' · '),
+                        ),
+                        onTap: () async {
+                          setSheetState(() => isClockingIn = true);
+                          await _performClockIn(e, userKey, staffName);
+                          if (ctx.mounted) Navigator.of(ctx).pop();
+                        },
+                      );
+                    }),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -7350,117 +7866,136 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final rate = (t['rate'] ?? 0).toString();
     final currency = (t['currency'] ?? 'USD').toString();
     final isWeb = ResponsiveLayout.shouldUseDesktopLayout(context);
+    final bool isSelected = _mergeSelectedIds.contains(id);
 
-    return Container(
-      margin: EdgeInsets.only(bottom: isWeb ? 0 : 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: ExColors.borderGrey),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+    return GestureDetector(
+      onTap: _isMergeMode ? () => _toggleMergeSelection(id) : null,
+      child: Container(
+        margin: EdgeInsets.only(bottom: isWeb ? 0 : 12),
+        decoration: BoxDecoration(
+          color: _isMergeMode && isSelected ? ExColors.techBlue.withOpacity(0.06) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: _isMergeMode && isSelected ? ExColors.techBlue : ExColors.borderGrey,
+            width: _isMergeMode && isSelected ? 2 : 1,
           ),
-        ],
-      ),
-      child: Padding(
-        padding: EdgeInsets.all(isWeb ? 20 : 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: ExColors.successDark.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.attach_money,
-                    color: ExColors.successDark,
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '$clientName',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: ExColors.charcoal,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        roleName ?? 'Unknown Role',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: ExColors.info.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '\$$rate $currency/hr',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: ExColors.techBlue,
-                    ),
-                  ),
-                ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.edit_outlined),
-                  color: ExColors.techBlue,
-                  iconSize: 20,
-                  tooltip: 'Edit',
-                  padding: const EdgeInsets.all(8),
-                  constraints: const BoxConstraints(),
-                  onPressed: () => _showEditTariffDialog(
-                    tariffId: id,
-                    clientId: clientId,
-                    roleId: roleId,
-                    currentRate: double.tryParse(rate) ?? 0.0,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline),
-                  color: ExColors.errorDark,
-                  iconSize: 20,
-                  tooltip: 'Delete',
-                  padding: const EdgeInsets.all(8),
-                  constraints: const BoxConstraints(),
-                  onPressed: () => _confirmDeleteTariff(id),
-                ),
-              ],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
           ],
+        ),
+        child: Padding(
+          padding: EdgeInsets.all(isWeb ? 20 : 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  if (_isMergeMode)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: Checkbox(
+                        value: isSelected,
+                        onChanged: (_) => _toggleMergeSelection(id),
+                        activeColor: ExColors.techBlue,
+                      ),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: ExColors.successDark.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.attach_money,
+                        color: ExColors.successDark,
+                        size: 22,
+                      ),
+                    ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '$clientName',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: ExColors.charcoal,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          roleName ?? 'Unknown Role',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: ExColors.info.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '\$$rate $currency/hr',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: ExColors.techBlue,
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  if (!_isMergeMode) ...[
+                    IconButton(
+                      icon: const Icon(Icons.edit_outlined),
+                      color: ExColors.techBlue,
+                      iconSize: 20,
+                      tooltip: 'Edit',
+                      padding: const EdgeInsets.all(8),
+                      constraints: const BoxConstraints(),
+                      onPressed: () => _showEditTariffDialog(
+                        tariffId: id,
+                        clientId: clientId,
+                        roleId: roleId,
+                        currentRate: double.tryParse(rate) ?? 0.0,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline),
+                      color: ExColors.errorDark,
+                      iconSize: 20,
+                      tooltip: 'Delete',
+                      padding: const EdgeInsets.all(8),
+                      constraints: const BoxConstraints(),
+                      onPressed: () => _confirmDeleteTariff(id),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -8050,59 +8585,77 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   Widget _roleListTile(Map<String, dynamic> role) {
     final String id = (role['id'] ?? '').toString();
     final String name = (role['name'] ?? '').toString();
+    final bool isSelected = _mergeSelectedIds.contains(id);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _isMergeMode && isSelected ? ExColors.techBlue.withOpacity(0.06) : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200, width: 1),
+        border: Border.all(
+          color: _isMergeMode && isSelected ? ExColors.techBlue : Colors.grey.shade200,
+          width: _isMergeMode && isSelected ? 2 : 1,
+        ),
       ),
       child: ListTile(
+        onTap: _isMergeMode ? () => _toggleMergeSelection(id) : null,
         title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
-        leading: const Icon(Icons.assignment_ind, color: ExColors.techBlue),
-        trailing: PopupMenuButton<String>(
-          onSelected: (value) async {
-            if (value == 'rename') {
-              final newName = await _promptNewNamedItem(
-                'Rename Role',
-                'Role name',
-                initial: name,
-              );
-              if (newName == null) return;
-              try {
-                await _rolesService.renameRole(id, newName);
-                await _loadRoles();
-              } catch (e) {
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Failed to rename: $e'),
-                    backgroundColor: ExColors.errorDark,
-                  ),
-                );
-              }
-            } else if (value == 'delete') {
-              final ok = await _confirmDeleteClient(name);
-              if (ok != true) return;
-              try {
-                await _rolesService.deleteRole(id);
-                await _loadRoles();
-              } catch (e) {
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Failed to delete: $e'),
-                    backgroundColor: ExColors.errorDark,
-                  ),
-                );
-              }
-            }
-          },
-          itemBuilder: (context) => const [
-            PopupMenuItem(value: 'rename', child: Text('Rename')),
-            PopupMenuItem(value: 'delete', child: Text('Delete')),
-          ],
-        ),
+        leading: _isMergeMode
+            ? AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: Checkbox(
+                  key: ValueKey('merge_role_$id'),
+                  value: isSelected,
+                  onChanged: (_) => _toggleMergeSelection(id),
+                  activeColor: ExColors.techBlue,
+                ),
+              )
+            : const Icon(Icons.assignment_ind, color: ExColors.techBlue),
+        trailing: _isMergeMode
+            ? null
+            : PopupMenuButton<String>(
+                onSelected: (value) async {
+                  if (value == 'rename') {
+                    final newName = await _promptNewNamedItem(
+                      'Rename Role',
+                      'Role name',
+                      initial: name,
+                    );
+                    if (newName == null) return;
+                    try {
+                      await _rolesService.renameRole(id, newName);
+                      await _loadRoles();
+                    } catch (e) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Failed to rename: $e'),
+                          backgroundColor: ExColors.errorDark,
+                        ),
+                      );
+                    }
+                  } else if (value == 'delete') {
+                    final ok = await _confirmDeleteClient(name);
+                    if (ok != true) return;
+                    try {
+                      await _rolesService.deleteRole(id);
+                      await _loadRoles();
+                    } catch (e) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Failed to delete: $e'),
+                          backgroundColor: ExColors.errorDark,
+                        ),
+                      );
+                    }
+                  }
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(value: 'rename', child: Text('Rename')),
+                  PopupMenuItem(value: 'delete', child: Text('Delete')),
+                ],
+              ),
       ),
     );
   }
@@ -8138,55 +8691,73 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   Widget _clientListTile(Map<String, dynamic> client) {
     final String id = (client['id'] ?? '').toString();
     final String name = (client['name'] ?? '').toString();
+    final bool isSelected = _mergeSelectedIds.contains(id);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _isMergeMode && isSelected ? ExColors.techBlue.withOpacity(0.06) : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200, width: 1),
+        border: Border.all(
+          color: _isMergeMode && isSelected ? ExColors.techBlue : Colors.grey.shade200,
+          width: _isMergeMode && isSelected ? 2 : 1,
+        ),
       ),
       child: ListTile(
+        onTap: _isMergeMode ? () => _toggleMergeSelection(id) : null,
         title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
-        leading: const Icon(Icons.business, color: ExColors.techBlue),
-        trailing: PopupMenuButton<String>(
-          onSelected: (value) async {
-            if (value == 'rename') {
-              final newName = await _promptRenameClient(name);
-              if (newName == null) return;
-              try {
-                await _clientsService.renameClient(id, newName);
-                await _loadClients();
-              } catch (e) {
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Failed to rename: $e'),
-                    backgroundColor: ExColors.errorDark,
-                  ),
-                );
-              }
-            } else if (value == 'delete') {
-              final ok = await _confirmDeleteClient(name);
-              if (ok != true) return;
-              try {
-                await _clientsService.deleteClient(id);
-                await _loadClients();
-              } catch (e) {
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Failed to delete: $e'),
-                    backgroundColor: ExColors.errorDark,
-                  ),
-                );
-              }
-            }
-          },
-          itemBuilder: (context) => const [
-            PopupMenuItem(value: 'rename', child: Text('Rename')),
-            PopupMenuItem(value: 'delete', child: Text('Delete')),
-          ],
-        ),
+        leading: _isMergeMode
+            ? AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: Checkbox(
+                  key: ValueKey('merge_client_$id'),
+                  value: isSelected,
+                  onChanged: (_) => _toggleMergeSelection(id),
+                  activeColor: ExColors.techBlue,
+                ),
+              )
+            : const Icon(Icons.business, color: ExColors.techBlue),
+        trailing: _isMergeMode
+            ? null
+            : PopupMenuButton<String>(
+                onSelected: (value) async {
+                  if (value == 'rename') {
+                    final newName = await _promptRenameClient(name);
+                    if (newName == null) return;
+                    try {
+                      await _clientsService.renameClient(id, newName);
+                      await _loadClients();
+                    } catch (e) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Failed to rename: $e'),
+                          backgroundColor: ExColors.errorDark,
+                        ),
+                      );
+                    }
+                  } else if (value == 'delete') {
+                    final ok = await _confirmDeleteClient(name);
+                    if (ok != true) return;
+                    try {
+                      await _clientsService.deleteClient(id);
+                      await _loadClients();
+                    } catch (e) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Failed to delete: $e'),
+                          backgroundColor: ExColors.errorDark,
+                        ),
+                      );
+                    }
+                  }
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(value: 'rename', child: Text('Rename')),
+                  PopupMenuItem(value: 'delete', child: Text('Delete')),
+                ],
+              ),
       ),
     );
   }

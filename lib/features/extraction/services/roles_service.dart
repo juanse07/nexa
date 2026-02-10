@@ -85,4 +85,27 @@ class RolesService {
       throw Exception('Failed to delete role: ${e.message}');
     }
   }
+
+  Future<Map<String, dynamic>> mergeRoles({
+    required List<String> sourceIds,
+    required String targetId,
+  }) async {
+    try {
+      final response = await _apiClient.post(
+        '/roles/merge',
+        data: {'sourceIds': sourceIds, 'targetId': targetId},
+      );
+
+      if (response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300) {
+        return response.data as Map<String, dynamic>;
+      }
+      throw Exception(
+        'Failed to merge roles (${response.statusCode}): ${response.data}',
+      );
+    } on DioException catch (e) {
+      throw Exception('Failed to merge roles: ${e.message}');
+    }
+  }
 }

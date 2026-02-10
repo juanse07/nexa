@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { requireAuth, AuthenticatedRequest } from '../middleware/requireAuth';
 import { ClientModel } from '../models/client';
 import { ManagerModel } from '../models/manager';
+import { mergeClients } from '../services/catalogMergeService';
 
 const router = Router();
 
@@ -162,6 +163,50 @@ router.delete('/clients/:id', requireAuth, async (req, res) => {
     return res.json({ message: 'Client deleted' });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to delete client' });
+  }
+});
+
+// Merge clients: transfer events/tariffs from sources to target, delete sources
+const mergeSchema = z.object({
+  sourceIds: z.array(z.string().min(1)).min(1),
+  targetId: z.string().min(1),
+});
+
+router.post('/clients/merge', requireAuth, async (req, res) => {
+  try {
+    const authUser = (req as any).authUser;
+    let managerObjectId: mongoose.Types.ObjectId;
+
+    if (authUser.managerId) {
+      managerObjectId = new mongoose.Types.ObjectId(authUser.managerId);
+    } else {
+      const manager = await ManagerModel.findOne({
+        provider: authUser.provider,
+        subject: authUser.sub
+      });
+      if (!manager) {
+        return res.status(403).json({ message: 'Manager not found' });
+      }
+      managerObjectId = manager._id as mongoose.Types.ObjectId;
+    }
+
+    const parsed = mergeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Validation failed', details: parsed.error.format() });
+    }
+    const { sourceIds, targetId } = parsed.data;
+
+    // Validate all IDs are valid ObjectIds
+    for (const id of [...sourceIds, targetId]) {
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ message: `Invalid id: ${id}` });
+      }
+    }
+
+    const result = await mergeClients(managerObjectId, sourceIds, targetId);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(500).json({ message: err.message || 'Failed to merge clients' });
   }
 });
 
