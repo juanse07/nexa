@@ -3982,7 +3982,7 @@ async function callOpenAIWithRetries(
 
 /**
  * POST /api/ai/discover-venues
- * Discover popular event venues in a city using Perplexity AI with automatic web search
+ * Discover popular event venues in a city using Groq Compound AI with automatic web search
  * Saves personalized venue list to manager's profile
  */
 router.post('/ai/discover-venues', requireAuth, async (req, res) => {
@@ -3995,10 +3995,10 @@ router.post('/ai/discover-venues', requireAuth, async (req, res) => {
 
     const isTouristCity = isTourist === true; // Default to false if not provided
 
-    const perplexityKey = process.env.PERPLEXITY_API_KEY;
-    if (!perplexityKey) {
-      console.error('[discover-venues] PERPLEXITY_API_KEY not configured');
-      return res.status(500).json({ message: 'Perplexity API key not configured on server' });
+    const groqKey = process.env.GROQ_API_KEY;
+    if (!groqKey) {
+      console.error('[discover-venues] GROQ_API_KEY not configured');
+      return res.status(500).json({ message: 'Groq API key not configured on server' });
     }
 
     // Get manager from auth
@@ -4015,7 +4015,7 @@ router.post('/ai/discover-venues', requireAuth, async (req, res) => {
       return res.status(404).json({ message: 'Manager not found' });
     }
 
-    console.log(`[discover-venues] Researching venues for ${isTouristCity ? 'tourist city' : 'metro area'}: ${city} using Perplexity AI`);
+    console.log(`[discover-venues] Researching venues for ${isTouristCity ? 'tourist city' : 'metro area'}: ${city} using Groq Compound AI`);
 
     // Extract city name and state from "City, State, Country" format
     const metroArea = city.includes(',') ? (city.split(',')[0] || city).trim() : city;
@@ -4098,40 +4098,46 @@ YOU MUST RETURN AT LEAST ${minVenues} VENUES. Prioritize the most popular and la
     const headers = {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${perplexityKey}`,
+      'Authorization': `Bearer ${groqKey}`,
     };
 
     const requestBody = {
-      model: 'sonar-pro', // Premium model for better quality and accuracy
+      model: 'compound-beta', // Groq Compound AI with built-in web search (temporarily replacing Perplexity sonar-pro)
       messages: [
         { role: 'user', content: prompt }
       ],
       temperature: 0.3,
-      max_tokens: 4000, // Increased for more venues
+      max_tokens: 4000,
     };
 
-    console.log('[discover-venues] Calling Perplexity API...');
+    console.log('[discover-venues] Calling Groq Compound API...');
 
     const response = await axios.post(
-      'https://api.perplexity.ai/chat/completions',
+      'https://api.groq.com/openai/v1/chat/completions',
       requestBody,
       { headers, validateStatus: () => true, timeout: 90000 } // 90s timeout for web search
     );
 
     if (response.status !== 200) {
-      console.error('[discover-venues] Perplexity API error:', response.status, response.data);
+      console.error('[discover-venues] Groq Compound API error:', response.status, response.data);
       return res.status(response.status).json({
         message: 'Failed to discover venues',
         error: response.data
       });
     }
 
-    // Perplexity returns standard OpenAI format with content in message.content
+    // Groq Compound returns standard OpenAI format with content in message.content
     const content = response.data.choices?.[0]?.message?.content;
 
     if (!content) {
       console.error('[discover-venues] No content in response. Response:', JSON.stringify(response.data, null, 2).substring(0, 500));
       return res.status(500).json({ message: 'No venue data returned' });
+    }
+
+    // Log executed tools if available (Groq Compound provides this)
+    const executedTools = response.data.choices?.[0]?.message?.executed_tools;
+    if (executedTools) {
+      console.log('[discover-venues] Groq Compound executed tools:', JSON.stringify(executedTools));
     }
 
     console.log('[discover-venues] Response length:', content.length, 'chars');
@@ -4140,7 +4146,7 @@ YOU MUST RETURN AT LEAST ${minVenues} VENUES. Prioritize the most popular and la
     // Parse JSON response
     let venueData;
     try {
-      // Try to parse directly first (Perplexity should return clean JSON)
+      // Try to parse directly first (Groq Compound should return clean JSON)
       let cleanedContent = content.trim();
 
       // Remove markdown code blocks if present
