@@ -38,10 +38,12 @@ import 'package:nexa/core/navigation/route_error_manager.dart';
 
 class AIChatScreen extends StatefulWidget {
   final bool startNewConversation;
+  final Map<String, dynamic>? eventData;
 
   const AIChatScreen({
     super.key,
     this.startNewConversation = false,
+    this.eventData,
   });
 
   @override
@@ -66,9 +68,6 @@ class _AIChatScreenState extends State<AIChatScreen>
   late AnimationController _inputAnimationController;
   late Animation<Offset> _inputSlideAnimation;
 
-  // Scroll-based chips visibility
-  bool _showChips = true;
-  double _lastScrollOffset = 0;
 
   @override
   void initState() {
@@ -95,8 +94,13 @@ class _AIChatScreenState extends State<AIChatScreen>
     // Scroll behavior disabled for fixed input UX
     // _scrollBehavior initialization removed
 
-    // Start new conversation if requested (e.g., from chat section)
-    if (widget.startNewConversation) {
+    // Auto-analyze event if eventData is provided (from AI sparkle button)
+    if (widget.eventData != null) {
+      // Skip full startNewConversation — loadEventAndAnalyze clears history itself
+      _stateProvider.setLoading(true);
+      _triggerEventAnalysis();
+    } else if (widget.startNewConversation) {
+      // Start new conversation if requested (e.g., from chat section)
       _stateProvider.startNewConversation();
       _loadGreeting();
     } else if (_stateProvider.conversationHistory.isEmpty) {
@@ -107,8 +111,6 @@ class _AIChatScreenState extends State<AIChatScreen>
     // Listen to provider changes
     _stateProvider.addListener(_onProviderStateChanged);
 
-    // Listen to scroll for chips visibility
-    _stateProvider.scrollController.addListener(_onScroll);
   }
 
   /// Handle provider state changes
@@ -118,27 +120,8 @@ class _AIChatScreenState extends State<AIChatScreen>
     });
   }
 
-  /// Handle scroll to hide/show chips bar
-  void _onScroll() {
-    if (!_stateProvider.scrollController.hasClients) return;
-
-    final currentOffset = _stateProvider.scrollController.offset;
-    final scrollingDown = currentOffset > _lastScrollOffset;
-    final scrollingUp = currentOffset < _lastScrollOffset;
-
-    if ((currentOffset - _lastScrollOffset).abs() > 10) {
-      if (scrollingDown && _showChips && currentOffset > 50) {
-        setState(() => _showChips = false);
-      } else if (scrollingUp && !_showChips) {
-        setState(() => _showChips = true);
-      }
-      _lastScrollOffset = currentOffset;
-    }
-  }
-
   @override
   void dispose() {
-    _stateProvider.scrollController.removeListener(_onScroll);
     _stateProvider.removeListener(_onProviderStateChanged);
     _stateProvider.dispose(); // Disposes timers, file manager, scroll controller
     _inputAnimationController.dispose();
@@ -148,6 +131,20 @@ class _AIChatScreenState extends State<AIChatScreen>
   Future<void> _loadGreeting() async {
     await _stateProvider.loadGreeting();
     // Provider automatically notifies listeners
+  }
+
+  Future<void> _triggerEventAnalysis() async {
+    try {
+      await _stateProvider.loadEventAndAnalyze(widget.eventData!);
+      _scrollToBottom();
+    } catch (e) {
+      print('[AIChatScreen] Event analysis failed: $e');
+      // Fall back to instant local greeting — no network call needed
+      _stateProvider.chatService.loadEventForEditing(widget.eventData!);
+      _stateProvider.notifyListeners();
+    } finally {
+      _stateProvider.setLoading(false);
+    }
   }
 
   void _scrollToBottom({bool animated = false}) {
@@ -675,7 +672,10 @@ class _AIChatScreenState extends State<AIChatScreen>
     final currentData = _stateProvider.currentEventData;
     final hasEventData = currentData.isNotEmpty;
 
+    final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: AppColors.surfaceLight,
       body: Stack(
           children: [
@@ -832,11 +832,11 @@ class _AIChatScreenState extends State<AIChatScreen>
                       )
                     : SliverWebContentWrapper.chat(
                         sliver: SliverPadding(
-                          padding: const EdgeInsets.only(
+                          padding: EdgeInsets.only(
                             left: 16,
                             right: 16,
                             top: 16,
-                            bottom: 100, // Bottom padding for input area
+                            bottom: 100 + keyboardHeight, // Bottom padding for input area + keyboard
                           ),
                           sliver: SliverList(
                           delegate: SliverChildBuilderDelegate(
@@ -946,7 +946,7 @@ class _AIChatScreenState extends State<AIChatScreen>
               Positioned(
                 left: 0,
                 right: 0,
-                bottom: 0,
+                bottom: keyboardHeight,
                 child: Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
@@ -996,7 +996,7 @@ class _AIChatScreenState extends State<AIChatScreen>
                         if (!_stateProvider.isLoading && _stateProvider.selectedImages.isEmpty && _stateProvider.selectedDocuments.isEmpty)
                           AnimatedSize(
                             duration: const Duration(milliseconds: 200),
-                            child: _showChips ? Builder(
+                            child: Builder(
                               builder: (context) {
                                 final terminology = context.read<TerminologyProvider>().singular;
                                 return Padding(
@@ -1029,7 +1029,7 @@ class _AIChatScreenState extends State<AIChatScreen>
                                   ),
                                 );
                               },
-                            ) : const SizedBox.shrink(),
+                            ),
                           ),
 
                         // Chat input

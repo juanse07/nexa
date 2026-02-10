@@ -802,6 +802,71 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
     ));
   }
 
+  /// Load an event and auto-analyze it (for AI sparkle button on cards)
+  Future<void> loadEventAndAnalyze(Map<String, dynamic> eventData) async {
+    _conversationHistory.clear();
+    _currentEventData.clear();
+    _currentEventData.addAll(eventData);
+    _eventComplete = false;
+
+    // Pre-detect missing fields client-side to guide the AI
+    final missing = <String>[];
+    final data = eventData;
+    if ((data['venue_name'] ?? '').toString().isEmpty &&
+        (data['venue_address'] ?? '').toString().isEmpty) {
+      missing.add('venue/address');
+    }
+    if ((data['date'] ?? '').toString().isEmpty) missing.add('date');
+    if ((data['start_time'] ?? data['call_time'] ?? '').toString().isEmpty) {
+      missing.add('start time');
+    }
+    if ((data['end_time'] ?? '').toString().isEmpty) missing.add('end time');
+    final roles = data['roles'];
+    if (roles == null || (roles is List && roles.isEmpty)) {
+      missing.add('roles/staffing');
+    }
+
+    final missingHint = missing.isNotEmpty
+        ? 'Missing fields: ${missing.join(", ")}.'
+        : 'All key fields appear filled.';
+
+    // Build a lean system prompt — skip the heavy 32KB instructions file.
+    // Only include the event JSON and editing rules.
+    final leanSystemPrompt = '''You are a helpful event management assistant. You are in EDITING MODE for an existing event.
+
+Current event data:
+```json
+${jsonEncode(_currentEventData)}
+```
+
+When the user requests changes, respond with EVENT_UPDATE followed by JSON: {"eventId": "<id>", "updates": {"field": "value"}}.
+Respond in the same language the user speaks. Be concise and conversational. Use natural date/time formats (e.g. "Saturday, Jan 25th" not "2025-01-25").''';
+
+    final analysisPrompt =
+        'Give a 2-3 sentence summary of this event, then note what needs attention. $missingHint Keep it brief and ask what they want to update.';
+
+    final messages = [
+      {'role': 'system', 'content': leanSystemPrompt},
+      {'role': 'user', 'content': analysisPrompt},
+    ];
+
+    // Use the user's preferred model (keeps reasoning capability)
+    // Lower token budget since analysis is brief, temperature slightly lower for consistency
+    final aiResponse = await _callBackendAI(
+      messages,
+      maxTokensOverride: 300,
+      temperatureOverride: 0.5,
+    );
+
+    // Add only the AI response to conversation history (no user message visible)
+    _conversationHistory.add(ChatMessage(
+      role: 'assistant',
+      content: aiResponse.content,
+      provider: AIProvider.groq,
+      reasoning: aiResponse.reasoning,
+    ));
+  }
+
   /// Send a user message and get AI response
   Future<ChatMessage> sendMessage(String userMessage, {String? terminology}) async {
     // Add user message to history
@@ -1200,8 +1265,11 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
 
   /// Call backend AI chat API
   Future<({String content, String? reasoning})> _callBackendAI(
-    List<Map<String, dynamic>> messages,
-  ) async {
+    List<Map<String, dynamic>> messages, {
+    String? modelOverride,
+    int? maxTokensOverride,
+    double? temperatureOverride,
+  }) async {
     // Get auth token
     final token = await AuthService.getJwt();
     if (token == null) {
@@ -1219,10 +1287,10 @@ If the user wants to modify an existing event, respond with "EVENT_UPDATE" follo
 
     final requestBody = {
       'messages': messages,
-      'temperature': 0.7,
-      'maxTokens': 500,
+      'temperature': temperatureOverride ?? 0.7,
+      'maxTokens': maxTokensOverride ?? 500,
       'provider': _aiProvider,
-      'model': modelMap[_modelPreference] ?? 'openai/gpt-oss-20b',
+      'model': modelOverride ?? modelMap[_modelPreference] ?? 'openai/gpt-oss-20b',
     };
 
     final headers = {
