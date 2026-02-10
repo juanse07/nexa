@@ -11,8 +11,7 @@ function buildMongoUri(): string {
   }
 
   // Determine database name based on NODE_ENV
-  // IMPORTANT: Using 'test' for production because that's where the data is
-  const dbName = ENV.nodeEnv === 'production' ? 'test' : 'nexa_test';
+  const dbName = ENV.nodeEnv === 'production' ? 'nexa_prod' : 'nexa_test';
 
   // Parse the URI to append database name
   // MongoDB URIs can have format: mongodb+srv://user:pass@host/[database]?options
