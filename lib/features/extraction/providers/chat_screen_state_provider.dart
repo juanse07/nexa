@@ -240,6 +240,12 @@ class ChatScreenStateProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  /// Load an event and auto-analyze it (for AI sparkle button on cards)
+  Future<void> loadEventAndAnalyze(Map<String, dynamic> eventData) async {
+    await chatService.loadEventAndAnalyze(eventData);
+    notifyListeners();
+  }
+
   /// Load greeting message
   Future<void> loadGreeting() async {
     await chatService.getGreeting();

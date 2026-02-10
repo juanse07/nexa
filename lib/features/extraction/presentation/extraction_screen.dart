@@ -69,6 +69,8 @@ import '../../../core/widgets/web_tab_navigation.dart';
 import '../../main/presentation/main_screen.dart';
 import 'package:nexa/shared/widgets/web_content_wrapper.dart';
 
+enum _SortMode { dateAsc, dateDesc, lastCreated }
+
 class ExtractionScreen extends StatefulWidget {
   final int initialIndex; // For Post a Job tab chips
   final int initialScreenIndex; // For main screen tabs (Post a Job=0, Events=1, etc.)
@@ -109,6 +111,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   List<Map<String, dynamic>>? _eventsAvailable;
   List<Map<String, dynamic>>? _eventsFull;
   List<Map<String, dynamic>>? _eventsCompleted;
+
+  // Search & sort state
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  bool _isSearchActive = false;
+  Timer? _searchDebounce;
+  _SortMode _sortMode = _SortMode.dateAsc; // default: job date ascending (current behavior)
+
   // Pending drafts (for the old draft section - will be deprecated)
   List<Map<String, dynamic>> _pendingDrafts = const [];
   bool _isPendingLoading = false;
@@ -221,6 +231,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     _createTabController = TabController(length: 3, vsync: this, initialIndex: widget.initialIndex);
     _eventsTabController = TabController(length: 4, vsync: this, initialIndex: widget.initialEventsTabIndex);
     _catalogTabController = TabController(length: 3, vsync: this);
+    _searchController.addListener(_onSearchChanged);
 
     // Initialize animation controllers for header hide/show
     _headerController = AnimationController(
@@ -383,6 +394,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     }
     _updateTimer?.cancel();
     _socketSubscription?.cancel();
+    _searchController.dispose();
+    _searchDebounce?.cancel();
     super.dispose();
   }
 
@@ -1633,45 +1646,31 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             ),
           ),
         ];
-      case 1: // Events tab - pin the chip bar navigation
+      case 1: // Events tab - pin the chip bar navigation (desktop: opaque)
         return [
           SliverPersistentHeader(
             pinned: true,
             delegate: PinnedHeaderDelegate(
-              height: 50.0,
+              height: 58.0,
               safeAreaPadding: topPadding,
               child: Container(
-                color: Colors.white,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border(
+                    bottom: BorderSide(
+                      color: ExColors.borderGrey.withValues(alpha: 0.5),
+                      width: 0.5,
+                    ),
+                  ),
+                ),
                 child: SafeArea(
                   top: false,
                   bottom: false,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: _buildFilterChipBar(
-                      labels: ['Pending', 'Posted', 'Full', 'Completed'],
-                      counts: [
-                        _eventsPending?.length ?? 0,
-                        _eventsAvailable?.length ?? 0,
-                        _eventsFull?.length ?? 0,
-                        _eventsCompleted?.length ?? 0,
-                      ],
-                      selectedIndex: _eventsTabController.index,
-                      onSelected: (index) {
-                        setState(() {
-                          _eventsTabController.animateTo(index);
-                        });
-                      },
-                      activeColor: ExColors.navySpaceCadet,
-                    ),
+                  child: _buildJobsSearchSortBar(
+                    pendingCount: _filterEvents(_eventsPending).length,
+                    availableCount: _filterEvents(_eventsAvailable).length,
+                    fullCount: _filterEvents(_eventsFull).length,
+                    completedCount: _filterEvents(_eventsCompleted).length,
                   ),
                 ),
               ),
@@ -1829,33 +1828,37 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         // For desktop/web, render events directly based on selected tab index
         // This avoids nested scrollable conflicts with NestedScrollView
         print('[RENDER] Events tab - controller index: ${_eventsTabController.index}, Completed items: ${_eventsCompleted?.length ?? 0}');
+        final filteredPending = _filterEvents(_eventsPending);
+        final filteredAvailable = _filterEvents(_eventsAvailable);
+        final filteredFull = _filterEvents(_eventsFull);
+        final filteredCompleted = _filterEvents(_eventsCompleted);
         if (kIsWeb || ResponsiveLayout.shouldUseDesktopLayout(context)) {
           // Directly return the content for the selected tab
           switch (_eventsTabController.index) {
             case 0:
-              print('[RENDER] Showing PENDING: ${_eventsPending?.length ?? 0} items');
-              return _eventsInner(_eventsPending ?? const []); // Pending tab
+              print('[RENDER] Showing PENDING: ${filteredPending.length} items');
+              return _eventsInner(filteredPending); // Pending tab
             case 1:
-              print('[RENDER] Showing POSTED: ${_eventsAvailable?.length ?? 0} items');
-              return _eventsInner(_eventsAvailable ?? const []); // Posted tab
+              print('[RENDER] Showing POSTED: ${filteredAvailable.length} items');
+              return _eventsInner(filteredAvailable); // Posted tab
             case 2:
-              print('[RENDER] Showing FULL: ${_eventsFull?.length ?? 0} items');
-              return _eventsInner(_eventsFull ?? const []); // Full tab
+              print('[RENDER] Showing FULL: ${filteredFull.length} items');
+              return _eventsInner(filteredFull); // Full tab
             case 3:
-              print('[RENDER] Showing COMPLETED: ${_eventsCompleted?.length ?? 0} items');
-              return _eventsInner(_eventsCompleted ?? const []); // Completed tab
+              print('[RENDER] Showing COMPLETED: ${filteredCompleted.length} items');
+              return _eventsInner(filteredCompleted); // Completed tab
             default:
-              return _eventsInner(_eventsPending ?? const []);
+              return _eventsInner(filteredPending);
           }
         } else {
           // For mobile, use TabBarView for swipe gestures
           return TabBarView(
             controller: _eventsTabController,
             children: [
-              _eventsInner(_eventsPending ?? const []), // Pending tab
-              _eventsInner(_eventsAvailable ?? const []), // Posted tab
-              _eventsInner(_eventsFull ?? const []), // Full tab
-              _eventsInner(_eventsCompleted ?? const []), // Completed tab
+              _eventsInner(filteredPending), // Pending tab
+              _eventsInner(filteredAvailable), // Posted tab
+              _eventsInner(filteredFull), // Full tab
+              _eventsInner(filteredCompleted), // Completed tab
             ],
           );
         }
@@ -2272,23 +2275,34 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     // }
     // ===== END DASHBOARD TAB SELECTOR =====
 
-    // Events/Jobs tab - compact chip bar
+    // Events/Jobs tab - compact chip bar with search & sort (frosted glass)
     if (_selectedIndex == 1) {
-      final pendingCount = _eventsPending?.length ?? 0;
-      final availableCount = _eventsAvailable?.length ?? 0;
-      final fullCount = _eventsFull?.length ?? 0;
-      final pastCount = _eventsCompleted?.length ?? 0;
+      final pendingCount = _filterEvents(_eventsPending).length;
+      final availableCount = _filterEvents(_eventsAvailable).length;
+      final fullCount = _filterEvents(_eventsFull).length;
+      final pastCount = _filterEvents(_eventsCompleted).length;
 
-      return _buildFilterChipBar(
-        labels: ['Pending', 'Posted', 'Full', 'Completed'],
-        counts: [pendingCount, availableCount, fullCount, pastCount],
-        selectedIndex: _eventsTabController.index,
-        onSelected: (index) {
-          setState(() {
-            _eventsTabController.animateTo(index);
-          });
-        },
-        activeColor: ExColors.navySpaceCadet,
+      return ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.7),
+              border: Border(
+                bottom: BorderSide(
+                  color: ExColors.borderGrey.withValues(alpha: 0.4),
+                  width: 0.5,
+                ),
+              ),
+            ),
+            child: _buildJobsSearchSortBar(
+              pendingCount: pendingCount,
+              availableCount: availableCount,
+              fullCount: fullCount,
+              completedCount: pastCount,
+            ),
+          ),
+        ),
       );
     }
 
@@ -2336,21 +2350,18 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   duration: const Duration(milliseconds: 200),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
-                    color: isActive ? activeColor : Colors.white,
+                    color: isActive ? const Color(0xFF1B2A4A) : Colors.transparent,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: isActive ? activeColor : const Color(0xFFE0E0E0),
+                      color: isActive ? const Color(0xFF1B2A4A) : Colors.grey[300]!,
                     ),
-                    boxShadow: isActive
-                        ? [BoxShadow(color: activeColor.withOpacity(0.3), blurRadius: 4, offset: const Offset(0, 2))]
-                        : null,
                   ),
                   child: Text(
                     '${labels[index]} (${counts[index]})',
                     style: TextStyle(
                       color: isActive ? Colors.white : ExColors.textPrimary,
                       fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                      fontSize: 13,
+                      fontSize: 14,
                     ),
                   ),
                 ),
@@ -4328,6 +4339,363 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     );
   }
 
+  // =========================================================================
+  // SEARCH & SORT HELPERS
+  // =========================================================================
+
+  List<Map<String, dynamic>> _filterEvents(List<Map<String, dynamic>>? events) {
+    if (events == null) return const [];
+    if (_searchQuery.isEmpty) return events;
+    return events.where((event) {
+      // Match against core text fields
+      final fields = [
+        event['client_name'],
+        event['shift_name'],
+        event['venue_name'],
+        event['venue_address'],
+        event['start_time'],
+        event['end_time'],
+      ];
+      for (final f in fields) {
+        if (f != null && f.toString().toLowerCase().contains(_searchQuery)) {
+          return true;
+        }
+      }
+      // Match formatted date (e.g. "Mar", "2025-03")
+      final rawDate = event['date']?.toString();
+      if (rawDate != null && rawDate.isNotEmpty) {
+        if (rawDate.toLowerCase().contains(_searchQuery)) return true;
+        try {
+          final dt = DateTime.parse(rawDate);
+          // Month names
+          const months = [
+            'january', 'february', 'march', 'april', 'may', 'june',
+            'july', 'august', 'september', 'october', 'november', 'december',
+          ];
+          const monthsShort = [
+            'jan', 'feb', 'mar', 'apr', 'may', 'jun',
+            'jul', 'aug', 'sep', 'oct', 'nov', 'dec',
+          ];
+          final monthIdx = dt.month - 1;
+          if (months[monthIdx].contains(_searchQuery) ||
+              monthsShort[monthIdx].contains(_searchQuery)) {
+            return true;
+          }
+          // Day of month
+          if (dt.day.toString() == _searchQuery) return true;
+        } catch (_) {}
+      }
+      // Match role names
+      final roles = (event['roles'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      for (final role in roles) {
+        if ((role['role'] ?? '').toString().toLowerCase().contains(_searchQuery)) {
+          return true;
+        }
+      }
+      // Match accepted staff names
+      final staff = (event['accepted_staff'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      for (final s in staff) {
+        final name = (s['name'] ?? s['user_name'] ?? '').toString().toLowerCase();
+        if (name.contains(_searchQuery)) return true;
+      }
+      return false;
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> _sortEvents(List<Map<String, dynamic>> events) {
+    final sorted = [...events];
+    switch (_sortMode) {
+      case _SortMode.dateAsc:
+        sorted.sort(_compareEventsAscending);
+        break;
+      case _SortMode.dateDesc:
+        sorted.sort(_compareEventsDescending);
+        break;
+      case _SortMode.lastCreated:
+        sorted.sort((a, b) {
+          // MongoDB ObjectIDs are time-sortable; fallback to createdAt
+          final aId = (a['_id'] ?? a['createdAt'] ?? '').toString();
+          final bId = (b['_id'] ?? b['createdAt'] ?? '').toString();
+          return bId.compareTo(aId); // descending = newest first
+        });
+        break;
+    }
+    return sorted;
+  }
+
+  void _onSearchChanged() {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        setState(() {
+          _searchQuery = _searchController.text.toLowerCase().trim();
+        });
+      }
+    });
+  }
+
+  void _dismissSearch() {
+    _searchController.clear();
+    setState(() {
+      _isSearchActive = false;
+      _searchQuery = '';
+    });
+  }
+
+  /// Unified search/sort bar used in both mobile pinned header and desktop tab bar.
+  Widget _buildJobsSearchSortBar({
+    required int pendingCount,
+    required int availableCount,
+    required int fullCount,
+    required int completedCount,
+  }) {
+    // Chips use padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10)
+    // Match that vertical padding so search aligns with chip row position
+    return SizedBox(
+      height: 58,
+      child: AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      switchInCurve: Curves.easeInOut,
+      switchOutCurve: Curves.easeInOut,
+      transitionBuilder: (child, animation) {
+        final isSearch = child.key == const ValueKey('search');
+        // Chips → Search: chips scale down 1.0→0.95, search scales up 0.95→1.0
+        final scaleTween = isSearch
+            ? Tween<double>(begin: 0.95, end: 1.0)
+            : Tween<double>(begin: 0.95, end: 1.0);
+        final slideTween = isSearch
+            ? Tween<Offset>(begin: const Offset(0.08, 0.0), end: Offset.zero)
+            : Tween<Offset>(begin: const Offset(-0.03, 0.0), end: Offset.zero);
+        return SlideTransition(
+          position: slideTween.animate(CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeInOut,
+          )),
+          child: ScaleTransition(
+            scale: scaleTween.animate(CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeInOut,
+            )),
+            child: FadeTransition(
+              opacity: CurvedAnimation(parent: animation, curve: Curves.easeIn),
+              child: child,
+            ),
+          ),
+        );
+      },
+      child: _isSearchActive
+        ? Padding(
+            key: const ValueKey('search'),
+            padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+            child: Row(
+              children: [
+                // Back button — slides in from left
+                TweenAnimationBuilder<Offset>(
+                  tween: Tween<Offset>(begin: const Offset(-0.3, 0), end: Offset.zero),
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  builder: (context, offset, child) => FractionalTranslation(
+                    translation: offset,
+                    child: child,
+                  ),
+                  child: _buildToolButton(
+                    icon: Icons.arrow_back_rounded,
+                    onTap: _dismissSearch,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Search field — chip-sized with rounded pill shape
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.grey[300]!),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(left: 12),
+                          child: Icon(Icons.search_rounded, size: 16, color: ExColors.slateGray),
+                        ),
+                        Expanded(
+                          child: TextField(
+                            controller: _searchController,
+                            autofocus: true,
+                            textAlignVertical: TextAlignVertical.center,
+                            decoration: InputDecoration(
+                              hintText: 'Search jobs...',
+                              hintStyle: TextStyle(
+                                color: ExColors.slateGray,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w400,
+                              ),
+                              border: InputBorder.none,
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                            ),
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: ExColors.textPrimary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        if (_searchQuery.isNotEmpty)
+                          Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(14),
+                              onTap: () {
+                                _searchController.clear();
+                                _onSearchChanged();
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.all(6),
+                                child: Container(
+                                  width: 20,
+                                  height: 20,
+                                  decoration: BoxDecoration(
+                                    color: ExColors.navySpaceCadet.withValues(alpha: 0.1),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(Icons.close_rounded, size: 13, color: ExColors.navySpaceCadet),
+                                ),
+                              ),
+                            ),
+                          ),
+                        const SizedBox(width: 6),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                _buildSortButton(),
+              ],
+            ),
+          )
+        : Row(
+            key: const ValueKey('chips'),
+            children: [
+              Expanded(
+                child: _buildFilterChipBar(
+                  labels: ['Pending', 'Posted', 'Full', 'Completed'],
+                  counts: [pendingCount, availableCount, fullCount, completedCount],
+                  selectedIndex: _eventsTabController.index,
+                  onSelected: (index) {
+                    setState(() {
+                      _eventsTabController.animateTo(index);
+                    });
+                  },
+                  activeColor: ExColors.navySpaceCadet,
+                ),
+              ),
+              _buildToolButton(
+                icon: Icons.search_rounded,
+                onTap: () => setState(() { _isSearchActive = true; }),
+              ),
+              const SizedBox(width: 4),
+              _buildSortButton(),
+              const SizedBox(width: 8),
+            ],
+          ),
+    ),
+    );
+  }
+
+  /// Flat tool button — no background, border, or shadow
+  Widget _buildToolButton({
+    required IconData icon,
+    required VoidCallback onTap,
+    bool isActive = false,
+  }) {
+    return IconButton(
+      icon: Icon(
+        icon,
+        size: 18,
+        color: isActive ? ExColors.navySpaceCadet : Colors.grey[500],
+      ),
+      onPressed: onTap,
+      splashRadius: 20,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+    );
+  }
+
+  Widget _buildSortButton() {
+    final isCustomSort = _sortMode != _SortMode.dateAsc;
+    return PopupMenuButton<_SortMode>(
+      tooltip: 'Sort jobs',
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      elevation: 12,
+      color: Colors.white,
+      offset: const Offset(0, 42),
+      onSelected: (mode) => setState(() => _sortMode = mode),
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Icon(
+          Icons.swap_vert_rounded,
+          size: 18,
+          color: isCustomSort ? ExColors.navySpaceCadet : Colors.grey[500],
+        ),
+      ),
+      itemBuilder: (_) => [
+        _buildSortMenuItem(_SortMode.dateAsc, 'Job Date', Icons.arrow_upward_rounded),
+        _buildSortMenuItem(_SortMode.dateDesc, 'Job Date', Icons.arrow_downward_rounded),
+        _buildSortMenuItem(_SortMode.lastCreated, 'Last Created', Icons.schedule_rounded),
+      ],
+    );
+  }
+
+  PopupMenuItem<_SortMode> _buildSortMenuItem(_SortMode mode, String label, IconData icon) {
+    final isSelected = _sortMode == mode;
+    return PopupMenuItem<_SortMode>(
+      value: mode,
+      height: 44,
+      child: Row(
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? ExColors.navySpaceCadet.withValues(alpha: 0.1)
+                  : ExColors.formFillSlate,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              icon,
+              size: 15,
+              color: isSelected ? ExColors.navySpaceCadet : ExColors.slateGray,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                color: isSelected ? ExColors.navySpaceCadet : ExColors.textPrimary,
+              ),
+            ),
+          ),
+          if (isSelected)
+            Container(
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                color: ExColors.navySpaceCadet,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.check_rounded, size: 12, color: Colors.white),
+            ),
+        ],
+      ),
+    );
+  }
+
   /// Show past events in a bottom sheet
   void _showPastEvents() {
     final pastEvents = _eventsCompleted ?? [];
@@ -4754,10 +5122,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   List<Widget> _buildEventsSlivers() {
-    final List<Map<String, dynamic>> pending = _eventsPending ?? const [];
-    final List<Map<String, dynamic>> available = _eventsAvailable ?? const [];
-    final List<Map<String, dynamic>> full = _eventsFull ?? const [];
-    final List<Map<String, dynamic>> completed = _eventsCompleted ?? const [];
+    final List<Map<String, dynamic>> pending = _filterEvents(_eventsPending);
+    final List<Map<String, dynamic>> available = _filterEvents(_eventsAvailable);
+    final List<Map<String, dynamic>> full = _filterEvents(_eventsFull);
+    final List<Map<String, dynamic>> completed = _filterEvents(_eventsCompleted);
 
     // Return the current tab's content directly as slivers
     List<Map<String, dynamic>> currentTabEvents;
@@ -4991,10 +5359,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
   Widget _buildEventsTab() {
     final List<Map<String, dynamic>> all = _events ?? const [];
-    final List<Map<String, dynamic>> pending = _eventsPending ?? const [];
-    final List<Map<String, dynamic>> available = _eventsAvailable ?? const [];
-    final List<Map<String, dynamic>> full = _eventsFull ?? const [];
-    final List<Map<String, dynamic>> past = _eventsCompleted ?? const [];
+    final List<Map<String, dynamic>> pending = _filterEvents(_eventsPending);
+    final List<Map<String, dynamic>> available = _filterEvents(_eventsAvailable);
+    final List<Map<String, dynamic>> full = _filterEvents(_eventsFull);
+    final List<Map<String, dynamic>> past = _filterEvents(_eventsCompleted);
     return SafeArea(
       child: DefaultTabController(
         length: 3,
@@ -5263,7 +5631,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
   Widget _eventsInner(List<Map<String, dynamic>> items) {
     print('[EVENTS INNER] Received ${items.length} items');
-    final sortedItems = [...items]..sort(_compareEventsAscending);
+    final sortedItems = _sortEvents(items);
     return RefreshIndicator(
       onRefresh: _loadEvents,
       color: ExColors.techBlue,
@@ -7659,7 +8027,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       },
       child: Container(
         margin: showMargin
-            ? const EdgeInsets.only(bottom: 16)
+            ? const EdgeInsets.only(bottom: 10)
             : EdgeInsets.zero,
         decoration: BoxDecoration(
           color: Colors.white,
@@ -7667,7 +8035,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           border: Border.all(color: Colors.grey.shade200, width: 1),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -7721,7 +8089,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           ),
                         ),
                       ),
-                      // Navigate button
+                      // Directions button
                       GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTap: () {
@@ -7754,18 +8122,36 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           ),
                         ),
                       ),
+                      // AI assistant button
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () async {
+                          if (!mounted) return;
+                          await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => AIChatScreen(eventData: e),
+                            ),
+                          );
+                          await _loadEvents();
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.all(6),
+                          child: Image.asset(
+                            'assets/ai_assistant_logo.png',
+                            width: 24,
+                            height: 24,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ],
               ),
 
               // Divider
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                child: Divider(
-                  height: 1,
-                  color: Colors.grey.shade200,
-                ),
+              Divider(
+                height: 16,
+                color: Colors.grey.shade200,
               ),
 
               // Date and Time row
@@ -7792,7 +8178,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 ],
               ),
 
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
 
               // Address row
               _buildCardInfoRow(
@@ -7801,7 +8187,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 isMissing: isVenueMissing,
               ),
 
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
 
               // Roles row
               _buildCardInfoRow(
@@ -7811,7 +8197,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 maxLines: 2,
               ),
 
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
 
               // Badges row (capacity + privacy) - more subtle
               Builder(
@@ -7910,7 +8296,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
               // Action buttons for pending/draft events (only true drafts, not sent to staff yet)
               if (status == 'draft' && ((e['accepted_staff'] as List?)?.isEmpty ?? true)) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 Row(
                   children: [
                     Expanded(
