@@ -162,8 +162,17 @@ class DemoSeed {
     if (!ENV.jwtSecret) throw new Error('BACKEND_JWT_SECRET required in .env');
 
     const dbName = ENV.nodeEnv === 'production' ? 'nexa_prod' : 'nexa_test';
-    const uri = ENV.mongoUri.trim().replace(/\/$/, '');
-    await mongoose.connect(`${uri}/${dbName}`);
+    let uri = ENV.mongoUri.trim().replace(/\/$/, '');
+    // Insert DB name before query string: ...mongodb.net/?opts → ...mongodb.net/dbName?opts
+    const qIdx = uri.indexOf('?');
+    if (qIdx !== -1) {
+      const base = uri.substring(0, qIdx).replace(/\/$/, '');
+      const query = uri.substring(qIdx);
+      uri = `${base}/${dbName}${query}`;
+    } else {
+      uri = `${uri}/${dbName}`;
+    }
+    await mongoose.connect(uri);
     console.log(`   Connected to: ${dbName}\n`);
   }
 
