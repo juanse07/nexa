@@ -47,6 +47,7 @@ export interface UserDocument extends Document {
   subscription_expires_at?: Date;
   ai_messages_used_this_month?: number;
   ai_messages_reset_date?: Date;
+  groq_request_limit?: number;
 
   // Gamification for punctuality
   gamification?: {
@@ -129,6 +130,7 @@ const UserSchema = new Schema<UserDocument>(
     subscription_started_at: { type: Date, default: null },
     subscription_expires_at: { type: Date, default: null },
     ai_messages_used_this_month: { type: Number, default: 0 },
+    groq_request_limit: { type: Number, default: 3 },
     ai_messages_reset_date: {
       type: Date,
       default: function() {

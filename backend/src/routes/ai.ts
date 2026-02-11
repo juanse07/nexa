@@ -8,6 +8,7 @@ import multer from 'multer';
 import FormData from 'form-data';
 import fs from 'fs';
 import { getDateTimeContext, getWelcomeDateContext, getFullSystemContext } from '../utils/dateContext';
+import { getProviderConfig, resolveProvider } from '../utils/aiProvider';
 import { EventModel } from '../models/event';
 import { ClientModel } from '../models/client';
 import { TeamMemberModel } from '../models/teamMember';
@@ -399,7 +400,7 @@ const chatMessageSchema = z.object({
   ),
   temperature: z.number().optional().default(0.7),
   maxTokens: z.number().optional().default(500),
-  provider: z.enum(['openai', 'claude', 'groq']).optional().default('groq'),
+  provider: z.enum(['openai', 'claude', 'groq', 'together']).optional().default('groq'),
   model: z.string().optional(), // Optional model override for Groq
 });
 
@@ -3301,19 +3302,48 @@ router.post('/ai/chat/message', requireAuth, async (req, res) => {
     const validated = chatMessageSchema.parse(req.body);
     const { messages, temperature, maxTokens, provider, model } = validated;
 
-    console.log(`[ai/chat/message] Using Groq, model: ${model || 'llama-3.1-8b-instant'}`);
-
     // Get managerId from authenticated user
     const managerId = (req as any).user?._id || (req as any).user?.managerId;
     if (!managerId) {
       return res.status(401).json({ message: 'Manager not found' });
     }
 
+    // Load manager for Groq usage tracking
+    const manager = await ManagerModel.findById(managerId);
+    if (!manager) {
+      return res.status(404).json({ message: 'Manager not found' });
+    }
+
+    // Check/reset monthly Groq counter
+    const now = new Date();
+    const resetDate = manager.groq_messages_reset_date || new Date();
+    if (now > resetDate) {
+      manager.groq_messages_used_this_month = 0;
+      const nextMonth = new Date(now);
+      nextMonth.setMonth(nextMonth.getMonth() + 1);
+      nextMonth.setDate(1);
+      nextMonth.setHours(0, 0, 0, 0);
+      manager.groq_messages_reset_date = nextMonth;
+      console.log(`[ai/chat/message] Reset Groq counter for manager ${managerId}, next reset: ${nextMonth.toISOString()}`);
+    }
+
+    // Resolve provider: first N messages use Groq, rest use Together AI
+    const groqUsed = manager.groq_messages_used_this_month || 0;
+    const groqLimit = manager.groq_request_limit || 3;
+    const chosenProvider = resolveProvider(groqUsed, groqLimit);
+
+    // If Groq is chosen, increment counter
+    if (chosenProvider === 'groq') {
+      manager.groq_messages_used_this_month = groqUsed + 1;
+    }
+    await manager.save();
+
+    console.log(`[ai/chat/message] Provider: ${chosenProvider} (groq used: ${groqUsed}/${groqLimit}), model: ${model || 'openai/gpt-oss-20b'}`);
+
     // Detect user's timezone from IP
     const timezone = getTimezoneFromRequest(req);
 
-    // Always use Groq (optimized for cost and performance)
-    return await handleGroqRequest(messages, temperature, maxTokens, res, timezone, model, managerId);
+    return await handleGroqRequest(messages, temperature, maxTokens, res, timezone, model, managerId, chosenProvider);
   } catch (err: any) {
     console.error('[ai/chat/message] Error:', err);
     if (err instanceof z.ZodError) {
@@ -3374,19 +3404,20 @@ async function handleGroqRequest(
   res: any,
   timezone?: string,
   model?: string,
-  managerId?: mongoose.Types.ObjectId
+  managerId?: mongoose.Types.ObjectId,
+  provider: 'groq' | 'together' = 'groq'
 ) {
-  const groqKey = process.env.GROQ_API_KEY;
-  if (!groqKey) {
-    console.error('[Groq] API key not configured');
-    return res.status(500).json({ message: 'Groq API key not configured on server' });
+  const groqModel = model || 'openai/gpt-oss-20b';
+  const config = getProviderConfig(provider, groqModel);
+
+  if (!config.apiKey) {
+    console.error(`[AI:${config.name}] API key not configured`);
+    return res.status(500).json({ message: `${config.name} API key not configured on server` });
   }
 
-  // Use GPT-OSS-20B for function calling (131K context, OpenAI-compatible tools)
-  const groqModel = model || 'openai/gpt-oss-20b';  // 20B params, 131K context, 65K max output
-  const isReasoningModel = groqModel.includes('gpt-oss');
+  const isReasoningModel = config.supportsReasoning && groqModel.includes('gpt-oss');
 
-  console.log(`[Groq] Manager using model: ${groqModel}`);
+  console.log(`[AI:${config.name}] Manager using model: ${config.model}`);
 
   // Fetch context examples from successful past conversations (for learning)
   let contextExamplesPrompt = '';
@@ -3405,10 +3436,10 @@ async function handleGroqRequest(
 
       if (examples.length > 0) {
         contextExamplesPrompt = formatContextExamples(examples);
-        console.log(`[Groq] Injected ${examples.length} context example(s) from past conversations`);
+        console.log(`[AI:${config.name}] Injected ${examples.length} context example(s) from past conversations`);
       }
     } catch (error) {
-      console.error('[Groq] Failed to fetch context examples:', error);
+      console.error(`[AI:${config.name}] Failed to fetch context examples:`, error);
       // Continue without examples - non-blocking
     }
   }
@@ -3538,7 +3569,7 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
 
   // Build request body with model-specific optimizations
   const requestBody: any = {
-    model: groqModel,
+    model: config.model,
     messages: processedMessages,
     temperature: isReasoningModel ? 0.6 : temperature, // Higher temp for reasoning
     max_tokens: isReasoningModel ? Math.max(maxTokens * 8, 4000) : maxTokens, // Reasoning needs large budget (thinking + answer)
@@ -3546,15 +3577,15 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
     tool_choice: 'auto'
   };
 
-  // Add reasoning parameters for gpt-oss models
+  // Add reasoning parameters only when provider supports it (Groq gpt-oss only)
   if (isReasoningModel) {
-    requestBody.reasoning_format = 'parsed'; // Return reasoning in separate field
+    requestBody.reasoning_format = 'parsed';
     requestBody.reasoning_effort = 'high';
-    console.log(`[Groq] Using reasoning mode with ${requestBody.max_tokens} max tokens`);
+    console.log(`[AI:${config.name}] Using reasoning mode with ${requestBody.max_tokens} max tokens`);
   }
 
   const headers = {
-    'Authorization': `Bearer ${groqKey}`,
+    'Authorization': `Bearer ${config.apiKey}`,
     'Content-Type': 'application/json',
   };
 
@@ -3564,41 +3595,40 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`[Groq] Attempt ${attempt}/${maxRetries} - Calling /v1/chat/completions...`);
+      console.log(`[AI:${config.name}] Attempt ${attempt}/${maxRetries} - Calling /v1/chat/completions...`);
 
       // Extended timeout for reasoning models (120s vs 60s)
       const timeout = isReasoningModel ? 120000 : 60000;
 
       const response = await axios.post(
-        'https://api.groq.com/openai/v1/chat/completions',
+        config.baseUrl,
         requestBody,
         { headers, validateStatus: () => true, timeout }
       );
 
-      console.log('[Groq] Response status:', response.status);
+      console.log(`[AI:${config.name}] Response status:`, response.status);
 
       // Handle rate limits with retry
       if (response.status === 429) {
         const retryAfter = parseInt(response.headers['retry-after'] || '5', 10);
         if (attempt < maxRetries) {
-          console.log(`[Groq] Rate limited, retrying after ${retryAfter}s...`);
+          console.log(`[AI:${config.name}] Rate limited, retrying after ${retryAfter}s...`);
           await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
           continue;
         }
         return res.status(429).json({
-          message: 'Groq API rate limit reached. Please try again later.',
+          message: `${config.name} API rate limit reached. Please try again later.`,
         });
       }
 
       // Handle other errors
       if (response.status >= 300) {
-        console.error('[Groq] API error:', response.status, response.data);
+        console.error(`[AI:${config.name}] API error:`, response.status, response.data);
 
-        // Llama model error - return error details
-        console.log('[Groq] Llama model error:', response.status);
+        console.log(`[AI:${config.name}] Model error:`, response.status);
 
         return res.status(response.status).json({
-          message: `Groq API error: ${response.statusText}`,
+          message: `${config.name} API error: ${response.statusText}`,
           details: response.data,
         });
       }
@@ -3611,13 +3641,13 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
 
       const assistantMessage = choice.message;
 
-      // Capture reasoning from first request (Groq uses 'reasoning' field)
+      // Capture reasoning from first request
       const firstRequestReasoning = assistantMessage.reasoning || null;
-      if (firstRequestReasoning) console.log('[Groq] Reasoning received:', firstRequestReasoning.length, 'chars');
+      if (firstRequestReasoning) console.log(`[AI:${config.name}] Reasoning received:`, firstRequestReasoning.length, 'chars');
 
       // Handle tool calls (including parallel calls for llama)
       if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-        console.log(`[Groq] ${assistantMessage.tool_calls.length} tool call(s) requested`);
+        console.log(`[AI:${config.name}] ${assistantMessage.tool_calls.length} tool call(s) requested`);
 
         if (!managerId) {
           return res.status(401).json({ message: 'Manager ID required for function calls' });
@@ -3629,12 +3659,11 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
             const functionName = toolCall.function.name;
 
             try {
-              // Parse arguments with error handling for malformed JSON
               let functionArgs: any;
               try {
                 functionArgs = JSON.parse(toolCall.function.arguments);
               } catch (parseError: any) {
-                console.error(`[Groq] Failed to parse tool arguments for ${functionName}:`, toolCall.function.arguments);
+                console.error(`[AI:${config.name}] Failed to parse tool arguments for ${functionName}:`, toolCall.function.arguments);
                 return {
                   role: 'tool',
                   tool_call_id: toolCall.id,
@@ -3642,7 +3671,7 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
                 };
               }
 
-              console.log(`[Groq] Executing ${functionName}:`, functionArgs);
+              console.log(`[AI:${config.name}] Executing ${functionName}:`, functionArgs);
 
               const result = await executeFunctionCall(functionName, functionArgs, managerId);
 
@@ -3652,7 +3681,7 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
                 content: result
               };
             } catch (execError: any) {
-              console.error(`[Groq] Tool execution failed for ${functionName}:`, execError);
+              console.error(`[AI:${config.name}] Tool execution failed for ${functionName}:`, execError);
               return {
                 role: 'tool',
                 tool_call_id: toolCall.id,
@@ -3676,10 +3705,10 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
         let finalReasoning: string | null = null;
 
         for (let step = 0; step < maxToolSteps; step++) {
-          console.log(`[Groq] Follow-up request step ${step + 1}/${maxToolSteps}...`);
+          console.log(`[AI:${config.name}] Follow-up request step ${step + 1}/${maxToolSteps}...`);
 
           const response = await axios.post(
-            'https://api.groq.com/openai/v1/chat/completions',
+            config.baseUrl,
             {
               model: requestBody.model,
               messages: currentMessages,
@@ -3695,9 +3724,8 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
 
           // Handle tool_use_failed - use context-aware fallback
           if (response.status === 400 && response.data?.error?.code === 'tool_use_failed') {
-            console.log('[Groq] tool_use_failed detected, using context-aware fallback...');
+            console.log(`[AI:${config.name}] tool_use_failed detected, using context-aware fallback...`);
 
-            // Collect ALL tool results accumulated so far
             const allToolResultsSummary = currentMessages
               .filter((m: any) => m.role === 'tool')
               .map((tr: any) => {
@@ -3709,7 +3737,6 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
                 }
               }).join('\n\n');
 
-            // Get the user's original request to preserve intent
             const originalUserMessage = processedMessages
               .filter((m: any) => m.role === 'user')
               .slice(-1)[0]?.content || '';
@@ -3727,10 +3754,10 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
               }
             ];
 
-            console.log('[Groq] Fallback messages count:', fallbackMessages.length);
+            console.log(`[AI:${config.name}] Fallback messages count:`, fallbackMessages.length);
 
             const fallbackResponse = await axios.post(
-              'https://api.groq.com/openai/v1/chat/completions',
+              config.baseUrl,
               {
                 model: requestBody.model,
                 messages: fallbackMessages,
@@ -3740,23 +3767,23 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
               { headers, validateStatus: () => true, timeout: secondTimeout }
             );
 
-            console.log('[Groq] Fallback response status:', fallbackResponse.status);
+            console.log(`[AI:${config.name}] Fallback response status:`, fallbackResponse.status);
 
             if (fallbackResponse.status >= 300) {
-              console.error('[Groq] Fallback also failed:', fallbackResponse.data);
+              console.error(`[AI:${config.name}] Fallback also failed:`, fallbackResponse.data);
               finalContent = `Here's what I found:\n\n${allToolResultsSummary}`;
               finalReasoning = null;
             } else {
               const fm = fallbackResponse.data.choices?.[0]?.message;
               finalContent = fm?.content || `Here's what I found:\n\n${allToolResultsSummary}`;
               finalReasoning = fm?.reasoning || null;
-              console.log('[Groq] Fallback content length:', finalContent.length);
+              console.log(`[AI:${config.name}] Fallback content length:`, finalContent.length);
             }
             break;
           }
 
           if (response.status >= 300) {
-            console.error('[Groq] Follow-up API call error:', response.status, response.data);
+            console.error(`[AI:${config.name}] Follow-up API call error:`, response.status, response.data);
             throw new Error(`Follow-up API call failed: ${response.statusText}`);
           }
 
@@ -3764,7 +3791,7 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
 
           // Check for additional tool calls - execute and loop
           if (message?.tool_calls && message.tool_calls.length > 0) {
-            console.log(`[Groq] Step ${step + 2}: ${message.tool_calls.length} additional tool call(s)`);
+            console.log(`[AI:${config.name}] Step ${step + 2}: ${message.tool_calls.length} additional tool call(s)`);
 
             const additionalResults = await Promise.all(
               message.tool_calls.map(async (toolCall: any) => {
@@ -3774,7 +3801,7 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
                   try {
                     functionArgs = JSON.parse(toolCall.function.arguments);
                   } catch (parseError: any) {
-                    console.error(`[Groq] Failed to parse tool arguments for ${functionName}:`, toolCall.function.arguments);
+                    console.error(`[AI:${config.name}] Failed to parse tool arguments for ${functionName}:`, toolCall.function.arguments);
                     return {
                       role: 'tool',
                       tool_call_id: toolCall.id,
@@ -3782,7 +3809,7 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
                     };
                   }
 
-                  console.log(`[Groq] Executing ${functionName}:`, functionArgs);
+                  console.log(`[AI:${config.name}] Executing ${functionName}:`, functionArgs);
                   allToolsUsed.push(functionName);
                   const result = await executeFunctionCall(functionName, functionArgs, managerId);
                   return {
@@ -3791,7 +3818,7 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
                     content: result
                   };
                 } catch (execError: any) {
-                  console.error(`[Groq] Tool execution failed for ${functionName}:`, execError);
+                  console.error(`[AI:${config.name}] Tool execution failed for ${functionName}:`, execError);
                   return {
                     role: 'tool',
                     tool_call_id: toolCall.id,
@@ -3812,8 +3839,8 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
           // No more tool calls - we have final content
           finalContent = message?.content || '';
           finalReasoning = message?.reasoning || null;
-          console.log('[Groq] Final content length:', finalContent.length);
-          if (finalReasoning) console.log('[Groq] Final reasoning length:', finalReasoning.length);
+          console.log(`[AI:${config.name}] Final content length:`, finalContent.length);
+          if (finalReasoning) console.log(`[AI:${config.name}] Final reasoning length:`, finalReasoning.length);
           break;
         }
 
@@ -3824,7 +3851,7 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
         return res.json({
           content: finalContent,
           reasoning: finalReasoning || firstRequestReasoning || null,
-          provider: 'groq',
+          provider: config.name,
           model: requestBody.model,
           toolsUsed: allToolsUsed
         });
@@ -3838,19 +3865,19 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
       }
 
       if (reasoningContent) {
-        console.log('[Groq] Reasoning content length:', reasoningContent.length);
+        console.log(`[AI:${config.name}] Reasoning content length:`, reasoningContent.length);
       }
 
       return res.json({
         content,
         reasoning: reasoningContent,
-        provider: 'groq',
+        provider: config.name,
         model: requestBody.model
       });
 
     } catch (error: any) {
       lastError = error;
-      console.error(`[Groq] Attempt ${attempt}/${maxRetries} failed:`, {
+      console.error(`[AI:${config.name}] Attempt ${attempt}/${maxRetries} failed:`, {
         message: error.message,
         status: error.response?.status,
         data: error.response?.data
@@ -3861,14 +3888,14 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
 
       // Exponential backoff: 1s, 2s, 4s
       const backoffMs = Math.pow(2, attempt - 1) * 1000;
-      console.log(`[Groq] Retrying after ${backoffMs}ms...`);
+      console.log(`[AI:${config.name}] Retrying after ${backoffMs}ms...`);
       await new Promise(resolve => setTimeout(resolve, backoffMs));
     }
   }
 
   // All retries exhausted
   return res.status(500).json({
-    message: 'Groq API request failed after retries',
+    message: `${config.name} API request failed after retries`,
     error: lastError?.message || 'Unknown error',
     details: lastError?.response?.data || lastError?.message
   });

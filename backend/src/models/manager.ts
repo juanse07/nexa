@@ -57,6 +57,11 @@ export interface ManagerDocument extends Document {
   }>;
   venueListUpdatedAt?: Date;
 
+  // AI provider usage tracking
+  groq_messages_used_this_month?: number;
+  groq_messages_reset_date?: Date;
+  groq_request_limit?: number;
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -126,6 +131,20 @@ const ManagerSchema = new Schema<ManagerDocument>(
       source: { type: String, enum: ['ai', 'manual'], default: 'ai' },
     }],
     venueListUpdatedAt: { type: Date },
+
+    // AI provider usage tracking
+    groq_messages_used_this_month: { type: Number, default: 0 },
+    groq_messages_reset_date: {
+      type: Date,
+      default: function() {
+        const date = new Date();
+        date.setMonth(date.getMonth() + 1);
+        date.setDate(1);
+        date.setHours(0, 0, 0, 0);
+        return date;
+      }
+    },
+    groq_request_limit: { type: Number, default: 3 },
   },
   { timestamps: true }
 );
