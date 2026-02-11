@@ -27,7 +27,7 @@ export function getProviderConfig(provider: 'groq' | 'together', groqModel: stri
       name: 'together',
       apiKey: process.env.TOGETHER_API_KEY || '',
       baseUrl: 'https://api.together.xyz/v1/chat/completions',
-      model: GROQ_TO_TOGETHER_MODEL[groqModel] || GROQ_TO_TOGETHER_MODEL['openai/gpt-oss-20b'],
+      model: GROQ_TO_TOGETHER_MODEL[groqModel] || 'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo',
       supportsReasoning: false,
     };
   }
