@@ -12,14 +12,9 @@ export interface AIProviderConfig {
   supportsReasoning: boolean;
 }
 
-/** Map Groq model names → Together AI equivalents */
-const GROQ_TO_TOGETHER_MODEL: Record<string, string> = {
-  'openai/gpt-oss-20b': 'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo',
-  'llama-3.1-8b-instant': 'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo',
-};
-
 /**
  * Get full provider config (URL, key, model) for a given provider + Groq model name.
+ * Together AI offers the same models — pass through the model name directly.
  */
 export function getProviderConfig(provider: 'groq' | 'together', groqModel: string): AIProviderConfig {
   if (provider === 'together') {
@@ -27,8 +22,8 @@ export function getProviderConfig(provider: 'groq' | 'together', groqModel: stri
       name: 'together',
       apiKey: process.env.TOGETHER_API_KEY || '',
       baseUrl: 'https://api.together.xyz/v1/chat/completions',
-      model: GROQ_TO_TOGETHER_MODEL[groqModel] || 'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo',
-      supportsReasoning: false,
+      model: groqModel,
+      supportsReasoning: true,
     };
   }
 
