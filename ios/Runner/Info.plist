@@ -53,8 +53,8 @@
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<!-- REVERSED_CLIENT_ID for Google Sign-In (nexastaffproject) -->
-				<string>com.googleusercontent.apps.832253199298-30pclv5ijm4etnciqh6en9b5l1iqddj0</string>
+				<!-- REVERSED_CLIENT_ID for Google Sign-In (iOS OAuth client) -->
+				<string>com.googleusercontent.apps.832253199298-bct5e2pl3ohsogd3q3o0jcodjt2191hg</string>
 				<!-- REVERSED_CLIENT_ID for Firebase Phone Auth (nexa-8e252) -->
 				<string>com.googleusercontent.apps.263339707561-dlqfbhuuc672u7acunk4fhkp3bqql0v1</string>
 				<!-- Firebase Phone Auth reCAPTCHA URL scheme (bundle ID) -->
@@ -66,7 +66,7 @@
 	</array>
 	<!-- Google Sign-In client IDs -->
     <key>GIDClientID</key>
-    <string>832253199298-30pclv5ijm4etnciqh6en9b5l1iqddj0.apps.googleusercontent.com</string>
+    <string>832253199298-bct5e2pl3ohsogd3q3o0jcodjt2191hg.apps.googleusercontent.com</string>
 	<key>GIDServerClientID</key>
 	<string>832253199298-cj28t4ill6gltnea1epaslvb2o1mar5k.apps.googleusercontent.com</string>
 

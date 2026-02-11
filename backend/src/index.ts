@@ -39,6 +39,7 @@ import statisticsRouter from './routes/statistics';
 import staffRouter from './routes/staff';
 import groupsRouter from './routes/groups';
 import uploadRouter from './routes/upload';
+import caricatureRouter from './routes/caricature';
 import { notificationScheduler } from './services/notificationScheduler';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
@@ -112,6 +113,10 @@ export async function createServer() {
   app.use('/api', staffRouter); // Staff management endpoints
   app.use('/api', groupsRouter); // Staff group management
   app.use('/api/upload', uploadRouter); // File upload routes
+  app.use('/api/caricature', caricatureRouter); // AI caricature generation
+
+  // Serve locally-stored uploads (caricatures, etc.) when R2 is not configured
+  app.use('/uploads', express.static('/app/uploads'));
 
   // Privacy and legal pages (served at root, not under /api)
   app.use(privacyRouter);

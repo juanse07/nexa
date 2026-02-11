@@ -2985,9 +2985,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       position: PopupMenuPosition.under,
       onSelected: (value) async {
         if (value == 'profile') {
-          Navigator.of(
+          await Navigator.of(
             context,
           ).push(MaterialPageRoute(builder: (_) => const ManagerProfilePage()));
+          // Refresh avatar after returning from profile page
+          _loadProfilePicture();
         } else if (value == 'settings') {
           Navigator.of(
             context,

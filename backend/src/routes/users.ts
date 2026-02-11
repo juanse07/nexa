@@ -34,6 +34,7 @@ const updateSchema = z.object({
     .regex(/^\d{9}$/)
     .optional(),
   picture: z.string().url().max(2048).optional(),
+  isCaricature: z.boolean().optional(), // When true, saves current picture as originalPicture
   eventTerminology: z.enum(['shift', 'job', 'event']).optional(),
 });
 
@@ -66,6 +67,8 @@ router.get('/users/me', requireAuth, async (req, res) => {
       lastName: user.last_name,
       phoneNumber: user.phone_number,
       picture: user.picture,
+      originalPicture: user.originalPicture || null,
+      caricatureHistory: user.caricatureHistory || [],
       appId: user.app_id,
       eventTerminology: user.eventTerminology || 'shift',
     });
@@ -111,13 +114,25 @@ router.patch('/users/me', requireAuth, async (req, res) => {
     }
 
     // Map camelCase to snake_case for database
+    const { isCaricature, ...restData } = parsed.data;
     const dbUpdate: any = { updatedAt: new Date() };
-    if (parsed.data.firstName !== undefined) dbUpdate.first_name = parsed.data.firstName;
-    if (parsed.data.lastName !== undefined) dbUpdate.last_name = parsed.data.lastName;
-    if (parsed.data.phoneNumber !== undefined) dbUpdate.phone_number = parsed.data.phoneNumber;
-    if (parsed.data.appId !== undefined) dbUpdate.app_id = parsed.data.appId;
-    if (parsed.data.picture !== undefined) dbUpdate.picture = parsed.data.picture;
-    if (parsed.data.eventTerminology !== undefined) dbUpdate.eventTerminology = parsed.data.eventTerminology;
+    if (restData.firstName !== undefined) dbUpdate.first_name = restData.firstName;
+    if (restData.lastName !== undefined) dbUpdate.last_name = restData.lastName;
+    if (restData.phoneNumber !== undefined) dbUpdate.phone_number = restData.phoneNumber;
+    if (restData.appId !== undefined) dbUpdate.app_id = restData.appId;
+    if (restData.picture !== undefined) dbUpdate.picture = restData.picture;
+    if (restData.eventTerminology !== undefined) dbUpdate.eventTerminology = restData.eventTerminology;
+
+    // If this is a caricature update, save the current picture as originalPicture
+    if (isCaricature && restData.picture) {
+      const current = await UserModel.findOne({
+        provider: authUser.provider,
+        subject: authUser.sub,
+      }).lean();
+      if (current?.picture) {
+        dbUpdate.originalPicture = current.picture;
+      }
+    }
 
     // eslint-disable-next-line no-console
     console.log('[users] PATCH /me - DB update object:', JSON.stringify(dbUpdate));
@@ -147,6 +162,8 @@ router.patch('/users/me', requireAuth, async (req, res) => {
       lastName: updated.last_name,
       phoneNumber: updated.phone_number,
       picture: updated.picture,
+      originalPicture: updated.originalPicture || null,
+      caricatureHistory: updated.caricatureHistory || [],
       appId: updated.app_id,
       eventTerminology: updated.eventTerminology || 'shift',
     });
@@ -185,6 +202,81 @@ router.get('/users/me/gamification', requireAuth, async (req, res) => {
     // eslint-disable-next-line no-console
     console.error('[users] GET /me/gamification failed', err);
     return res.status(500).json({ message: 'Failed to fetch gamification stats' });
+  }
+});
+
+// POST /users/me/revert-picture - Revert to original (pre-caricature) picture
+router.post('/users/me/revert-picture', requireAuth, async (req, res) => {
+  try {
+    const authUser = (req as any).authUser;
+    if (!authUser?.provider || !authUser?.sub) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+    if (authUser.managerId) {
+      return res.status(403).json({ message: 'Managers should use /managers/me/revert-picture' });
+    }
+
+    const user = await UserModel.findOne({
+      provider: authUser.provider,
+      subject: authUser.sub,
+    });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    if (!user.originalPicture) {
+      return res.status(400).json({ message: 'No original picture to revert to' });
+    }
+
+    user.picture = user.originalPicture;
+    user.originalPicture = undefined;
+    await user.save();
+
+    return res.json({
+      picture: user.picture,
+      originalPicture: null,
+      message: 'Reverted to original picture',
+    });
+  } catch (err) {
+    console.error('[users] POST /me/revert-picture failed', err);
+    return res.status(500).json({ message: 'Failed to revert picture', error: (err as Error).message });
+  }
+});
+
+// DELETE /users/me/caricatures/:index - Delete a caricature from history
+router.delete('/users/me/caricatures/:index', requireAuth, async (req, res) => {
+  try {
+    const authUser = (req as any).authUser;
+    if (!authUser?.provider || !authUser?.sub) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+    if (authUser.managerId) {
+      return res.status(403).json({ message: 'Managers should use /managers/me/caricatures/:index' });
+    }
+
+    const index = parseInt(req.params.index || '0', 10);
+    if (isNaN(index) || index < 0) {
+      return res.status(400).json({ message: 'Invalid index parameter' });
+    }
+
+    const user = await UserModel.findOne({
+      provider: authUser.provider,
+      subject: authUser.sub,
+    });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    if (!user.caricatureHistory || index >= user.caricatureHistory.length) {
+      return res.status(404).json({ message: 'Caricature not found at index' });
+    }
+
+    user.caricatureHistory.splice(index, 1);
+    await user.save();
+
+    return res.json({
+      message: 'Caricature deleted',
+      caricatureHistory: user.caricatureHistory,
+    });
+  } catch (err) {
+    console.error('[users] DELETE /me/caricatures/:index failed', err);
+    return res.status(500).json({ message: 'Failed to delete caricature', error: (err as Error).message });
   }
 });
 

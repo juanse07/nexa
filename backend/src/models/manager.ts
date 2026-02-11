@@ -9,6 +9,7 @@ export interface ManagerDocument extends Document {
   last_name?: string;
   auth_phone_number?: string; // verified phone for authentication (E.164 format)
   picture?: string; // optional override picture
+  originalPicture?: string; // pre-caricature picture (for revert)
   app_id?: string; // optional 9-digit app id
 
   // Linked authentication methods (for account linking)
@@ -41,6 +42,19 @@ export interface ManagerDocument extends Document {
   qonversion_user_id?: string;
   subscription_started_at?: Date;
   subscription_expires_at?: Date;
+
+  // Caricature history (last 10 creations)
+  caricatureHistory?: Array<{
+    url: string;
+    role: string;
+    artStyle: string;
+    createdAt: Date;
+  }>;
+
+  // AI chat usage tracking
+  groq_messages_used_this_month?: number;
+  groq_messages_reset_date?: Date;
+  groq_request_limit?: number;
 
   // Personalized venue discovery
   preferredCity?: string; // DEPRECATED: Use cities array instead. Kept for backward compatibility
@@ -76,6 +90,7 @@ const ManagerSchema = new Schema<ManagerDocument>(
     last_name: { type: String, trim: true },
     auth_phone_number: { type: String, trim: true }, // E.164 format for phone auth
     picture: { type: String, trim: true },
+    originalPicture: { type: String, trim: true }, // pre-caricature picture
     app_id: { type: String, trim: true },
 
     // Linked authentication methods
@@ -116,6 +131,19 @@ const ManagerSchema = new Schema<ManagerDocument>(
     qonversion_user_id: { type: String, sparse: true },
     subscription_started_at: { type: Date, default: null },
     subscription_expires_at: { type: Date, default: null },
+
+    // Caricature history (last 10 creations)
+    caricatureHistory: [{
+      url: { type: String, required: true },
+      role: { type: String, required: true },
+      artStyle: { type: String, required: true },
+      createdAt: { type: Date, default: Date.now },
+    }],
+
+    // AI chat usage tracking
+    groq_messages_used_this_month: { type: Number, default: 0 },
+    groq_messages_reset_date: { type: Date },
+    groq_request_limit: { type: Number, default: 3 },
 
     // Personalized venue discovery
     preferredCity: { type: String, trim: true }, // DEPRECATED: kept for backward compatibility

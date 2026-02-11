@@ -283,9 +283,19 @@ class AuthService {
     } else {
       // For mobile platforms, use serverClientId for backend verification
       final serverClientId = env.get('GOOGLE_SERVER_CLIENT_ID');
+      // On iOS, pass clientId explicitly when available to override the
+      // CLIENT_ID from GoogleService-Info.plist. Only pass it if it looks
+      // like a real Google client ID (on-device builds may only have
+      // placeholder values from .env.defaults).
+      final iosClientId = env.get('GOOGLE_CLIENT_ID_IOS');
+      final validIosClientId = (iosClientId != null &&
+              iosClientId.contains('.apps.googleusercontent.com'))
+          ? iosClientId
+          : null;
       if (serverClientId != null && serverClientId.isNotEmpty) {
         return GoogleSignIn(
           scopes: const ['email', 'profile'],
+          clientId: (!kIsWeb && Platform.isIOS) ? validIosClientId : null,
           serverClientId: serverClientId,
         );
       }

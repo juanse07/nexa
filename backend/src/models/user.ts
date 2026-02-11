@@ -10,7 +10,16 @@ export interface UserDocument extends Document {
   phone_number?: string; // profile phone (for contact)
   auth_phone_number?: string; // verified phone for authentication (E.164 format)
   picture?: string; // optional override picture
+  originalPicture?: string; // pre-caricature picture (for revert)
   app_id?: string; // optional 9-digit app id
+
+  // Caricature history (last 10 creations)
+  caricatureHistory?: Array<{
+    url: string;
+    role: string;
+    artStyle: string;
+    createdAt: Date;
+  }>;
 
   // Linked authentication methods (for account linking)
   linked_providers?: Array<{
@@ -86,7 +95,16 @@ const UserSchema = new Schema<UserDocument>(
     phone_number: { type: String, trim: true },
     auth_phone_number: { type: String, trim: true }, // E.164 format for phone auth
     picture: { type: String, trim: true },
+    originalPicture: { type: String, trim: true }, // pre-caricature picture
     app_id: { type: String, trim: true },
+
+    // Caricature history (last 10 creations)
+    caricatureHistory: [{
+      url: { type: String, required: true },
+      role: { type: String, required: true },
+      artStyle: { type: String, required: true },
+      createdAt: { type: Date, default: Date.now },
+    }],
 
     // Linked authentication methods
     linked_providers: [{
