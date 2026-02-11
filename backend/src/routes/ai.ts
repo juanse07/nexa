@@ -24,6 +24,7 @@ import { FlaggedAttendanceModel } from '../models/flaggedAttendance';
 import { UserModel } from '../models/user';
 import { TeamModel } from '../models/team';
 import { emitToManager, emitToTeams, emitToUser } from '../socket/server';
+import { getTierLimits, SubscriptionTier } from '../config/tiers';
 import { notificationService } from '../services/notificationService';
 import { computeRoleStats } from '../utils/eventCapacity';
 
@@ -2627,8 +2628,17 @@ ${topStaff ? `Most Flagged: ${topStaff}` : ''}`;
         if (!Array.isArray(events) || events.length === 0) {
           return '❌ No events provided. Pass an array of event objects.';
         }
-        if (events.length > 30) {
-          return `❌ Too many events (${events.length}). Maximum is 30 per bulk operation.`;
+
+        // Enforce tier-based bulk create limit
+        const mgr = await ManagerModel.findById(managerId).select('subscription_tier').lean();
+        const mgrTier = ((mgr as any)?.subscription_tier || 'free') as SubscriptionTier;
+        const { bulkCreateLimit } = getTierLimits(mgrTier);
+
+        if (bulkCreateLimit === 0) {
+          return '❌ Bulk event creation is not available on the Free plan. You can create events one at a time using "create_event", or upgrade your plan to unlock bulk creation.';
+        }
+        if (events.length > bulkCreateLimit) {
+          return `❌ Your ${mgrTier.charAt(0).toUpperCase() + mgrTier.slice(1)} plan allows up to ${bulkCreateLimit} events per bulk operation, but you requested ${events.length}. Please reduce the number of events or upgrade your plan for a higher limit.`;
         }
 
         // Validate all events before creating any
@@ -3314,7 +3324,7 @@ router.post('/ai/chat/message', requireAuth, async (req, res) => {
       return res.status(404).json({ message: 'Manager not found' });
     }
 
-    // Check/reset monthly Groq counter
+    // Track monthly AI message counter
     const now = new Date();
     const resetDate = manager.groq_messages_reset_date || new Date();
     if (now > resetDate) {
@@ -3324,21 +3334,19 @@ router.post('/ai/chat/message', requireAuth, async (req, res) => {
       nextMonth.setDate(1);
       nextMonth.setHours(0, 0, 0, 0);
       manager.groq_messages_reset_date = nextMonth;
-      console.log(`[ai/chat/message] Reset Groq counter for manager ${managerId}, next reset: ${nextMonth.toISOString()}`);
     }
+    const messagesUsed = manager.groq_messages_used_this_month || 0;
 
-    // Resolve provider: first N messages use Groq, rest use Together AI
-    const groqUsed = manager.groq_messages_used_this_month || 0;
-    const groqLimit = manager.groq_request_limit || 3;
-    const chosenProvider = resolveProvider(groqUsed, groqLimit);
+    // Resolve AI provider based on tier + message cycle
+    const tier = (manager.subscription_tier || 'free') as SubscriptionTier;
+    const togetherPercent = getTierLimits(tier).togetherAiPercent;
+    const chosenProvider = resolveProvider(messagesUsed, togetherPercent);
 
-    // If Groq is chosen, increment counter
-    if (chosenProvider === 'groq') {
-      manager.groq_messages_used_this_month = groqUsed + 1;
-    }
+    // Increment counter
+    manager.groq_messages_used_this_month = messagesUsed + 1;
     await manager.save();
 
-    console.log(`[ai/chat/message] Provider: ${chosenProvider} (groq used: ${groqUsed}/${groqLimit}), model: ${model || 'openai/gpt-oss-20b'}`);
+    console.log(`[ai/chat/message] Provider: ${chosenProvider} (tier: ${tier}, msg #${messagesUsed}, togetherPct: ${togetherPercent}%), model: ${model || 'openai/gpt-oss-20b'}`);
 
     // Detect user's timezone from IP
     const timezone = getTimezoneFromRequest(req);
@@ -3418,6 +3426,20 @@ async function handleGroqRequest(
   const isReasoningModel = config.supportsReasoning && groqModel.includes('gpt-oss');
 
   console.log(`[AI:${config.name}] Manager using model: ${config.model}`);
+
+  // Fetch manager's subscription tier for prompt injection
+  let managerBulkCreateLimit = 0;
+  let managerTierName = 'Free';
+  if (managerId) {
+    try {
+      const mgrDoc = await ManagerModel.findById(managerId).select('subscription_tier').lean();
+      const tier = ((mgrDoc as any)?.subscription_tier || 'free') as SubscriptionTier;
+      managerBulkCreateLimit = getTierLimits(tier).bulkCreateLimit;
+      managerTierName = tier.charAt(0).toUpperCase() + tier.slice(1);
+    } catch (err) {
+      console.error('[Groq] Failed to fetch manager tier:', err);
+    }
+  }
 
   // Fetch context examples from successful past conversations (for learning)
   let contextExamplesPrompt = '';
@@ -3509,7 +3531,9 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
 - If user says yes: use publish_event tool with the event_id from create_event result
 
 📦 BULK CREATION:
+- The user's plan (${managerTierName}) allows bulk creating up to ${managerBulkCreateLimit} events per batch.${managerBulkCreateLimit === 0 ? '\n- Bulk creation is NOT available on this plan. Use create_event for single events. If the user asks for bulk creation, let them know they need to upgrade.' : ''}
 - For recurring patterns ("every Saturday in March", "3 shifts next week"): use create_events_bulk
+- If the user requests more than ${managerBulkCreateLimit} events at once, inform them of the limit and suggest upgrading their plan or splitting into multiple batches.
 - Present full list summary before creating, ask for confirmation
 - After bulk creation: offer to publish all with publish_events_bulk
 

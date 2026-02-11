@@ -95,8 +95,9 @@ class SubscriptionService {
     }
   }
 
-  /// Purchase Pro subscription (pricing TBD: $15-25/month)
-  Future<bool> purchaseProSubscription() async {
+  /// Purchase a subscription for the given tier
+  /// Supported tiers: 'starter', 'pro', 'business'
+  Future<bool> purchaseSubscription(String tier) async {
     try {
       if (!_initialized) {
         await initialize();
@@ -104,7 +105,7 @@ class SubscriptionService {
 
       // If Qonversion isn't configured, return false
       if (_qonversionUserId == null) {
-        print('[SubscriptionService] ⚠️  Cannot purchase - Qonversion not initialized');
+        print('[SubscriptionService] Cannot purchase - Qonversion not initialized');
         return false;
       }
 
@@ -112,42 +113,44 @@ class SubscriptionService {
       // TODO: Re-enable when ready to configure Qonversion
       print('[SubscriptionService] Purchase temporarily disabled (Qonversion not configured)');
 
+      // Product ID mapping: nexa_{tier}_monthly
+      // final productId = 'nexa_${tier}_monthly';
+
       // Get available offerings
       // final offerings = await Qonversion.getSharedInstance().offerings();
       // final mainOffering = offerings.main;
 
       // if (mainOffering == null) {
-      //   print('[SubscriptionService] ❌ No offerings available');
+      //   print('[SubscriptionService] No offerings available');
       //   return false;
       // }
 
-      // Find Pro subscription product (monthly subscription)
-      // final proProduct = mainOffering.products['manager_pro_monthly'];
+      // Find subscription product
+      // final product = mainOffering.products[productId];
 
-      // if (proProduct == null) {
-      //   print('[SubscriptionService] ❌ Pro product not found');
+      // if (product == null) {
+      //   print('[SubscriptionService] Product $productId not found');
       //   return false;
       // }
 
-      // print('[SubscriptionService] Purchasing ${proProduct.qonversionID}...');
+      // print('[SubscriptionService] Purchasing ${product.qonversionID}...');
 
       // Purchase
-      // final result = await Qonversion.getSharedInstance().purchase(proProduct);
+      // final result = await Qonversion.getSharedInstance().purchase(product);
 
       // Check if purchase was successful
-      // final isActive = result.entitlements['pro']?.isActive ?? false;
+      // final isActive = result.entitlements[tier]?.isActive ?? false;
 
       // if (isActive) {
-      //   print('[SubscriptionService] ✅ Purchase successful!');
-      //   // Sync with backend
+      //   print('[SubscriptionService] Purchase successful!');
       //   await _syncWithBackend();
       // } else {
-      //   print('[SubscriptionService] ⚠️  Purchase completed but entitlement not active');
+      //   print('[SubscriptionService] Purchase completed but entitlement not active');
       // }
 
       return false; // Temporarily disabled
     } catch (e) {
-      print('[SubscriptionService] ❌ Purchase failed: $e');
+      print('[SubscriptionService] Purchase failed: $e');
       return false;
     }
   }
@@ -260,27 +263,40 @@ class SubscriptionService {
     }
   }
 
-  /// Check if manager is Pro subscriber
-  Future<bool> isPro() async {
-    final status = await getSubscriptionStatus();
-    return status['tier'] == 'pro' && status['isActive'] == true;
+  /// Check if user is on any paid tier (starter+)
+  Future<bool> isPaidTier() async {
+    final status = await getBackendStatus();
+    final tier = status['tier'] ?? 'free';
+    return tier != 'free';
   }
 
-  /// Check if team limit is reached (free tier: 25 members)
+  /// Check if AI extraction is available (starter+)
+  Future<bool> hasAIExtraction() async {
+    final usage = await getManagerUsage();
+    return (usage['aiExtraction']?['hasAccess'] as bool?) ?? false;
+  }
+
+  /// Check if team limit is reached
   Future<bool> canAddTeamMember() async {
     final usage = await getManagerUsage();
     return (usage['teamMembers']?['canAddMore'] as bool?) ?? true;
   }
 
-  /// Check if event limit is reached (free tier: 10 events/month)
+  /// Check if event limit is reached
   Future<bool> canCreateEvent() async {
     final usage = await getManagerUsage();
     return (usage['events']?['canCreateMore'] as bool?) ?? true;
   }
 
-  /// Check if analytics is accessible (Pro only)
+  /// Check if analytics is accessible (pro+)
   Future<bool> hasAnalyticsAccess() async {
     final usage = await getManagerUsage();
     return (usage['analytics']?['hasAccess'] as bool?) ?? false;
+  }
+
+  /// Check if custom branding (team logo) is accessible (starter+)
+  Future<bool> hasCustomBranding() async {
+    final usage = await getManagerUsage();
+    return (usage['customBranding']?['hasAccess'] as bool?) ?? false;
   }
 }

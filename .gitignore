@@ -50,5 +50,8 @@ app.*.map.json
 .env.*
 !/.env.defaults
 
+# Private strategy documents
+docs/private/
+
 # Claude Code configuration (may contain local paths and server info)
 .claude/

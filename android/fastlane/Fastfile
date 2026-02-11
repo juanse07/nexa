@@ -1,0 +1,43 @@
+default_platform(:android)
+
+platform :android do
+  desc "Capture Play Store screenshots on Android emulators"
+  lane :screenshots do
+    # Target emulators — Play Store requires phone and tablet
+    devices = [
+      "Pixel_8_Pro",    # Phone
+      "Pixel_Tablet",   # 10" Tablet
+    ]
+
+    devices.each do |device|
+      UI.message("📸 Capturing screenshots on #{device}...")
+
+      # Boot emulator (assumes AVD already created)
+      sh("#{ENV['ANDROID_HOME']}/emulator/emulator -avd '#{device}' -no-audio -no-window &")
+      sh("adb wait-for-device")
+
+      # Set demo mode for clean status bar
+      sh("adb shell settings put global sysui_demo_allowed 1")
+      sh("adb shell am broadcast -a com.android.systemui.demo " \
+         "-e command clock -e hhmm 0941")
+      sh("adb shell am broadcast -a com.android.systemui.demo " \
+         "-e command battery -e level 100 -e plugged false")
+      sh("adb shell am broadcast -a com.android.systemui.demo " \
+         "-e command network -e wifi show -e level 4")
+      sh("adb shell am broadcast -a com.android.systemui.demo " \
+         "-e command network -e mobile show -e level 4 -e datatype none")
+      sh("adb shell am broadcast -a com.android.systemui.demo " \
+         "-e command notifications -e visible false")
+
+      # Run the screenshot integration test
+      sh("cd '#{ENV['PWD']}/..' && " \
+         "flutter test integration_test/screenshots/screenshot_test.dart " \
+         "-d '#{device}'")
+
+      # Exit demo mode
+      sh("adb shell am broadcast -a com.android.systemui.demo -e command exit")
+    end
+
+    UI.success("✅ All Android screenshots captured!")
+  end
+end

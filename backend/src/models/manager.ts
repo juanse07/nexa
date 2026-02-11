@@ -35,7 +35,7 @@ export interface ManagerDocument extends Document {
   }>;
 
   // Subscription fields
-  subscription_tier?: 'free' | 'pro';
+  subscription_tier?: 'free' | 'lite' | 'starter' | 'pro' | 'business' | 'enterprise';
   subscription_status?: 'active' | 'trial' | 'expired' | 'cancelled' | 'grace_period';
   subscription_platform?: 'ios' | 'android' | 'web' | null;
   qonversion_user_id?: string;
@@ -102,7 +102,7 @@ const ManagerSchema = new Schema<ManagerDocument>(
     }],
 
     // Subscription fields
-    subscription_tier: { type: String, enum: ['free', 'pro'], default: 'free' },
+    subscription_tier: { type: String, enum: ['free', 'lite', 'starter', 'pro', 'business', 'enterprise'], default: 'free' },
     subscription_status: {
       type: String,
       enum: ['active', 'trial', 'expired', 'cancelled', 'grace_period'],

@@ -1,7 +1,7 @@
 /**
- * AI Provider configuration for Groq ↔ Together AI auto-switching.
- * First N requests/month use Groq, then auto-switch to Together AI.
- * The limit (N) is stored per-user/manager in MongoDB — changeable anytime without deploys.
+ * AI Provider configuration for Groq ↔ Together AI percentage-based routing.
+ * Each subscription tier defines a togetherAiPercent (0–100) that controls
+ * the probability of routing a request to Together AI vs Groq.
  */
 
 export interface AIProviderConfig {
@@ -37,11 +37,13 @@ export function getProviderConfig(provider: 'groq' | 'together', groqModel: stri
 }
 
 /**
- * Decide which provider to use based on monthly Groq usage.
+ * Decide which provider to use based on message count and tier percentage.
+ * Uses a deterministic cycle of 10: the first (100-togetherPercent)/10 slots
+ * go to Groq, the rest to Together. Paying users get Groq first in each cycle.
  * Falls back to Groq if Together API key is missing.
  */
-export function resolveProvider(groqUsed: number, groqLimit: number): 'groq' | 'together' {
-  if (groqUsed < groqLimit) return 'groq';
+export function resolveProvider(messageIndex: number, togetherPercent: number): 'groq' | 'together' {
   if (!process.env.TOGETHER_API_KEY) return 'groq';
-  return 'together';
+  const groqSlots = (100 - togetherPercent) / 10;
+  return messageIndex % 10 < groqSlots ? 'groq' : 'together';
 }

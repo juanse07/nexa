@@ -16,7 +16,11 @@ import 'package:nexa/shared/presentation/theme/app_colors.dart';
 class MainScreen extends StatefulWidget {
   final int initialIndex;
 
-  const MainScreen({super.key, this.initialIndex = 0});
+  /// When true, uses IndexedStack instead of PageView (avoids
+  /// assertion errors in integration-test mode and on desktop).
+  final bool useIndexedStack;
+
+  const MainScreen({super.key, this.initialIndex = 0, this.useIndexedStack = false});
 
   @override
   State<MainScreen> createState() => _MainScreenState();
@@ -191,11 +195,13 @@ class _MainScreenState extends State<MainScreen>
       _selectedIndex = index;
     });
 
-    _pageController.animateToPage(
-      index,
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeOut,
-    );
+    if (!widget.useIndexedStack) {
+      _pageController.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
+    }
   }
 
   @override
@@ -214,18 +220,24 @@ class _MainScreenState extends State<MainScreen>
         },
         child: Stack(
           children: [
-            // Main content with PageView
-            PageView(
-              controller: _pageController,
-              onPageChanged: (index) {
-                // Show bars when page changes
-                _showBars();
-                setState(() {
-                  _selectedIndex = index;
-                });
-              },
-              children: _screens,
-            ),
+            // Main content
+            if (widget.useIndexedStack)
+              IndexedStack(
+                index: _selectedIndex,
+                children: _screens,
+              )
+            else
+              PageView(
+                controller: _pageController,
+                onPageChanged: (index) {
+                  // Show bars when page changes
+                  _showBars();
+                  setState(() {
+                    _selectedIndex = index;
+                  });
+                },
+                children: _screens,
+              ),
 
             // Animated bottom navigation bar
             Positioned(

@@ -14,6 +14,7 @@ import { AvailabilityModel } from '../models/availability';
 import { TeamMemberModel } from '../models/teamMember';
 import { ConversationModel } from '../models/conversation';
 import { ChatMessageModel } from '../models/chatMessage';
+import { getTierLimits, SubscriptionTier } from '../config/tiers';
 import { ManagerModel } from '../models/manager';
 import { emitToManager } from '../socket/server';
 
@@ -486,8 +487,7 @@ router.get('/ai/staff/context', requireAuth, async (req, res) => {
     console.log('[ai/staff/context] Query params - userKey:', userKey, 'tier:', subscriptionTier);
 
     // Dynamic context limit based on subscription tier
-    // Free: 10 events (~750 tokens) | Pro: 50 events (~3,750 tokens)
-    const eventLimit = subscriptionTier === 'pro' ? 50 : 10;
+    const eventLimit = getTierLimits(subscriptionTier as SubscriptionTier).aiContextEvents;
 
     const assignedEvents = await EventModel.find(query)
     .sort({ date: 1 })
@@ -944,7 +944,7 @@ async function executeGetMySchedule(
   userKey: string,
   dateRange?: string,
   limit?: number,
-  subscriptionTier: 'free' | 'pro' = 'free'
+  subscriptionTier: SubscriptionTier = 'free'
 ): Promise<{ success: boolean; message: string; data?: any }> {
   try {
     console.log(`[executeGetMySchedule] Getting schedule for userId ${userId}, userKey ${userKey}, range: ${dateRange || 'all'}, tier: ${subscriptionTier}`);
@@ -1002,7 +1002,7 @@ async function executeGetMySchedule(
     // Dynamic limit with user override
     // If limit specified, use it (constrained by subscription tier)
     // Otherwise use default: Free: 10 events | Pro: 50 events
-    const maxLimit = subscriptionTier === 'pro' ? 50 : 10;
+    const maxLimit = getTierLimits(subscriptionTier).aiContextEvents;
     const eventLimit = limit
       ? Math.min(limit, maxLimit)  // Use user limit but cap at subscription max
       : maxLimit;  // Default to max for tier
@@ -1931,7 +1931,7 @@ async function executeStaffFunction(
   functionArgs: any,
   userId: string,
   userKey: string,
-  subscriptionTier: 'free' | 'pro' = 'free'
+  subscriptionTier: SubscriptionTier = 'free'
 ): Promise<{ success: boolean; message: string; data?: any }> {
   console.log(`[executeStaffFunction] Executing ${functionName} with args:`, functionArgs, 'tier:', subscriptionTier);
 
@@ -2012,65 +2012,58 @@ router.post('/ai/staff/chat/message', requireAuth, async (req, res) => {
 
     const userId = String(user._id);
     const userKey = `${oauthProvider}:${subject}`;
-    const subscriptionTier = (user as any).subscription_tier || 'free';
+    const subscriptionTier = ((user as any).subscription_tier || 'free') as SubscriptionTier;
+    const tierMessageLimit = getTierLimits(subscriptionTier).aiMessages;
 
-    // Free tier message limit enforcement (50 messages/month)
-    if (subscriptionTier === 'free') {
-      // Get mutable user document for updating counters
-      const mutableUser = await UserModel.findOne({ provider: oauthProvider, subject });
-      if (!mutableUser) {
-        return res.status(404).json({ message: 'User not found' });
-      }
-
-      // Check if we need to reset monthly counter
-      const now = new Date();
-      const resetDate = mutableUser.ai_messages_reset_date || new Date();
-
-      if (now > resetDate) {
-        // Reset counter for new month
-        mutableUser.ai_messages_used_this_month = 0;
-        const nextMonth = new Date(now);
-        nextMonth.setMonth(nextMonth.getMonth() + 1);
-        nextMonth.setDate(1);
-        nextMonth.setHours(0, 0, 0, 0);
-        mutableUser.ai_messages_reset_date = nextMonth;
-        console.log(`[ai/staff/chat/message] Reset message counter for user ${userId}, next reset: ${nextMonth.toISOString()}`);
-      }
-
-      // Check message limit (20 for free tier - changed from 50 to reduce costs)
-      const messagesUsed = mutableUser.ai_messages_used_this_month || 0;
-      const messageLimit = 20;
-
-      if (messagesUsed >= messageLimit) {
-        console.log(`[ai/staff/chat/message] User ${userId} hit message limit (${messagesUsed}/${messageLimit})`);
-        return res.status(402).json({
-          message: `You've reached your monthly AI message limit (${messageLimit} messages). Upgrade to Pro for unlimited messages!`,
-          upgradeRequired: true,
-          usage: {
-            used: messagesUsed,
-            limit: messageLimit,
-            resetDate: mutableUser.ai_messages_reset_date,
-          },
-        });
-      }
-
-      // Increment counter
-      mutableUser.ai_messages_used_this_month = messagesUsed + 1;
-      await mutableUser.save();
-
-      console.log(`[ai/staff/chat/message] Message count for user ${userId}: ${messagesUsed + 1}/${messageLimit}`);
+    // Load mutable user for counter tracking + provider routing
+    const mutableUser = await UserModel.findOne({ provider: oauthProvider, subject });
+    if (!mutableUser) {
+      return res.status(404).json({ message: 'User not found' });
     }
+
+    // Check/reset monthly counter
+    const now = new Date();
+    const resetDate = mutableUser.ai_messages_reset_date || new Date();
+    if (now > resetDate) {
+      mutableUser.ai_messages_used_this_month = 0;
+      const nextMonth = new Date(now);
+      nextMonth.setMonth(nextMonth.getMonth() + 1);
+      nextMonth.setDate(1);
+      nextMonth.setHours(0, 0, 0, 0);
+      mutableUser.ai_messages_reset_date = nextMonth;
+      console.log(`[ai/staff/chat/message] Reset message counter for user ${userId}, next reset: ${nextMonth.toISOString()}`);
+    }
+
+    const messagesUsed = mutableUser.ai_messages_used_this_month || 0;
+
+    // Enforce message limit if applicable (null = unlimited)
+    if (tierMessageLimit !== null && messagesUsed >= tierMessageLimit) {
+      console.log(`[ai/staff/chat/message] User ${userId} hit message limit (${messagesUsed}/${tierMessageLimit})`);
+      return res.status(402).json({
+        message: `You've reached your monthly AI message limit (${tierMessageLimit} messages). Upgrade for unlimited messages!`,
+        upgradeRequired: true,
+        usage: {
+          used: messagesUsed,
+          limit: tierMessageLimit,
+          resetDate: mutableUser.ai_messages_reset_date,
+        },
+      });
+    }
+
+    // Increment counter + save
+    mutableUser.ai_messages_used_this_month = messagesUsed + 1;
+    await mutableUser.save();
+
+    console.log(`[ai/staff/chat/message] Message count for user ${userId}: ${messagesUsed + 1}/${tierMessageLimit ?? '∞'}`);
 
     const validated = chatMessageSchema.parse(req.body);
     const { messages, temperature, maxTokens, model } = validated;
 
-    // Resolve AI provider: first N messages use Groq, rest use Together AI
-    const providerUser = await UserModel.findOne({ provider: oauthProvider, subject });
-    const aiMessagesUsed = providerUser?.ai_messages_used_this_month || 0;
-    const groqLimit = providerUser?.groq_request_limit || 3;
-    const chosenProvider = resolveProvider(aiMessagesUsed, groqLimit);
+    // Resolve AI provider based on tier + message cycle
+    const togetherPercent = getTierLimits(subscriptionTier).togetherAiPercent;
+    const chosenProvider = resolveProvider(messagesUsed, togetherPercent);
 
-    console.log(`[ai/staff/chat/message] Provider: ${chosenProvider} (used: ${aiMessagesUsed}/${groqLimit}), model: ${model || 'openai/gpt-oss-20b'} for user ${userId}, tier: ${subscriptionTier}`);
+    console.log(`[ai/staff/chat/message] Provider: ${chosenProvider} (tier: ${subscriptionTier}, msg #${messagesUsed}, togetherPct: ${togetherPercent}%), model: ${model || 'openai/gpt-oss-20b'} for user ${userId}`);
 
     const timezone = getTimezoneFromRequest(req);
 
@@ -2102,7 +2095,7 @@ async function handleStaffGroqRequest(
   timezone?: string,
   userId?: string,
   userKey?: string,
-  subscriptionTier?: 'free' | 'pro',
+  subscriptionTier?: SubscriptionTier,
   model?: string,
   provider: 'groq' | 'together' = 'groq'
 ) {

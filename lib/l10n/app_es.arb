@@ -116,5 +116,9 @@
   "addToServer": "Agregar a Servidor",
   "addToRole": "Agregar a {role}",
 
-  "typeMessage": "Escribe un mensaje..."
+  "typeMessage": "Escribe un mensaje...",
+
+  "shift": "Turno",
+  "postJob": "Publicar Turno",
+  "jobPosted": "Turno publicado"
 }

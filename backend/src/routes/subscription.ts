@@ -6,6 +6,7 @@ import { UserModel } from '../models/user';
 import { ManagerModel } from '../models/manager';
 import { TeamMemberModel } from '../models/teamMember';
 import { EventModel } from '../models/event';
+import { getTierLimits, PRODUCT_TO_TIER, STAFF_OVERAGE_RATE, SubscriptionTier } from '../config/tiers';
 
 const router = Router();
 
@@ -50,7 +51,7 @@ router.get('/subscription/status', requireAuth, async (req, res) => {
       platform: user.subscription_platform || null,
       startedAt: user.subscription_started_at || null,
       expiresAt: user.subscription_expires_at || null,
-      isActive: user.subscription_tier === 'pro' && user.subscription_status === 'active',
+      isActive: user.subscription_tier !== 'free' && user.subscription_status === 'active',
       userType: isManager ? 'manager' : 'staff', // Indicate which type of user
     });
   } catch (err: any) {
@@ -80,16 +81,16 @@ router.get('/subscription/usage', requireAuth, async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    const isFree = user.subscription_tier === 'free';
-    const FREE_TIER_LIMIT = 20; // Changed from 50 to 20 to reduce costs
-    const limit = isFree ? FREE_TIER_LIMIT : null; // Pro has unlimited
+    const tier = (user.subscription_tier || 'free') as SubscriptionTier;
+    const tierLimits = getTierLimits(tier);
+    const limit = tierLimits.aiMessages; // null = unlimited
 
     return res.json({
       used: user.ai_messages_used_this_month || 0,
       limit: limit,
       resetDate: user.ai_messages_reset_date,
-      tier: user.subscription_tier || 'free',
-      percentUsed: isFree ? Math.round(((user.ai_messages_used_this_month || 0) / FREE_TIER_LIMIT) * 100) : 0,
+      tier,
+      percentUsed: limit !== null ? Math.round(((user.ai_messages_used_this_month || 0) / limit) * 100) : 0,
     });
   } catch (err: any) {
     console.error('[subscription/usage] Error:', err);
@@ -120,7 +121,8 @@ router.get('/subscription/manager/usage', requireAuth, async (req, res) => {
       return res.status(404).json({ message: 'Manager not found' });
     }
 
-    const isFree = manager.subscription_tier === 'free' || !manager.subscription_tier;
+    const tier = (manager.subscription_tier || 'free') as SubscriptionTier;
+    const tierLimits = getTierLimits(tier);
 
     // Count team members
     const teamMemberCount = await TeamMemberModel.countDocuments({ managerId });
@@ -133,28 +135,43 @@ router.get('/subscription/manager/usage', requireAuth, async (req, res) => {
       createdAt: { $gte: firstDayOfMonth }
     });
 
-    // Free tier limits
-    const FREE_TEAM_LIMIT = 25;
-    const FREE_EVENT_LIMIT = 10; // events per month
+    const staffLimit = tierLimits.staffLimit;
+    const eventLimit = tierLimits.eventsPerMonth;
+    const overageCount = (staffLimit !== null && teamMemberCount > staffLimit)
+      ? teamMemberCount - staffLimit
+      : 0;
+    const overageCost = overageCount * STAFF_OVERAGE_RATE;
 
     return res.json({
       teamMembers: {
         current: teamMemberCount,
-        limit: isFree ? FREE_TEAM_LIMIT : null, // Pro has unlimited
-        percentUsed: isFree ? Math.round((teamMemberCount / FREE_TEAM_LIMIT) * 100) : 0,
-        canAddMore: isFree ? teamMemberCount < FREE_TEAM_LIMIT : true,
+        limit: staffLimit,
+        percentUsed: staffLimit !== null ? Math.round((teamMemberCount / staffLimit) * 100) : 0,
+        canAddMore: staffLimit === null ? true : (tierLimits.staffOverageAllowed || teamMemberCount < staffLimit),
+        overage: {
+          allowed: tierLimits.staffOverageAllowed,
+          count: overageCount,
+          ratePerStaff: STAFF_OVERAGE_RATE,
+          monthlyCost: overageCost,
+        },
       },
       events: {
         thisMonth: eventsThisMonth,
-        limit: isFree ? FREE_EVENT_LIMIT : null, // Pro has unlimited
-        percentUsed: isFree ? Math.round((eventsThisMonth / FREE_EVENT_LIMIT) * 100) : 0,
-        canCreateMore: isFree ? eventsThisMonth < FREE_EVENT_LIMIT : true,
+        limit: eventLimit,
+        percentUsed: eventLimit !== null ? Math.round((eventsThisMonth / eventLimit) * 100) : 0,
+        canCreateMore: eventLimit === null ? true : eventsThisMonth < eventLimit,
       },
       analytics: {
-        hasAccess: !isFree, // Analytics only for Pro users
+        hasAccess: tierLimits.analytics,
       },
-      tier: manager.subscription_tier || 'free',
-      isPro: !isFree,
+      aiExtraction: {
+        hasAccess: tierLimits.aiExtraction,
+      },
+      customBranding: {
+        hasAccess: tierLimits.customBranding,
+      },
+      tier,
+      isPaid: tier !== 'free',
     });
   } catch (err: any) {
     console.error('[subscription/manager/usage] Error:', err);
@@ -337,8 +354,9 @@ async function handleSubscriptionActivation(event: any) {
       : null;
 
     const subscriptionStatus = event.type.includes('trial') ? 'trial' : 'active';
+    const tier = PRODUCT_TO_TIER[event.product_id] || 'starter';
     const updateData = {
-      subscription_tier: 'pro' as const,
+      subscription_tier: tier,
       subscription_status: subscriptionStatus as 'trial' | 'active',
       subscription_started_at: new Date(),
       subscription_expires_at: expirationDate,
@@ -362,7 +380,7 @@ async function handleSubscriptionActivation(event: any) {
     }
 
     if (updateResult) {
-      console.log('[handleSubscriptionActivation] Activated pro subscription for Qonversion user:', qonversionUserId);
+      console.log(`[handleSubscriptionActivation] Activated ${tier} subscription for Qonversion user:`, qonversionUserId);
     } else {
       console.warn('[handleSubscriptionActivation] User not found for Qonversion ID:', qonversionUserId);
     }
@@ -466,7 +484,9 @@ async function handleProductChange(event: any) {
       ? new Date(event.expiration_date * 1000)
       : null;
 
+    const newTier = PRODUCT_TO_TIER[event.product_id] || 'starter';
     const updateData = {
+      subscription_tier: newTier,
       subscription_expires_at: expirationDate,
     };
 
@@ -487,7 +507,7 @@ async function handleProductChange(event: any) {
     }
 
     if (updateResult) {
-      console.log('[handleProductChange] Updated subscription for Qonversion user:', qonversionUserId);
+      console.log(`[handleProductChange] Updated subscription to ${newTier} for Qonversion user:`, qonversionUserId);
     } else {
       console.warn('[handleProductChange] User not found for Qonversion ID:', qonversionUserId);
     }
