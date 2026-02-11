@@ -1359,7 +1359,7 @@ router.post('/invitations/send-bulk', requireAuth, async (req, res) => {
     // Import capacity helper
     const { checkRoleHasCapacity } = await import('../utils/eventCapacity');
 
-    const results: Array<{
+    type InvitationResult = {
       userKey: string;
       roleId: string;
       roleName?: string;
@@ -1367,74 +1367,65 @@ router.post('/invitations/send-bulk', requireAuth, async (req, res) => {
       error?: string;
       conversationId?: string;
       messageId?: string;
-    }> = [];
+    };
 
-    // Send invitation to each user
-    for (const assignment of userRoleAssignments) {
+    // Pre-compute shared values outside the loop
+    const manager = await ManagerModel.findById(managerId);
+    const managerName = manager?.first_name && manager?.last_name
+      ? `${manager.first_name} ${manager.last_name}`
+      : manager?.name || 'Your manager';
+    const notificationTitle = `🟣 ${managerName}`;
+
+    const eventDate = event.date;
+    const startTime = event.start_time;
+    const endTime = event.end_time;
+    const clientName = event.client_name;
+
+    let formattedDate = '';
+    if (eventDate) {
+      const d = new Date(eventDate);
+      const day = d.getDate();
+      const month = d.toLocaleDateString('en-US', { month: 'short' });
+      formattedDate = `${day} ${month}`;
+    }
+
+    // Process a single invitation
+    async function processInvitation(assignment: { userKey: string; roleId: string }): Promise<InvitationResult> {
       const { userKey, roleId } = assignment;
 
       if (!userKey || !roleId) {
-        results.push({
-          userKey: userKey || 'unknown',
-          roleId: roleId || 'unknown',
-          success: false,
-          error: 'Missing userKey or roleId',
-        });
-        continue;
+        return { userKey: userKey || 'unknown', roleId: roleId || 'unknown', success: false, error: 'Missing userKey or roleId' };
       }
 
       try {
         // Check if role has capacity
         const hasCapacity = checkRoleHasCapacity(event, roleId);
         if (!hasCapacity) {
-          results.push({
-            userKey,
-            roleId,
-            success: false,
-            error: 'Role is already full',
-          });
-          continue;
+          return { userKey, roleId, success: false, error: 'Role is already full' };
         }
 
         // Verify user exists and is active team member
         const [userProvider, userSubject] = userKey.split(':');
         if (!userProvider || !userSubject) {
-          results.push({
-            userKey,
-            roleId,
-            success: false,
-            error: 'Invalid userKey format',
-          });
-          continue;
+          return { userKey, roleId, success: false, error: 'Invalid userKey format' };
         }
 
-        const user = await UserModel.findOne({ provider: userProvider, subject: userSubject });
+        const [user, isTeamMember] = await Promise.all([
+          UserModel.findOne({ provider: userProvider, subject: userSubject }),
+          TeamMemberModel.findOne({
+            managerId: new mongoose.Types.ObjectId(managerId),
+            provider: userProvider,
+            subject: userSubject,
+            status: 'active',
+          }).lean(),
+        ]);
+
         if (!user) {
-          results.push({
-            userKey,
-            roleId,
-            success: false,
-            error: 'User not found',
-          });
-          continue;
+          return { userKey, roleId, success: false, error: 'User not found' };
         }
-
-        // Check if user is active team member
-        const isTeamMember = await TeamMemberModel.findOne({
-          managerId: new mongoose.Types.ObjectId(managerId),
-          provider: userProvider,
-          subject: userSubject,
-          status: 'active',
-        }).lean();
 
         if (!isTeamMember) {
-          results.push({
-            userKey,
-            roleId,
-            success: false,
-            error: 'User is not an active team member',
-          });
-          continue;
+          return { userKey, roleId, success: false, error: 'User is not an active team member' };
         }
 
         // Find or create conversation
@@ -1459,21 +1450,6 @@ router.post('/invitations/send-bulk', requireAuth, async (req, res) => {
 
         const roleName = role?.role || 'Position';
 
-        // Compose invitation message with date, time, and client
-        const eventDate = event.date;
-        const startTime = event.start_time;
-        const endTime = event.end_time;
-        const clientName = event.client_name;
-
-        // Format date as "15 Jan"
-        let formattedDate = '';
-        if (eventDate) {
-          const d = new Date(eventDate);
-          const day = d.getDate();
-          const month = d.toLocaleDateString('en-US', { month: 'short' });
-          formattedDate = `${day} ${month}`;
-        }
-
         // Build message: "15 Jan, 2:00 PM - 10:00 PM • ClientName • Server"
         const bodyParts = [];
 
@@ -1489,7 +1465,6 @@ router.post('/invitations/send-bulk', requireAuth, async (req, res) => {
           bodyParts.push(clientName);
         }
 
-        // Add the specific role they were invited for
         if (roleName) {
           bodyParts.push(roleName);
         }
@@ -1524,7 +1499,7 @@ router.post('/invitations/send-bulk', requireAuth, async (req, res) => {
         });
 
         // Emit socket event to user
-        const messagePayload = {
+        emitToUser(userKey, 'chat:message', {
           id: String(chatMessage._id),
           conversationId: String(conversation._id),
           senderType: chatMessage.senderType,
@@ -1535,19 +1510,12 @@ router.post('/invitations/send-bulk', requireAuth, async (req, res) => {
           readByManager: chatMessage.readByManager,
           readByUser: chatMessage.readByUser,
           createdAt: chatMessage.createdAt,
-        };
+        });
 
-        emitToUser(userKey, 'chat:message', messagePayload);
-
-        // Send push notification
-        const manager = await ManagerModel.findById(managerId);
-        const managerName = manager?.first_name && manager?.last_name
-          ? `${manager.first_name} ${manager.last_name}`
-          : manager?.name || 'Your manager';
-
-        await notificationService.sendToUser(
+        // Send push notification (fire-and-forget, don't block the batch)
+        notificationService.sendToUser(
           String(user._id),
-          `🟣 ${managerName}`,
+          notificationTitle,
           invitationMessage.length > 100
             ? invitationMessage.substring(0, 100) + '...'
             : invitationMessage,
@@ -1560,27 +1528,37 @@ router.post('/invitations/send-bulk', requireAuth, async (req, res) => {
             eventId: String(event._id),
           },
           'user'
-        );
+        ).catch(err => console.error('[BULK INVITATION] Push notification error for', userKey, err));
 
-        results.push({
+        console.log('[BULK INVITATION] Sent to', userKey, 'for role', roleName);
+
+        return {
           userKey,
           roleId,
           roleName,
           success: true,
           conversationId: String(conversation._id),
           messageId: String(chatMessage._id),
-        });
-
-        console.log('[BULK INVITATION] Sent to', userKey, 'for role', roleName);
+        };
       } catch (error) {
         console.error('[BULK INVITATION] Error sending to', userKey, error);
-        results.push({
+        return {
           userKey,
           roleId,
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error',
-        });
+        };
       }
+    }
+
+    // Process invitations in parallel batches of 10
+    const BATCH_SIZE = 10;
+    const results: InvitationResult[] = [];
+
+    for (let i = 0; i < userRoleAssignments.length; i += BATCH_SIZE) {
+      const batch = userRoleAssignments.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.all(batch.map(processInvitation));
+      results.push(...batchResults);
     }
 
     const successCount = results.filter((r) => r.success).length;
