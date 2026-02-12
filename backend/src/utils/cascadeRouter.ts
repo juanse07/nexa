@@ -15,12 +15,12 @@ export interface CascadeSelection {
 }
 
 /** Extract the last user-role message text from a messages array. */
-export function extractLastUserMessage(messages: { role: string; content: string }[]): string {
+export function extractLastUserMessage(messages: { role: string; content: any }[]): string {
   if (!messages || messages.length === 0) return '';
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
     if (msg && msg.role === 'user' && msg.content) {
-      return msg.content;
+      return typeof msg.content === 'string' ? msg.content : '';
     }
   }
   return '';
@@ -60,7 +60,7 @@ export function isComplexQuery(userMessage: string): boolean {
  *   simple  → together / openai/gpt-oss-20b
  */
 export function selectModelForQuery(
-  messages: { role: string; content: string }[],
+  messages: { role: string; content: any }[],
 ): CascadeSelection {
   const lastMessage = extractLastUserMessage(messages);
   const complex = isComplexQuery(lastMessage);
