@@ -1281,8 +1281,12 @@ async function sendManagerMessage(
 async function executeFunctionCall(
   functionName: string,
   functionArgs: any,
-  managerId: mongoose.Types.ObjectId
+  rawManagerId: mongoose.Types.ObjectId | string
 ): Promise<string> {
+  // Ensure managerId is an ObjectId — JWT gives us a string, but aggregate() needs ObjectId
+  const managerId = rawManagerId instanceof mongoose.Types.ObjectId
+    ? rawManagerId
+    : new mongoose.Types.ObjectId(String(rawManagerId));
   console.log(`[executeFunctionCall] Executing ${functionName} with args:`, functionArgs);
 
   try {
