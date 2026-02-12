@@ -18,6 +18,7 @@ export interface UserDocument extends Document {
     url: string;
     role: string;
     artStyle: string;
+    model?: string; // 'dev' | 'pro'
     createdAt: Date;
   }>;
 
@@ -103,6 +104,7 @@ const UserSchema = new Schema<UserDocument>(
       url: { type: String, required: true },
       role: { type: String, required: true },
       artStyle: { type: String, required: true },
+      model: { type: String, enum: ['dev', 'pro'], default: 'dev' },
       createdAt: { type: Date, default: Date.now },
     }],
 

@@ -9,12 +9,14 @@ class CaricatureHistoryItem {
   final String url;
   final String role;
   final String artStyle;
+  final String model; // 'dev' or 'pro'
   final DateTime createdAt;
 
   CaricatureHistoryItem({
     required this.url,
     required this.role,
     required this.artStyle,
+    this.model = 'dev',
     required this.createdAt,
   });
 
@@ -23,6 +25,7 @@ class CaricatureHistoryItem {
       url: map['url'] as String? ?? '',
       role: map['role'] as String? ?? '',
       artStyle: map['artStyle'] as String? ?? '',
+      model: map['model'] as String? ?? 'dev',
       createdAt: map['createdAt'] != null
           ? DateTime.tryParse(map['createdAt'].toString()) ?? DateTime.now()
           : DateTime.now(),

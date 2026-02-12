@@ -21,8 +21,8 @@ class CaricatureRole {
 
   factory CaricatureRole.fromMap(Map<String, dynamic> map) {
     return CaricatureRole(
-      id: map['id'] as String,
-      label: map['label'] as String,
+      id: map['id']?.toString() ?? '',
+      label: map['label']?.toString() ?? '',
       icon: map['icon'] as String? ?? 'person',
       category: map['category'] as String? ?? 'Other',
       locked: map['locked'] as bool? ?? false,
@@ -46,8 +46,8 @@ class CaricatureArtStyle {
 
   factory CaricatureArtStyle.fromMap(Map<String, dynamic> map) {
     return CaricatureArtStyle(
-      id: map['id'] as String,
-      label: map['label'] as String,
+      id: map['id']?.toString() ?? '',
+      label: map['label']?.toString() ?? '',
       icon: map['icon'] as String? ?? 'brush',
       locked: map['locked'] as bool? ?? false,
     );
@@ -65,15 +65,28 @@ class StylesResponse {
   final List<CaricatureArtStyle> artStyles;
 }
 
-/// Result of a caricature generation.
+/// Result of a caricature generation (preview — not yet saved).
 class CaricatureResult {
   CaricatureResult({
-    required this.url,
+    required this.base64,
+    required this.role,
+    required this.artStyle,
+    required this.model,
     required this.remaining,
   });
 
-  final String url;
+  final String base64;
+  final String role;
+  final String artStyle;
+  final String model;
   final int remaining;
+}
+
+/// Result of accepting a caricature (saved to storage).
+class CaricatureAcceptResult {
+  CaricatureAcceptResult({required this.url});
+
+  final String url;
 }
 
 /// Service for AI caricature generation via the backend API.
@@ -114,10 +127,10 @@ class CaricatureService {
 
   /// Generate a caricature with the given role and art style.
   /// Extended timeout since image generation takes 10-20 seconds.
-  Future<CaricatureResult> generate(String roleId, String artStyleId) async {
+  Future<CaricatureResult> generate(String roleId, String artStyleId, {String model = 'dev'}) async {
     final response = await _apiClient.post<dynamic>(
       '/caricature/generate',
-      data: {'role': roleId, 'artStyle': artStyleId},
+      data: {'role': roleId, 'artStyle': artStyleId, 'model': model},
       options: Options(
         sendTimeout: const Duration(seconds: 90),
         receiveTimeout: const Duration(seconds: 90),
@@ -136,10 +149,46 @@ class CaricatureService {
       throw Exception(data['message'] ?? 'Generation failed');
     }
 
+    final base64 = data['base64'];
+    if (base64 == null || base64 is! String) {
+      throw Exception('Server returned no image data');
+    }
+
     return CaricatureResult(
-      url: data['url'] as String,
+      base64: base64,
+      role: data['role'] as String? ?? roleId,
+      artStyle: data['artStyle'] as String? ?? artStyleId,
+      model: data['model'] as String? ?? model,
       remaining: data['remaining'] as int? ?? 0,
     );
+  }
+
+  /// Accept a generated caricature — uploads to storage and saves to history.
+  Future<CaricatureAcceptResult> accept(CaricatureResult preview) async {
+    final response = await _apiClient.post<dynamic>(
+      '/caricature/accept',
+      data: {
+        'base64': preview.base64,
+        'role': preview.role,
+        'artStyle': preview.artStyle,
+        'model': preview.model,
+      },
+      options: Options(
+        sendTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 30),
+      ),
+    );
+
+    final data = _parseResponse(response.data);
+    if (response.statusCode != 200) {
+      throw Exception(data['message'] ?? 'Failed to save caricature');
+    }
+
+    final url = data['url'];
+    if (url == null || url is! String) {
+      throw Exception('Server returned no image URL');
+    }
+    return CaricatureAcceptResult(url: url);
   }
 
   Map<String, dynamic> _parseResponse(dynamic data) {

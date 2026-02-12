@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -68,6 +69,8 @@ const _iconMap = <String, IconData>{
   'science': Icons.science_rounded,
   'rocket_launch': Icons.rocket_launch_rounded,
   // Art style icons
+  'sentiment_very_satisfied': Icons.sentiment_very_satisfied_rounded,
+  'badge': Icons.badge_rounded,
   'brush': Icons.brush_rounded,
   'auto_awesome': Icons.auto_fix_high_rounded,
   'menu_book': Icons.menu_book_rounded,
@@ -138,8 +141,10 @@ class _CaricatureGeneratorSheetState extends State<CaricatureGeneratorSheet>
   bool _loadingStyles = true;
   String? _selectedRoleId;
   String? _selectedArtStyleId;
-  String? _generatedUrl;
+  String _selectedModel = 'dev'; // 'dev' = Standard, 'pro' = HD
+  CaricatureResult? _preview; // base64 preview (not yet saved)
   bool _generating = false;
+  bool _accepting = false;
   String? _error;
   bool _showAllRoles = false;
 
@@ -215,18 +220,19 @@ class _CaricatureGeneratorSheetState extends State<CaricatureGeneratorSheet>
     setState(() {
       _generating = true;
       _error = null;
-      _generatedUrl = null;
+      _preview = null;
+      _preview = null;
     });
 
     _startLoadingMessages();
     unawaited(HapticFeedback.mediumImpact());
 
     try {
-      final result = await _service.generate(_selectedRoleId!, _selectedArtStyleId!);
+      final result = await _service.generate(_selectedRoleId!, _selectedArtStyleId!, model: _selectedModel);
       if (!mounted) return;
       unawaited(HapticFeedback.heavyImpact());
       setState(() {
-        _generatedUrl = result.url;
+        _preview = result;
         _generating = false;
       });
       _loadingMessageTimer?.cancel();
@@ -240,16 +246,29 @@ class _CaricatureGeneratorSheetState extends State<CaricatureGeneratorSheet>
     }
   }
 
-  void _accept() {
-    if (_generatedUrl == null) return;
+  Future<void> _accept() async {
+    if (_preview == null) return;
+    setState(() => _accepting = true);
     HapticFeedback.mediumImpact();
-    widget.onAccepted(_generatedUrl!);
-    Navigator.of(context).pop();
+
+    try {
+      final saved = await _service.accept(_preview!);
+      if (!mounted) return;
+      widget.onAccepted(saved.url);
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _accepting = false;
+        _error = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
   }
 
   void _tryAnother() {
     setState(() {
-      _generatedUrl = null;
+      _preview = null;
+      _preview = null;
       _error = null;
     });
   }
@@ -298,10 +317,14 @@ class _CaricatureGeneratorSheetState extends State<CaricatureGeneratorSheet>
                     _buildRoleSection(),
                     const SizedBox(height: 22),
                     _buildStyleSection(),
+                    const SizedBox(height: 18),
+                    _buildModelSection(),
                     const SizedBox(height: 24),
                     _buildPreview(),
                     const SizedBox(height: 20),
                     if (_error != null) _buildError(),
+                    _buildAiDisclaimer(),
+                    const SizedBox(height: 12),
                     _buildActions(),
                   ],
                 ),
@@ -390,7 +413,7 @@ class _CaricatureGeneratorSheetState extends State<CaricatureGeneratorSheet>
               HapticFeedback.selectionClick();
               setState(() {
                 _selectedRoleId = role.id;
-                _generatedUrl = null;
+                _preview = null;
               });
             }
           : null,
@@ -636,7 +659,7 @@ class _CaricatureGeneratorSheetState extends State<CaricatureGeneratorSheet>
                         HapticFeedback.selectionClick();
                         setState(() {
                           _selectedArtStyleId = style.id;
-                          _generatedUrl = null;
+                          _preview = null;
                         });
                       }
                     : null,
@@ -689,12 +712,105 @@ class _CaricatureGeneratorSheetState extends State<CaricatureGeneratorSheet>
     );
   }
 
+  Widget _buildModelSection() {
+    if (_loadingStyles) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.tune_rounded, size: 18, color: AppColors.primaryPurple.withValues(alpha: 0.7)),
+            const SizedBox(width: 8),
+            const Text(
+              'Quality',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primaryPurple,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: SegmentedButton<String>(
+            segments: const [
+              ButtonSegment<String>(
+                value: 'dev',
+                label: Text('Standard'),
+                icon: Icon(Icons.speed_rounded, size: 18),
+              ),
+              ButtonSegment<String>(
+                value: 'pro',
+                label: Text('HD'),
+                icon: Icon(Icons.hd_rounded, size: 18),
+              ),
+            ],
+            selected: {_selectedModel},
+            onSelectionChanged: _generating
+                ? null
+                : (selection) {
+                    HapticFeedback.selectionClick();
+                    setState(() {
+                      _selectedModel = selection.first;
+                      _preview = null;
+                    });
+                  },
+            style: ButtonStyle(
+              backgroundColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return AppColors.primaryPurple;
+                }
+                return Colors.white;
+              }),
+              foregroundColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return Colors.white;
+                }
+                return AppColors.textSecondary;
+              }),
+              side: WidgetStateProperty.all(
+                const BorderSide(color: AppColors.border, width: 1.5),
+              ),
+              shape: WidgetStateProperty.all(
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              textStyle: WidgetStateProperty.all(
+                const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+        ),
+        if (_selectedModel == 'pro')
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Row(
+              children: [
+                Icon(Icons.auto_awesome_rounded, size: 13, color: AppColors.primaryIndigo),
+                const SizedBox(width: 4),
+                Text(
+                  'Higher detail & better facial preservation',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
   Widget _buildPreview() {
     if (_generating) {
       return _buildGeneratingState();
     }
 
-    if (_generatedUrl != null) {
+    if (_preview != null) {
       return _buildBeforeAfter();
     }
 
@@ -817,7 +933,7 @@ class _CaricatureGeneratorSheetState extends State<CaricatureGeneratorSheet>
                 child: const Icon(Icons.arrow_forward_rounded, color: AppColors.primaryIndigo, size: 16),
               ),
             ),
-            Expanded(child: _buildImageCard('After', _generatedUrl!, true)),
+            Expanded(child: _buildBase64ImageCard('After', _preview!.base64)),
           ],
         ),
       ],
@@ -871,6 +987,50 @@ class _CaricatureGeneratorSheetState extends State<CaricatureGeneratorSheet>
     );
   }
 
+  Widget _buildBase64ImageCard(String label, String base64Data) {
+    return Column(
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppColors.primaryPurple,
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.primaryIndigo, width: 2.5),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.1),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(13),
+            child: Image.memory(
+              base64Decode(base64Data),
+              height: 160,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                height: 160,
+                color: AppColors.surfaceGray,
+                child: const Icon(Icons.broken_image, size: 32, color: AppColors.textMuted),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildError() {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -897,8 +1057,25 @@ class _CaricatureGeneratorSheetState extends State<CaricatureGeneratorSheet>
     );
   }
 
+  Widget _buildAiDisclaimer() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.info_outline_rounded, size: 14, color: AppColors.textMuted.withValues(alpha: 0.7)),
+        const SizedBox(width: 6),
+        Text(
+          'AI-generated images may not be accurate',
+          style: TextStyle(
+            fontSize: 12,
+            color: AppColors.textMuted.withValues(alpha: 0.7),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildActions() {
-    if (_generatedUrl != null) {
+    if (_preview != null) {
       return Row(
         children: [
           Expanded(
@@ -920,9 +1097,11 @@ class _CaricatureGeneratorSheetState extends State<CaricatureGeneratorSheet>
           Expanded(
             flex: 2,
             child: ElevatedButton.icon(
-              onPressed: _accept,
-              icon: const Icon(Icons.check_rounded, size: 20),
-              label: const Text('Use This Photo'),
+              onPressed: _accepting ? null : _accept,
+              icon: _accepting
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.check_rounded, size: 20),
+              label: Text(_accepting ? 'Saving...' : 'Use This Photo'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryPurple,
                 foregroundColor: Colors.white,

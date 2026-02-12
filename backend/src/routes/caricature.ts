@@ -9,6 +9,7 @@ import {
   getAllArtStyles,
   CaricatureRole,
   ArtStyle,
+  CaricatureModel,
   ALL_ROLE_IDS,
 } from '../services/caricatureService';
 import { isStorageConfigured, uploadProfilePicture } from '../services/storageService';
@@ -66,11 +67,13 @@ router.get('/styles', requireAuth, async (_req: Request, res: Response) => {
 
 /**
  * POST /api/caricature/generate
- * Generate a role-themed caricature with an art style from the user's profile picture.
+ * Generate a caricature preview — returns base64 image data only.
+ * Nothing is saved to storage or history until the user accepts.
  */
 const generateSchema = z.object({
   role: z.enum(ALL_ROLE_IDS as [string, ...string[]]),
-  artStyle: z.enum(['cartoon', 'anime', 'comic', 'pixar', 'watercolor']),
+  artStyle: z.enum(['cartoon', 'caricature', 'anime', 'comic', 'pixar', 'watercolor']),
+  model: z.enum(['dev', 'pro']).optional().default('dev'),
 });
 
 router.post('/generate', requireAuth, async (req: Request, res: Response) => {
@@ -83,7 +86,7 @@ router.post('/generate', requireAuth, async (req: Request, res: Response) => {
       });
     }
 
-    const { role, artStyle } = parsed.data;
+    const { role, artStyle, model } = parsed.data;
     const { provider, sub, managerId } = (req as any).authUser;
     const userId = managerId || `${provider}:${sub}`;
 
@@ -119,18 +122,62 @@ router.post('/generate', requireAuth, async (req: Request, res: Response) => {
       });
     }
 
-    // Generate the caricature
-    const imageBuffer = await generateCaricature(pictureUrl, role as CaricatureRole, artStyle as ArtStyle);
+    // Generate the caricature — returns raw buffer, nothing saved yet
+    const imageBuffer = await generateCaricature(pictureUrl, role as CaricatureRole, artStyle as ArtStyle, model as CaricatureModel);
 
-    // Upload: try R2 first, fall back to local filesystem
+    logger.info({ userId, role, artStyle, model, remaining: usage.remaining }, 'Caricature preview generated');
+
+    return res.json({
+      base64: imageBuffer.toString('base64'),
+      role,
+      artStyle,
+      model,
+      remaining: usage.remaining,
+      message: 'Caricature generated successfully',
+    });
+  } catch (error) {
+    logger.error({ error }, 'Failed to generate caricature');
+    const message = (error as Error).message || 'Failed to generate caricature';
+    return res.status(500).json({ message });
+  }
+});
+
+/**
+ * POST /api/caricature/accept
+ * Accept a generated caricature — uploads to R2 and saves to history.
+ * Called only when the user clicks "Use This Photo".
+ */
+const acceptSchema = z.object({
+  base64: z.string().min(100), // base64-encoded PNG
+  role: z.enum(ALL_ROLE_IDS as [string, ...string[]]),
+  artStyle: z.enum(['cartoon', 'caricature', 'anime', 'comic', 'pixar', 'watercolor']),
+  model: z.enum(['dev', 'pro']).optional().default('dev'),
+});
+
+router.post('/accept', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const parsed = acceptSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        message: 'Invalid request',
+        errors: parsed.error.errors,
+      });
+    }
+
+    const { base64, role, artStyle, model } = parsed.data;
+    const { provider, sub, managerId } = (req as any).authUser;
+    const userId = managerId || `${provider}:${sub}`;
+
+    const imageBuffer = Buffer.from(base64, 'base64');
+
+    // Upload to R2 or local filesystem
     const timestamp = Date.now();
-    const filename = `${timestamp}-${role}-${artStyle}.png`;
+    const filename = `${timestamp}-${role}-${artStyle}-${model}.png`;
     let url: string;
 
     if (isStorageConfigured()) {
       url = await uploadProfilePicture(imageBuffer, userId, filename, 'image/png');
     } else {
-      // Local filesystem fallback
       const uploadsDir = path.join('/app', 'uploads', 'caricatures', userId.toString());
       fs.mkdirSync(uploadsDir, { recursive: true });
       fs.writeFileSync(path.join(uploadsDir, filename), imageBuffer);
@@ -144,7 +191,7 @@ router.post('/generate', requireAuth, async (req: Request, res: Response) => {
       const historyEntry = {
         $push: {
           caricatureHistory: {
-            $each: [{ url, role, artStyle, createdAt: new Date() }],
+            $each: [{ url, role, artStyle, model, createdAt: new Date() }],
             $slice: -10,
           },
         },
@@ -161,18 +208,18 @@ router.post('/generate', requireAuth, async (req: Request, res: Response) => {
       logger.warn({ historyErr }, 'Failed to save caricature history (non-blocking)');
     }
 
-    logger.info({ userId, role, artStyle, remaining: usage.remaining, local: !isStorageConfigured() }, 'Caricature generated');
+    logger.info({ userId, role, artStyle, model, local: !isStorageConfigured() }, 'Caricature accepted and saved');
 
     return res.json({
       url,
       role,
       artStyle,
-      remaining: usage.remaining,
-      message: 'Caricature generated successfully',
+      model,
+      message: 'Caricature saved successfully',
     });
   } catch (error) {
-    logger.error({ error }, 'Failed to generate caricature');
-    const message = (error as Error).message || 'Failed to generate caricature';
+    logger.error({ error }, 'Failed to accept caricature');
+    const message = (error as Error).message || 'Failed to save caricature';
     return res.status(500).json({ message });
   }
 });

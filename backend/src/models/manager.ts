@@ -48,13 +48,9 @@ export interface ManagerDocument extends Document {
     url: string;
     role: string;
     artStyle: string;
+    model?: string; // 'dev' | 'pro'
     createdAt: Date;
   }>;
-
-  // AI chat usage tracking
-  groq_messages_used_this_month?: number;
-  groq_messages_reset_date?: Date;
-  groq_request_limit?: number;
 
   // Personalized venue discovery
   preferredCity?: string; // DEPRECATED: Use cities array instead. Kept for backward compatibility
@@ -137,13 +133,9 @@ const ManagerSchema = new Schema<ManagerDocument>(
       url: { type: String, required: true },
       role: { type: String, required: true },
       artStyle: { type: String, required: true },
+      model: { type: String, enum: ['dev', 'pro'], default: 'dev' },
       createdAt: { type: Date, default: Date.now },
     }],
-
-    // AI chat usage tracking
-    groq_messages_used_this_month: { type: Number, default: 0 },
-    groq_messages_reset_date: { type: Date },
-    groq_request_limit: { type: Number, default: 3 },
 
     // Personalized venue discovery
     preferredCity: { type: String, trim: true }, // DEPRECATED: kept for backward compatibility
