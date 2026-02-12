@@ -66,16 +66,17 @@ class StylesResponse {
 }
 
 /// Result of a caricature generation (preview — not yet saved).
+/// Contains multiple image options the user can swipe through.
 class CaricatureResult {
   CaricatureResult({
-    required this.base64,
+    required this.images,
     required this.role,
     required this.artStyle,
     required this.model,
     required this.remaining,
   });
 
-  final String base64;
+  final List<String> images; // base64-encoded PNGs
   final String role;
   final String artStyle;
   final String model;
@@ -127,10 +128,14 @@ class CaricatureService {
 
   /// Generate a caricature with the given role and art style.
   /// Extended timeout since image generation takes 10-20 seconds.
-  Future<CaricatureResult> generate(String roleId, String artStyleId, {String model = 'dev'}) async {
+  Future<CaricatureResult> generate(String roleId, String artStyleId, {String model = 'dev', String? name, String? tagline}) async {
+    final body = <String, dynamic>{'role': roleId, 'artStyle': artStyleId, 'model': model};
+    if (name != null && name.isNotEmpty) body['name'] = name;
+    if (tagline != null && tagline.isNotEmpty) body['tagline'] = tagline;
+
     final response = await _apiClient.post<dynamic>(
       '/caricature/generate',
-      data: {'role': roleId, 'artStyle': artStyleId, 'model': model},
+      data: body,
       options: Options(
         sendTimeout: const Duration(seconds: 90),
         receiveTimeout: const Duration(seconds: 90),
@@ -149,13 +154,13 @@ class CaricatureService {
       throw Exception(data['message'] ?? 'Generation failed');
     }
 
-    final base64 = data['base64'];
-    if (base64 == null || base64 is! String) {
+    final imagesRaw = data['images'] as List<dynamic>?;
+    if (imagesRaw == null || imagesRaw.isEmpty) {
       throw Exception('Server returned no image data');
     }
 
     return CaricatureResult(
-      base64: base64,
+      images: imagesRaw.map((e) => e.toString()).toList(),
       role: data['role'] as String? ?? roleId,
       artStyle: data['artStyle'] as String? ?? artStyleId,
       model: data['model'] as String? ?? model,
@@ -164,11 +169,11 @@ class CaricatureService {
   }
 
   /// Accept a generated caricature — uploads to storage and saves to history.
-  Future<CaricatureAcceptResult> accept(CaricatureResult preview) async {
+  Future<CaricatureAcceptResult> accept(CaricatureResult preview, int selectedIndex) async {
     final response = await _apiClient.post<dynamic>(
       '/caricature/accept',
       data: {
-        'base64': preview.base64,
+        'base64': preview.images[selectedIndex],
         'role': preview.role,
         'artStyle': preview.artStyle,
         'model': preview.model,

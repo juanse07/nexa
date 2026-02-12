@@ -74,6 +74,8 @@ const generateSchema = z.object({
   role: z.enum(ALL_ROLE_IDS as [string, ...string[]]),
   artStyle: z.enum(['cartoon', 'caricature', 'anime', 'comic', 'pixar', 'watercolor']),
   model: z.enum(['dev', 'pro']).optional().default('dev'),
+  name: z.string().max(40).optional(),
+  tagline: z.string().max(50).optional(),
 });
 
 router.post('/generate', requireAuth, async (req: Request, res: Response) => {
@@ -86,7 +88,7 @@ router.post('/generate', requireAuth, async (req: Request, res: Response) => {
       });
     }
 
-    const { role, artStyle, model } = parsed.data;
+    const { role, artStyle, model, name, tagline } = parsed.data;
     const { provider, sub, managerId } = (req as any).authUser;
     const userId = managerId || `${provider}:${sub}`;
 
@@ -122,18 +124,24 @@ router.post('/generate', requireAuth, async (req: Request, res: Response) => {
       });
     }
 
-    // Generate the caricature — returns raw buffer, nothing saved yet
-    const imageBuffer = await generateCaricature(pictureUrl, role as CaricatureRole, artStyle as ArtStyle, model as CaricatureModel);
+    // Build overlay text from name + tagline (for two-pass text rendering)
+    const textParts: string[] = [];
+    if (name) textParts.push(name);
+    if (tagline) textParts.push(tagline);
+    const overlayText = textParts.length > 0 ? textParts.join(' — ') : undefined;
 
-    logger.info({ userId, role, artStyle, model, remaining: usage.remaining }, 'Caricature preview generated');
+    // Generate caricature previews — returns raw buffers, nothing saved yet
+    const imageBuffers = await generateCaricature(pictureUrl, role as CaricatureRole, artStyle as ArtStyle, model as CaricatureModel, 3, overlayText);
+
+    logger.info({ userId, role, artStyle, model, count: imageBuffers.length, remaining: usage.remaining }, 'Caricature previews generated');
 
     return res.json({
-      base64: imageBuffer.toString('base64'),
+      images: imageBuffers.map((buf) => buf.toString('base64')),
       role,
       artStyle,
       model,
       remaining: usage.remaining,
-      message: 'Caricature generated successfully',
+      message: 'Caricatures generated successfully',
     });
   } catch (error) {
     logger.error({ error }, 'Failed to generate caricature');

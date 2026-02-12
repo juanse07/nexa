@@ -447,8 +447,8 @@ const ROLE_DEFINITIONS: Record<CaricatureRole, RoleDefinition> = {
   },
 };
 
-/** Base negative prompt shared by ALL styles — ensures no photographic output */
-const BASE_NEGATIVE = 'photograph, photorealistic, realistic rendering, real photo, DSLR, camera shot, raw photo, lens blur, film grain, stock photo, real skin texture, natural lighting photo';
+/** Identity-drift rejection — included in ALL negative prompts */
+const IDENTITY_NEGATIVE = 'different person, altered face, wrong gender, gender swap, different skin tone, different hair, face swap, identity change';
 
 const ART_STYLE_DEFINITIONS: Record<ArtStyle, ArtStyleDefinition> = {
   cartoon: {
@@ -458,7 +458,7 @@ const ART_STYLE_DEFINITIONS: Record<ArtStyle, ArtStyleDefinition> = {
     rendering: `Style: fun cartoon caricature with bold outlines, slightly exaggerated features, vibrant colors, and playful energy. Think premium cartoon portrait commission — clean, polished, with personality. This MUST be a cartoon illustration, NOT a photograph or realistic image.
 
 Output: square 1:1 profile picture, centered composition, clean background that complements the scene.`,
-    negativePrompt: `${BASE_NEGATIVE}, hyperrealistic, untooned`,
+    negativePrompt: `photograph, photorealistic, ${IDENTITY_NEGATIVE}`,
   },
   caricature: {
     id: 'caricature',
@@ -467,7 +467,7 @@ Output: square 1:1 profile picture, centered composition, clean background that 
     rendering: `Style: classic editorial caricature with deliberately exaggerated distinctive features — amplify the most recognizable aspects of the person's face (prominent nose, jawline, ears, smile, etc.) in a humorous, flattering way. Bold confident ink lines, expressive shading, and a lively hand-drawn editorial illustration feel. Think professional theme-park caricature artist or political cartoon portrait — skilled exaggeration that is instantly recognizable as the person while being playful and fun. This MUST be an illustrated caricature, NOT a photograph or realistic image.
 
 Output: square 1:1 profile picture, centered composition, simple clean background.`,
-    negativePrompt: `${BASE_NEGATIVE}, flat cartoon, anime, 3D render, subtle, understated`,
+    negativePrompt: `photograph, photorealistic, flat cartoon, anime, ${IDENTITY_NEGATIVE}`,
   },
   anime: {
     id: 'anime',
@@ -476,7 +476,7 @@ Output: square 1:1 profile picture, centered composition, simple clean backgroun
     rendering: `Style: Japanese anime-style portrait rendered with clean sharp linework, cel-shading, and vivid saturated colors. Apply anime rendering (smooth skin shading, sharp hair highlights, vibrant color palette) while keeping the person's ACTUAL facial proportions, eye size, and features accurate. Think premium anime portrait commission — polished, recognizable, not generic. This MUST be an anime illustration, NOT a photograph or realistic image.
 
 Output: square 1:1 profile picture, centered composition, anime-style background.`,
-    negativePrompt: `${BASE_NEGATIVE}, western cartoon, 3D render, chibi, super deformed`,
+    negativePrompt: `photograph, photorealistic, 3D render, chibi, ${IDENTITY_NEGATIVE}`,
   },
   comic: {
     id: 'comic',
@@ -485,7 +485,7 @@ Output: square 1:1 profile picture, centered composition, anime-style background
     rendering: `Style: bold comic book illustration with thick ink outlines, dramatic cel-shading, halftone dot patterns, and rich saturated colors. Superhero comic aesthetic — dynamic and punchy. Keep the person's ACTUAL facial proportions and features accurate while applying the comic rendering technique (bold lines, flat color fills, dramatic shadows). Think premium comic book cover portrait. This MUST be a comic book illustration, NOT a photograph or realistic image.
 
 Output: square 1:1 profile picture, centered composition, dynamic comic-style background.`,
-    negativePrompt: `${BASE_NEGATIVE}, soft lighting, pastel colors, distorted face`,
+    negativePrompt: `photograph, photorealistic, pastel colors, ${IDENTITY_NEGATIVE}`,
   },
   pixar: {
     id: 'pixar',
@@ -494,7 +494,7 @@ Output: square 1:1 profile picture, centered composition, dynamic comic-style ba
     rendering: `Style: 3D animated character in Disney/Pixar rendering style with smooth skin texture, warm cinematic lighting, and subsurface scattering. Apply the Pixar RENDERING (soft 3D shading, rim lighting, depth of field) while keeping the person's ACTUAL facial proportions, eye size, nose shape, and features recognizable. Think premium Pixar-style portrait — polished, charming, clearly them. This MUST be a 3D animated character, NOT a photograph or realistic image, NOT 2D flat illustration.
 
 Output: square 1:1 profile picture, centered composition, cinematic depth of field background.`,
-    negativePrompt: `${BASE_NEGATIVE}, 2D, flat illustration, sketch, distorted proportions, oversized eyes`,
+    negativePrompt: `photograph, photorealistic, 2D flat illustration, ${IDENTITY_NEGATIVE}`,
   },
   watercolor: {
     id: 'watercolor',
@@ -503,7 +503,7 @@ Output: square 1:1 profile picture, centered composition, cinematic depth of fie
     rendering: `Style: elegant watercolor portrait with soft washes of color, visible artistic brush strokes, paper texture bleeding through, and gentle paint drips at edges. Apply the watercolor MEDIUM (soft color blending, wet edges, paper grain) while keeping the person's ACTUAL facial proportions and features accurate and recognizable. Think premium hand-painted portrait commission. This MUST be a watercolor painting, NOT a photograph or digital image.
 
 Output: square 1:1 profile picture, centered composition, watercolor wash background.`,
-    negativePrompt: `${BASE_NEGATIVE}, digital, sharp edges, vector, flat color, distorted face`,
+    negativePrompt: `photograph, photorealistic, digital, sharp edges, ${IDENTITY_NEGATIVE}`,
   },
 };
 
@@ -542,53 +542,141 @@ export function getAllStyles(): (RoleDefinition & { locked: boolean })[] {
   return getAllRoles();
 }
 
-/** Negative-prompt terms that penalise identity drift (pro only) */
-const IDENTITY_NEGATIVE = 'different person, altered face, wrong facial features, changed skin tone, different hair, different eye color, face swap, identity change, gender swap, added facial hair, beard on woman, masculine features on woman, feminine features on man';
-
 /**
- * Build the full prompt combining role scene + art style rendering + identity preservation.
+ * Build the prompt for a given model tier.
  *
- * Identity instruction is placed FIRST so it receives the highest attention weight,
- * and the negative prompt includes identity-drift rejection terms.
+ * - **pro**: Full detailed prompt — the model has strong prompt adherence so
+ *   we can include rich scene + style + identity instructions.
+ * - **dev**: Shorter, punchier prompt — the dev model drifts with long text,
+ *   so we front-load identity locking and keep it concise.
+ *
+ * Together AI supports `negative_prompt` but NOT `guidance_scale`.
  */
-function buildPrompt(role: CaricatureRole, artStyle: ArtStyle): { prompt: string; negativePrompt: string } {
+function buildPrompt(role: CaricatureRole, artStyle: ArtStyle, model: CaricatureModel): { prompt: string; negativePrompt: string } {
   const roleDef = ROLE_DEFINITIONS[role];
   const styleDef = ART_STYLE_DEFINITIONS[artStyle];
   if (!roleDef) throw new Error(`Unknown role: ${role}`);
   if (!styleDef) throw new Error(`Unknown art style: ${artStyle}`);
 
-  // Prefix every scene with gender-preservation anchor to fight training-data bias
+  if (model === 'dev') {
+    // Dev model: shorter prompt with identity anchored to "the person in this uploaded photo"
+    const shortScene = roleDef.scene.replace(
+      /^Depict this person as/,
+      'Transform the person in this uploaded photo into',
+    );
+    const prompt = [
+      'IMPORTANT: Keep the EXACT same person from the uploaded photo — same face, same gender, same skin tone, same hair. Do NOT change who they are.',
+      '',
+      shortScene,
+      '',
+      styleDef.rendering,
+    ].join('\n');
+    return { prompt, negativePrompt: styleDef.negativePrompt };
+  }
+
+  // Pro model: full detailed prompt — stronger model handles the length well
   const genderAnchor = 'Keeping this person\'s exact gender, face, and appearance from the uploaded photo,';
   const anchoredScene = roleDef.scene.replace(/^Depict this person as/, `${genderAnchor} depict them as`);
 
   const IDENTITY_REMINDER = 'REMINDER: The person\'s gender, face, and all facial features MUST be identical to the uploaded photo. A female face stays female. A male face stays male. No exceptions.';
   const prompt = `${IDENTITY_INSTRUCTION}\n\n${anchoredScene}\n\n${styleDef.rendering}\n\n${IDENTITY_REMINDER}`;
+  return { prompt, negativePrompt: styleDef.negativePrompt };
+}
 
-  // Extend negative prompt with identity-drift terms
-  const negativePrompt = `${styleDef.negativePrompt}, ${IDENTITY_NEGATIVE}`;
+/** Randomized text style options per art style — keeps each generation fresh */
+const TEXT_STYLES: Record<ArtStyle, string[]> = {
+  cartoon: [
+    'bold white letters with a black outline',
+    'playful yellow bubble letters with a dark shadow',
+    'large neon green letters with a thick black outline',
+    'bold red and white retro-style letters',
+    'chunky orange block letters with a dark drop shadow',
+    'bright cyan letters in a fun rounded font',
+  ],
+  caricature: [
+    'bold white letters with a dark shadow',
+    'elegant gold serif letters',
+    'bold black letters on a white ribbon banner',
+    'stylish silver metallic letters with a subtle shadow',
+    'classic white italic serif letters with a dark outline',
+    'bold cream-colored vintage-style letters',
+  ],
+  anime: [
+    'bold white letters with a colorful glow',
+    'neon pink anime-style letters with a dark outline',
+    'bold cyan letters with a glowing blue outline',
+    'dramatic white letters with a red glow effect',
+    'bright yellow letters with a purple outline in anime style',
+    'bold white letters with a vibrant gradient outline',
+  ],
+  comic: [
+    'bold yellow comic-book letters with a black outline',
+    'dramatic white impact-style letters with a red shadow',
+    'bold orange letters in a punchy comic style with action lines',
+    'large white letters with a bold black outline',
+    'bright green comic-style letters with a dark outline and halftone dots',
+    'bold red and yellow superhero-style letters',
+  ],
+  pixar: [
+    'clean bold white 3D letters with a soft shadow',
+    'elegant gold 3D metallic letters',
+    'bold white rounded letters with a subtle warm glow',
+    'clean silver 3D letters with soft lighting',
+    'playful teal 3D letters with a gentle shadow',
+    'bold white letters with a cinematic depth effect',
+  ],
+  watercolor: [
+    'elegant gold script letters',
+    'soft white calligraphy letters with a delicate shadow',
+    'dark ink brush-style letters',
+    'elegant navy blue serif letters',
+    'warm brown hand-lettered style text',
+    'soft black elegant cursive letters',
+  ],
+};
 
-  return { prompt, negativePrompt };
+function pickRandom(arr: string[]): string {
+  return arr[Math.floor(Math.random() * arr.length)]!;
+}
+
+/**
+ * Build a randomized text instruction that matches the art style.
+ * Position is always at the bottom for accessibility.
+ */
+function buildTextInstruction(text: string, artStyle: ArtStyle): string {
+  const style = pickRandom(TEXT_STYLES[artStyle] ?? TEXT_STYLES.cartoon);
+  return `Add text saying "${text}" at the bottom of the image in ${style}, clearly readable. Ensure text does not overlap the face.`;
 }
 
 /**
  * Generate a caricature from a profile photo using Together AI FLUX.1 Kontext.
+ * Text is rendered by appending a text instruction to the prompt — Kontext
+ * handles typography natively in a single pass.
  */
 export async function generateCaricature(
   imageUrl: string,
   role: CaricatureRole,
   artStyle: ArtStyle = 'cartoon',
   model: CaricatureModel = 'dev',
-): Promise<Buffer> {
+  count: number = 3,
+  overlayText?: string,
+): Promise<Buffer[]> {
   const apiKey = process.env.TOGETHER_API_KEY;
   if (!apiKey) {
     throw new Error('Together AI API key is not configured');
   }
 
-  const { prompt, negativePrompt } = buildPrompt(role, artStyle);
+  const { prompt: basePrompt, negativePrompt } = buildPrompt(role, artStyle, model);
 
-  const steps = model === 'pro' ? 50 : 28;
-  const guidanceScale = model === 'pro' ? 4.5 : undefined;
-  logger.info({ role, artStyle, model, togetherModel: MODEL_MAP[model], steps, guidanceScale, promptLength: prompt.length }, 'Generating caricature');
+  // Append text instruction if provided (single-pass — Kontext renders text natively)
+  let prompt = basePrompt;
+  if (overlayText) {
+    prompt += `\n\n${buildTextInstruction(overlayText, artStyle)}`;
+  }
+
+  const steps = model === 'pro' ? 50 : 35;
+  const size = model === 'pro' ? 1440 : 1152;
+  logger.info({ role, artStyle, model, togetherModel: MODEL_MAP[model], steps, size, count, overlayText, promptLength: prompt.length }, 'Generating caricature');
 
   const response = await fetch('https://api.together.xyz/v1/images/generations', {
     method: 'POST',
@@ -601,11 +689,10 @@ export async function generateCaricature(
       prompt,
       negative_prompt: negativePrompt,
       image_url: imageUrl,
-      width: 1152,
-      height: 1152,
+      width: size,
+      height: size,
       steps,
-      ...(guidanceScale != null && { guidance_scale: guidanceScale }),
-      n: 1,
+      n: count,
       response_format: 'b64_json',
     }),
   });
@@ -620,10 +707,14 @@ export async function generateCaricature(
     data?: Array<{ b64_json?: string }>;
   };
 
-  const b64 = result.data?.[0]?.b64_json;
-  if (!b64) {
+  const images = (result.data ?? [])
+    .map((d) => d.b64_json)
+    .filter((b): b is string => !!b)
+    .map((b64) => Buffer.from(b64, 'base64'));
+
+  if (images.length === 0) {
     throw new Error('No image data returned from Together AI');
   }
 
-  return Buffer.from(b64, 'base64');
+  return images;
 }

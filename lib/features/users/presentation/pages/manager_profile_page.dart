@@ -421,6 +421,8 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
       builder: (_) => CaricatureGeneratorSheet(
         currentPictureUrl: _pictureCtrl.text.trim(),
         onAccepted: _acceptCaricature,
+        userName: _firstNameCtrl.text.trim().isNotEmpty ? _firstNameCtrl.text.trim() : null,
+        userLastName: _lastNameCtrl.text.trim().isNotEmpty ? _lastNameCtrl.text.trim() : null,
       ),
     );
   }

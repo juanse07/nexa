@@ -117,16 +117,90 @@ const _loadingMessages = [
 /// How many roles to show before the "See More" button
 const _initialRoleCount = 12;
 
+/// Predefined taglines grouped by role category + generics.
+const _taglinesByCategory = <String, List<String>>{
+  '_generic': [
+    'Living the Dream',
+    'Built Different',
+    'On a Mission',
+    'Level Up',
+  ],
+  'Hospitality & Events': [
+    'Born to Host',
+    'Making Nights Happen',
+    'Service with Style',
+    'The Life of the Party',
+  ],
+  'Healthcare': [
+    'Saving Lives Daily',
+    'Always On Call',
+    'Heart of Gold',
+    'Healing Hands',
+  ],
+  'Legal & Business': [
+    'Closing Deals',
+    'Boss Moves Only',
+    'Making It Happen',
+    'The Closer',
+  ],
+  'Tech': [
+    'Code & Coffee',
+    'Shipping It',
+    'In My Element',
+    'Ctrl+Alt+Dominate',
+  ],
+  'Trades & Construction': [
+    'Built to Last',
+    'Skilled Hands',
+    'Getting It Done',
+    'Hard Work Pays Off',
+  ],
+  'Creative': [
+    'Creating Magic',
+    'Art Is Life',
+    'Born Creative',
+    'Vision to Reality',
+  ],
+  'Emergency & Service': [
+    'Courage Under Fire',
+    'Serving with Honor',
+    'Always Ready',
+    'First to Respond',
+  ],
+  'Education': [
+    'Shaping Minds',
+    'Knowledge Is Power',
+    'Born to Teach',
+    'Inspiring Futures',
+  ],
+  'Sports & Fitness': [
+    'No Days Off',
+    'Beast Mode',
+    'Stronger Every Day',
+    'All In',
+  ],
+  'Science': [
+    'For Science',
+    'Exploring the Unknown',
+    'Curious Mind',
+    'Discovery Mode',
+  ],
+};
+
 /// Bottom sheet for generating fun profile pictures.
 class CaricatureGeneratorSheet extends StatefulWidget {
   const CaricatureGeneratorSheet({
     super.key,
     required this.currentPictureUrl,
     required this.onAccepted,
+    this.userName,
+    this.userLastName,
   });
 
   final String currentPictureUrl;
   final ValueChanged<String> onAccepted;
+  final String? userName;
+  final String? userLastName;
 
   @override
   State<CaricatureGeneratorSheet> createState() => _CaricatureGeneratorSheetState();
@@ -142,11 +216,17 @@ class _CaricatureGeneratorSheetState extends State<CaricatureGeneratorSheet>
   String? _selectedRoleId;
   String? _selectedArtStyleId;
   String _selectedModel = 'dev'; // 'dev' = Standard, 'pro' = HD
-  CaricatureResult? _preview; // base64 preview (not yet saved)
+  CaricatureResult? _preview; // base64 previews (not yet saved)
+  int _selectedImageIndex = 0;
+  PageController? _pageController;
   bool _generating = false;
   bool _accepting = false;
   String? _error;
   bool _showAllRoles = false;
+
+  // Text overlay chips
+  bool _includeNameChip = false;
+  String? _selectedTagline;
 
   // Loading message rotation
   int _loadingMessageIndex = 0;
@@ -173,8 +253,10 @@ class _CaricatureGeneratorSheetState extends State<CaricatureGeneratorSheet>
   }
 
   @override
+  @override
   void dispose() {
     _loadingMessageTimer?.cancel();
+    _pageController?.dispose();
     _btnController.dispose();
     super.dispose();
   }
@@ -221,14 +303,22 @@ class _CaricatureGeneratorSheetState extends State<CaricatureGeneratorSheet>
       _generating = true;
       _error = null;
       _preview = null;
-      _preview = null;
+      _selectedImageIndex = 0;
     });
+    _pageController?.dispose();
+    _pageController = PageController();
 
     _startLoadingMessages();
     unawaited(HapticFeedback.mediumImpact());
 
     try {
-      final result = await _service.generate(_selectedRoleId!, _selectedArtStyleId!, model: _selectedModel);
+      final result = await _service.generate(
+        _selectedRoleId!,
+        _selectedArtStyleId!,
+        model: _selectedModel,
+        name: _includeNameChip ? _fullName : null,
+        tagline: _selectedTagline,
+      );
       if (!mounted) return;
       unawaited(HapticFeedback.heavyImpact());
       setState(() {
@@ -252,7 +342,7 @@ class _CaricatureGeneratorSheetState extends State<CaricatureGeneratorSheet>
     HapticFeedback.mediumImpact();
 
     try {
-      final saved = await _service.accept(_preview!);
+      final saved = await _service.accept(_preview!, _selectedImageIndex);
       if (!mounted) return;
       widget.onAccepted(saved.url);
       Navigator.of(context).pop();
@@ -266,9 +356,11 @@ class _CaricatureGeneratorSheetState extends State<CaricatureGeneratorSheet>
   }
 
   void _tryAnother() {
+    _pageController?.dispose();
+    _pageController = null;
     setState(() {
       _preview = null;
-      _preview = null;
+      _selectedImageIndex = 0;
       _error = null;
     });
   }
@@ -319,6 +411,8 @@ class _CaricatureGeneratorSheetState extends State<CaricatureGeneratorSheet>
                     _buildStyleSection(),
                     const SizedBox(height: 18),
                     _buildModelSection(),
+                    const SizedBox(height: 18),
+                    _buildTextOverlaySection(),
                     const SizedBox(height: 24),
                     _buildPreview(),
                     const SizedBox(height: 20),
@@ -805,6 +899,155 @@ class _CaricatureGeneratorSheetState extends State<CaricatureGeneratorSheet>
     );
   }
 
+  /// Full name from first + last.
+  String? get _fullName {
+    final first = widget.userName ?? '';
+    final last = widget.userLastName ?? '';
+    final full = [first, last].where((s) => s.isNotEmpty).join(' ');
+    return full.isNotEmpty ? full : null;
+  }
+
+  /// Taglines for the currently selected role's category + generics.
+  List<String> _availableTaglines() {
+    final selectedRole = _roles.where((r) => r.id == _selectedRoleId).firstOrNull;
+    final category = selectedRole?.category;
+    final generic = _taglinesByCategory['_generic'] ?? <String>[];
+    final roleSpecific = category != null ? (_taglinesByCategory[category] ?? <String>[]) : <String>[];
+    return [...roleSpecific, ...generic];
+  }
+
+  Widget _buildTextOverlaySection() {
+    if (_loadingStyles) return const SizedBox.shrink();
+
+    final name = _fullName;
+    final taglines = _availableTaglines();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.text_fields_rounded, size: 18, color: AppColors.primaryPurple.withValues(alpha: 0.7)),
+            const SizedBox(width: 8),
+            const Text(
+              'Text in image',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primaryPurple,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceGray,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Text(
+                'Optional',
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.textMuted),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            // "None" chip — selected when no text options are active
+            _buildToggleChip(
+              label: 'None',
+              selected: !_includeNameChip && _selectedTagline == null,
+              icon: Icons.block_rounded,
+              onTap: () => setState(() {
+                _includeNameChip = false;
+                _selectedTagline = null;
+                _preview = null;
+              }),
+            ),
+            // Name chip (first + last name from profile)
+            if (name != null)
+              _buildToggleChip(
+                label: name,
+                selected: _includeNameChip,
+                icon: Icons.person_rounded,
+                onTap: () => setState(() {
+                  _includeNameChip = !_includeNameChip;
+                  _preview = null;
+                }),
+              ),
+            // Tagline chips
+            ...taglines.map((tagline) => _buildToggleChip(
+              label: tagline,
+              selected: _selectedTagline == tagline,
+              onTap: () => setState(() {
+                _selectedTagline = _selectedTagline == tagline ? null : tagline;
+                _preview = null;
+              }),
+            )),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildToggleChip({
+    required String label,
+    required bool selected,
+    IconData? icon,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: !_generating ? () { HapticFeedback.selectionClick(); onTap(); } : null,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primaryPurple : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? AppColors.primaryPurple : AppColors.border,
+            width: 1.5,
+          ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: AppColors.primaryPurple.withValues(alpha: 0.2),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (selected)
+              Padding(
+                padding: const EdgeInsets.only(right: 5),
+                child: Icon(Icons.check_rounded, size: 14, color: AppColors.primaryIndigo),
+              )
+            else if (icon != null)
+              Padding(
+                padding: const EdgeInsets.only(right: 5),
+                child: Icon(icon, size: 14, color: AppColors.textMuted),
+              ),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                color: selected ? Colors.white : AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildPreview() {
     if (_generating) {
       return _buildGeneratingState();
@@ -933,7 +1176,50 @@ class _CaricatureGeneratorSheetState extends State<CaricatureGeneratorSheet>
                 child: const Icon(Icons.arrow_forward_rounded, color: AppColors.primaryIndigo, size: 16),
               ),
             ),
-            Expanded(child: _buildBase64ImageCard('After', _preview!.base64)),
+            Expanded(
+              child: Column(
+                children: [
+                  const Text(
+                    'After',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primaryPurple,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    height: 160,
+                    child: PageView.builder(
+                      controller: _pageController,
+                      itemCount: _preview!.images.length,
+                      onPageChanged: (i) => setState(() => _selectedImageIndex = i),
+                      itemBuilder: (_, i) => _buildBase64Image(_preview!.images[i]),
+                    ),
+                  ),
+                  if (_preview!.images.length > 1) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(_preview!.images.length, (i) {
+                        final isSelected = i == _selectedImageIndex;
+                        return AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          margin: const EdgeInsets.symmetric(horizontal: 3),
+                          width: isSelected ? 20 : 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: isSelected ? AppColors.primaryPurple : AppColors.border,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        );
+                      }),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ],
         ),
       ],
@@ -984,6 +1270,36 @@ class _CaricatureGeneratorSheetState extends State<CaricatureGeneratorSheet>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildBase64Image(String base64Data) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.primaryIndigo, width: 2.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(13),
+        child: Image.memory(
+          base64Decode(base64Data),
+          height: 160,
+          width: double.infinity,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Container(
+            height: 160,
+            color: AppColors.surfaceGray,
+            child: const Icon(Icons.broken_image, size: 32, color: AppColors.textMuted),
+          ),
+        ),
+      ),
     );
   }
 
