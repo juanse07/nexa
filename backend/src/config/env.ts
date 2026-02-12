@@ -36,4 +36,8 @@ export const ENV = {
   r2SecretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
   r2BucketName: process.env.R2_BUCKET_NAME || 'nexa-files',
   r2PublicUrl: process.env.R2_PUBLIC_URL || '', // e.g., https://pub-xxx.r2.dev or custom domain
+
+  // Document Generation Service
+  docServiceUrl: process.env.DOC_SERVICE_URL || 'http://doc-service:5000',
+  docServiceSecret: process.env.DOC_SERVICE_SECRET || '',
 };

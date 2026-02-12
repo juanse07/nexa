@@ -8,6 +8,7 @@ import { ClientModel } from '../models/client';
 import { UserModel } from '../models/user';
 import { FlaggedAttendanceModel } from '../models/flaggedAttendance';
 import { resolveManagerForRequest } from '../utils/manager';
+import { generateReport, ReportFormat } from '../services/docService';
 
 const router = Router();
 
@@ -1007,6 +1008,13 @@ router.get('/exports/staff-shifts', requireAuth, async (req: Request, res: Respo
       };
     });
 
+    const periodLabel = getPeriodLabel(period as string, start, end);
+    const summary = {
+      totalShifts: records.length,
+      totalHours: Math.round(records.reduce((sum, r) => sum + r.hoursWorked, 0) * 10) / 10,
+      totalEarnings: Math.round(records.reduce((sum, r) => sum + r.earnings, 0) * 100) / 100,
+    };
+
     if (format === 'csv') {
       // Generate CSV
       const headers = [
@@ -1040,33 +1048,40 @@ router.get('/exports/staff-shifts', requireAuth, async (req: Request, res: Respo
         csvRows.push(row.join(','));
       }
 
-      // Add summary row
-      const totalHours = records.reduce((sum, r) => sum + r.hoursWorked, 0);
-      const totalEarnings = records.reduce((sum, r) => sum + r.earnings, 0);
       csvRows.push('');
-      csvRows.push(`"TOTAL","","","","","","",${Math.round(totalHours * 10) / 10},"",${Math.round(totalEarnings * 100) / 100}`);
+      csvRows.push(`"TOTAL","","","","","","",${summary.totalHours},"",${summary.totalEarnings}`);
 
       const csvContent = csvRows.join('\n');
 
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', `attachment; filename="shifts_${start.toISOString().split('T')[0]}_to_${end.toISOString().split('T')[0]}.csv"`);
       return res.send(csvContent);
+    } else if (format === 'pdf' || format === 'docx' || format === 'xlsx') {
+      // Generate document via Python doc-service, upload to R2
+      const reportPayload = {
+        report_type: 'staff-shifts' as const,
+        report_format: format as ReportFormat,
+        title: 'Shift History Report',
+        period: { start: start.toISOString(), end: end.toISOString(), label: periodLabel },
+        records,
+        summary,
+      };
+
+      const report = await generateReport(reportPayload, userKey);
+      return res.json({
+        url: report.url,
+        key: report.key,
+        filename: report.filename,
+        contentType: report.contentType,
+      });
     } else {
-      // PDF format - return JSON for now, frontend will generate PDF
+      // JSON fallback
       return res.json({
         format: 'pdf_data',
         title: 'Shift History Report',
-        period: {
-          start: start.toISOString(),
-          end: end.toISOString(),
-          label: getPeriodLabel(period as string, start, end),
-        },
+        period: { start: start.toISOString(), end: end.toISOString(), label: periodLabel },
         records,
-        summary: {
-          totalShifts: records.length,
-          totalHours: Math.round(records.reduce((sum, r) => sum + r.hoursWorked, 0) * 10) / 10,
-          totalEarnings: Math.round(records.reduce((sum, r) => sum + r.earnings, 0) * 100) / 100,
-        },
+        summary,
       });
     }
   } catch (err: any) {
@@ -1151,6 +1166,13 @@ router.get('/exports/team-report', requireAuth, async (req: Request, res: Respon
         totalPay: Math.round(s.earnings * 100) / 100,
       })).sort((a, b) => b.totalPay - a.totalPay);
 
+      const payrollPeriodLabel = getPeriodLabel(period as string, start, end);
+      const payrollSummary = {
+        staffCount: records.length,
+        totalHours: Math.round(records.reduce((sum, r) => sum + r.hours, 0) * 10) / 10,
+        totalPayroll: Math.round(records.reduce((sum, r) => sum + r.totalPay, 0) * 100) / 100,
+      };
+
       if (format === 'csv') {
         const headers = ['Staff Name', 'Email', 'Shifts', 'Total Hours', 'Avg Rate', 'Total Pay'];
         const csvRows = [headers.join(',')];
@@ -1166,30 +1188,36 @@ router.get('/exports/team-report', requireAuth, async (req: Request, res: Respon
           ].join(','));
         }
 
-        // Summary
-        const totalHours = records.reduce((sum, r) => sum + r.hours, 0);
-        const totalPay = records.reduce((sum, r) => sum + r.totalPay, 0);
         csvRows.push('');
-        csvRows.push(`"TOTAL","",${records.reduce((s, r) => s + r.shifts, 0)},${Math.round(totalHours * 10) / 10},"",${Math.round(totalPay * 100) / 100}`);
+        csvRows.push(`"TOTAL","",${records.reduce((s, r) => s + r.shifts, 0)},${payrollSummary.totalHours},"",${payrollSummary.totalPayroll}`);
 
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', `attachment; filename="payroll_${start.toISOString().split('T')[0]}_to_${end.toISOString().split('T')[0]}.csv"`);
         return res.send(csvRows.join('\n'));
+      } else if (format === 'pdf' || format === 'docx' || format === 'xlsx') {
+        const reportPayload = {
+          report_type: 'payroll' as const,
+          report_format: format as ReportFormat,
+          title: 'Payroll Report',
+          period: { start: start.toISOString(), end: end.toISOString(), label: payrollPeriodLabel },
+          records,
+          summary: payrollSummary,
+        };
+
+        const report = await generateReport(reportPayload, String(manager._id));
+        return res.json({
+          url: report.url,
+          key: report.key,
+          filename: report.filename,
+          contentType: report.contentType,
+        });
       } else {
         return res.json({
           format: 'pdf_data',
           title: 'Payroll Report',
-          period: {
-            start: start.toISOString(),
-            end: end.toISOString(),
-            label: getPeriodLabel(period as string, start, end),
-          },
+          period: { start: start.toISOString(), end: end.toISOString(), label: payrollPeriodLabel },
           records,
-          summary: {
-            staffCount: records.length,
-            totalHours: Math.round(records.reduce((sum, r) => sum + r.hours, 0) * 10) / 10,
-            totalPayroll: Math.round(records.reduce((sum, r) => sum + r.totalPay, 0) * 100) / 100,
-          },
+          summary: payrollSummary,
         });
       }
     } else {
@@ -1226,6 +1254,12 @@ router.get('/exports/team-report', requireAuth, async (req: Request, res: Respon
         }
       }
 
+      const attendPeriodLabel = getPeriodLabel(period as string, start, end);
+      const attendSummary = {
+        totalRecords: records.length,
+        totalHours: Math.round(records.reduce((sum, r) => sum + r.hoursWorked, 0) * 10) / 10,
+      };
+
       if (format === 'csv') {
         const headers = ['Date', 'Event', 'Staff', 'Role', 'Scheduled Start', 'Scheduled End', 'Clock In', 'Clock Out', 'Hours', 'Status'];
         const csvRows = [headers.join(',')];
@@ -1248,20 +1282,30 @@ router.get('/exports/team-report', requireAuth, async (req: Request, res: Respon
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', `attachment; filename="attendance_${start.toISOString().split('T')[0]}_to_${end.toISOString().split('T')[0]}.csv"`);
         return res.send(csvRows.join('\n'));
+      } else if (format === 'pdf' || format === 'docx' || format === 'xlsx') {
+        const reportPayload = {
+          report_type: 'attendance' as const,
+          report_format: format as ReportFormat,
+          title: 'Attendance Report',
+          period: { start: start.toISOString(), end: end.toISOString(), label: attendPeriodLabel },
+          records,
+          summary: attendSummary,
+        };
+
+        const report = await generateReport(reportPayload, String(manager._id));
+        return res.json({
+          url: report.url,
+          key: report.key,
+          filename: report.filename,
+          contentType: report.contentType,
+        });
       } else {
         return res.json({
           format: 'pdf_data',
           title: 'Attendance Report',
-          period: {
-            start: start.toISOString(),
-            end: end.toISOString(),
-            label: getPeriodLabel(period as string, start, end),
-          },
+          period: { start: start.toISOString(), end: end.toISOString(), label: attendPeriodLabel },
           records,
-          summary: {
-            totalRecords: records.length,
-            totalHours: Math.round(records.reduce((sum, r) => sum + r.hoursWorked, 0) * 10) / 10,
-          },
+          summary: attendSummary,
         });
       }
     }
