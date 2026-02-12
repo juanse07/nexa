@@ -1,6 +1,116 @@
 import pino from 'pino';
+import crypto from 'crypto';
+import { ManagerModel } from '../models/manager';
+import { UserModel } from '../models/user';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
+
+// ── Cache Key Generation ──
+
+function hashString(input: string): string {
+  return crypto.createHash('md5').update(input).digest('hex').slice(0, 16);
+}
+
+/**
+ * Generate a cache key from generation parameters.
+ * Uses MD5 hash of pictureUrl + role + artStyle + model + overlayText.
+ */
+export function generateCacheKey(
+  pictureUrl: string,
+  role: string,
+  artStyle: string,
+  model: string,
+  overlayText?: string,
+): string {
+  const pictureHash = hashString(pictureUrl);
+  const content = `${pictureHash}-${role}-${artStyle}-${model}-${overlayText || ''}`;
+  return crypto.createHash('md5').update(content).digest('hex');
+}
+
+/**
+ * Look up a cached caricature by cache key across all managers and users.
+ * Returns the most recent match within maxAgeInDays, or null.
+ */
+export async function getCachedCaricature(
+  cacheKey: string,
+  maxAgeInDays: number = 30,
+): Promise<{
+  url: string;
+  role: string;
+  artStyle: string;
+  model: string;
+  overlayText?: string;
+  createdAt: Date;
+} | null> {
+  try {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - maxAgeInDays);
+
+    // Use $elemMatch for precise array element matching
+    const query = {
+      caricatureHistory: {
+        $elemMatch: {
+          cacheKey,
+          createdAt: { $gte: cutoffDate },
+        },
+      },
+    };
+
+    // Search in manager history
+    const managers = await ManagerModel.find(query).select('caricatureHistory').lean();
+    logger.info({ cacheKey, managersFound: managers.length }, 'Caricature cache: searched managers');
+
+    for (const manager of managers) {
+      const entries = (manager.caricatureHistory as any[]) ?? [];
+      const cached = entries.find(
+        (item: any) =>
+          item.cacheKey === cacheKey &&
+          new Date(item.createdAt) >= cutoffDate,
+      );
+      if (cached) {
+        logger.info({ cacheKey, url: cached.url }, 'Caricature cache HIT in managers');
+        return {
+          url: cached.url,
+          role: cached.role,
+          artStyle: cached.artStyle,
+          model: cached.model,
+          overlayText: cached.overlayText,
+          createdAt: new Date(cached.createdAt),
+        };
+      }
+    }
+
+    // Search in user history
+    const users = await UserModel.find(query).select('caricatureHistory').lean();
+    logger.info({ cacheKey, usersFound: users.length }, 'Caricature cache: searched users');
+
+    for (const user of users) {
+      const entries = (user.caricatureHistory as any[]) ?? [];
+      const cached = entries.find(
+        (item: any) =>
+          item.cacheKey === cacheKey &&
+          new Date(item.createdAt) >= cutoffDate,
+      );
+      if (cached) {
+        logger.info({ cacheKey, url: cached.url }, 'Caricature cache HIT in users');
+        return {
+          url: cached.url,
+          role: cached.role,
+          artStyle: cached.artStyle,
+          model: cached.model,
+          overlayText: cached.overlayText,
+          createdAt: new Date(cached.createdAt),
+        };
+      }
+    }
+
+    logger.info({ cacheKey }, 'Caricature cache: no match found');
+    return null;
+  } catch (error) {
+    logger.error({ error, cacheKey }, 'Caricature cache lookup error');
+    return null; // Fail gracefully — proceed with generation
+  }
+}
 
 /** Available caricature roles (scene/context) */
 export type CaricatureRole =
@@ -658,7 +768,7 @@ export async function generateCaricature(
   role: CaricatureRole,
   artStyle: ArtStyle = 'cartoon',
   model: CaricatureModel = 'dev',
-  count: number = 3,
+  count: number = 2,
   overlayText?: string,
 ): Promise<Buffer[]> {
   const apiKey = process.env.TOGETHER_API_KEY;

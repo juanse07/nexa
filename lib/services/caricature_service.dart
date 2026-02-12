@@ -66,7 +66,8 @@ class StylesResponse {
 }
 
 /// Result of a caricature generation (preview — not yet saved).
-/// Contains multiple image options the user can swipe through.
+/// Contains multiple image options the user can swipe through,
+/// OR a single cached URL if the server found a cache hit.
 class CaricatureResult {
   CaricatureResult({
     required this.images,
@@ -74,13 +75,21 @@ class CaricatureResult {
     required this.artStyle,
     required this.model,
     required this.remaining,
+    this.cached = false,
+    this.cacheKey,
+    this.cachedUrl,
+    this.overlayText,
   });
 
-  final List<String> images; // base64-encoded PNGs
+  final List<String> images; // base64-encoded PNGs (empty if cached)
   final String role;
   final String artStyle;
   final String model;
   final int remaining;
+  final bool cached; // true = cache hit, no new generation
+  final String? cacheKey; // for accept flow
+  final String? cachedUrl; // R2 URL from cache hit
+  final String? overlayText;
 }
 
 /// Result of accepting a caricature (saved to storage).
@@ -128,10 +137,11 @@ class CaricatureService {
 
   /// Generate a caricature with the given role and art style.
   /// Extended timeout since image generation takes 10-20 seconds.
-  Future<CaricatureResult> generate(String roleId, String artStyleId, {String model = 'dev', String? name, String? tagline}) async {
+  Future<CaricatureResult> generate(String roleId, String artStyleId, {String model = 'dev', String? name, String? tagline, bool forceNew = false}) async {
     final body = <String, dynamic>{'role': roleId, 'artStyle': artStyleId, 'model': model};
     if (name != null && name.isNotEmpty) body['name'] = name;
     if (tagline != null && tagline.isNotEmpty) body['tagline'] = tagline;
+    if (forceNew) body['forceNew'] = true;
 
     final response = await _apiClient.post<dynamic>(
       '/caricature/generate',
@@ -154,6 +164,23 @@ class CaricatureService {
       throw Exception(data['message'] ?? 'Generation failed');
     }
 
+    final isCached = data['cached'] as bool? ?? false;
+
+    if (isCached) {
+      // Cache hit — server returns a URL, no base64 images
+      return CaricatureResult(
+        images: const [], // no base64 data for cache hits
+        role: data['role'] as String? ?? roleId,
+        artStyle: data['artStyle'] as String? ?? artStyleId,
+        model: data['model'] as String? ?? model,
+        remaining: data['remaining'] as int? ?? 0,
+        cached: true,
+        cachedUrl: data['url'] as String?,
+        cacheKey: data['cacheKey'] as String?,
+        overlayText: data['overlayText'] as String?,
+      );
+    }
+
     final imagesRaw = data['images'] as List<dynamic>?;
     if (imagesRaw == null || imagesRaw.isEmpty) {
       throw Exception('Server returned no image data');
@@ -165,19 +192,25 @@ class CaricatureService {
       artStyle: data['artStyle'] as String? ?? artStyleId,
       model: data['model'] as String? ?? model,
       remaining: data['remaining'] as int? ?? 0,
+      cached: false,
+      cacheKey: data['cacheKey'] as String?,
     );
   }
 
   /// Accept a generated caricature — uploads to storage and saves to history.
   Future<CaricatureAcceptResult> accept(CaricatureResult preview, int selectedIndex) async {
+    final body = <String, dynamic>{
+      'base64': preview.images[selectedIndex],
+      'role': preview.role,
+      'artStyle': preview.artStyle,
+      'model': preview.model,
+    };
+    if (preview.cacheKey != null) body['cacheKey'] = preview.cacheKey;
+    if (preview.overlayText != null) body['overlayText'] = preview.overlayText;
+
     final response = await _apiClient.post<dynamic>(
       '/caricature/accept',
-      data: {
-        'base64': preview.images[selectedIndex],
-        'role': preview.role,
-        'artStyle': preview.artStyle,
-        'model': preview.model,
-      },
+      data: body,
       options: Options(
         sendTimeout: const Duration(seconds: 30),
         receiveTimeout: const Duration(seconds: 30),

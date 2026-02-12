@@ -19,6 +19,9 @@ export interface UserDocument extends Document {
     role: string;
     artStyle: string;
     model?: string; // 'dev' | 'pro'
+    overlayText?: string;
+    cacheKey?: string;
+    cached?: boolean;
     createdAt: Date;
   }>;
 
@@ -105,6 +108,9 @@ const UserSchema = new Schema<UserDocument>(
       role: { type: String, required: true },
       artStyle: { type: String, required: true },
       model: { type: String, enum: ['dev', 'pro'], default: 'dev' },
+      overlayText: { type: String },
+      cacheKey: { type: String, index: true },
+      cached: { type: Boolean, default: false },
       createdAt: { type: Date, default: Date.now },
     }],
 

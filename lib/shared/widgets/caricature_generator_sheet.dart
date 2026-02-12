@@ -296,7 +296,7 @@ class _CaricatureGeneratorSheetState extends State<CaricatureGeneratorSheet>
     });
   }
 
-  Future<void> _generate() async {
+  Future<void> _generate({bool forceNew = false}) async {
     if (_selectedRoleId == null || _selectedArtStyleId == null) return;
 
     setState(() {
@@ -318,6 +318,7 @@ class _CaricatureGeneratorSheetState extends State<CaricatureGeneratorSheet>
         model: _selectedModel,
         name: _includeNameChip ? _fullName : null,
         tagline: _selectedTagline,
+        forceNew: forceNew,
       );
       if (!mounted) return;
       unawaited(HapticFeedback.heavyImpact());
@@ -342,6 +343,14 @@ class _CaricatureGeneratorSheetState extends State<CaricatureGeneratorSheet>
     HapticFeedback.mediumImpact();
 
     try {
+      // Cache hit — URL already exists, skip upload
+      if (_preview!.cached && _preview!.cachedUrl != null) {
+        if (!mounted) return;
+        widget.onAccepted(_preview!.cachedUrl!);
+        Navigator.of(context).pop();
+        return;
+      }
+
       final saved = await _service.accept(_preview!, _selectedImageIndex);
       if (!mounted) return;
       widget.onAccepted(saved.url);
@@ -1162,6 +1171,28 @@ class _CaricatureGeneratorSheetState extends State<CaricatureGeneratorSheet>
             ),
           ),
         ),
+        if (_preview!.cached)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: AppColors.success.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.bolt_rounded, size: 12, color: AppColors.success),
+                  const SizedBox(width: 4),
+                  Text(
+                    'From your history',
+                    style: TextStyle(fontSize: 11, color: AppColors.success),
+                  ),
+                ],
+              ),
+            ),
+          ),
         Row(
           children: [
             Expanded(child: _buildImageCard('Before', widget.currentPictureUrl, false)),
@@ -1189,33 +1220,53 @@ class _CaricatureGeneratorSheetState extends State<CaricatureGeneratorSheet>
                     ),
                   ),
                   const SizedBox(height: 6),
-                  SizedBox(
-                    height: 160,
-                    child: PageView.builder(
-                      controller: _pageController,
-                      itemCount: _preview!.images.length,
-                      onPageChanged: (i) => setState(() => _selectedImageIndex = i),
-                      itemBuilder: (_, i) => _buildBase64Image(_preview!.images[i]),
+                  if (_preview!.cached && _preview!.cachedUrl != null) ...[
+                    // Cache hit — show the cached URL image
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.network(
+                        _preview!.cachedUrl!,
+                        height: 160,
+                        width: 160,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          height: 160,
+                          width: 160,
+                          color: AppColors.surfaceGray,
+                          child: const Icon(Icons.broken_image, size: 40),
+                        ),
+                      ),
                     ),
-                  ),
-                  if (_preview!.images.length > 1) ...[
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(_preview!.images.length, (i) {
-                        final isSelected = i == _selectedImageIndex;
-                        return AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          margin: const EdgeInsets.symmetric(horizontal: 3),
-                          width: isSelected ? 20 : 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: isSelected ? AppColors.primaryPurple : AppColors.border,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        );
-                      }),
+                  ] else ...[
+                    // Normal flow — swipeable base64 previews
+                    SizedBox(
+                      height: 160,
+                      child: PageView.builder(
+                        controller: _pageController,
+                        itemCount: _preview!.images.length,
+                        onPageChanged: (i) => setState(() => _selectedImageIndex = i),
+                        itemBuilder: (_, i) => _buildBase64Image(_preview!.images[i]),
+                      ),
                     ),
+                    if (_preview!.images.length > 1) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(_preview!.images.length, (i) {
+                          final isSelected = i == _selectedImageIndex;
+                          return AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            margin: const EdgeInsets.symmetric(horizontal: 3),
+                            width: isSelected ? 20 : 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: isSelected ? AppColors.primaryPurple : AppColors.border,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          );
+                        }),
+                      ),
+                    ],
                   ],
                 ],
               ),
@@ -1396,9 +1447,14 @@ class _CaricatureGeneratorSheetState extends State<CaricatureGeneratorSheet>
         children: [
           Expanded(
             child: OutlinedButton.icon(
-              onPressed: _tryAnother,
-              icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: const Text('Try Again'),
+              onPressed: _preview!.cached
+                  ? () => _generate(forceNew: true)
+                  : _tryAnother,
+              icon: Icon(
+                _preview!.cached ? Icons.auto_awesome_rounded : Icons.refresh_rounded,
+                size: 18,
+              ),
+              label: Text(_preview!.cached ? 'Generate New' : 'Try Again'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.textSecondary,
                 side: const BorderSide(color: AppColors.border),

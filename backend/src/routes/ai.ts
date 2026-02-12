@@ -3632,15 +3632,26 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
 
       // Handle tool calls (including parallel calls for llama)
       if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-        console.log(`[AI:${config.name}] ${assistantMessage.tool_calls.length} tool call(s) requested`);
+        const MAX_TOOL_CALLS = 10;
+        let toolCalls: any[] = assistantMessage.tool_calls;
+
+        // Cap tool calls to prevent runaway requests (model sometimes requests 40+)
+        if (toolCalls.length > MAX_TOOL_CALLS) {
+          console.warn(`[AI:${config.name}] Tool call cap: ${toolCalls.length} requested, limiting to ${MAX_TOOL_CALLS}`);
+          toolCalls = toolCalls.slice(0, MAX_TOOL_CALLS);
+          assistantMessage.tool_calls = toolCalls;
+        }
+
+        console.log(`[AI:${config.name}] ${toolCalls.length} tool call(s) requested`);
 
         if (!managerId) {
           return res.status(401).json({ message: 'Manager ID required for function calls' });
         }
 
-        // Execute tool calls in parallel with error handling
+        // Deduplicate identical tool calls (same function + same args → execute once)
+        const dedupCache = new Map<string, string>();
         const toolResults = await Promise.all(
-          assistantMessage.tool_calls.map(async (toolCall: any) => {
+          toolCalls.map(async (toolCall: any) => {
             const functionName = toolCall.function.name;
 
             try {
@@ -3656,9 +3667,21 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
                 };
               }
 
+              // Dedup: if same function + same args already executed, reuse result
+              const dedupKey = `${functionName}:${JSON.stringify(functionArgs)}`;
+              if (dedupCache.has(dedupKey)) {
+                console.log(`[AI:${config.name}] Dedup hit for ${functionName} — reusing cached result`);
+                return {
+                  role: 'tool',
+                  tool_call_id: toolCall.id,
+                  content: dedupCache.get(dedupKey)!,
+                };
+              }
+
               console.log(`[AI:${config.name}] Executing ${functionName}:`, functionArgs);
 
               const result = await executeFunctionCall(functionName, functionArgs, managerId);
+              dedupCache.set(dedupKey, result);
 
               return {
                 role: 'tool',
