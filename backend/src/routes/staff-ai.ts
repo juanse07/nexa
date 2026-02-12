@@ -7,7 +7,8 @@ import multer from 'multer';
 import FormData from 'form-data';
 import fs from 'fs';
 import { getDateTimeContext, getWelcomeDateContext, getFullSystemContext } from '../utils/dateContext';
-import { getProviderConfig, resolveProvider } from '../utils/aiProvider';
+import { getProviderConfig } from '../utils/aiProvider';
+import { selectModelForQuery, shouldEscalateFromTools, ESCALATION_MODEL, ESCALATION_PROVIDER } from '../utils/cascadeRouter';
 import { EventModel } from '../models/event';
 import { UserModel } from '../models/user';
 import { AvailabilityModel } from '../models/availability';
@@ -2064,17 +2065,14 @@ router.post('/ai/staff/chat/message', requireAuth, async (req, res) => {
     const validated = chatMessageSchema.parse(req.body);
     const { messages, temperature, maxTokens, model } = validated;
 
-    // Resolve AI provider: first N messages use Groq, rest use Together AI
-    const providerUser = await UserModel.findOne({ provider: oauthProvider, subject });
-    const aiMessagesUsed = providerUser?.ai_messages_used_this_month || 0;
-    const groqLimit = providerUser?.groq_request_limit || 3;
-    const chosenProvider = resolveProvider(aiMessagesUsed, groqLimit);
+    // Cascade routing: classify query complexity → pick model + provider
+    const { provider: selectedProvider, model: selectedModel, tier } = selectModelForQuery(messages);
 
-    console.log(`[ai/staff/chat/message] Provider: ${chosenProvider} (used: ${aiMessagesUsed}/${groqLimit}), model: ${model || 'openai/gpt-oss-20b'} for user ${userId}, tier: ${subscriptionTier}`);
+    console.log(`[ai/staff/chat/message] Cascade tier=${tier}, provider=${selectedProvider}, model=${selectedModel} for user ${userId}, subscription: ${subscriptionTier}`);
 
     const timezone = getTimezoneFromRequest(req);
 
-    return await handleStaffGroqRequest(messages, temperature, maxTokens, res, timezone, userId, userKey, subscriptionTier, model, chosenProvider);
+    return await handleStaffGroqRequest(messages, temperature, maxTokens, res, timezone, userId, userKey, subscriptionTier, selectedModel, selectedProvider, tier);
   } catch (err: any) {
     console.error('[ai/staff/chat/message] Error:', err);
     if (err instanceof z.ZodError) {
@@ -2104,7 +2102,8 @@ async function handleStaffGroqRequest(
   userKey?: string,
   subscriptionTier?: 'free' | 'pro',
   model?: string,
-  provider: 'groq' | 'together' = 'groq'
+  provider: 'groq' | 'together' = 'groq',
+  cascadeTier: 'simple' | 'complex' = 'simple'
 ) {
   const groqModel = model || 'openai/gpt-oss-20b';
   const config = getProviderConfig(provider, groqModel);
@@ -2373,18 +2372,33 @@ Example: "February" in December 2025 → February 2026
         ];
         const allToolsUsed = [...assistantMessage.tool_calls.map((tc: any) => tc.function.name)];
         const maxToolSteps = 3;
-        const secondTimeout = isReasoningModel ? 120000 : 60000;
+
+        // Method 2: Tool-based escalation — if initial tier was simple but
+        // the AI picked complex tools, switch to 120B for the synthesis step.
+        let synthesisConfig = config;
+        let synthesisModel = requestBody.model;
+        if (cascadeTier === 'simple' && shouldEscalateFromTools(assistantMessage.tool_calls)) {
+          synthesisConfig = getProviderConfig(ESCALATION_PROVIDER, ESCALATION_MODEL);
+          synthesisModel = ESCALATION_MODEL;
+          console.log(`[AI:${config.name}] Tool-based escalation → ${ESCALATION_MODEL} @ ${ESCALATION_PROVIDER} (tools: ${allToolsUsed.join(', ')})`);
+        }
+
+        const synthesisHeaders = {
+          'Authorization': `Bearer ${synthesisConfig.apiKey}`,
+          'Content-Type': 'application/json',
+        };
+        const secondTimeout = (synthesisConfig.supportsReasoning && synthesisModel.includes('gpt-oss')) ? 120000 : 60000;
 
         let finalContent = '';
         let finalReasoning: string | null = null;
 
         for (let step = 0; step < maxToolSteps; step++) {
-          console.log(`[AI:${config.name}] Follow-up request step ${step + 1}/${maxToolSteps}...`);
+          console.log(`[AI:${synthesisConfig.name}] Follow-up request step ${step + 1}/${maxToolSteps}...`);
 
           const response = await axios.post(
-            config.baseUrl,
+            synthesisConfig.baseUrl,
             {
-              model: requestBody.model,
+              model: synthesisModel,
               messages: currentMessages,
               temperature: requestBody.temperature,
               max_tokens: requestBody.max_tokens,
@@ -2393,12 +2407,12 @@ Example: "February" in December 2025 → February 2026
               // NOTE: Omit reasoning params on follow-up requests with tool results
               // to avoid tool_use_failed errors
             },
-            { headers, validateStatus: () => true, timeout: secondTimeout }
+            { headers: synthesisHeaders, validateStatus: () => true, timeout: secondTimeout }
           );
 
           // Handle tool_use_failed - use context-aware fallback
           if (response.status === 400 && response.data?.error?.code === 'tool_use_failed') {
-            console.log(`[AI:${config.name}] tool_use_failed detected, using context-aware fallback...`);
+            console.log(`[AI:${synthesisConfig.name}] tool_use_failed detected, using context-aware fallback...`);
 
             const allToolResultsSummary = currentMessages
               .filter((m: any) => m.role === 'tool')
@@ -2428,36 +2442,36 @@ Example: "February" in December 2025 → February 2026
               }
             ];
 
-            console.log(`[AI:${config.name}] Fallback messages count:`, fallbackMessages.length);
+            console.log(`[AI:${synthesisConfig.name}] Fallback messages count:`, fallbackMessages.length);
 
             const fallbackResponse = await axios.post(
-              config.baseUrl,
+              synthesisConfig.baseUrl,
               {
-                model: requestBody.model,
+                model: synthesisModel,
                 messages: fallbackMessages,
                 temperature: requestBody.temperature,
                 max_tokens: requestBody.max_tokens,
               },
-              { headers, validateStatus: () => true, timeout: secondTimeout }
+              { headers: synthesisHeaders, validateStatus: () => true, timeout: secondTimeout }
             );
 
-            console.log(`[AI:${config.name}] Fallback response status:`, fallbackResponse.status);
+            console.log(`[AI:${synthesisConfig.name}] Fallback response status:`, fallbackResponse.status);
 
             if (fallbackResponse.status >= 300) {
-              console.error(`[AI:${config.name}] Fallback also failed:`, fallbackResponse.data);
+              console.error(`[AI:${synthesisConfig.name}] Fallback also failed:`, fallbackResponse.data);
               finalContent = `Here's what I found:\n\n${allToolResultsSummary}`;
               finalReasoning = null;
             } else {
               const fm = fallbackResponse.data.choices?.[0]?.message;
               finalContent = fm?.content || `Here's what I found:\n\n${allToolResultsSummary}`;
               finalReasoning = fm?.reasoning || null;
-              console.log(`[AI:${config.name}] Fallback content length:`, finalContent.length);
+              console.log(`[AI:${synthesisConfig.name}] Fallback content length:`, finalContent.length);
             }
             break;
           }
 
           if (response.status >= 300) {
-            console.error(`[AI:${config.name}] Follow-up API call error:`, response.status, response.data);
+            console.error(`[AI:${synthesisConfig.name}] Follow-up API call error:`, response.status, response.data);
             throw new Error(`Follow-up API call failed: ${response.statusText}`);
           }
 
@@ -2465,7 +2479,7 @@ Example: "February" in December 2025 → February 2026
 
           // Check for additional tool calls - execute and loop
           if (message?.tool_calls && message.tool_calls.length > 0) {
-            console.log(`[AI:${config.name}] Step ${step + 2}: ${message.tool_calls.length} additional tool call(s)`);
+            console.log(`[AI:${synthesisConfig.name}] Step ${step + 2}: ${message.tool_calls.length} additional tool call(s)`);
 
             const additionalResults = await Promise.all(
               message.tool_calls.map(async (toolCall: any) => {
@@ -2475,7 +2489,7 @@ Example: "February" in December 2025 → February 2026
                   try {
                     functionArgs = JSON.parse(toolCall.function.arguments);
                   } catch (parseError: any) {
-                    console.error(`[AI:${config.name}] Failed to parse tool arguments for ${functionName}:`, toolCall.function.arguments);
+                    console.error(`[AI:${synthesisConfig.name}] Failed to parse tool arguments for ${functionName}:`, toolCall.function.arguments);
                     return {
                       role: 'tool',
                       tool_call_id: toolCall.id,
@@ -2483,7 +2497,7 @@ Example: "February" in December 2025 → February 2026
                     };
                   }
 
-                  console.log(`[AI:${config.name}] Executing ${functionName}:`, functionArgs);
+                  console.log(`[AI:${synthesisConfig.name}] Executing ${functionName}:`, functionArgs);
                   allToolsUsed.push(functionName);
                   const result = await executeStaffFunction(
                     functionName,
@@ -2498,7 +2512,7 @@ Example: "February" in December 2025 → February 2026
                     content: JSON.stringify(result)
                   };
                 } catch (execError: any) {
-                  console.error(`[AI:${config.name}] Tool execution failed for ${functionName}:`, execError);
+                  console.error(`[AI:${synthesisConfig.name}] Tool execution failed for ${functionName}:`, execError);
                   return {
                     role: 'tool',
                     tool_call_id: toolCall.id,
@@ -2519,8 +2533,8 @@ Example: "February" in December 2025 → February 2026
           // No more tool calls - we have final content
           finalContent = message?.content || '';
           finalReasoning = message?.reasoning || null;
-          console.log(`[AI:${config.name}] Final content length:`, finalContent.length);
-          if (finalReasoning) console.log(`[AI:${config.name}] Final reasoning length:`, finalReasoning.length);
+          console.log(`[AI:${synthesisConfig.name}] Final content length:`, finalContent.length);
+          if (finalReasoning) console.log(`[AI:${synthesisConfig.name}] Final reasoning length:`, finalReasoning.length);
           break;
         }
 
@@ -2531,8 +2545,8 @@ Example: "February" in December 2025 → February 2026
         return res.json({
           content: finalContent,
           reasoning: finalReasoning || firstRequestReasoning || null,
-          provider: config.name,
-          model: requestBody.model,
+          provider: synthesisConfig.name,
+          model: synthesisModel,
           toolsUsed: allToolsUsed
         });
       }
