@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:nexa/l10n/app_localizations.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/config/environment.dart';
 import '../../../core/constants/storage_keys.dart';
+import '../../brand/data/providers/brand_provider.dart';
 import '../../extraction/services/event_service.dart';
 import '../../extraction/presentation/pending_publish_screen.dart';
 import '../../extraction/presentation/pending_edit_screen.dart';
@@ -1148,6 +1150,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
     setState(() => _isGeneratingSheet = true);
 
+    // Read preferred design from BrandProvider
+    String? templateDesign;
+    try {
+      templateDesign = context.read<BrandProvider>().preferredDocDesign;
+    } catch (_) {}
+
     try {
       const storage = FlutterSecureStorage();
       final token = await storage.read(key: StorageKeys.accessToken);
@@ -1155,13 +1163,18 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         'API_BASE_URL', 'https://api.nexapymesoft.com',
       );
 
+      final bodyMap = <String, String>{'format': format};
+      if (templateDesign != null) {
+        bodyMap['template_design'] = templateDesign;
+      }
+
       final response = await http.post(
         Uri.parse('$baseUrl/api/events/$eventId/working-hours-sheet'),
         headers: {
           'Content-Type': 'application/json',
           if (token != null) 'Authorization': 'Bearer $token',
         },
-        body: jsonEncode({'format': format}),
+        body: jsonEncode(bodyMap),
       ).timeout(const Duration(seconds: 30));
 
       if (!mounted) return;

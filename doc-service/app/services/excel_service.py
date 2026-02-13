@@ -6,17 +6,41 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-from app.models.schemas import BrandConfig, ReportRequest, ReportType
+from app.models.schemas import BrandConfig, ReportRequest, ReportType, TemplateDesign
 
 
 def _get_brand_colors(req: ReportRequest) -> dict[str, str]:
-    """Return hex color strings from brand_config or defaults."""
+    """Return hex color strings from brand_config, adjusted for template_design."""
     bc = req.brand_config or BrandConfig()
-    return {
-        "primary": bc.primary_color.upper(),
-        "secondary": bc.secondary_color.upper(),
-        "neutral": bc.neutral_color.upper(),
-    }
+    design = req.template_design
+
+    if design == TemplateDesign.PLAIN:
+        return {
+            "primary": "#374151",
+            "secondary": "#374151",
+            "neutral": "#F9FAFB",
+            "header_bg": "#F9FAFB",
+            "header_fg": "#374151",
+            "use_zebra": False,
+        }
+    elif design == TemplateDesign.EXECUTIVE:
+        return {
+            "primary": bc.primary_color.upper(),
+            "secondary": bc.secondary_color.upper(),
+            "neutral": "#FAFBFC",
+            "header_bg": "#F8FAFC",
+            "header_fg": bc.primary_color.upper(),
+            "use_zebra": True,
+        }
+    else:  # classic
+        return {
+            "primary": bc.primary_color.upper(),
+            "secondary": bc.secondary_color.upper(),
+            "neutral": bc.neutral_color.upper(),
+            "header_bg": bc.primary_color.upper(),
+            "header_fg": "#FFFFFF",
+            "use_zebra": True,
+        }
 
 
 def _write_staff_shifts(req: ReportRequest, writer: pd.ExcelWriter):
@@ -159,14 +183,18 @@ def _write_title(workbook, worksheet, title: str, num_cols: int, bc: dict[str, s
 
 
 def _style_sheet(workbook, worksheet, df: pd.DataFrame, bc: dict[str, str] | None = None):
-    primary = (bc or {}).get("primary", "#1E293B")
-    neutral = (bc or {}).get("neutral", "#F8FAFC")
+    bc = bc or {}
+    header_bg = bc.get("header_bg", bc.get("primary", "#1E293B"))
+    header_fg = bc.get("header_fg", "#FFFFFF")
+    neutral = bc.get("neutral", "#F8FAFC")
+    use_zebra = bc.get("use_zebra", True)
+
     header_fmt = workbook.add_format(
         {
             "bold": True,
             "font_size": 10,
-            "font_color": "#FFFFFF",
-            "bg_color": primary,
+            "font_color": header_fg,
+            "bg_color": header_bg,
             "border": 1,
             "border_color": "#CBD5E1",
             "text_wrap": True,
@@ -184,13 +212,14 @@ def _style_sheet(workbook, worksheet, df: pd.DataFrame, bc: dict[str, str] | Non
         )
         worksheet.set_column(col_num, col_num, min(max_len + 4, 30))
 
-    # Zebra striping
-    alt_fmt = workbook.add_format({"bg_color": neutral})
-    for row_idx in range(len(df)):
-        if row_idx % 2 == 0:
-            for col_idx in range(len(df.columns)):
-                val = df.iloc[row_idx, col_idx]
-                worksheet.write(row_idx + 2, col_idx, val, alt_fmt)
+    # Zebra striping (skipped for plain design)
+    if use_zebra:
+        alt_fmt = workbook.add_format({"bg_color": neutral})
+        for row_idx in range(len(df)):
+            if row_idx % 2 == 0:
+                for col_idx in range(len(df.columns)):
+                    val = df.iloc[row_idx, col_idx]
+                    worksheet.write(row_idx + 2, col_idx, val, alt_fmt)
 
 
 _WRITERS = {

@@ -86,6 +86,7 @@ export interface ManagerDocument extends Document {
     secondaryColor?: string;
     accentColor?: string;
     neutralColor?: string;
+    preferredDocDesign?: string;
     createdAt?: Date;
     updatedAt?: Date;
   };
@@ -184,6 +185,7 @@ const ManagerSchema = new Schema<ManagerDocument>(
       secondaryColor: { type: String, trim: true },
       accentColor: { type: String, trim: true },
       neutralColor: { type: String, trim: true },
+      preferredDocDesign: { type: String, enum: ['plain', 'classic', 'executive'], default: 'classic' },
       createdAt: { type: Date },
       updatedAt: { type: Date },
     },

@@ -150,8 +150,9 @@ class ContentTypeInterceptor extends Interceptor {
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
-    // Set default content type if not already set
-    if (!options.headers.containsKey(ApiConstants.contentType)) {
+    // Skip content-type for FormData — Dio sets multipart/form-data automatically
+    if (options.data is! FormData &&
+        !options.headers.containsKey(ApiConstants.contentType)) {
       options.headers[ApiConstants.contentType] =
           ApiConstants.applicationJson;
     }

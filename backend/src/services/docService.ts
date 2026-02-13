@@ -20,6 +20,8 @@ export interface BrandConfig {
   logo_watermark_url?: string;
 }
 
+export type TemplateDesign = 'plain' | 'classic' | 'executive';
+
 export interface ReportPayload {
   report_type: ReportType;
   report_format: ReportFormat;
@@ -29,6 +31,7 @@ export interface ReportPayload {
   summary: Record<string, any>;
   company_name?: string;
   brand_config?: BrandConfig;
+  template_design?: TemplateDesign;
 }
 
 export interface GeneratedReport {

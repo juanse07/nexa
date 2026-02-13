@@ -8,7 +8,7 @@ import { ClientModel } from '../models/client';
 import { UserModel } from '../models/user';
 import { FlaggedAttendanceModel } from '../models/flaggedAttendance';
 import { resolveManagerForRequest } from '../utils/manager';
-import { generateReport, ReportFormat, BrandConfig } from '../services/docService';
+import { generateReport, ReportFormat, BrandConfig, TemplateDesign } from '../services/docService';
 import { ManagerModel } from '../models/manager';
 import { getPresignedUrl, extractKeyFromUrl } from '../services/storageService';
 
@@ -1235,6 +1235,7 @@ router.get('/exports/team-report', requireAuth, async (req: Request, res: Respon
         return res.send(csvRows.join('\n'));
       } else if (format === 'pdf' || format === 'docx' || format === 'xlsx') {
         const brandConfig = await buildBrandConfig(String(manager._id));
+        const templateDesign = (req.query.template_design as TemplateDesign) || undefined;
         const reportPayload = {
           report_type: 'payroll' as const,
           report_format: format as ReportFormat,
@@ -1243,6 +1244,7 @@ router.get('/exports/team-report', requireAuth, async (req: Request, res: Respon
           records,
           summary: payrollSummary,
           ...(brandConfig && { brand_config: brandConfig }),
+          ...(templateDesign && { template_design: templateDesign }),
         };
 
         const report = await generateReport(reportPayload, String(manager._id));
@@ -1325,6 +1327,7 @@ router.get('/exports/team-report', requireAuth, async (req: Request, res: Respon
         return res.send(csvRows.join('\n'));
       } else if (format === 'pdf' || format === 'docx' || format === 'xlsx') {
         const attendBrandConfig = await buildBrandConfig(String(manager._id));
+        const attendTemplateDesign = (req.query.template_design as TemplateDesign) || undefined;
         const reportPayload = {
           report_type: 'attendance' as const,
           report_format: format as ReportFormat,
@@ -1333,6 +1336,7 @@ router.get('/exports/team-report', requireAuth, async (req: Request, res: Respon
           records,
           summary: attendSummary,
           ...(attendBrandConfig && { brand_config: attendBrandConfig }),
+          ...(attendTemplateDesign && { template_design: attendTemplateDesign }),
         };
 
         const report = await generateReport(reportPayload, String(manager._id));
@@ -1376,6 +1380,7 @@ const aiAnalysisDocSchema = z.object({
     totalPayroll: z.number().optional(),
     fulfillmentRate: z.number().optional(),
   }).optional(),
+  template_design: z.enum(['plain', 'classic', 'executive']).optional(),
 });
 
 /**
@@ -1394,7 +1399,7 @@ router.post('/statistics/manager/ai-analysis-doc', requireAuth, async (req: Requ
       return res.status(400).json({ message: 'Invalid request', errors: parsed.error.issues });
     }
 
-    const { analysis, format, period, summary } = parsed.data;
+    const { analysis, format, period, summary, template_design } = parsed.data;
 
     console.log(`[statistics/ai-analysis-doc] Generating ${format} for manager ${manager._id}`);
 
@@ -1407,6 +1412,7 @@ router.post('/statistics/manager/ai-analysis-doc', requireAuth, async (req: Requ
       records: [{ content: analysis }],
       summary: summary || {},
       ...(aiBrandConfig && { brand_config: aiBrandConfig }),
+      ...(template_design && { template_design }),
     };
 
     const report = await generateReport(reportPayload, String(manager._id));
@@ -1429,6 +1435,7 @@ router.post('/statistics/manager/ai-analysis-doc', requireAuth, async (req: Requ
 
 const workingHoursSchema = z.object({
   format: z.enum(['pdf', 'docx']).default('pdf'),
+  template_design: z.enum(['plain', 'classic', 'executive']).optional(),
 });
 
 /**
@@ -1449,7 +1456,7 @@ router.post('/events/:eventId/working-hours-sheet', requireAuth, async (req: Req
       return res.status(400).json({ message: 'Invalid request', errors: parsed.error.issues });
     }
 
-    const { format } = parsed.data;
+    const { format, template_design: whTemplateDesign } = parsed.data;
 
     // Fetch the event
     const event = await EventModel.findOne({
@@ -1571,6 +1578,7 @@ router.post('/events/:eventId/working-hours-sheet', requireAuth, async (req: Req
         notes: (event as any).notes || '',
       },
       ...(whBrandConfig && { brand_config: whBrandConfig }),
+      ...(whTemplateDesign && { template_design: whTemplateDesign }),
     };
 
     const report = await generateReport(reportPayload, String(manager._id));

@@ -12,6 +12,7 @@ class BrandProfile {
     this.secondaryColor,
     this.accentColor,
     this.neutralColor,
+    this.preferredDocDesign,
     this.createdAt,
     this.updatedAt,
   });
@@ -27,6 +28,7 @@ class BrandProfile {
       secondaryColor: json['secondaryColor'] as String?,
       accentColor: json['accentColor'] as String?,
       neutralColor: json['neutralColor'] as String?,
+      preferredDocDesign: json['preferredDocDesign'] as String?,
       createdAt: json['createdAt'] != null ? DateTime.tryParse(json['createdAt'].toString()) : null,
       updatedAt: json['updatedAt'] != null ? DateTime.tryParse(json['updatedAt'].toString()) : null,
     );
@@ -41,6 +43,7 @@ class BrandProfile {
   final String? secondaryColor;
   final String? accentColor;
   final String? neutralColor;
+  final String? preferredDocDesign;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -55,6 +58,7 @@ class BrandProfile {
       if (secondaryColor != null) 'secondaryColor': secondaryColor,
       if (accentColor != null) 'accentColor': accentColor,
       if (neutralColor != null) 'neutralColor': neutralColor,
+      if (preferredDocDesign != null) 'preferredDocDesign': preferredDocDesign,
     };
   }
 
@@ -87,6 +91,7 @@ class BrandProfile {
     String? secondaryColor,
     String? accentColor,
     String? neutralColor,
+    String? preferredDocDesign,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -100,6 +105,7 @@ class BrandProfile {
       secondaryColor: secondaryColor ?? this.secondaryColor,
       accentColor: accentColor ?? this.accentColor,
       neutralColor: neutralColor ?? this.neutralColor,
+      preferredDocDesign: preferredDocDesign ?? this.preferredDocDesign,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

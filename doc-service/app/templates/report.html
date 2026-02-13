@@ -33,14 +33,54 @@
     .summary-row td { font-weight: 700; background: #f1f5f9; border-top: 2px solid var(--brand-secondary); }
     .text-right { text-align: right; }
     .footer { margin-top: 30px; padding-top: 12px; border-top: 1px solid #e2e8f0; font-size: 9px; color: #94a3b8; text-align: center; }
+
+    {% if template_design == 'plain' %}
+    /* Plain theme overrides */
+    .header { background: #ffffff; color: #1a1a1a; border-bottom: 1px solid #e2e8f0; }
+    .header h1 { color: #1a1a1a; }
+    .header .subtitle { color: #64748b; opacity: 1; }
+    .accent-divider { display: none; }
+    tr:nth-child(even) { background: transparent; }
+    th { background: #f9fafb; color: #374151; border-bottom: 2px solid #d1d5db; }
+    td { border-bottom: 1px solid #e5e7eb; }
+    .meta { background: #f9fafb; border-color: #e5e7eb; }
+    .meta-value { color: #374151; }
+    .summary-row td { background: #f9fafb; border-top: 2px solid #9ca3af; }
+    .header-logo { display: none; }
+    {% endif %}
+
+    {% if template_design == 'executive' %}
+    /* Executive theme overrides */
+    .header { background: #ffffff; color: #1a1a1a; padding-bottom: 16px; border-top: 4px solid var(--brand-accent); }
+    .header h1 { color: var(--brand-primary); font-size: 24px; }
+    .header .subtitle { color: #64748b; opacity: 1; }
+    .accent-divider { display: none; }
+    th { background: #f8fafc; color: var(--brand-primary); border-bottom: 2px solid #e2e8f0; }
+    tr:nth-child(even) { background: #fafbfc; }
+    .meta { background: #ffffff; border-left: 3px solid var(--brand-accent); border-radius: 0 6px 6px 0; }
+    .meta-value { color: var(--brand-primary); }
+    .summary-row td { background: #f8fafc; border-top: 2px solid var(--brand-primary); }
+    {% endif %}
   </style>
 </head>
 <body>
+  {% if template_design == 'executive' and logo_header_url %}
+  <div class="header">
+    <div style="display:flex;align-items:center;gap:16px;">
+      <img class="header-logo" src="{{ logo_header_url }}" alt="Logo">
+      <div>
+        <h1>{{ title }}</h1>
+        <div class="subtitle">{{ company_name }} &mdash; {{ period_label }}</div>
+      </div>
+    </div>
+  </div>
+  {% else %}
   <div class="header">
     {% if logo_header_url %}<img class="header-logo" src="{{ logo_header_url }}" alt="Logo">{% endif %}
     <h1>{{ title }}</h1>
     <div class="subtitle">{{ company_name }} &mdash; {{ period_label }}</div>
   </div>
+  {% endif %}
   <div class="accent-divider"></div>
 
   <div class="meta">

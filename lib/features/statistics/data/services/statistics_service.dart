@@ -172,6 +172,7 @@ class StatisticsService {
     String period = 'month',
     DateTime? startDate,
     DateTime? endDate,
+    String? templateDesign,
   }) async {
     try {
       debugPrint('[StatisticsService] getExportDataForPdf called');
@@ -186,6 +187,9 @@ class StatisticsService {
       if (period == 'custom' && startDate != null && endDate != null) {
         queryParams['startDate'] = startDate.toIso8601String();
         queryParams['endDate'] = endDate.toIso8601String();
+      }
+      if (templateDesign != null) {
+        queryParams['template_design'] = templateDesign;
       }
 
       final uri = Uri.parse('$_apiUrl/exports/team-report')
@@ -310,6 +314,7 @@ ${complianceInfo.isNotEmpty ? 'Flags by Type:\n$complianceInfo' : '- No flags th
     required String analysis,
     required ManagerStatistics statistics,
     String format = 'pdf',
+    String? templateDesign,
   }) async {
     final headers = await _getHeaders();
     final s = statistics.summary;
@@ -328,6 +333,7 @@ ${complianceInfo.isNotEmpty ? 'Flags by Type:\n$complianceInfo' : '- No flags th
         'totalPayroll': s.totalPayroll,
         'fulfillmentRate': s.fulfillmentRate,
       },
+      if (templateDesign != null) 'template_design': templateDesign,
     });
 
     debugPrint('[StatisticsService] Generating AI analysis $format...');

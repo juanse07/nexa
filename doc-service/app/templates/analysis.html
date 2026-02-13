@@ -36,14 +36,48 @@
     .content strong { color: var(--brand-primary); }
     .content em { color: #475569; }
     .footer { margin-top: 30px; padding-top: 12px; border-top: 1px solid #e2e8f0; font-size: 9px; color: #94a3b8; text-align: center; }
+
+    {% if template_design == 'plain' %}
+    .header { background: #ffffff; color: #1a1a1a; border-bottom: 1px solid #e2e8f0; }
+    .header h1 { color: #1a1a1a; }
+    .header .subtitle { color: #64748b; opacity: 1; }
+    .accent-divider { display: none; }
+    .meta { background: #f9fafb; border-color: #e5e7eb; }
+    .meta-value { color: #374151; }
+    .content strong { color: #1a1a1a; }
+    .content h1 { color: #1a1a1a; }
+    .content h2 { color: #374151; }
+    .header-logo { display: none; }
+    {% endif %}
+
+    {% if template_design == 'executive' %}
+    .header { background: #ffffff; color: #1a1a1a; padding-bottom: 16px; border-top: 4px solid var(--brand-accent); }
+    .header h1 { color: var(--brand-primary); font-size: 24px; }
+    .header .subtitle { color: #64748b; opacity: 1; }
+    .accent-divider { display: none; }
+    .meta { background: #ffffff; border-left: 3px solid var(--brand-accent); border-radius: 0 6px 6px 0; }
+    .meta-value { color: var(--brand-primary); }
+    {% endif %}
   </style>
 </head>
 <body>
+  {% if template_design == 'executive' and logo_header_url %}
+  <div class="header">
+    <div style="display:flex;align-items:center;gap:16px;">
+      <img class="header-logo" src="{{ logo_header_url }}" alt="Logo">
+      <div>
+        <h1>{{ title }}</h1>
+        <div class="subtitle">{{ company_name }} &mdash; {{ period_label }}</div>
+      </div>
+    </div>
+  </div>
+  {% else %}
   <div class="header">
     {% if logo_header_url %}<img class="header-logo" src="{{ logo_header_url }}" alt="Logo">{% endif %}
     <h1>{{ title }}</h1>
     <div class="subtitle">{{ company_name }} &mdash; {{ period_label }}</div>
   </div>
+  {% endif %}
   <div class="accent-divider"></div>
 
   {% if summary_items %}

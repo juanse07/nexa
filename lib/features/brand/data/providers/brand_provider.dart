@@ -181,6 +181,35 @@ class BrandProvider with ChangeNotifier {
     }
   }
 
+  /// Get the preferred document design (defaults to 'classic').
+  String get preferredDocDesign => _profile?.preferredDocDesign ?? 'classic';
+
+  /// Save preferred document design template.
+  Future<bool> setDocDesign(String design) async {
+    _error = null;
+
+    try {
+      await _apiClient.put<Map<String, dynamic>>(
+        '/brand/doc-design',
+        data: {'design': design},
+      );
+
+      if (_profile != null) {
+        _profile = _profile!.copyWith(preferredDocDesign: design);
+      } else {
+        _profile = BrandProfile(preferredDocDesign: design);
+      }
+
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = 'Failed to save design preference';
+      debugPrint('[BrandProvider] setDocDesign error: $e');
+      notifyListeners();
+      return false;
+    }
+  }
+
   /// Delete the brand profile entirely.
   Future<bool> deleteBrandProfile() async {
     _state = BrandLoadingState.deleting;

@@ -53,14 +53,52 @@
     .badge-clocked { background: #dcfce7; color: #166534; }
     .badge-pending { background: #fef3c7; color: #92400e; }
     .badge-none { background: #f1f5f9; color: #64748b; }
+
+    {% if template_design == 'plain' %}
+    .header { background: #ffffff; color: #1a1a1a; border-bottom: 1px solid #e2e8f0; }
+    .header h1 { color: #1a1a1a; }
+    .header .subtitle { color: #64748b; opacity: 1; }
+    .accent-divider { display: none; }
+    th { background: #f9fafb; color: #374151; border-bottom: 2px solid #d1d5db; }
+    tr:nth-child(even) { background: transparent; }
+    td { border-bottom: 1px solid #e5e7eb; }
+    .event-info { background: #f9fafb; border-color: #e5e7eb; }
+    .info-value { color: #374151; }
+    .totals-row td { border-top: 2px solid #9ca3af; }
+    .header-logo { display: none; }
+    {% endif %}
+
+    {% if template_design == 'executive' %}
+    .header { background: #ffffff; color: #1a1a1a; padding-bottom: 12px; border-top: 4px solid var(--brand-accent); }
+    .header h1 { color: var(--brand-primary); }
+    .header .subtitle { color: #64748b; opacity: 1; }
+    .accent-divider { display: none; }
+    th { background: #f8fafc; color: var(--brand-primary); }
+    tr:nth-child(even) { background: #fafbfc; }
+    .event-info { background: #ffffff; border-left: 3px solid var(--brand-accent); border-radius: 0 6px 6px 0; }
+    .info-value { color: var(--brand-primary); }
+    .totals-row td { border-top: 2px solid var(--brand-primary); }
+    {% endif %}
   </style>
 </head>
 <body>
+  {% if template_design == 'executive' and logo_header_url %}
+  <div class="header">
+    <div style="display:flex;align-items:center;gap:16px;">
+      <img class="header-logo" src="{{ logo_header_url }}" alt="Logo">
+      <div>
+        <h1>{{ title }}</h1>
+        <div class="subtitle">{{ company_name }} &mdash; Working Hours Sheet</div>
+      </div>
+    </div>
+  </div>
+  {% else %}
   <div class="header">
     {% if logo_header_url %}<img class="header-logo" src="{{ logo_header_url }}" alt="Logo">{% endif %}
     <h1>{{ title }}</h1>
     <div class="subtitle">{{ company_name }} &mdash; Working Hours Sheet</div>
   </div>
+  {% endif %}
   <div class="accent-divider"></div>
 
   <div class="event-info">

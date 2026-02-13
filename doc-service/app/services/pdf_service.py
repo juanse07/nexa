@@ -9,7 +9,7 @@ import markdown
 from jinja2 import Environment, FileSystemLoader
 from weasyprint import HTML
 
-from app.models.schemas import BrandConfig, ReportRequest, ReportType
+from app.models.schemas import BrandConfig, ReportRequest, ReportType, TemplateDesign
 
 _TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "..", "templates")
 _env = Environment(loader=FileSystemLoader(_TEMPLATE_DIR), autoescape=True)
@@ -18,13 +18,16 @@ _env = Environment(loader=FileSystemLoader(_TEMPLATE_DIR), autoescape=True)
 def _brand_context(req: ReportRequest) -> dict:
     """Extract brand CSS variables from request, falling back to defaults."""
     bc = req.brand_config or BrandConfig()
+    design = req.template_design
     ctx = {
         "brand_primary": bc.primary_color,
         "brand_secondary": bc.secondary_color,
         "brand_accent": bc.accent_color,
         "brand_neutral": bc.neutral_color,
+        "template_design": design.value,
     }
-    if bc.logo_header_url:
+    # Plain design suppresses logo
+    if bc.logo_header_url and design != TemplateDesign.PLAIN:
         ctx["logo_header_url"] = bc.logo_header_url
     return ctx
 

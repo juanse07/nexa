@@ -12,6 +12,12 @@ class ReportFormat(str, Enum):
     XLSX = "xlsx"
 
 
+class TemplateDesign(str, Enum):
+    PLAIN = "plain"
+    CLASSIC = "classic"
+    EXECUTIVE = "executive"
+
+
 class ReportType(str, Enum):
     STAFF_SHIFTS = "staff-shifts"
     PAYROLL = "payroll"
@@ -79,6 +85,7 @@ class ReportRequest(BaseModel):
     summary: dict[str, Any] = {}
     company_name: str = "Nexa"
     brand_config: BrandConfig | None = None
+    template_design: TemplateDesign = TemplateDesign.CLASSIC
 
 
 class ReportResponse(BaseModel):

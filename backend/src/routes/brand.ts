@@ -55,8 +55,9 @@ router.post('/logo', requireAuth, upload.single('logo'), async (req, res) => {
     // Extract colors via AI vision
     const colors = await extractColorsFromLogo(req.file.buffer);
 
-    // Save to manager
+    // Save to manager (preserve preferredDocDesign if it was set)
     const now = new Date();
+    const existingDesign = manager.brandProfile?.preferredDocDesign;
     manager.brandProfile = {
       logoOriginalUrl: logoResult.originalUrl,
       logoHeaderUrl: logoResult.headerUrl,
@@ -67,6 +68,7 @@ router.post('/logo', requireAuth, upload.single('logo'), async (req, res) => {
       secondaryColor: colors.secondaryColor,
       accentColor: colors.accentColor,
       neutralColor: colors.neutralColor,
+      preferredDocDesign: existingDesign || 'classic',
       createdAt: manager.brandProfile?.createdAt || now,
       updatedAt: now,
     };
@@ -120,6 +122,42 @@ router.put('/colors', requireAuth, async (req, res) => {
   }
 });
 
+// Zod schema for doc design preference
+const DocDesignSchema = z.object({
+  design: z.enum(['plain', 'classic', 'executive']),
+});
+
+/**
+ * PUT /brand/doc-design
+ * Save preferred document design template.
+ */
+router.put('/doc-design', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+
+    const parsed = DocDesignSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Invalid design', errors: parsed.error.issues });
+    }
+
+    if (!manager.brandProfile) {
+      manager.brandProfile = { createdAt: new Date(), updatedAt: new Date() };
+    }
+
+    manager.brandProfile.preferredDocDesign = parsed.data.design;
+    manager.brandProfile.updatedAt = new Date();
+    await manager.save();
+
+    return res.json({
+      message: 'Document design updated',
+      preferredDocDesign: parsed.data.design,
+    });
+  } catch (err: any) {
+    console.error('[brand/doc-design] Error:', err);
+    return res.status(500).json({ message: 'Failed to update design', error: err.message });
+  }
+});
+
 /**
  * GET /brand/profile
  * Get current brand profile.
@@ -132,7 +170,9 @@ router.get('/profile', requireAuth, async (req, res) => {
       return res.json({ brandProfile: null });
     }
 
-    const profile = { ...manager.brandProfile };
+    // Use toObject() for clean serialization (avoids Mongoose internal properties)
+    const fullDoc = manager.toObject();
+    const profile = fullDoc.brandProfile;
 
     return res.json({ brandProfile: profile });
   } catch (err: any) {

@@ -12,7 +12,7 @@ from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Pt, RGBColor
 
-from app.models.schemas import BrandConfig, ReportRequest, ReportType
+from app.models.schemas import BrandConfig, ReportRequest, ReportType, TemplateDesign
 
 _HEADER_BG = RGBColor(0x1E, 0x29, 0x3B)
 _HEADER_FG = RGBColor(0xFF, 0xFF, 0xFF)
@@ -26,16 +26,46 @@ def _hex_to_rgb(hex_color: str) -> RGBColor:
     return RGBColor(int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
 
 
+def _get_theme_config(req: ReportRequest) -> dict:
+    """Return theme-aware styling config based on template_design."""
+    bc = req.brand_config or BrandConfig()
+    design = req.template_design
+
+    if design == TemplateDesign.PLAIN:
+        return {
+            "header_bg": RGBColor(0xF9, 0xFA, 0xFB),
+            "header_fg": RGBColor(0x37, 0x41, 0x51),
+            "alt_row_bg": _ALT_ROW_BG,
+            "border_color": _BORDER_COLOR,
+            "secondary": RGBColor(0x37, 0x41, 0x51),
+            "show_logo": False,
+            "use_zebra": False,
+        }
+    elif design == TemplateDesign.EXECUTIVE:
+        return {
+            "header_bg": RGBColor(0xF8, 0xFA, 0xFC),
+            "header_fg": _hex_to_rgb(bc.primary_color),
+            "alt_row_bg": RGBColor(0xFA, 0xFB, 0xFC),
+            "border_color": _BORDER_COLOR,
+            "secondary": _hex_to_rgb(bc.secondary_color),
+            "show_logo": True,
+            "use_zebra": True,
+        }
+    else:  # classic
+        return {
+            "header_bg": _hex_to_rgb(bc.primary_color),
+            "header_fg": _HEADER_FG,
+            "alt_row_bg": _hex_to_rgb(bc.neutral_color),
+            "border_color": _BORDER_COLOR,
+            "secondary": _hex_to_rgb(bc.secondary_color),
+            "show_logo": True,
+            "use_zebra": True,
+        }
+
+
 def _get_colors(req: ReportRequest) -> dict[str, RGBColor]:
     """Return color dict from brand_config or fall back to module defaults."""
-    bc = req.brand_config or BrandConfig()
-    return {
-        "header_bg": _hex_to_rgb(bc.primary_color),
-        "header_fg": _HEADER_FG,
-        "alt_row_bg": _hex_to_rgb(bc.neutral_color),
-        "border_color": _BORDER_COLOR,
-        "secondary": _hex_to_rgb(bc.secondary_color),
-    }
+    return _get_theme_config(req)
 
 
 def _set_cell_shading(cell, color: RGBColor):
@@ -62,15 +92,16 @@ def _style_header_row(row, columns: list[str], colors: dict[str, RGBColor] | Non
         _set_cell_shading(cell, bg)
 
 
-def _add_data_row(table, values: list[str], row_idx: int, colors: dict[str, RGBColor] | None = None):
+def _add_data_row(table, values: list[str], row_idx: int, colors: dict | None = None):
     alt_bg = (colors or {}).get("alt_row_bg", _ALT_ROW_BG)
+    use_zebra = (colors or {}).get("use_zebra", True)
     row = table.add_row()
     for i, cell in enumerate(row.cells):
         cell.text = str(values[i])
         for p in cell.paragraphs:
             for run in p.runs:
                 run.font.size = Pt(9)
-    if row_idx % 2 == 0:
+    if use_zebra and row_idx % 2 == 0:
         for cell in row.cells:
             _set_cell_shading(cell, alt_bg)
     return row
@@ -354,7 +385,7 @@ def _add_logo(doc: Document, logo_url: str) -> None:
 
 def create_report(req: ReportRequest, output_path: str) -> None:
     colors = _get_colors(req)
-    header_bg = colors["header_bg"]
+    theme = _get_theme_config(req)
 
     # Working hours uses its own builder
     if req.report_type == ReportType.WORKING_HOURS:
@@ -369,15 +400,16 @@ def create_report(req: ReportRequest, output_path: str) -> None:
 
     doc = Document()
 
-    # Logo
+    # Logo (gated on theme)
     bc = req.brand_config
-    if bc and bc.logo_header_url:
+    if bc and bc.logo_header_url and theme.get("show_logo", True):
         _add_logo(doc, bc.logo_header_url)
 
-    # Title
+    # Title — use primary color for classic/executive, dark for plain
+    title_color = _hex_to_rgb((bc or BrandConfig()).primary_color) if req.template_design != TemplateDesign.PLAIN else RGBColor(0x1A, 0x1A, 0x1A)
     title_para = doc.add_heading(req.title, level=1)
     for run in title_para.runs:
-        run.font.color.rgb = header_bg
+        run.font.color.rgb = title_color
 
     # Subtitle with period
     subtitle = doc.add_paragraph()

@@ -7,6 +7,7 @@ import 'package:nexa/features/brand/presentation/widgets/brand_color_picker_dial
 // TODO: Restore these imports when re-enabling Pro subscription gating
 // import 'package:nexa/core/di/injection.dart';
 // import 'package:nexa/features/subscription/data/services/subscription_service.dart';
+import 'package:nexa/features/statistics/presentation/widgets/doc_design_picker.dart';
 import 'package:nexa/features/subscription/presentation/pages/subscription_paywall_page.dart';
 import 'package:provider/provider.dart';
 
@@ -209,6 +210,17 @@ class _BrandCustomizationCardState extends State<BrandCustomizationCard> {
     );
   }
 
+  void _onDesignSelected(BrandProvider provider, String design) {
+    if (!_isPro && design != 'plain') {
+      Navigator.push<void>(
+        context,
+        MaterialPageRoute<void>(builder: (_) => const SubscriptionPaywallPage()),
+      );
+      return;
+    }
+    provider.setDocDesign(design);
+  }
+
   /// Pro content: upload zone or brand profile display.
   Widget _buildProContent(ThemeData theme) {
     return Consumer<BrandProvider>(
@@ -239,6 +251,28 @@ class _BrandCustomizationCardState extends State<BrandCustomizationCard> {
               _buildUploadZone(theme)
             else
               _buildBrandDisplay(theme, provider),
+
+            // Document Style picker — always shown (works with or without logo)
+            if (!isLoading && !isUploading) ...[
+              const SizedBox(height: 20),
+              Text(
+                'Document Style',
+                style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Choose how exported documents look',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 12),
+              DocDesignPicker(
+                selected: provider.preferredDocDesign,
+                isPro: _isPro,
+                onSelected: (design) => _onDesignSelected(provider, design),
+              ),
+            ],
           ],
         );
       },

@@ -3,8 +3,10 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../shared/widgets/web_content_wrapper.dart';
+import '../../brand/data/providers/brand_provider.dart';
 import '../data/models/statistics_models.dart';
 import '../data/services/statistics_service.dart';
 import 'widgets/stats_hero_header.dart';
@@ -334,11 +336,18 @@ class _AIAnalysisSheetState extends State<_AIAnalysisSheet> {
     if (_analysis == null) return;
     setState(() => _generating = true);
 
+    // Read preferred design from BrandProvider
+    String? templateDesign;
+    try {
+      templateDesign = context.read<BrandProvider>().preferredDocDesign;
+    } catch (_) {}
+
     try {
       final url = await StatisticsService.generateAnalysisDoc(
         analysis: _analysis!,
         statistics: widget.statistics,
         format: format,
+        templateDesign: templateDesign,
       );
 
       if (mounted) {
