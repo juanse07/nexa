@@ -44,6 +44,7 @@ class DocDesignPicker extends StatelessWidget {
               right: d.key != 'executive' ? 10 : 0,
             ),
             child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
               onTap: locked ? null : () => onSelected(d.key),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),

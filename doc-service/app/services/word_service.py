@@ -16,8 +16,8 @@ from app.models.schemas import BrandConfig, ReportRequest, ReportType, TemplateD
 
 _HEADER_BG = RGBColor(0x1E, 0x29, 0x3B)
 _HEADER_FG = RGBColor(0xFF, 0xFF, 0xFF)
-_ALT_ROW_BG = RGBColor(0xF8, 0xFA, 0xFC)
-_BORDER_COLOR = RGBColor(0xCB, 0xD5, 0xE1)
+_ALT_ROW_BG = RGBColor(0xF8, 0xF9, 0xFA)  # Fixed light gray — never brand-neutral
+_BORDER_COLOR = RGBColor(0xE5, 0xE7, 0xEB)  # Thinner, lighter borders
 
 
 def _hex_to_rgb(hex_color: str) -> RGBColor:
@@ -51,11 +51,11 @@ def _get_theme_config(req: ReportRequest) -> dict:
             "show_logo": True,
             "use_zebra": True,
         }
-    else:  # classic
+    else:  # classic — uses fixed light gray for zebra, NOT brand-neutral
         return {
             "header_bg": _hex_to_rgb(bc.primary_color),
             "header_fg": _HEADER_FG,
-            "alt_row_bg": _hex_to_rgb(bc.neutral_color),
+            "alt_row_bg": _ALT_ROW_BG,
             "border_color": _BORDER_COLOR,
             "secondary": _hex_to_rgb(bc.secondary_color),
             "show_logo": True,

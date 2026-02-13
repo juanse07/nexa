@@ -32,11 +32,11 @@ def _get_brand_colors(req: ReportRequest) -> dict[str, str]:
             "header_fg": bc.primary_color.upper(),
             "use_zebra": True,
         }
-    else:  # classic
+    else:  # classic — fixed light gray for zebra, NOT brand-neutral
         return {
             "primary": bc.primary_color.upper(),
             "secondary": bc.secondary_color.upper(),
-            "neutral": bc.neutral_color.upper(),
+            "neutral": "#F8F9FA",
             "header_bg": bc.primary_color.upper(),
             "header_fg": "#FFFFFF",
             "use_zebra": True,
@@ -195,8 +195,8 @@ def _style_sheet(workbook, worksheet, df: pd.DataFrame, bc: dict[str, str] | Non
             "font_size": 10,
             "font_color": header_fg,
             "bg_color": header_bg,
-            "border": 1,
-            "border_color": "#CBD5E1",
+            "bottom": 1,
+            "bottom_color": "#E5E7EB",
             "text_wrap": True,
         }
     )

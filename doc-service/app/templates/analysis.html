@@ -8,26 +8,26 @@
       --brand-primary: {{ brand_primary | default('#1e293b') }};
       --brand-secondary: {{ brand_secondary | default('#334155') }};
       --brand-accent: {{ brand_accent | default('#3b82f6') }};
-      --brand-neutral: {{ brand_neutral | default('#f8fafc') }};
     }
     @page {
       size: A4;
       margin: 2cm;
-      @bottom-center { content: "Page " counter(page) " of " counter(pages); font-size: 9px; color: #888; }
+      @bottom-center { content: "Page " counter(page) " of " counter(pages); font-size: 9px; color: #94a3b8; }
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1a1a1a; font-size: 12px; line-height: 1.6; }
+
     .header { background: var(--brand-primary); color: #fff; padding: 24px 32px; margin: -2cm -2cm 0 -2cm; }
     .header h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
     .header .subtitle { font-size: 12px; opacity: 0.85; }
     .header-logo { max-height: 40px; max-width: 160px; margin-bottom: 8px; }
-    .accent-divider { height: 3px; background: var(--brand-accent); margin: 0 -2cm 24px -2cm; }
-    .meta { display: flex; justify-content: space-between; margin-bottom: 24px; padding: 12px 16px; background: var(--brand-neutral); border-radius: 6px; border: 1px solid #e2e8f0; }
+    .accent-divider { height: 2px; background: var(--brand-accent); margin: 0 -2cm 24px -2cm; }
+    .meta { display: flex; justify-content: space-between; margin-bottom: 24px; padding: 12px 16px; background: #f8f9fb; border-radius: 6px; border: 0.5px solid #e5e7eb; }
     .meta-item { text-align: center; }
     .meta-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; }
     .meta-value { font-size: 16px; font-weight: 700; color: var(--brand-primary); }
     .content { padding: 0; }
-    .content h1 { font-size: 18px; font-weight: 700; color: var(--brand-primary); margin: 20px 0 8px 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 4px; }
+    .content h1 { font-size: 18px; font-weight: 700; color: var(--brand-primary); margin: 20px 0 8px 0; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
     .content h2 { font-size: 15px; font-weight: 600; color: var(--brand-secondary); margin: 16px 0 6px 0; }
     .content h3 { font-size: 13px; font-weight: 600; color: #475569; margin: 12px 0 4px 0; }
     .content p { margin: 6px 0; font-size: 11.5px; line-height: 1.7; color: #374151; }
@@ -35,28 +35,29 @@
     .content li { margin: 3px 0; font-size: 11.5px; line-height: 1.6; color: #374151; }
     .content strong { color: var(--brand-primary); }
     .content em { color: #475569; }
-    .footer { margin-top: 30px; padding-top: 12px; border-top: 1px solid #e2e8f0; font-size: 9px; color: #94a3b8; text-align: center; }
+    .footer { margin-top: 30px; padding-top: 12px; border-top: 0.5px solid #e5e7eb; font-size: 9px; color: #94a3b8; text-align: center; }
 
     {% if template_design == 'plain' %}
-    .header { background: #ffffff; color: #1a1a1a; border-bottom: 1px solid #e2e8f0; }
+    .header { background: #ffffff; color: #1a1a1a; border-bottom: 0.5px solid #d1d5db; }
     .header h1 { color: #1a1a1a; }
-    .header .subtitle { color: #64748b; opacity: 1; }
+    .header .subtitle { color: #6b7280; opacity: 1; }
     .accent-divider { display: none; }
     .meta { background: #f9fafb; border-color: #e5e7eb; }
     .meta-value { color: #374151; }
     .content strong { color: #1a1a1a; }
-    .content h1 { color: #1a1a1a; }
+    .content h1 { color: #1a1a1a; border-bottom-color: #d1d5db; }
     .content h2 { color: #374151; }
     .header-logo { display: none; }
     {% endif %}
 
     {% if template_design == 'executive' %}
-    .header { background: #ffffff; color: #1a1a1a; padding-bottom: 16px; border-top: 4px solid var(--brand-accent); }
-    .header h1 { color: var(--brand-primary); font-size: 24px; }
-    .header .subtitle { color: #64748b; opacity: 1; }
+    .header { background: #ffffff; color: #1a1a1a; padding-bottom: 16px; border-top: 3px solid var(--brand-accent); }
+    .header h1 { color: var(--brand-primary); font-size: 24px; font-weight: 600; }
+    .header .subtitle { color: #6b7280; opacity: 1; font-size: 11px; }
     .accent-divider { display: none; }
-    .meta { background: #ffffff; border-left: 3px solid var(--brand-accent); border-radius: 0 6px 6px 0; }
+    .meta { background: #ffffff; border: 0.5px solid #e5e7eb; border-left: 3px solid var(--brand-accent); border-radius: 0 6px 6px 0; }
     .meta-value { color: var(--brand-primary); }
+    .content h1 { border-bottom: 1px solid #e2e8f0; }
     {% endif %}
   </style>
 </head>

@@ -8,23 +8,23 @@
       --brand-primary: {{ brand_primary | default('#1e293b') }};
       --brand-secondary: {{ brand_secondary | default('#334155') }};
       --brand-accent: {{ brand_accent | default('#3b82f6') }};
-      --brand-neutral: {{ brand_neutral | default('#f8fafc') }};
     }
     @page {
       size: A4 landscape;
       margin: 1.5cm;
-      @bottom-center { content: "Page " counter(page) " of " counter(pages); font-size: 8px; color: #888; }
+      @bottom-center { content: "Page " counter(page) " of " counter(pages); font-size: 8px; color: #94a3b8; }
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1a1a1a; font-size: 10px; line-height: 1.4; }
 
+    /* Classic (default) */
     .header { background: var(--brand-primary); color: #fff; padding: 16px 24px; margin: -1.5cm -1.5cm 0 -1.5cm; }
     .header h1 { font-size: 18px; font-weight: 700; margin-bottom: 2px; }
     .header .subtitle { font-size: 11px; opacity: 0.85; }
     .header-logo { max-height: 36px; max-width: 140px; margin-bottom: 6px; }
-    .accent-divider { height: 3px; background: var(--brand-accent); margin: 0 -1.5cm 16px -1.5cm; }
+    .accent-divider { height: 2px; background: var(--brand-accent); margin: 0 -1.5cm 16px -1.5cm; }
 
-    .event-info { display: flex; justify-content: space-between; margin-bottom: 14px; padding: 10px 14px; background: var(--brand-neutral); border-radius: 6px; border: 1px solid #e2e8f0; }
+    .event-info { display: flex; justify-content: space-between; margin-bottom: 14px; padding: 10px 14px; background: #f8f9fb; border-radius: 6px; border: 0.5px solid #e5e7eb; }
     .event-info .info-block { }
     .info-label { font-size: 8px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin-bottom: 1px; }
     .info-value { font-size: 12px; font-weight: 600; color: var(--brand-primary); }
@@ -32,22 +32,22 @@
     table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
     th { background: var(--brand-primary); color: #fff; font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.4px; padding: 7px 6px; text-align: left; }
     th.center { text-align: center; }
-    td { padding: 10px 6px; border-bottom: 1px solid #cbd5e1; font-size: 9.5px; vertical-align: middle; }
-    tr:nth-child(even) { background: var(--brand-neutral); }
+    td { padding: 8px 6px; border-bottom: 0.5px solid #e5e7eb; font-size: 9.5px; vertical-align: middle; }
+    tr:nth-child(even) { background: #f8f9fa; }
     td.center { text-align: center; }
 
     .signature-cell { min-width: 80px; border-bottom: 1px dotted #94a3b8; }
     .break-cell { min-width: 50px; }
 
-    .totals-row td { font-weight: 700; background: #f1f5f9; border-top: 2px solid var(--brand-primary); }
+    .totals-row td { font-weight: 700; background: #f1f5f9; border-top: 1px solid var(--brand-primary); }
 
     .sign-off { margin-top: 24px; display: flex; justify-content: space-between; gap: 40px; }
     .sign-off-block { flex: 1; }
     .sign-off-label { font-size: 9px; color: #64748b; margin-bottom: 20px; }
-    .sign-off-line { border-bottom: 1px solid var(--brand-secondary); margin-bottom: 4px; height: 20px; }
+    .sign-off-line { border-bottom: 0.5px solid #94a3b8; margin-bottom: 4px; height: 20px; }
     .sign-off-hint { font-size: 8px; color: #94a3b8; }
 
-    .footer { margin-top: 20px; padding-top: 8px; border-top: 1px solid #e2e8f0; font-size: 8px; color: #94a3b8; text-align: center; }
+    .footer { margin-top: 20px; padding-top: 8px; border-top: 0.5px solid #e5e7eb; font-size: 8px; color: #94a3b8; text-align: center; }
 
     .badge { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 8px; font-weight: 600; }
     .badge-clocked { background: #dcfce7; color: #166534; }
@@ -55,29 +55,31 @@
     .badge-none { background: #f1f5f9; color: #64748b; }
 
     {% if template_design == 'plain' %}
-    .header { background: #ffffff; color: #1a1a1a; border-bottom: 1px solid #e2e8f0; }
+    /* Plain — minimal, hairline borders, no brand */
+    .header { background: #ffffff; color: #1a1a1a; border-bottom: 0.5px solid #d1d5db; }
     .header h1 { color: #1a1a1a; }
-    .header .subtitle { color: #64748b; opacity: 1; }
+    .header .subtitle { color: #6b7280; opacity: 1; }
     .accent-divider { display: none; }
-    th { background: #f9fafb; color: #374151; border-bottom: 2px solid #d1d5db; }
+    th { background: #f9fafb; color: #374151; border-bottom: 1px solid #d1d5db; }
     tr:nth-child(even) { background: transparent; }
-    td { border-bottom: 1px solid #e5e7eb; }
+    td { border-bottom: 0.5px solid #e5e7eb; }
     .event-info { background: #f9fafb; border-color: #e5e7eb; }
     .info-value { color: #374151; }
-    .totals-row td { border-top: 2px solid #9ca3af; }
+    .totals-row td { background: #f9fafb; border-top: 1px solid #9ca3af; }
     .header-logo { display: none; }
     {% endif %}
 
     {% if template_design == 'executive' %}
-    .header { background: #ffffff; color: #1a1a1a; padding-bottom: 12px; border-top: 4px solid var(--brand-accent); }
-    .header h1 { color: var(--brand-primary); }
-    .header .subtitle { color: #64748b; opacity: 1; }
+    /* Executive — refined, white header, accent top border */
+    .header { background: #ffffff; color: #1a1a1a; padding-bottom: 12px; border-top: 3px solid var(--brand-accent); }
+    .header h1 { color: var(--brand-primary); font-weight: 600; }
+    .header .subtitle { color: #6b7280; opacity: 1; }
     .accent-divider { display: none; }
-    th { background: #f8fafc; color: var(--brand-primary); }
+    th { background: #f8fafc; color: var(--brand-primary); font-weight: 600; border-bottom: 1px solid #e2e8f0; }
     tr:nth-child(even) { background: #fafbfc; }
-    .event-info { background: #ffffff; border-left: 3px solid var(--brand-accent); border-radius: 0 6px 6px 0; }
+    .event-info { background: #ffffff; border: 0.5px solid #e5e7eb; border-left: 3px solid var(--brand-accent); border-radius: 0 6px 6px 0; }
     .info-value { color: var(--brand-primary); }
-    .totals-row td { border-top: 2px solid var(--brand-primary); }
+    .totals-row td { background: #f8fafc; border-top: 1px solid var(--brand-primary); }
     {% endif %}
   </style>
 </head>
