@@ -215,9 +215,103 @@ def _build_ai_analysis(doc: Document, req: ReportRequest):
                     run.font.color.rgb = _HEADER_BG
 
 
+def _build_working_hours(doc: Document, req: ReportRequest):
+    """Build working hours sheet table for Word."""
+    # Event info block
+    summary = req.summary or {}
+    info_items = [
+        ("Client", summary.get("client", "")),
+        ("Event", summary.get("eventName", "")),
+        ("Date", summary.get("date", "")),
+        ("Schedule", f"{summary.get('startTime', '')} – {summary.get('endTime', '')}"),
+        ("Venue", summary.get("venue", "")),
+        ("Staff Count", str(len(req.records))),
+    ]
+    for label, value in info_items:
+        if not value or value == " – ":
+            continue
+        p = doc.add_paragraph()
+        run_label = p.add_run(f"{label}: ")
+        run_label.font.bold = True
+        run_label.font.size = Pt(10)
+        run_label.font.color.rgb = _HEADER_BG
+        run_val = p.add_run(str(value))
+        run_val.font.size = Pt(10)
+
+    doc.add_paragraph()
+
+    cols = ["#", "Staff Name", "Role", "Phone", "ID", "Sched In", "Sched Out",
+            "Clock In", "Clock Out", "Break", "Hours", "Signature"]
+    table = doc.add_table(rows=1, cols=len(cols))
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    _style_header_row(table.rows[0], cols)
+
+    total_hours = 0.0
+    for idx, r in enumerate(req.records):
+        hours = r.get("totalHours", 0)
+        total_hours += float(hours) if hours else 0
+        _add_data_row(
+            table,
+            [
+                str(idx + 1),
+                r.get("name", ""),
+                r.get("role", "Staff"),
+                r.get("phone", ""),
+                r.get("companyId", ""),
+                r.get("scheduledIn", ""),
+                r.get("scheduledOut", ""),
+                r.get("clockIn", ""),
+                r.get("clockOut", ""),
+                r.get("breakDuration", ""),
+                str(r.get("totalHours", "")),
+                "",  # Signature — blank for manual entry
+            ],
+            idx,
+        )
+
+    # Totals row
+    totals_row = table.add_row()
+    for i, cell in enumerate(totals_row.cells):
+        if i == 0:
+            cell.text = ""
+        elif i == 1:
+            cell.text = "TOTAL"
+            for p in cell.paragraphs:
+                for run in p.runs:
+                    run.font.bold = True
+                    run.font.size = Pt(9)
+        elif i == 10:
+            cell.text = str(round(total_hours, 1))
+            for p in cell.paragraphs:
+                for run in p.runs:
+                    run.font.bold = True
+                    run.font.size = Pt(9)
+        else:
+            cell.text = ""
+        _set_cell_shading(cell, RGBColor(0xF1, 0xF5, 0xF9))
+
+    # Sign-off section
+    doc.add_paragraph()
+    doc.add_paragraph()
+    p = doc.add_paragraph()
+    run = p.add_run("Manager Signature: ")
+    run.font.size = Pt(10)
+    run.font.bold = True
+    p.add_run("_" * 40).font.size = Pt(10)
+
+    p2 = doc.add_paragraph()
+    run2 = p2.add_run("Client Representative: ")
+    run2.font.size = Pt(10)
+    run2.font.bold = True
+    p2.add_run("_" * 40).font.size = Pt(10)
+
+
 def create_report(req: ReportRequest, output_path: str) -> None:
+    # Working hours uses its own builder
+    if req.report_type == ReportType.WORKING_HOURS:
+        builder = _build_working_hours
     # AI analysis uses a simplified prose builder
-    if req.report_type == ReportType.AI_ANALYSIS:
+    elif req.report_type == ReportType.AI_ANALYSIS:
         builder = _build_ai_analysis
     else:
         builder = _BUILDERS.get(req.report_type)

@@ -17,6 +17,7 @@ class ReportType(str, Enum):
     PAYROLL = "payroll"
     ATTENDANCE = "attendance"
     AI_ANALYSIS = "ai-analysis"
+    WORKING_HOURS = "working-hours"
 
 
 class Period(BaseModel):

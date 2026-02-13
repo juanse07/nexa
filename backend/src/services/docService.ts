@@ -9,7 +9,7 @@ const DOC_SERVICE_URL = process.env.DOC_SERVICE_URL || 'http://doc-service:5000'
 const DOC_SERVICE_SECRET = process.env.DOC_SERVICE_SECRET || '';
 
 export type ReportFormat = 'pdf' | 'docx' | 'xlsx';
-export type ReportType = 'staff-shifts' | 'payroll' | 'attendance' | 'ai-analysis';
+export type ReportType = 'staff-shifts' | 'payroll' | 'attendance' | 'ai-analysis' | 'working-hours';
 
 export interface ReportPayload {
   report_type: ReportType;

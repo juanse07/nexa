@@ -1,5 +1,12 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:http/http.dart' as http;
 import 'package:nexa/l10n/app_localizations.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../../core/config/environment.dart';
+import '../../../core/constants/storage_keys.dart';
 import '../../extraction/services/event_service.dart';
 import '../../extraction/presentation/pending_publish_screen.dart';
 import '../../extraction/presentation/pending_edit_screen.dart';
@@ -26,6 +33,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   final EventService _eventService = EventService();
   bool _isRemoving = false;
   bool _isUpdatingKeepOpen = false;
+  bool _isGeneratingSheet = false;
 
   @override
   void initState() {
@@ -269,13 +277,57 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             // Accepted Staff Section
             if (acceptedStaff.isNotEmpty) ...[
               const SizedBox(height: 24),
-              Text(
-                'Accepted Staff (${acceptedStaff.length})',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textDark,
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Accepted Staff (${acceptedStaff.length})',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textDark,
+                      ),
+                    ),
+                  ),
+                  if (_isGeneratingSheet)
+                    const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  else
+                    PopupMenuButton<String>(
+                      icon: const Icon(
+                        Icons.description_outlined,
+                        color: AppColors.techBlue,
+                        size: 22,
+                      ),
+                      tooltip: 'Working Hours Sheet',
+                      onSelected: _generateWorkingHoursSheet,
+                      itemBuilder: (ctx) => [
+                        const PopupMenuItem(
+                          value: 'pdf',
+                          child: Row(
+                            children: [
+                              Icon(Icons.picture_as_pdf, size: 18, color: Colors.red),
+                              SizedBox(width: 8),
+                              Text('Hours Sheet (PDF)'),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'docx',
+                          child: Row(
+                            children: [
+                              Icon(Icons.description, size: 18, color: Colors.blue),
+                              SizedBox(width: 8),
+                              Text('Hours Sheet (Word)'),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
               ),
               const SizedBox(height: 12),
               ...acceptedStaff.map((member) {
@@ -1087,6 +1139,56 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           behavior: SnackBarBehavior.floating,
         ),
       );
+    }
+  }
+
+  Future<void> _generateWorkingHoursSheet(String format) async {
+    final eventId = (event['_id'] ?? event['id'] ?? '').toString();
+    if (eventId.isEmpty) return;
+
+    setState(() => _isGeneratingSheet = true);
+
+    try {
+      const storage = FlutterSecureStorage();
+      final token = await storage.read(key: StorageKeys.accessToken);
+      final baseUrl = Environment.instance.getOrDefault(
+        'API_BASE_URL', 'https://api.nexapymesoft.com',
+      );
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/events/$eventId/working-hours-sheet'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'format': format}),
+      ).timeout(const Duration(seconds: 30));
+
+      if (!mounted) return;
+      setState(() => _isGeneratingSheet = false);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final url = data['url'] as String?;
+        if (url != null) {
+          final uri = Uri.parse(url);
+          if (await canLaunchUrl(uri)) {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+          }
+        }
+      } else {
+        final errMsg = jsonDecode(response.body)['message'] ?? 'Unknown error';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to generate: $errMsg')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isGeneratingSheet = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to generate sheet: $e')),
+        );
+      }
     }
   }
 

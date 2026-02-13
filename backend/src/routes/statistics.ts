@@ -1378,4 +1378,166 @@ router.post('/statistics/manager/ai-analysis-doc', requireAuth, async (req: Requ
   }
 });
 
+// ============================================================================
+// WORKING HOURS SHEET
+// ============================================================================
+
+const workingHoursSchema = z.object({
+  format: z.enum(['pdf', 'docx']).default('pdf'),
+});
+
+/**
+ * POST /events/:eventId/working-hours-sheet
+ * Generate a Working Hours Sheet PDF/DOCX for a specific event.
+ * Enriches accepted staff with User model data (phone, app_id).
+ */
+router.post('/events/:eventId/working-hours-sheet', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    if (!manager) {
+      return res.status(403).json({ message: 'Manager access required' });
+    }
+
+    const { eventId } = req.params;
+    const parsed = workingHoursSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Invalid request', errors: parsed.error.issues });
+    }
+
+    const { format } = parsed.data;
+
+    // Fetch the event
+    const event = await EventModel.findOne({
+      _id: eventId,
+      managerId: manager._id,
+    }).lean();
+
+    if (!event) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    const acceptedStaff = ((event as any).accepted_staff || []).filter(
+      (s: any) => s.response === 'accepted' || s.response === 'accept'
+    );
+
+    if (acceptedStaff.length === 0) {
+      return res.status(400).json({ message: 'No accepted staff for this event' });
+    }
+
+    // Collect userKeys to batch-lookup User data
+    const userKeys = acceptedStaff
+      .map((s: any) => s.userKey)
+      .filter(Boolean);
+
+    // Lookup users for phone_number and app_id
+    const users = await UserModel.find({
+      $or: [
+        { google_id: { $in: userKeys } },
+        { apple_id: { $in: userKeys } },
+        { email: { $in: userKeys } },
+      ]
+    }).select('google_id apple_id email phone_number app_id auth_phone_number').lean();
+
+    // Build userKey → user data map
+    const userMap: Record<string, { phone: string; appId: string }> = {};
+    for (const u of users) {
+      const keys = [
+        (u as any).google_id,
+        (u as any).apple_id,
+        (u as any).email,
+      ].filter(Boolean);
+      const phone = (u as any).phone_number || (u as any).auth_phone_number || '';
+      const appId = (u as any).app_id || '';
+      for (const k of keys) {
+        userMap[k] = { phone, appId };
+      }
+    }
+
+    const eventDate = (event as any).date
+      ? new Date((event as any).date).toLocaleDateString('en-US', {
+          weekday: 'short', year: 'numeric', month: 'short', day: 'numeric'
+        })
+      : '';
+
+    const scheduledHours = calculateHours((event as any).start_time, (event as any).end_time);
+
+    // Build records
+    const records = acceptedStaff.map((staff: any) => {
+      const attendance = (staff.attendance || [])[0];
+      const userData = userMap[staff.userKey] || { phone: '', appId: '' };
+
+      let clockInStr = '';
+      let clockOutStr = '';
+      let totalHours = 0;
+
+      if (attendance?.clockInAt) {
+        const ci = new Date(attendance.clockInAt);
+        clockInStr = ci.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      }
+      if (attendance?.clockOutAt) {
+        const co = new Date(attendance.clockOutAt);
+        clockOutStr = co.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      }
+
+      if (attendance?.approvedHours) {
+        totalHours = Math.round(attendance.approvedHours * 10) / 10;
+      } else if (attendance?.clockInAt && attendance?.clockOutAt) {
+        totalHours = Math.round(
+          ((new Date(attendance.clockOutAt).getTime() - new Date(attendance.clockInAt).getTime()) / (1000 * 60 * 60)) * 10
+        ) / 10;
+      } else {
+        totalHours = Math.round(scheduledHours * 10) / 10;
+      }
+
+      return {
+        name: staff.name || staff.first_name || 'Unknown',
+        role: staff.role || 'Staff',
+        phone: userData.phone,
+        companyId: userData.appId,
+        scheduledIn: (event as any).start_time || '',
+        scheduledOut: (event as any).end_time || '',
+        clockIn: clockInStr,
+        clockOut: clockOutStr,
+        breakDuration: '',  // Blank for manual entry
+        totalHours,
+      };
+    });
+
+    console.log(`[events/working-hours-sheet] Generating ${format} for event ${eventId}, ${records.length} staff`);
+
+    const reportPayload = {
+      report_type: 'working-hours' as const,
+      report_format: format as ReportFormat,
+      title: `Working Hours Sheet — ${(event as any).shift_name || (event as any).event_name || 'Event'}`,
+      period: {
+        start: (event as any).date ? new Date((event as any).date).toISOString() : new Date().toISOString(),
+        end: (event as any).date ? new Date((event as any).date).toISOString() : new Date().toISOString(),
+        label: eventDate,
+      },
+      records,
+      summary: {
+        client: (event as any).client_name || '',
+        eventName: (event as any).shift_name || (event as any).event_name || 'Event',
+        date: eventDate,
+        startTime: (event as any).start_time || '',
+        endTime: (event as any).end_time || '',
+        venue: (event as any).venue_name || '',
+        notes: (event as any).notes || '',
+      },
+    };
+
+    const report = await generateReport(reportPayload, String(manager._id));
+
+    return res.json({
+      url: report.url,
+      key: report.key,
+      filename: report.filename,
+      contentType: report.contentType,
+    });
+  } catch (err: any) {
+    console.error('[events/working-hours-sheet] Error:', err);
+    return res.status(500).json({ message: 'Failed to generate working hours sheet', error: err.message });
+  }
+});
+
 export default router;

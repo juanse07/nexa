@@ -130,7 +130,58 @@ def _build_ai_analysis_context(req: ReportRequest) -> dict:
     return {"analysis_html": analysis_html, "summary_items": summary_items}
 
 
+def _build_working_hours_context(req: ReportRequest) -> dict:
+    """Build context for working hours sheet — event-specific staff attendance."""
+    rows = []
+    total_hours = 0.0
+    for r in req.records:
+        hours = r.get("totalHours", 0)
+        total_hours += float(hours) if hours else 0
+        rows.append({
+            "name": r.get("name", ""),
+            "role": r.get("role", "Staff"),
+            "phone": r.get("phone", ""),
+            "companyId": r.get("companyId", ""),
+            "scheduledIn": r.get("scheduledIn", ""),
+            "scheduledOut": r.get("scheduledOut", ""),
+            "clockIn": r.get("clockIn", ""),
+            "clockOut": r.get("clockOut", ""),
+            "breakDuration": r.get("breakDuration", ""),
+            "totalHours": r.get("totalHours", ""),
+        })
+
+    totals = {"totalHours": round(total_hours, 1)} if rows else None
+
+    return {
+        "rows": rows,
+        "totals": totals,
+        "event_client": req.summary.get("client", ""),
+        "event_name": req.summary.get("eventName", ""),
+        "event_date": req.summary.get("date", ""),
+        "event_start": req.summary.get("startTime", ""),
+        "event_end": req.summary.get("endTime", ""),
+        "event_venue": req.summary.get("venue", ""),
+        "staff_count": len(rows),
+        "notes": req.summary.get("notes", ""),
+    }
+
+
 def create_report(req: ReportRequest, output_path: str) -> None:
+    # Working hours uses its own landscape template
+    if req.report_type == ReportType.WORKING_HOURS:
+        ctx = _build_working_hours_context(req)
+        ctx.update(
+            {
+                "title": req.title,
+                "company_name": req.company_name,
+                "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+            }
+        )
+        template = _env.get_template("working_hours.html")
+        html_str = template.render(**ctx)
+        HTML(string=html_str).write_pdf(output_path)
+        return
+
     # AI analysis uses a different template
     if req.report_type == ReportType.AI_ANALYSIS:
         ctx = _build_ai_analysis_context(req)

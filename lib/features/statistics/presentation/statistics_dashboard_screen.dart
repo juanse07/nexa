@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -20,8 +22,8 @@ class StatisticsDashboardScreen extends StatefulWidget {
 
 class _StatisticsDashboardScreenState extends State<StatisticsDashboardScreen> {
   bool _isLoading = true;
-  bool _isRefreshing = false;
   bool _isAnalyzing = false;
+  bool _fabExtended = true;
 
   String _selectedPeriod = 'month';
   DateTimeRange? _customDateRange;
@@ -30,10 +32,28 @@ class _StatisticsDashboardScreenState extends State<StatisticsDashboardScreen> {
   PayrollReport _payrollReport = PayrollReport.empty;
   TopPerformersReport _topPerformers = TopPerformersReport.empty;
 
+  final ScrollController _scrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    // Collapse FAB when scrolling down, expand when near top
+    final extended = _scrollController.offset < 50;
+    if (extended != _fabExtended) {
+      setState(() => _fabExtended = extended);
+    }
   }
 
   Future<void> _loadData() async {
@@ -78,11 +98,7 @@ class _StatisticsDashboardScreenState extends State<StatisticsDashboardScreen> {
   }
 
   Future<void> _refresh() async {
-    setState(() => _isRefreshing = true);
     await _loadData();
-    if (mounted) {
-      setState(() => _isRefreshing = false);
-    }
   }
 
   void _onPeriodChanged(String period, DateTimeRange? customRange) {
@@ -115,6 +131,93 @@ class _StatisticsDashboardScreenState extends State<StatisticsDashboardScreen> {
     });
   }
 
+  Widget _buildValerioFab() {
+    final icon = _isAnalyzing
+        ? const SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            ),
+          )
+        : ClipOval(
+            child: Image.asset(
+              'assets/ai_assistant_logo.png',
+              width: 28,
+              height: 28,
+              fit: BoxFit.cover,
+            ),
+          );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 70),
+      child: GestureDetector(
+        onTap: _isAnalyzing ? null : _showAIAnalysis,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeInOut,
+          height: 48,
+          padding: EdgeInsets.symmetric(
+            horizontal: _fabExtended ? 16 : 10,
+          ),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeInOut,
+                padding: EdgeInsets.symmetric(
+                  horizontal: _fabExtended ? 16 : 10,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF212C4A).withValues(alpha: 0.75),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.15),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF212C4A).withValues(alpha: 0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    icon,
+                    if (_fabExtended) ...[
+                      const SizedBox(width: 8),
+                      AnimatedOpacity(
+                        opacity: _fabExtended ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 200),
+                        child: Text(
+                          _isAnalyzing ? 'Analyzing...' : 'AI Analysis',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final content = Scaffold(
@@ -130,6 +233,7 @@ class _StatisticsDashboardScreenState extends State<StatisticsDashboardScreen> {
           : RefreshIndicator(
               onRefresh: _refresh,
               child: CustomScrollView(
+                controller: _scrollController,
                 slivers: [
                   SliverToBoxAdapter(
                     child: PeriodSelector(
@@ -164,26 +268,7 @@ class _StatisticsDashboardScreenState extends State<StatisticsDashboardScreen> {
                 ],
               ),
             ),
-      floatingActionButton: _isLoading
-          ? null
-          : Padding(
-              padding: const EdgeInsets.only(bottom: 70),
-              child: FloatingActionButton.extended(
-                onPressed: _isAnalyzing ? null : _showAIAnalysis,
-                icon: _isAnalyzing
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      )
-                    : const Icon(Icons.auto_awesome),
-                label: Text(_isAnalyzing ? 'Analyzing...' : 'AI Analysis'),
-                backgroundColor: const Color(0xFF212C4A),
-              ),
-            ),
+      floatingActionButton: _isLoading ? null : _buildValerioFab(),
     );
 
     if (kIsWeb) {
@@ -301,16 +386,12 @@ class _AIAnalysisSheetState extends State<_AIAnalysisSheet> {
             padding: const EdgeInsets.fromLTRB(20, 16, 16, 8),
             child: Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF212C4A).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.auto_awesome,
-                    color: Color(0xFF212C4A),
-                    size: 20,
+                ClipOval(
+                  child: Image.asset(
+                    'assets/ai_assistant_logo.png',
+                    width: 36,
+                    height: 36,
+                    fit: BoxFit.cover,
                   ),
                 ),
                 const SizedBox(width: 12),
