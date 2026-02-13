@@ -19,7 +19,40 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    depends_on:
+      doc-service:
+        condition: service_healthy
     # Enable rolling updates
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+
+  doc-service:
+    build:
+      context: ../doc-service
+      dockerfile: Dockerfile
+    image: nexa-doc-service:latest
+    container_name: nexa-doc-service
+    restart: unless-stopped
+    expose:
+      - "5000"
+    environment:
+      - DOC_SERVICE_PORT=5000
+      - DOC_SERVICE_SECRET=${DOC_SERVICE_SECRET:-}
+      - LOG_LEVEL=info
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/healthz')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     deploy:
       replicas: 1
       update_config:
