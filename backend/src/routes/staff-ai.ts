@@ -700,7 +700,7 @@ const chatMessageSchema = z.object({
   temperature: z.number().optional().default(0.7),
   maxTokens: z.number().optional().default(500),
   provider: z.enum(['openai', 'claude', 'groq', 'together']).optional().default('groq'),
-  model: z.string().optional(), // Optional model override for Groq
+  model: z.string().optional(), // Accepted for backward compat — ignored; cascade router selects model server-side
 });
 
 /**
@@ -2089,7 +2089,7 @@ router.post('/ai/staff/chat/message', requireAuth, async (req, res) => {
 
 /**
  * Handle Groq chat request for staff with optimized Chat Completions API
- * Supports: llama-3.1-8b-instant (default, fast) and openai/gpt-oss-20b (advanced reasoning)
+ * Model is selected by cascade router: Tier 1 (simple) → gpt-oss-20b @ Together, Tier 2 (complex) → gpt-oss-120b @ Groq
  * Features: Parallel tool calls, prompt caching, retry logic, reasoning mode with extended tokens
  */
 async function handleStaffGroqRequest(

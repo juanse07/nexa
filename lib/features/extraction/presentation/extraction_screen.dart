@@ -10469,45 +10469,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     padding: const EdgeInsets.only(left: 8, right: 12, bottom: 6),
                     child: Row(
                       children: [
-                        // AI Provider toggle button - only visible on web
-                        if (kIsWeb) ...[
-                          Container(
-                            decoration: BoxDecoration(
-                              color: _aiChatService.modelPreference == 'llama'
-                                  ? Colors.purple
-                                  : Colors.black,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(8),
-                                onTap: () {
-                                  setState(() {
-                                    final newModel = _aiChatService.modelPreference == 'llama' ? 'gpt-oss' : 'llama';
-                                    _aiChatService.setModelPreference(newModel);
-                                  });
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Using ${_aiChatService.modelPreference == 'llama' ? 'Llama 3.1 8B' : 'GPT-OSS 20B'} model'),
-                                      duration: const Duration(seconds: 2),
-                                    ),
-                                  );
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.all(4),
-                                  child: Icon(
-                                    _aiChatService.modelPreference == 'llama' ? Icons.bolt : Icons.psychology,
-                                    color: Colors.white,
-                                    size: 14,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                        ],
-                        // Chat input
+                        // Chat input (model selection handled server-side by cascade router)
                         Expanded(
                           child: ChatInputWidget(
                             key: const ValueKey('chat-input'),

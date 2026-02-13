@@ -205,4 +205,147 @@ class StatisticsService {
       return null;
     }
   }
+
+  /// Request AI analysis of statistics data via the AI chat endpoint.
+  /// Sends a structured summary of the loaded stats and returns the AI response.
+  static Future<String> getAIAnalysis({
+    required ManagerStatistics statistics,
+    required PayrollReport payroll,
+    required TopPerformersReport topPerformers,
+  }) async {
+    final headers = await _getHeaders();
+
+    // Build a structured data summary for the AI
+    final s = statistics.summary;
+    final p = payroll.summary;
+    final periodLabel = statistics.period.label;
+
+    final topPerformersList = topPerformers.topPerformers
+        .take(5)
+        .map((tp) =>
+            '  - ${tp.name}: ${tp.shiftsCompleted} shifts, ${tp.hoursWorked}h, \$${tp.earnings.toStringAsFixed(2)}, punctuality ${tp.punctualityScore}%')
+        .join('\n');
+
+    final payrollBreakdown = payroll.entries
+        .take(10)
+        .map((e) =>
+            '  - ${e.name}: ${e.shifts} shifts, ${e.hours}h, \$${e.earnings.toStringAsFixed(2)} (avg \$${e.averageRate.toStringAsFixed(2)}/h), roles: ${e.roles.join(", ")}')
+        .join('\n');
+
+    final complianceInfo = statistics.compliance.flagsByType.entries
+        .map((e) => '  - ${e.key}: ${e.value}')
+        .join('\n');
+
+    final dataBlock = '''
+Period: $periodLabel
+
+TEAM SUMMARY:
+- Total Events: ${s.totalEvents}
+- Completed: ${s.completedEvents}
+- Cancelled: ${s.cancelledEvents}
+- Total Staff Hours: ${s.totalStaffHours}
+- Total Payroll: \$${s.totalPayroll.toStringAsFixed(2)}
+- Average Event Size: ${s.averageEventSize} staff
+- Fulfillment Rate: ${s.fulfillmentRate}%
+
+PAYROLL SUMMARY:
+- Staff Count: ${p.staffCount}
+- Total Hours: ${p.totalHours}
+- Total Payroll: \$${p.totalPayroll.toStringAsFixed(2)}
+- Average Per Staff: \$${p.averagePerStaff.toStringAsFixed(2)}
+
+PAYROLL BY STAFF (top 10):
+$payrollBreakdown
+
+TOP PERFORMERS:
+$topPerformersList
+
+COMPLIANCE:
+- Pending Flags: ${statistics.compliance.pendingFlags}
+${complianceInfo.isNotEmpty ? 'Flags by Type:\n$complianceInfo' : '- No flags this period'}
+''';
+
+    final messages = [
+      {
+        'role': 'system',
+        'content':
+            'You are a business analytics assistant for a catering/event staffing company. '
+            'Analyze the following team statistics and provide actionable insights. '
+            'Use markdown formatting with headers, bullet points, and bold for emphasis. '
+            'Keep it concise (under 400 words). Focus on: key highlights, trends, areas of concern, and recommendations.',
+      },
+      {
+        'role': 'user',
+        'content': 'Analyze my team stats for this period:\n\n$dataBlock',
+      },
+    ];
+
+    final body = jsonEncode({
+      'messages': messages,
+      'temperature': 0.7,
+      'maxTokens': 800,
+      'provider': 'groq',
+    });
+
+    debugPrint('[StatisticsService] Requesting AI analysis...');
+
+    final response = await http.post(
+      Uri.parse('$_apiUrl/ai/chat/message'),
+      headers: headers,
+      body: body,
+    ).timeout(const Duration(seconds: 30));
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return data['content'] as String? ?? 'No analysis generated.';
+    }
+
+    final errMsg = jsonDecode(response.body)['message'] ?? 'Unknown error';
+    throw Exception('AI analysis failed: $errMsg');
+  }
+
+  /// Generate a PDF or DOCX document from the AI analysis text.
+  /// Returns a presigned download URL.
+  static Future<String> generateAnalysisDoc({
+    required String analysis,
+    required ManagerStatistics statistics,
+    String format = 'pdf',
+  }) async {
+    final headers = await _getHeaders();
+    final s = statistics.summary;
+
+    final body = jsonEncode({
+      'analysis': analysis,
+      'format': format,
+      'period': {
+        'start': statistics.period.start.toIso8601String(),
+        'end': statistics.period.end.toIso8601String(),
+        'label': statistics.period.label,
+      },
+      'summary': {
+        'totalEvents': s.totalEvents,
+        'totalStaffHours': s.totalStaffHours,
+        'totalPayroll': s.totalPayroll,
+        'fulfillmentRate': s.fulfillmentRate,
+      },
+    });
+
+    debugPrint('[StatisticsService] Generating AI analysis $format...');
+
+    final response = await http.post(
+      Uri.parse('$_apiUrl/statistics/manager/ai-analysis-doc'),
+      headers: headers,
+      body: body,
+    ).timeout(const Duration(seconds: 30));
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final url = data['url'] as String?;
+      if (url == null) throw Exception('No download URL returned');
+      return url;
+    }
+
+    final errMsg = jsonDecode(response.body)['message'] ?? 'Unknown error';
+    throw Exception('Document generation failed: $errMsg');
+  }
 }

@@ -1246,27 +1246,14 @@ Respond in the same language the user speaks. Be concise and conversational. Use
     _pendingUpdates.remove(update);
   }
 
-  // Model preference for Groq ('llama' or 'gpt-oss')
-  String _modelPreference = 'gpt-oss'; // Default to GPT-OSS 20B (supports function calling)
-
   /// Get current AI provider
   String get aiProviderName => _aiProvider;
 
-  /// Get current model preference
-  String get modelPreference => _modelPreference;
-
-  /// Set model preference (llama or gpt-oss)
-  void setModelPreference(String model) {
-    if (model == 'llama' || model == 'gpt-oss') {
-      _modelPreference = model;
-      print('Model preference set to: $_modelPreference');
-    }
-  }
-
-  /// Call backend AI chat API
+  /// Call backend AI chat API.
+  /// Model selection is handled server-side by the cascade router —
+  /// the client does not send a model preference.
   Future<({String content, String? reasoning})> _callBackendAI(
     List<Map<String, dynamic>> messages, {
-    String? modelOverride,
     int? maxTokensOverride,
     double? temperatureOverride,
   }) async {
@@ -1279,18 +1266,11 @@ Respond in the same language the user speaks. Be concise and conversational. Use
     final String baseUrl = AppConfig.instance.baseUrl;
     final Uri uri = Uri.parse('$baseUrl/ai/chat/message');
 
-    // Map model preference to actual Groq model names
-    final modelMap = {
-      'llama': 'llama-3.1-8b-instant',
-      'gpt-oss': 'openai/gpt-oss-20b',
-    };
-
     final requestBody = {
       'messages': messages,
       'temperature': temperatureOverride ?? 0.7,
       'maxTokens': maxTokensOverride ?? 500,
       'provider': _aiProvider,
-      'model': modelOverride ?? modelMap[_modelPreference] ?? 'openai/gpt-oss-20b',
     };
 
     final headers = {

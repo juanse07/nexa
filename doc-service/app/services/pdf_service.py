@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
+import markdown
 from jinja2 import Environment, FileSystemLoader
 from weasyprint import HTML
 
@@ -107,7 +108,45 @@ _CONTEXT_BUILDERS = {
 }
 
 
+def _build_ai_analysis_context(req: ReportRequest) -> dict:
+    """Build context for AI analysis reports — renders markdown content to HTML."""
+    md_text = ""
+    if req.records and len(req.records) > 0:
+        md_text = req.records[0].get("content", "")
+
+    analysis_html = markdown.markdown(md_text, extensions=["tables", "fenced_code"])
+
+    summary_items = []
+    if req.summary:
+        if "totalEvents" in req.summary:
+            summary_items.append({"label": "Events", "value": req.summary["totalEvents"]})
+        if "totalStaffHours" in req.summary:
+            summary_items.append({"label": "Staff Hours", "value": req.summary["totalStaffHours"]})
+        if "totalPayroll" in req.summary:
+            summary_items.append({"label": "Payroll", "value": f"${req.summary['totalPayroll']:,.2f}"})
+        if "fulfillmentRate" in req.summary:
+            summary_items.append({"label": "Fulfillment", "value": f"{req.summary['fulfillmentRate']}%"})
+
+    return {"analysis_html": analysis_html, "summary_items": summary_items}
+
+
 def create_report(req: ReportRequest, output_path: str) -> None:
+    # AI analysis uses a different template
+    if req.report_type == ReportType.AI_ANALYSIS:
+        ctx = _build_ai_analysis_context(req)
+        ctx.update(
+            {
+                "title": req.title,
+                "company_name": req.company_name,
+                "period_label": req.period.label,
+                "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+            }
+        )
+        template = _env.get_template("analysis.html")
+        html_str = template.render(**ctx)
+        HTML(string=html_str).write_pdf(output_path)
+        return
+
     builder = _CONTEXT_BUILDERS.get(req.report_type)
     if not builder:
         raise ValueError(f"Unknown report type: {req.report_type}")

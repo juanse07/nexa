@@ -174,10 +174,55 @@ _BUILDERS = {
 }
 
 
+def _build_ai_analysis(doc: Document, req: ReportRequest):
+    """Render AI analysis markdown as Word paragraphs."""
+    md_text = ""
+    if req.records and len(req.records) > 0:
+        md_text = req.records[0].get("content", "")
+
+    for line in md_text.split("\n"):
+        stripped = line.strip()
+        if not stripped:
+            doc.add_paragraph()
+            continue
+        if stripped.startswith("### "):
+            h = doc.add_heading(stripped[4:], level=3)
+            for run in h.runs:
+                run.font.color.rgb = RGBColor(0x47, 0x55, 0x69)
+        elif stripped.startswith("## "):
+            h = doc.add_heading(stripped[3:], level=2)
+            for run in h.runs:
+                run.font.color.rgb = RGBColor(0x33, 0x41, 0x55)
+        elif stripped.startswith("# "):
+            h = doc.add_heading(stripped[2:], level=1)
+            for run in h.runs:
+                run.font.color.rgb = _HEADER_BG
+        elif stripped.startswith("- ") or stripped.startswith("* "):
+            p = doc.add_paragraph(stripped[2:], style="List Bullet")
+            for run in p.runs:
+                run.font.size = Pt(10)
+        else:
+            # Handle **bold** segments
+            p = doc.add_paragraph()
+            parts = stripped.split("**")
+            for i, part in enumerate(parts):
+                if not part:
+                    continue
+                run = p.add_run(part)
+                run.font.size = Pt(10)
+                if i % 2 == 1:
+                    run.font.bold = True
+                    run.font.color.rgb = _HEADER_BG
+
+
 def create_report(req: ReportRequest, output_path: str) -> None:
-    builder = _BUILDERS.get(req.report_type)
-    if not builder:
-        raise ValueError(f"Unknown report type: {req.report_type}")
+    # AI analysis uses a simplified prose builder
+    if req.report_type == ReportType.AI_ANALYSIS:
+        builder = _build_ai_analysis
+    else:
+        builder = _BUILDERS.get(req.report_type)
+        if not builder:
+            raise ValueError(f"Unknown report type: {req.report_type}")
 
     doc = Document()
 

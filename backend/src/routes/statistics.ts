@@ -1315,4 +1315,67 @@ router.get('/exports/team-report', requireAuth, async (req: Request, res: Respon
   }
 });
 
+// ============================================================================
+// AI ANALYSIS DOCUMENT GENERATION
+// ============================================================================
+
+const aiAnalysisDocSchema = z.object({
+  analysis: z.string().min(1),
+  format: z.enum(['pdf', 'docx']).default('pdf'),
+  period: z.object({
+    start: z.string(),
+    end: z.string(),
+    label: z.string(),
+  }),
+  summary: z.object({
+    totalEvents: z.number().optional(),
+    totalStaffHours: z.number().optional(),
+    totalPayroll: z.number().optional(),
+    fulfillmentRate: z.number().optional(),
+  }).optional(),
+});
+
+/**
+ * POST /statistics/manager/ai-analysis-doc
+ * Generate a PDF or DOCX from the AI analysis text
+ */
+router.post('/statistics/manager/ai-analysis-doc', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    if (!manager) {
+      return res.status(403).json({ message: 'Manager access required' });
+    }
+
+    const parsed = aiAnalysisDocSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Invalid request', errors: parsed.error.issues });
+    }
+
+    const { analysis, format, period, summary } = parsed.data;
+
+    console.log(`[statistics/ai-analysis-doc] Generating ${format} for manager ${manager._id}`);
+
+    const reportPayload = {
+      report_type: 'ai-analysis' as const,
+      report_format: format as ReportFormat,
+      title: 'AI Team Analysis',
+      period,
+      records: [{ content: analysis }],
+      summary: summary || {},
+    };
+
+    const report = await generateReport(reportPayload, String(manager._id));
+
+    return res.json({
+      url: report.url,
+      key: report.key,
+      filename: report.filename,
+      contentType: report.contentType,
+    });
+  } catch (err: any) {
+    console.error('[statistics/ai-analysis-doc] Error:', err);
+    return res.status(500).json({ message: 'Failed to generate document', error: err.message });
+  }
+});
+
 export default router;
