@@ -4,6 +4,12 @@
   <meta charset="UTF-8">
   <title>{{ title }}</title>
   <style>
+    :root {
+      --brand-primary: {{ brand_primary | default('#1e293b') }};
+      --brand-secondary: {{ brand_secondary | default('#334155') }};
+      --brand-accent: {{ brand_accent | default('#3b82f6') }};
+      --brand-neutral: {{ brand_neutral | default('#f8fafc') }};
+    }
     @page {
       size: A4 landscape;
       margin: 1.5cm;
@@ -12,31 +18,33 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1a1a1a; font-size: 10px; line-height: 1.4; }
 
-    .header { background: #1e293b; color: #fff; padding: 16px 24px; margin: -1.5cm -1.5cm 16px -1.5cm; }
+    .header { background: var(--brand-primary); color: #fff; padding: 16px 24px; margin: -1.5cm -1.5cm 0 -1.5cm; }
     .header h1 { font-size: 18px; font-weight: 700; margin-bottom: 2px; }
     .header .subtitle { font-size: 11px; opacity: 0.85; }
+    .header-logo { max-height: 36px; max-width: 140px; margin-bottom: 6px; }
+    .accent-divider { height: 3px; background: var(--brand-accent); margin: 0 -1.5cm 16px -1.5cm; }
 
-    .event-info { display: flex; justify-content: space-between; margin-bottom: 14px; padding: 10px 14px; background: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0; }
+    .event-info { display: flex; justify-content: space-between; margin-bottom: 14px; padding: 10px 14px; background: var(--brand-neutral); border-radius: 6px; border: 1px solid #e2e8f0; }
     .event-info .info-block { }
     .info-label { font-size: 8px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin-bottom: 1px; }
-    .info-value { font-size: 12px; font-weight: 600; color: #1e293b; }
+    .info-value { font-size: 12px; font-weight: 600; color: var(--brand-primary); }
 
     table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-    th { background: #1e293b; color: #fff; font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.4px; padding: 7px 6px; text-align: left; }
+    th { background: var(--brand-primary); color: #fff; font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.4px; padding: 7px 6px; text-align: left; }
     th.center { text-align: center; }
     td { padding: 10px 6px; border-bottom: 1px solid #cbd5e1; font-size: 9.5px; vertical-align: middle; }
-    tr:nth-child(even) { background: #f8fafc; }
+    tr:nth-child(even) { background: var(--brand-neutral); }
     td.center { text-align: center; }
 
     .signature-cell { min-width: 80px; border-bottom: 1px dotted #94a3b8; }
     .break-cell { min-width: 50px; }
 
-    .totals-row td { font-weight: 700; background: #f1f5f9; border-top: 2px solid #1e293b; }
+    .totals-row td { font-weight: 700; background: #f1f5f9; border-top: 2px solid var(--brand-primary); }
 
     .sign-off { margin-top: 24px; display: flex; justify-content: space-between; gap: 40px; }
     .sign-off-block { flex: 1; }
     .sign-off-label { font-size: 9px; color: #64748b; margin-bottom: 20px; }
-    .sign-off-line { border-bottom: 1px solid #334155; margin-bottom: 4px; height: 20px; }
+    .sign-off-line { border-bottom: 1px solid var(--brand-secondary); margin-bottom: 4px; height: 20px; }
     .sign-off-hint { font-size: 8px; color: #94a3b8; }
 
     .footer { margin-top: 20px; padding-top: 8px; border-top: 1px solid #e2e8f0; font-size: 8px; color: #94a3b8; text-align: center; }
@@ -49,9 +57,11 @@
 </head>
 <body>
   <div class="header">
+    {% if logo_header_url %}<img class="header-logo" src="{{ logo_header_url }}" alt="Logo">{% endif %}
     <h1>{{ title }}</h1>
     <div class="subtitle">{{ company_name }} &mdash; Working Hours Sheet</div>
   </div>
+  <div class="accent-divider"></div>
 
   <div class="event-info">
     <div class="info-block">

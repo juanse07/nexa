@@ -8,9 +8,48 @@ import { ClientModel } from '../models/client';
 import { UserModel } from '../models/user';
 import { FlaggedAttendanceModel } from '../models/flaggedAttendance';
 import { resolveManagerForRequest } from '../utils/manager';
-import { generateReport, ReportFormat } from '../services/docService';
+import { generateReport, ReportFormat, BrandConfig } from '../services/docService';
+import { ManagerModel } from '../models/manager';
+import { getPresignedUrl, extractKeyFromUrl } from '../services/storageService';
 
 const router = Router();
+
+/**
+ * Build a BrandConfig payload from a manager's brandProfile (if present).
+ * Generates presigned URLs for logo assets so WeasyPrint can fetch them.
+ */
+async function buildBrandConfig(managerId: string): Promise<BrandConfig | undefined> {
+  const mgr = await ManagerModel.findById(managerId).select('brandProfile').lean();
+  const bp = mgr?.brandProfile;
+  if (!bp?.primaryColor) return undefined;
+
+  const config: BrandConfig = {
+    primary_color: bp.primaryColor,
+    secondary_color: bp.secondaryColor,
+    accent_color: bp.accentColor,
+    neutral_color: bp.neutralColor,
+  };
+
+  // Generate presigned URLs for logo images (WeasyPrint needs HTTP-accessible URLs)
+  if (bp.logoHeaderUrl) {
+    const key = extractKeyFromUrl(bp.logoHeaderUrl);
+    if (key) {
+      try {
+        config.logo_header_url = await getPresignedUrl(key, 600);
+      } catch { /* skip if presign fails */ }
+    }
+  }
+  if (bp.logoWatermarkUrl) {
+    const key = extractKeyFromUrl(bp.logoWatermarkUrl);
+    if (key) {
+      try {
+        config.logo_watermark_url = await getPresignedUrl(key, 600);
+      } catch { /* skip if presign fails */ }
+    }
+  }
+
+  return config;
+}
 
 // ============================================================================
 // VALIDATION SCHEMAS
@@ -1195,6 +1234,7 @@ router.get('/exports/team-report', requireAuth, async (req: Request, res: Respon
         res.setHeader('Content-Disposition', `attachment; filename="payroll_${start.toISOString().split('T')[0]}_to_${end.toISOString().split('T')[0]}.csv"`);
         return res.send(csvRows.join('\n'));
       } else if (format === 'pdf' || format === 'docx' || format === 'xlsx') {
+        const brandConfig = await buildBrandConfig(String(manager._id));
         const reportPayload = {
           report_type: 'payroll' as const,
           report_format: format as ReportFormat,
@@ -1202,6 +1242,7 @@ router.get('/exports/team-report', requireAuth, async (req: Request, res: Respon
           period: { start: start.toISOString(), end: end.toISOString(), label: payrollPeriodLabel },
           records,
           summary: payrollSummary,
+          ...(brandConfig && { brand_config: brandConfig }),
         };
 
         const report = await generateReport(reportPayload, String(manager._id));
@@ -1283,6 +1324,7 @@ router.get('/exports/team-report', requireAuth, async (req: Request, res: Respon
         res.setHeader('Content-Disposition', `attachment; filename="attendance_${start.toISOString().split('T')[0]}_to_${end.toISOString().split('T')[0]}.csv"`);
         return res.send(csvRows.join('\n'));
       } else if (format === 'pdf' || format === 'docx' || format === 'xlsx') {
+        const attendBrandConfig = await buildBrandConfig(String(manager._id));
         const reportPayload = {
           report_type: 'attendance' as const,
           report_format: format as ReportFormat,
@@ -1290,6 +1332,7 @@ router.get('/exports/team-report', requireAuth, async (req: Request, res: Respon
           period: { start: start.toISOString(), end: end.toISOString(), label: attendPeriodLabel },
           records,
           summary: attendSummary,
+          ...(attendBrandConfig && { brand_config: attendBrandConfig }),
         };
 
         const report = await generateReport(reportPayload, String(manager._id));
@@ -1355,6 +1398,7 @@ router.post('/statistics/manager/ai-analysis-doc', requireAuth, async (req: Requ
 
     console.log(`[statistics/ai-analysis-doc] Generating ${format} for manager ${manager._id}`);
 
+    const aiBrandConfig = await buildBrandConfig(String(manager._id));
     const reportPayload = {
       report_type: 'ai-analysis' as const,
       report_format: format as ReportFormat,
@@ -1362,6 +1406,7 @@ router.post('/statistics/manager/ai-analysis-doc', requireAuth, async (req: Requ
       period,
       records: [{ content: analysis }],
       summary: summary || {},
+      ...(aiBrandConfig && { brand_config: aiBrandConfig }),
     };
 
     const report = await generateReport(reportPayload, String(manager._id));
@@ -1505,6 +1550,7 @@ router.post('/events/:eventId/working-hours-sheet', requireAuth, async (req: Req
 
     console.log(`[events/working-hours-sheet] Generating ${format} for event ${eventId}, ${records.length} staff`);
 
+    const whBrandConfig = await buildBrandConfig(String(manager._id));
     const reportPayload = {
       report_type: 'working-hours' as const,
       report_format: format as ReportFormat,
@@ -1524,6 +1570,7 @@ router.post('/events/:eventId/working-hours-sheet', requireAuth, async (req: Req
         venue: (event as any).venue_name || '',
         notes: (event as any).notes || '',
       },
+      ...(whBrandConfig && { brand_config: whBrandConfig }),
     };
 
     const report = await generateReport(reportPayload, String(manager._id));

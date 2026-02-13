@@ -75,6 +75,21 @@ export interface ManagerDocument extends Document {
   groq_messages_reset_date?: Date;
   groq_request_limit?: number;
 
+  // Brand customization (Pro tier)
+  brandProfile?: {
+    logoOriginalUrl?: string;
+    logoHeaderUrl?: string;
+    logoWatermarkUrl?: string;
+    aspectRatio?: number;
+    shapeClassification?: 'horizontal' | 'square' | 'vertical' | 'icon';
+    primaryColor?: string;
+    secondaryColor?: string;
+    accentColor?: string;
+    neutralColor?: string;
+    createdAt?: Date;
+    updatedAt?: Date;
+  };
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -157,6 +172,21 @@ const ManagerSchema = new Schema<ManagerDocument>(
       source: { type: String, enum: ['ai', 'manual'], default: 'ai' },
     }],
     venueListUpdatedAt: { type: Date },
+
+    // Brand customization (Pro tier)
+    brandProfile: {
+      logoOriginalUrl: { type: String, trim: true },
+      logoHeaderUrl: { type: String, trim: true },
+      logoWatermarkUrl: { type: String, trim: true },
+      aspectRatio: { type: Number },
+      shapeClassification: { type: String, enum: ['horizontal', 'square', 'vertical', 'icon'] },
+      primaryColor: { type: String, trim: true },
+      secondaryColor: { type: String, trim: true },
+      accentColor: { type: String, trim: true },
+      neutralColor: { type: String, trim: true },
+      createdAt: { type: Date },
+      updatedAt: { type: Date },
+    },
 
     // AI provider usage tracking
     groq_messages_used_this_month: { type: Number, default: 0 },

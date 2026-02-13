@@ -9,10 +9,24 @@ import markdown
 from jinja2 import Environment, FileSystemLoader
 from weasyprint import HTML
 
-from app.models.schemas import ReportRequest, ReportType
+from app.models.schemas import BrandConfig, ReportRequest, ReportType
 
 _TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "..", "templates")
 _env = Environment(loader=FileSystemLoader(_TEMPLATE_DIR), autoescape=True)
+
+
+def _brand_context(req: ReportRequest) -> dict:
+    """Extract brand CSS variables from request, falling back to defaults."""
+    bc = req.brand_config or BrandConfig()
+    ctx = {
+        "brand_primary": bc.primary_color,
+        "brand_secondary": bc.secondary_color,
+        "brand_accent": bc.accent_color,
+        "brand_neutral": bc.neutral_color,
+    }
+    if bc.logo_header_url:
+        ctx["logo_header_url"] = bc.logo_header_url
+    return ctx
 
 
 def _build_staff_shifts_context(req: ReportRequest) -> dict:
@@ -167,6 +181,8 @@ def _build_working_hours_context(req: ReportRequest) -> dict:
 
 
 def create_report(req: ReportRequest, output_path: str) -> None:
+    brand = _brand_context(req)
+
     # Working hours uses its own landscape template
     if req.report_type == ReportType.WORKING_HOURS:
         ctx = _build_working_hours_context(req)
@@ -177,6 +193,7 @@ def create_report(req: ReportRequest, output_path: str) -> None:
                 "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
             }
         )
+        ctx.update(brand)
         template = _env.get_template("working_hours.html")
         html_str = template.render(**ctx)
         HTML(string=html_str).write_pdf(output_path)
@@ -193,6 +210,7 @@ def create_report(req: ReportRequest, output_path: str) -> None:
                 "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
             }
         )
+        ctx.update(brand)
         template = _env.get_template("analysis.html")
         html_str = template.render(**ctx)
         HTML(string=html_str).write_pdf(output_path)
@@ -211,6 +229,7 @@ def create_report(req: ReportRequest, output_path: str) -> None:
             "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         }
     )
+    ctx.update(brand)
 
     template = _env.get_template("report.html")
     html_str = template.render(**ctx)

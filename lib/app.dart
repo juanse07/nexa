@@ -6,8 +6,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 
+import 'package:nexa/core/di/injection.dart';
 import 'package:nexa/features/auth/data/services/auth_service.dart';
 import 'package:nexa/features/auth/presentation/pages/login_page.dart';
+import 'package:nexa/features/brand/data/providers/brand_provider.dart';
 import 'package:nexa/features/users/presentation/pages/manager_onboarding_page.dart';
 import 'package:nexa/shared/presentation/theme/theme.dart';
 import 'package:nexa/shared/presentation/splash/splash_screen.dart';
@@ -92,8 +94,11 @@ class _NexaAppState extends State<NexaApp> {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => TerminologyProvider(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => TerminologyProvider()),
+        ChangeNotifierProvider.value(value: getIt<BrandProvider>()),
+      ],
       child: MaterialApp(
         navigatorKey: _navigatorKey,
         title: 'FlowShift Manager',

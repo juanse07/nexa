@@ -61,6 +61,15 @@ class AttendanceRecord(BaseModel):
     status: str = "unknown"
 
 
+class BrandConfig(BaseModel):
+    primary_color: str = "#1e293b"
+    secondary_color: str = "#334155"
+    accent_color: str = "#3b82f6"
+    neutral_color: str = "#f8fafc"
+    logo_header_url: str | None = None
+    logo_watermark_url: str | None = None
+
+
 class ReportRequest(BaseModel):
     report_type: ReportType
     report_format: ReportFormat
@@ -69,6 +78,7 @@ class ReportRequest(BaseModel):
     records: list[dict[str, Any]]
     summary: dict[str, Any] = {}
     company_name: str = "Nexa"
+    brand_config: BrandConfig | None = None
 
 
 class ReportResponse(BaseModel):

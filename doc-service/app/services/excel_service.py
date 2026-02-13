@@ -6,7 +6,17 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-from app.models.schemas import ReportRequest, ReportType
+from app.models.schemas import BrandConfig, ReportRequest, ReportType
+
+
+def _get_brand_colors(req: ReportRequest) -> dict[str, str]:
+    """Return hex color strings from brand_config or defaults."""
+    bc = req.brand_config or BrandConfig()
+    return {
+        "primary": bc.primary_color.upper(),
+        "secondary": bc.secondary_color.upper(),
+        "neutral": bc.neutral_color.upper(),
+    }
 
 
 def _write_staff_shifts(req: ReportRequest, writer: pd.ExcelWriter):
@@ -30,8 +40,9 @@ def _write_staff_shifts(req: ReportRequest, writer: pd.ExcelWriter):
 
     workbook = writer.book
     worksheet = writer.sheets[sheet]
-    _write_title(workbook, worksheet, req.title, len(df.columns))
-    _style_sheet(workbook, worksheet, df)
+    bc = _get_brand_colors(req)
+    _write_title(workbook, worksheet, req.title, len(df.columns), bc)
+    _style_sheet(workbook, worksheet, df, bc)
 
     # Summary row
     summary_row = len(df) + 3
@@ -73,8 +84,9 @@ def _write_payroll(req: ReportRequest, writer: pd.ExcelWriter):
 
     workbook = writer.book
     worksheet = writer.sheets[sheet]
-    _write_title(workbook, worksheet, req.title, len(df.columns))
-    _style_sheet(workbook, worksheet, df)
+    bc = _get_brand_colors(req)
+    _write_title(workbook, worksheet, req.title, len(df.columns), bc)
+    _style_sheet(workbook, worksheet, df, bc)
 
     # Summary
     summary_row = len(df) + 3
@@ -121,8 +133,9 @@ def _write_attendance(req: ReportRequest, writer: pd.ExcelWriter):
 
     workbook = writer.book
     worksheet = writer.sheets[sheet]
-    _write_title(workbook, worksheet, req.title, len(df.columns))
-    _style_sheet(workbook, worksheet, df)
+    bc = _get_brand_colors(req)
+    _write_title(workbook, worksheet, req.title, len(df.columns), bc)
+    _style_sheet(workbook, worksheet, df, bc)
 
     # Summary
     summary_row = len(df) + 3
@@ -131,26 +144,29 @@ def _write_attendance(req: ReportRequest, writer: pd.ExcelWriter):
     worksheet.write(summary_row, 8, req.summary.get("totalHours", 0), bold)
 
 
-def _write_title(workbook, worksheet, title: str, num_cols: int):
+def _write_title(workbook, worksheet, title: str, num_cols: int, bc: dict[str, str] | None = None):
+    primary = (bc or {}).get("primary", "#1E293B")
     title_fmt = workbook.add_format(
         {
             "bold": True,
             "font_size": 14,
-            "font_color": "#1E293B",
+            "font_color": primary,
             "bottom": 2,
-            "bottom_color": "#1E293B",
+            "bottom_color": primary,
         }
     )
     worksheet.merge_range(0, 0, 0, num_cols - 1, title, title_fmt)
 
 
-def _style_sheet(workbook, worksheet, df: pd.DataFrame):
+def _style_sheet(workbook, worksheet, df: pd.DataFrame, bc: dict[str, str] | None = None):
+    primary = (bc or {}).get("primary", "#1E293B")
+    neutral = (bc or {}).get("neutral", "#F8FAFC")
     header_fmt = workbook.add_format(
         {
             "bold": True,
             "font_size": 10,
             "font_color": "#FFFFFF",
-            "bg_color": "#1E293B",
+            "bg_color": primary,
             "border": 1,
             "border_color": "#CBD5E1",
             "text_wrap": True,
@@ -169,7 +185,7 @@ def _style_sheet(workbook, worksheet, df: pd.DataFrame):
         worksheet.set_column(col_num, col_num, min(max_len + 4, 30))
 
     # Zebra striping
-    alt_fmt = workbook.add_format({"bg_color": "#F8FAFC"})
+    alt_fmt = workbook.add_format({"bg_color": neutral})
     for row_idx in range(len(df)):
         if row_idx % 2 == 0:
             for col_idx in range(len(df.columns)):

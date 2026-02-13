@@ -11,6 +11,15 @@ const DOC_SERVICE_SECRET = process.env.DOC_SERVICE_SECRET || '';
 export type ReportFormat = 'pdf' | 'docx' | 'xlsx';
 export type ReportType = 'staff-shifts' | 'payroll' | 'attendance' | 'ai-analysis' | 'working-hours';
 
+export interface BrandConfig {
+  primary_color?: string;
+  secondary_color?: string;
+  accent_color?: string;
+  neutral_color?: string;
+  logo_header_url?: string;
+  logo_watermark_url?: string;
+}
+
 export interface ReportPayload {
   report_type: ReportType;
   report_format: ReportFormat;
@@ -19,6 +28,7 @@ export interface ReportPayload {
   records: Record<string, any>[];
   summary: Record<string, any>;
   company_name?: string;
+  brand_config?: BrandConfig;
 }
 
 export interface GeneratedReport {

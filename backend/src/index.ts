@@ -40,6 +40,7 @@ import staffRouter from './routes/staff';
 import groupsRouter from './routes/groups';
 import uploadRouter from './routes/upload';
 import caricatureRouter from './routes/caricature';
+import brandRouter from './routes/brand';
 import { notificationScheduler } from './services/notificationScheduler';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
@@ -114,6 +115,7 @@ export async function createServer() {
   app.use('/api', groupsRouter); // Staff group management
   app.use('/api/upload', uploadRouter); // File upload routes
   app.use('/api/caricature', caricatureRouter); // AI caricature generation
+  app.use('/api/brand', brandRouter); // Brand customization (Pro tier)
 
   // Serve locally-stored uploads (caricatures, etc.) when R2 is not configured
   app.use('/uploads', express.static('/app/uploads'));

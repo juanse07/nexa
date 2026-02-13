@@ -20,7 +20,7 @@ const r2Client = new S3Client({
   },
 });
 
-export type FileCategory = 'profiles' | 'documents' | 'sign-in-sheets';
+export type FileCategory = 'profiles' | 'documents' | 'sign-in-sheets' | 'brands';
 
 interface UploadResult {
   key: string;
@@ -116,6 +116,18 @@ export async function uploadSignInSheet(
 ): Promise<string> {
   const result = await uploadFile(buffer, 'sign-in-sheets', eventId, filename, contentType);
   return result.url;
+}
+
+/**
+ * Uploads a brand asset (logo variant) and returns the public URL
+ */
+export async function uploadBrandAsset(
+  buffer: Buffer,
+  managerId: string,
+  filename: string,
+  contentType: string
+): Promise<UploadResult> {
+  return uploadFile(buffer, 'brands', managerId, filename, contentType);
 }
 
 /**

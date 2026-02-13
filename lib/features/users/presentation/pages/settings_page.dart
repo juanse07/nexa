@@ -13,6 +13,7 @@ import '../../../onboarding/presentation/manager_onboarding_screen.dart';
 import '../../../onboarding/presentation/venue_list_screen.dart';
 import '../../../venues/presentation/venue_form_screen.dart';
 import '../../../../shared/presentation/theme/app_colors.dart';
+import '../../../brand/presentation/widgets/brand_customization_card.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -254,6 +255,9 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 16),
+                // Brand Customization Section
+                const BrandCustomizationCard(),
                 const SizedBox(height: 16),
                 // Venue Management Section
                 Card(

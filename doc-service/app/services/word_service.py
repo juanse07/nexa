@@ -2,19 +2,40 @@
 
 from __future__ import annotations
 
+import tempfile
 from datetime import datetime, timezone
+from io import BytesIO
+from urllib.request import urlopen
 
 from docx import Document
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Pt, RGBColor
 
-from app.models.schemas import ReportRequest, ReportType
+from app.models.schemas import BrandConfig, ReportRequest, ReportType
 
 _HEADER_BG = RGBColor(0x1E, 0x29, 0x3B)
 _HEADER_FG = RGBColor(0xFF, 0xFF, 0xFF)
 _ALT_ROW_BG = RGBColor(0xF8, 0xFA, 0xFC)
 _BORDER_COLOR = RGBColor(0xCB, 0xD5, 0xE1)
+
+
+def _hex_to_rgb(hex_color: str) -> RGBColor:
+    """Convert a hex color string like '#1e293b' to an RGBColor."""
+    h = hex_color.lstrip("#")
+    return RGBColor(int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+
+
+def _get_colors(req: ReportRequest) -> dict[str, RGBColor]:
+    """Return color dict from brand_config or fall back to module defaults."""
+    bc = req.brand_config or BrandConfig()
+    return {
+        "header_bg": _hex_to_rgb(bc.primary_color),
+        "header_fg": _HEADER_FG,
+        "alt_row_bg": _hex_to_rgb(bc.neutral_color),
+        "border_color": _BORDER_COLOR,
+        "secondary": _hex_to_rgb(bc.secondary_color),
+    }
 
 
 def _set_cell_shading(cell, color: RGBColor):
@@ -27,7 +48,9 @@ def _set_cell_shading(cell, color: RGBColor):
     cell._tc.get_or_add_tcPr().append(shading)
 
 
-def _style_header_row(row, columns: list[str]):
+def _style_header_row(row, columns: list[str], colors: dict[str, RGBColor] | None = None):
+    bg = (colors or {}).get("header_bg", _HEADER_BG)
+    fg = (colors or {}).get("header_fg", _HEADER_FG)
     for i, cell in enumerate(row.cells):
         cell.text = columns[i]
         for p in cell.paragraphs:
@@ -35,11 +58,12 @@ def _style_header_row(row, columns: list[str]):
             for run in p.runs:
                 run.font.bold = True
                 run.font.size = Pt(9)
-                run.font.color.rgb = _HEADER_FG
-        _set_cell_shading(cell, _HEADER_BG)
+                run.font.color.rgb = fg
+        _set_cell_shading(cell, bg)
 
 
-def _add_data_row(table, values: list[str], row_idx: int):
+def _add_data_row(table, values: list[str], row_idx: int, colors: dict[str, RGBColor] | None = None):
+    alt_bg = (colors or {}).get("alt_row_bg", _ALT_ROW_BG)
     row = table.add_row()
     for i, cell in enumerate(row.cells):
         cell.text = str(values[i])
@@ -48,18 +72,19 @@ def _add_data_row(table, values: list[str], row_idx: int):
                 run.font.size = Pt(9)
     if row_idx % 2 == 0:
         for cell in row.cells:
-            _set_cell_shading(cell, _ALT_ROW_BG)
+            _set_cell_shading(cell, alt_bg)
     return row
 
 
-def _add_summary_section(doc: Document, items: list[tuple[str, str]]):
+def _add_summary_section(doc: Document, items: list[tuple[str, str]], colors: dict[str, RGBColor] | None = None):
+    heading_color = (colors or {}).get("header_bg", _HEADER_BG)
     doc.add_paragraph()
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.LEFT
     run = p.add_run("Summary")
     run.font.size = Pt(13)
     run.font.bold = True
-    run.font.color.rgb = _HEADER_BG
+    run.font.color.rgb = heading_color
 
     for label, value in items:
         p = doc.add_paragraph()
@@ -70,11 +95,11 @@ def _add_summary_section(doc: Document, items: list[tuple[str, str]]):
         run_val.font.size = Pt(10)
 
 
-def _build_staff_shifts(doc: Document, req: ReportRequest):
+def _build_staff_shifts(doc: Document, req: ReportRequest, colors: dict[str, RGBColor] | None = None):
     cols = ["Date", "Event", "Client", "Venue", "Role", "Clock In", "Clock Out", "Hours", "Rate", "Earnings"]
     table = doc.add_table(rows=1, cols=len(cols))
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    _style_header_row(table.rows[0], cols)
+    _style_header_row(table.rows[0], cols, colors)
 
     for idx, r in enumerate(req.records):
         _add_data_row(
@@ -92,6 +117,7 @@ def _build_staff_shifts(doc: Document, req: ReportRequest):
                 f"${r.get('earnings', 0):,.2f}",
             ],
             idx,
+            colors,
         )
 
     _add_summary_section(
@@ -101,14 +127,15 @@ def _build_staff_shifts(doc: Document, req: ReportRequest):
             ("Total Hours", str(req.summary.get("totalHours", 0))),
             ("Total Earnings", f"${req.summary.get('totalEarnings', 0):,.2f}"),
         ],
+        colors,
     )
 
 
-def _build_payroll(doc: Document, req: ReportRequest):
+def _build_payroll(doc: Document, req: ReportRequest, colors: dict[str, RGBColor] | None = None):
     cols = ["Staff Name", "Email", "Shifts", "Hours", "Avg Rate", "Total Pay"]
     table = doc.add_table(rows=1, cols=len(cols))
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    _style_header_row(table.rows[0], cols)
+    _style_header_row(table.rows[0], cols, colors)
 
     for idx, r in enumerate(req.records):
         _add_data_row(
@@ -122,6 +149,7 @@ def _build_payroll(doc: Document, req: ReportRequest):
                 f"${r.get('totalPay', 0):,.2f}",
             ],
             idx,
+            colors,
         )
 
     _add_summary_section(
@@ -131,14 +159,15 @@ def _build_payroll(doc: Document, req: ReportRequest):
             ("Total Hours", str(req.summary.get("totalHours", 0))),
             ("Total Payroll", f"${req.summary.get('totalPayroll', 0):,.2f}"),
         ],
+        colors,
     )
 
 
-def _build_attendance(doc: Document, req: ReportRequest):
+def _build_attendance(doc: Document, req: ReportRequest, colors: dict[str, RGBColor] | None = None):
     cols = ["Date", "Event", "Staff", "Role", "Sched. Start", "Sched. End", "Clock In", "Clock Out", "Hours", "Status"]
     table = doc.add_table(rows=1, cols=len(cols))
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    _style_header_row(table.rows[0], cols)
+    _style_header_row(table.rows[0], cols, colors)
 
     for idx, r in enumerate(req.records):
         _add_data_row(
@@ -156,6 +185,7 @@ def _build_attendance(doc: Document, req: ReportRequest):
                 r.get("status", ""),
             ],
             idx,
+            colors,
         )
 
     _add_summary_section(
@@ -164,6 +194,7 @@ def _build_attendance(doc: Document, req: ReportRequest):
             ("Total Records", str(req.summary.get("totalRecords", len(req.records)))),
             ("Total Hours", str(req.summary.get("totalHours", 0))),
         ],
+        colors,
     )
 
 
@@ -174,8 +205,10 @@ _BUILDERS = {
 }
 
 
-def _build_ai_analysis(doc: Document, req: ReportRequest):
+def _build_ai_analysis(doc: Document, req: ReportRequest, colors: dict[str, RGBColor] | None = None):
     """Render AI analysis markdown as Word paragraphs."""
+    header_bg = (colors or {}).get("header_bg", _HEADER_BG)
+    secondary = (colors or {}).get("secondary", RGBColor(0x33, 0x41, 0x55))
     md_text = ""
     if req.records and len(req.records) > 0:
         md_text = req.records[0].get("content", "")
@@ -192,11 +225,11 @@ def _build_ai_analysis(doc: Document, req: ReportRequest):
         elif stripped.startswith("## "):
             h = doc.add_heading(stripped[3:], level=2)
             for run in h.runs:
-                run.font.color.rgb = RGBColor(0x33, 0x41, 0x55)
+                run.font.color.rgb = secondary
         elif stripped.startswith("# "):
             h = doc.add_heading(stripped[2:], level=1)
             for run in h.runs:
-                run.font.color.rgb = _HEADER_BG
+                run.font.color.rgb = header_bg
         elif stripped.startswith("- ") or stripped.startswith("* "):
             p = doc.add_paragraph(stripped[2:], style="List Bullet")
             for run in p.runs:
@@ -212,11 +245,12 @@ def _build_ai_analysis(doc: Document, req: ReportRequest):
                 run.font.size = Pt(10)
                 if i % 2 == 1:
                     run.font.bold = True
-                    run.font.color.rgb = _HEADER_BG
+                    run.font.color.rgb = header_bg
 
 
-def _build_working_hours(doc: Document, req: ReportRequest):
+def _build_working_hours(doc: Document, req: ReportRequest, colors: dict[str, RGBColor] | None = None):
     """Build working hours sheet table for Word."""
+    header_bg = (colors or {}).get("header_bg", _HEADER_BG)
     # Event info block
     summary = req.summary or {}
     info_items = [
@@ -234,7 +268,7 @@ def _build_working_hours(doc: Document, req: ReportRequest):
         run_label = p.add_run(f"{label}: ")
         run_label.font.bold = True
         run_label.font.size = Pt(10)
-        run_label.font.color.rgb = _HEADER_BG
+        run_label.font.color.rgb = header_bg
         run_val = p.add_run(str(value))
         run_val.font.size = Pt(10)
 
@@ -244,7 +278,7 @@ def _build_working_hours(doc: Document, req: ReportRequest):
             "Clock In", "Clock Out", "Break", "Hours", "Signature"]
     table = doc.add_table(rows=1, cols=len(cols))
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    _style_header_row(table.rows[0], cols)
+    _style_header_row(table.rows[0], cols, colors)
 
     total_hours = 0.0
     for idx, r in enumerate(req.records):
@@ -267,6 +301,7 @@ def _build_working_hours(doc: Document, req: ReportRequest):
                 "",  # Signature — blank for manual entry
             ],
             idx,
+            colors,
         )
 
     # Totals row
@@ -306,7 +341,21 @@ def _build_working_hours(doc: Document, req: ReportRequest):
     p2.add_run("_" * 40).font.size = Pt(10)
 
 
+def _add_logo(doc: Document, logo_url: str) -> None:
+    """Download logo from URL and insert into document header area."""
+    try:
+        with urlopen(logo_url) as resp:
+            logo_data = resp.read()
+        stream = BytesIO(logo_data)
+        doc.add_picture(stream, width=Inches(2.0))
+    except Exception:
+        pass  # Logo fetch failed — continue without it
+
+
 def create_report(req: ReportRequest, output_path: str) -> None:
+    colors = _get_colors(req)
+    header_bg = colors["header_bg"]
+
     # Working hours uses its own builder
     if req.report_type == ReportType.WORKING_HOURS:
         builder = _build_working_hours
@@ -320,10 +369,15 @@ def create_report(req: ReportRequest, output_path: str) -> None:
 
     doc = Document()
 
+    # Logo
+    bc = req.brand_config
+    if bc and bc.logo_header_url:
+        _add_logo(doc, bc.logo_header_url)
+
     # Title
     title_para = doc.add_heading(req.title, level=1)
     for run in title_para.runs:
-        run.font.color.rgb = _HEADER_BG
+        run.font.color.rgb = header_bg
 
     # Subtitle with period
     subtitle = doc.add_paragraph()
@@ -333,7 +387,7 @@ def create_report(req: ReportRequest, output_path: str) -> None:
 
     doc.add_paragraph()
 
-    builder(doc, req)
+    builder(doc, req, colors)
 
     # Footer
     doc.add_paragraph()
