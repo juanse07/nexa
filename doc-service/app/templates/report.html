@@ -21,7 +21,7 @@
     .header { background: var(--brand-primary); color: #fff; padding: 24px 32px; margin: -2cm -2cm 0 -2cm; }
     .header h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
     .header .subtitle { font-size: 12px; opacity: 0.85; }
-    .header-logo { max-height: 40px; max-width: 160px; margin-bottom: 8px; }
+    .header-logo { max-height: 100px; max-width: 280px; margin-bottom: 12px; display: block; }
     .accent-divider { height: 2px; background: var(--brand-accent); margin: 0 -2cm 24px -2cm; }
     .meta { display: flex; justify-content: space-between; margin-bottom: 20px; padding: 12px 16px; background: #f8f9fb; border-radius: 6px; border: 0.5px solid #e5e7eb; }
     .meta-item { text-align: center; }
@@ -65,23 +65,11 @@
   </style>
 </head>
 <body>
-  {% if template_design == 'executive' and logo_header_url %}
-  <div class="header">
-    <div style="display:flex;align-items:center;gap:16px;">
-      <img class="header-logo" src="{{ logo_header_url }}" alt="Logo">
-      <div>
-        <h1>{{ title }}</h1>
-        <div class="subtitle">{{ company_name }} &mdash; {{ period_label }}</div>
-      </div>
-    </div>
-  </div>
-  {% else %}
   <div class="header">
     {% if logo_header_url %}<img class="header-logo" src="{{ logo_header_url }}" alt="Logo">{% endif %}
     <h1>{{ title }}</h1>
     <div class="subtitle">{{ company_name }} &mdash; {{ period_label }}</div>
   </div>
-  {% endif %}
   <div class="accent-divider"></div>
 
   <div class="meta">

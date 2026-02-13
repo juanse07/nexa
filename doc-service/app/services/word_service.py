@@ -378,7 +378,7 @@ def _add_logo(doc: Document, logo_url: str) -> None:
         with urlopen(logo_url) as resp:
             logo_data = resp.read()
         stream = BytesIO(logo_data)
-        doc.add_picture(stream, width=Inches(2.0))
+        doc.add_picture(stream, width=Inches(3.5))
     except Exception:
         pass  # Logo fetch failed — continue without it
 

@@ -58,9 +58,9 @@ export async function processLogo(
   // Upload original
   const original = await uploadBrandAsset(buffer, managerId, `${baseName}-original.png`, mimeType);
 
-  // Generate header variant (max 300x80px, PNG)
+  // Generate header variant (max 800x200px, PNG — large enough for documents)
   const headerBuffer = await sharp(buffer)
-    .resize({ width: 300, height: 80, fit: 'inside', withoutEnlargement: true })
+    .resize({ width: 800, height: 200, fit: 'inside', withoutEnlargement: true })
     .png()
     .toBuffer();
   const header = await uploadBrandAsset(headerBuffer, managerId, `${baseName}-header.png`, 'image/png');
