@@ -185,7 +185,7 @@ const ManagerSchema = new Schema<ManagerDocument>(
       secondaryColor: { type: String, trim: true },
       accentColor: { type: String, trim: true },
       neutralColor: { type: String, trim: true },
-      preferredDocDesign: { type: String, enum: ['plain', 'classic', 'executive'], default: 'classic' },
+      preferredDocDesign: { type: String, enum: ['plain', 'classic', 'executive', 'modern'], default: 'classic' },
       createdAt: { type: Date },
       updatedAt: { type: Date },
     },

@@ -33,31 +33,45 @@ def _get_theme_config(req: ReportRequest) -> dict:
 
     if design == TemplateDesign.PLAIN:
         return {
-            "header_bg": RGBColor(0xF9, 0xFA, 0xFB),
-            "header_fg": RGBColor(0x37, 0x41, 0x51),
+            "header_bg": RGBColor(0xFF, 0xFF, 0xFF),
+            "header_fg": RGBColor(0x4B, 0x55, 0x63),
             "alt_row_bg": _ALT_ROW_BG,
             "border_color": _BORDER_COLOR,
             "secondary": RGBColor(0x37, 0x41, 0x51),
+            "title_color": RGBColor(0x00, 0x00, 0x00),
             "show_logo": False,
             "use_zebra": False,
         }
     elif design == TemplateDesign.EXECUTIVE:
         return {
-            "header_bg": RGBColor(0xF8, 0xFA, 0xFC),
+            "header_bg": RGBColor(0xFF, 0xFF, 0xFF),
             "header_fg": _hex_to_rgb(bc.primary_color),
-            "alt_row_bg": RGBColor(0xFA, 0xFB, 0xFC),
+            "alt_row_bg": RGBColor(0xFC, 0xFC, 0xFD),
             "border_color": _BORDER_COLOR,
             "secondary": _hex_to_rgb(bc.secondary_color),
+            "title_color": _hex_to_rgb(bc.primary_color),
             "show_logo": True,
             "use_zebra": True,
         }
-    else:  # classic — uses fixed light gray for zebra, NOT brand-neutral
+    elif design == TemplateDesign.MODERN:
         return {
-            "header_bg": _hex_to_rgb(bc.primary_color),
-            "header_fg": _HEADER_FG,
-            "alt_row_bg": _ALT_ROW_BG,
+            "header_bg": RGBColor(0xF7, 0xF7, 0xF8),
+            "header_fg": RGBColor(0x9C, 0xA3, 0xAF),
+            "alt_row_bg": RGBColor(0xFA, 0xFA, 0xFB),
+            "border_color": RGBColor(0xF0, 0xF0, 0xF0),
+            "secondary": RGBColor(0x4B, 0x55, 0x63),
+            "title_color": RGBColor(0x00, 0x00, 0x00),
+            "show_logo": True,
+            "use_zebra": True,
+        }
+    else:  # classic — white header, grey table header, brand accent as line
+        return {
+            "header_bg": RGBColor(0xFA, 0xFA, 0xFA),
+            "header_fg": RGBColor(0x4B, 0x55, 0x63),
+            "alt_row_bg": RGBColor(0xFA, 0xFB, 0xFC),
             "border_color": _BORDER_COLOR,
-            "secondary": _hex_to_rgb(bc.secondary_color),
+            "secondary": RGBColor(0x37, 0x41, 0x51),
+            "title_color": _hex_to_rgb(bc.primary_color),
             "show_logo": True,
             "use_zebra": True,
         }
@@ -405,8 +419,8 @@ def create_report(req: ReportRequest, output_path: str) -> None:
     if bc and bc.logo_header_url and theme.get("show_logo", True):
         _add_logo(doc, bc.logo_header_url)
 
-    # Title — use primary color for classic/executive, dark for plain
-    title_color = _hex_to_rgb((bc or BrandConfig()).primary_color) if req.template_design != TemplateDesign.PLAIN else RGBColor(0x1A, 0x1A, 0x1A)
+    # Title — use theme-specific title color
+    title_color = theme.get("title_color", RGBColor(0x1A, 0x1A, 0x1A))
     title_para = doc.add_heading(req.title, level=1)
     for run in title_para.runs:
         run.font.color.rgb = title_color

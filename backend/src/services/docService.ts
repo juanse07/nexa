@@ -20,7 +20,7 @@ export interface BrandConfig {
   logo_watermark_url?: string;
 }
 
-export type TemplateDesign = 'plain' | 'classic' | 'executive';
+export type TemplateDesign = 'plain' | 'classic' | 'executive' | 'modern';
 
 export interface ReportPayload {
   report_type: ReportType;

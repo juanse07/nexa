@@ -16,29 +16,38 @@ def _get_brand_colors(req: ReportRequest) -> dict[str, str]:
 
     if design == TemplateDesign.PLAIN:
         return {
-            "primary": "#374151",
+            "primary": "#000000",
             "secondary": "#374151",
-            "neutral": "#F9FAFB",
-            "header_bg": "#F9FAFB",
-            "header_fg": "#374151",
+            "neutral": "#FFFFFF",
+            "header_bg": "#FFFFFF",
+            "header_fg": "#4B5563",
             "use_zebra": False,
         }
     elif design == TemplateDesign.EXECUTIVE:
         return {
             "primary": bc.primary_color.upper(),
             "secondary": bc.secondary_color.upper(),
-            "neutral": "#FAFBFC",
-            "header_bg": "#F8FAFC",
+            "neutral": "#FCFCFD",
+            "header_bg": "#FFFFFF",
             "header_fg": bc.primary_color.upper(),
             "use_zebra": True,
         }
-    else:  # classic — fixed light gray for zebra, NOT brand-neutral
+    elif design == TemplateDesign.MODERN:
+        return {
+            "primary": "#000000",
+            "secondary": "#4B5563",
+            "neutral": "#FAFAFB",
+            "header_bg": "#F7F7F8",
+            "header_fg": "#9CA3AF",
+            "use_zebra": True,
+        }
+    else:  # classic — white/grey structural palette, brand accent as title color
         return {
             "primary": bc.primary_color.upper(),
-            "secondary": bc.secondary_color.upper(),
-            "neutral": "#F8F9FA",
-            "header_bg": bc.primary_color.upper(),
-            "header_fg": "#FFFFFF",
+            "secondary": "#374151",
+            "neutral": "#FAFBFC",
+            "header_bg": "#FAFAFA",
+            "header_fg": "#4B5563",
             "use_zebra": True,
         }
 

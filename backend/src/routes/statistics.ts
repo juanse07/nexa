@@ -1380,7 +1380,7 @@ const aiAnalysisDocSchema = z.object({
     totalPayroll: z.number().optional(),
     fulfillmentRate: z.number().optional(),
   }).optional(),
-  template_design: z.enum(['plain', 'classic', 'executive']).optional(),
+  template_design: z.enum(['plain', 'classic', 'executive', 'modern']).optional(),
 });
 
 /**
@@ -1435,7 +1435,7 @@ router.post('/statistics/manager/ai-analysis-doc', requireAuth, async (req: Requ
 
 const workingHoursSchema = z.object({
   format: z.enum(['pdf', 'docx']).default('pdf'),
-  template_design: z.enum(['plain', 'classic', 'executive']).optional(),
+  template_design: z.enum(['plain', 'classic', 'executive', 'modern']).optional(),
 });
 
 /**

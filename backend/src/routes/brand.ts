@@ -124,7 +124,7 @@ router.put('/colors', requireAuth, async (req, res) => {
 
 // Zod schema for doc design preference
 const DocDesignSchema = z.object({
-  design: z.enum(['plain', 'classic', 'executive']),
+  design: z.enum(['plain', 'classic', 'executive', 'modern']),
 });
 
 /**

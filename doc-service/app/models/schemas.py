@@ -16,6 +16,7 @@ class TemplateDesign(str, Enum):
     PLAIN = "plain"
     CLASSIC = "classic"
     EXECUTIVE = "executive"
+    MODERN = "modern"
 
 
 class ReportType(str, Enum):
