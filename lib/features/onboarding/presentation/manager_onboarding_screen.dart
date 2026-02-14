@@ -162,21 +162,22 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: const Color(0xFFFFF9E5),
+              color: AppColors.secondaryPurple.withValues(alpha: 0.08),
               shape: BoxShape.circle,
             ),
-            child: const Icon(
-              Icons.location_city,
+            child: Icon(
+              Icons.event_note_rounded,
               size: 80,
-              color: AppColors.yellow,
+              color: AppColors.secondaryPurple,
             ),
           ),
           const SizedBox(height: 32),
-          const Text(
-            'Welcome to Nexa!',
+          Text(
+            'Welcome to FlowShift!',
             style: TextStyle(
               fontSize: 32,
               fontWeight: FontWeight.bold,
+              color: AppColors.primaryPurple,
             ),
             textAlign: TextAlign.center,
           ),
@@ -201,7 +202,7 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
               },
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: AppColors.yellow,
+                backgroundColor: AppColors.primaryPurple,
               ),
               child: const Text(
                 'Get Started',
@@ -290,7 +291,7 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
                   : null,
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: AppColors.yellow,
+                backgroundColor: AppColors.primaryPurple,
               ),
               child: const Text(
                 'Continue',
@@ -322,9 +323,9 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const CircularProgressIndicator(
+            CircularProgressIndicator(
               strokeWidth: 3,
-              valueColor: AlwaysStoppedAnimation<Color>(AppColors.yellow),
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.secondaryPurple),
             ),
             const SizedBox(height: 32),
             Text(
@@ -418,10 +419,10 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
               onPressed: _finishOnboarding,
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: AppColors.yellow,
+                backgroundColor: AppColors.primaryPurple,
               ),
               child: const Text(
-                'Start Using Nexa',
+                'Start Using FlowShift',
                 style: TextStyle(fontSize: 16),
               ),
             ),

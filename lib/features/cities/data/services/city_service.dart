@@ -73,7 +73,7 @@ class CityService {
       '/ai/discover-venues',
       data: payload,
       options: Options(
-        receiveTimeout: const Duration(seconds: 120), // 2 minutes for AI processing
+        receiveTimeout: const Duration(seconds: 200), // 3+ minutes for AI web search processing
       ),
     );
 

@@ -28,7 +28,7 @@ class _SubscriptionPaywallPageState extends State<SubscriptionPaywallPage> {
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('🎉 Welcome to Nexa Pro! All business features unlocked.'),
+            content: Text('🎉 Welcome to FlowShift Pro! All business features unlocked.'),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 3),
           ),
@@ -148,7 +148,7 @@ class _SubscriptionPaywallPageState extends State<SubscriptionPaywallPage> {
 
               // Title
               const Text(
-                'Nexa Pro',
+                'FlowShift Pro',
                 style: TextStyle(
                   fontSize: 36,
                   fontWeight: FontWeight.bold,

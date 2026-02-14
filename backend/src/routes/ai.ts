@@ -4094,7 +4094,7 @@ YOU MUST RETURN AT LEAST ${minVenues} VENUES. Prioritize the most popular and la
     };
 
     const requestBody = {
-      model: 'compound-beta', // Groq Compound AI with built-in web search (temporarily replacing Perplexity sonar-pro)
+      model: 'groq/compound', // Groq Compound AI with built-in web search (temporarily replacing Perplexity sonar-pro)
       messages: [
         { role: 'user', content: prompt }
       ],
@@ -4107,7 +4107,7 @@ YOU MUST RETURN AT LEAST ${minVenues} VENUES. Prioritize the most popular and la
     const response = await axios.post(
       'https://api.groq.com/openai/v1/chat/completions',
       requestBody,
-      { headers, validateStatus: () => true, timeout: 90000 } // 90s timeout for web search
+      { headers, validateStatus: () => true, timeout: 180000 } // 180s timeout for web search
     );
 
     if (response.status !== 200) {

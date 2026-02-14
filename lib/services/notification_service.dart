@@ -186,8 +186,8 @@ class NotificationService {
   ) async {
     const androidDetails = AndroidNotificationDetails(
       'nexa_channel',
-      'Nexa Notifications',
-      channelDescription: 'Notifications for Nexa app',
+      'FlowShift Notifications',
+      channelDescription: 'Notifications for FlowShift app',
       importance: Importance.high,
       priority: Priority.high,
     );

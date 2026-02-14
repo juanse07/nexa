@@ -44,6 +44,9 @@ class ManagerProfile {
   final List<CaricatureHistoryItem> caricatureHistory;
   final String? appId;
   final String? phoneNumber;
+  final String? provider;
+  final List<Map<String, dynamic>> linkedProviders;
+  final String? authPhoneNumber;
 
   ManagerProfile({
     this.id,
@@ -56,10 +59,14 @@ class ManagerProfile {
     this.caricatureHistory = const [],
     this.appId,
     this.phoneNumber,
+    this.provider,
+    this.linkedProviders = const [],
+    this.authPhoneNumber,
   });
 
   factory ManagerProfile.fromMap(Map<String, dynamic> map) {
     final historyRaw = map['caricatureHistory'] as List<dynamic>? ?? [];
+    final linkedRaw = map['linked_providers'] as List<dynamic>? ?? [];
     return ManagerProfile(
       id: map['id']?.toString(),
       email: map['email']?.toString(),
@@ -73,6 +80,11 @@ class ManagerProfile {
           .toList(),
       appId: map['app_id']?.toString(),             // Backend returns snake_case
       phoneNumber: map['phone_number']?.toString(), // Backend returns snake_case
+      provider: map['provider']?.toString(),
+      linkedProviders: linkedRaw
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList(),
+      authPhoneNumber: map['auth_phone_number']?.toString(),
     );
   }
 }

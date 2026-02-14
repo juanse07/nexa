@@ -3,7 +3,7 @@ class AppConstants {
   AppConstants._();
 
   // App Information
-  static const String appName = 'Nexa';
+  static const String appName = 'FlowShift';
   static const String appVersion = '1.0.0';
   static const String appBuildNumber = '1';
 

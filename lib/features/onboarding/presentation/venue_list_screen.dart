@@ -226,7 +226,7 @@ class _VenueListScreenState extends State<VenueListScreen> {
       badgeIcon = Icons.person;
       badgeText = 'Manual';
     } else {
-      badgeColor = Colors.blue;
+      badgeColor = AppColors.navySpaceCadet;
       badgeIcon = Icons.smart_toy;
       badgeText = 'AI';
     }
@@ -398,7 +398,7 @@ class _VenueListScreenState extends State<VenueListScreen> {
                                         ? AppColors.oceanBlue
                                         : venue.isManual
                                             ? Colors.green
-                                            : Theme.of(context).primaryColor,
+                                            : AppColors.navySpaceCadet,
                                     child: Icon(
                                       venue.isFromPlaces
                                           ? Icons.place

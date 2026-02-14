@@ -72,6 +72,10 @@ router.get('/managers/me', requireAuth, async (req, res) => {
       originalPicture: (manager as any).originalPicture || null,
       caricatureHistory: (manager as any).caricatureHistory || [],
       app_id: (manager as any).app_id,
+      provider: (manager as any).provider,
+      linked_providers: (manager as any).linked_providers || [],
+      auth_phone_number: (manager as any).auth_phone_number || null,
+      phone_number: (manager as any).phone_number || null,
       preferredCity: (manager as any).preferredCity, // DEPRECATED
       cities: (manager as any).cities || [],
       venueList: (manager as any).venueList || [],

@@ -474,7 +474,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Finish these steps to activate your Nexa workspace:',
+              'Finish these steps to activate your FlowShift workspace:',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 12),

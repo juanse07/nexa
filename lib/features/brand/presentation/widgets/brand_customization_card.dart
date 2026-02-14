@@ -99,7 +99,7 @@ class _BrandCustomizationCardState extends State<BrandCustomizationCard> {
         title: const Text('Remove Branding?'),
         content: const Text(
           'This will delete your logo and custom colors. '
-          'Exported documents will revert to the default Nexa styling.',
+          'Exported documents will revert to the default FlowShift styling.',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),

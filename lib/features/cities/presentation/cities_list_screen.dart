@@ -178,6 +178,31 @@ class _CitiesListScreenState extends State<CitiesListScreen> {
   }
 
   Future<void> _discoverVenues(City city) async {
+    // Show confirmation dialog warning about wait time
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Discover Venues'),
+        content: Text(
+          'AI will search the web for event venues in ${city.name}. '
+          'This can take up to 2-3 minutes depending on the city size.\n\n'
+          'Please keep the app open during the search.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Start Search'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
     setState(() {
       _discoveringVenues[city.name] = true;
     });
@@ -364,7 +389,7 @@ class _CitiesListScreenState extends State<CitiesListScreen> {
                                           )
                                         : const Icon(Icons.search),
                                     label: Text(
-                                      isDiscovering ? 'Discovering...' : 'Discover Venues',
+                                      isDiscovering ? 'Searching web... (up to 3 min)' : 'Discover Venues',
                                     ),
                                   ),
                                 ),

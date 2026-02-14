@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,6 +8,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get_it/get_it.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:nexa/core/network/api_client.dart';
+import 'package:nexa/features/auth/data/services/phone_auth_service.dart';
 import 'package:nexa/features/users/data/services/manager_service.dart';
 import 'package:nexa/services/file_upload_service.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
@@ -33,7 +35,11 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
   bool _saving = false;
   bool _uploading = false;
   bool _reverting = false;
+  bool _linkingPhone = false;
   String? _error;
+
+  /// The loaded profile data (for displaying auth info).
+  ManagerProfile? _profile;
 
   /// The original (pre-caricature) picture URL from the backend.
   String? _originalPicture;
@@ -61,6 +67,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
         _pictureCtrl.text = me.picture ?? '';
         _originalPicture = me.originalPicture;
         _caricatureHistory = me.caricatureHistory;
+        _profile = me;
         _loading = false;
       });
     } catch (e) {
@@ -336,24 +343,251 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
                     keyboardType: TextInputType.number,
                     maxLength: 9,
                   ),
-                  const SizedBox(height: 4),
-                  // Collapsible URL field for manual entry
-                  ExpansionTile(
-                    title: const Text('Picture URL (advanced)', style: TextStyle(fontSize: 14, color: Colors.grey)),
-                    tilePadding: EdgeInsets.zero,
-                    childrenPadding: EdgeInsets.zero,
-                    children: [
-                      TextField(
-                        controller: _pictureCtrl,
-                        decoration: const InputDecoration(labelText: 'Picture URL'),
-                        onChanged: (_) => setState(() {}),
-                      ),
-                    ],
-                  ),
+                  if (_profile != null) ...[
+                    const SizedBox(height: 24),
+                    _buildAccountSection(),
+                  ],
                 ],
               ),
             ),
     );
+  }
+
+  // ── Account section ─────────────────────────────────────────
+
+  Widget _buildAccountSection() {
+    final profile = _profile!;
+    final primary = profile.provider ?? 'unknown';
+    final linked = profile.linkedProviders;
+
+    // Determine which providers are linked (besides primary)
+    final linkedNames = linked.map((lp) => lp['provider']?.toString() ?? '').toSet();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Section header
+        Row(
+          children: [
+            Icon(Icons.shield_outlined, size: 18, color: AppColors.primaryPurple.withValues(alpha: 0.7)),
+            const SizedBox(width: 8),
+            Text(
+              'Account',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primaryPurple,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+
+        // Email (read-only)
+        if (profile.email != null && profile.email!.isNotEmpty)
+          _buildInfoRow(Icons.email_outlined, 'Email', profile.email!),
+
+        // Phone (read-only)
+        if (profile.authPhoneNumber != null && profile.authPhoneNumber!.isNotEmpty)
+          _buildInfoRow(Icons.phone_outlined, 'Phone', profile.authPhoneNumber!),
+
+        const SizedBox(height: 14),
+
+        // Linked accounts header
+        Text(
+          'Linked Accounts',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textTertiary,
+          ),
+        ),
+        const SizedBox(height: 8),
+
+        // Provider chips
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _buildProviderChip(
+              'google',
+              isPrimary: primary == 'google',
+              isLinked: primary == 'google' || linkedNames.contains('google'),
+            ),
+            _buildProviderChip(
+              'apple',
+              isPrimary: primary == 'apple',
+              isLinked: primary == 'apple' || linkedNames.contains('apple'),
+            ),
+            _buildProviderChip(
+              'phone',
+              isPrimary: primary == 'phone',
+              isLinked: primary == 'phone' || linkedNames.contains('phone'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: AppColors.textMuted),
+          const SizedBox(width: 8),
+          Text(
+            '$label: ',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textTertiary,
+            ),
+          ),
+          Flexible(
+            child: Text(
+              value,
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProviderChip(String provider, {required bool isPrimary, required bool isLinked}) {
+    final label = _providerDisplayName(provider);
+    final icon = _providerIcon(provider);
+    final color = _providerColor(provider);
+
+    if (isPrimary) {
+      // Primary provider — solid chip with badge
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 6),
+            Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: color)),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Text('Primary', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+    } else if (isLinked) {
+      // Linked provider — outlined with checkmark
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceGray,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 6),
+            Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textSecondary)),
+            const SizedBox(width: 4),
+            Icon(Icons.check_circle, size: 14, color: AppColors.success),
+          ],
+        ),
+      );
+    } else {
+      // Not linked — show Link button or Coming soon
+      final canLink = provider == 'phone';
+      return GestureDetector(
+        onTap: canLink ? _startPhoneLinking : null,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.borderLight),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: AppColors.textMuted),
+              const SizedBox(width: 6),
+              Text(label, style: TextStyle(fontSize: 13, color: AppColors.textMuted)),
+              const SizedBox(width: 6),
+              if (canLink)
+                _linkingPhone
+                    ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 1.5))
+                    : Text('Link', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.secondaryPurple))
+              else
+                Text('Coming soon', style: TextStyle(fontSize: 10, color: AppColors.textMuted, fontStyle: FontStyle.italic)),
+            ],
+          ),
+        ),
+      );
+    }
+  }
+
+  String _providerDisplayName(String provider) {
+    switch (provider) {
+      case 'google': return 'Google';
+      case 'apple': return 'Apple';
+      case 'phone': return 'Phone';
+      default: return provider;
+    }
+  }
+
+  IconData _providerIcon(String provider) {
+    switch (provider) {
+      case 'google': return Icons.g_mobiledata_rounded;
+      case 'apple': return Icons.apple_rounded;
+      case 'phone': return Icons.phone_iphone_rounded;
+      default: return Icons.link;
+    }
+  }
+
+  Color _providerColor(String provider) {
+    switch (provider) {
+      case 'google': return const Color(0xFF4285F4);
+      case 'apple': return AppColors.textDark;
+      case 'phone': return AppColors.success;
+      default: return AppColors.textMuted;
+    }
+  }
+
+  // ── Phone linking flow ─────────────────────────────────────
+
+  Future<void> _startPhoneLinking() async {
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _PhoneLinkSheet(),
+    );
+    if (result == true && mounted) {
+      // Reload profile to pick up the newly linked phone
+      setState(() => _linkingPhone = true);
+      await _load();
+      setState(() => _linkingPhone = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Phone number linked successfully!')),
+        );
+      }
+    }
   }
 
   /// Builds the row of action buttons below the avatar.
@@ -809,6 +1043,275 @@ class _FullImageViewer extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Bottom sheet for linking a phone number to the current account.
+/// Handles Firebase OTP verification directly (bypasses PhoneAuthService login
+/// flow), then calls [PhoneAuthService.linkPhoneToAccount] to link via backend.
+class _PhoneLinkSheet extends StatefulWidget {
+  const _PhoneLinkSheet();
+
+  @override
+  State<_PhoneLinkSheet> createState() => _PhoneLinkSheetState();
+}
+
+class _PhoneLinkSheetState extends State<_PhoneLinkSheet> {
+  final _phoneCtrl = TextEditingController();
+  final _otpCtrl = TextEditingController();
+  final _linkService = PhoneAuthService();
+
+  String? _verificationId;
+  int? _resendToken;
+  bool _sendingCode = false;
+  bool _codeSent = false;
+  bool _verifying = false;
+  String? _error;
+  String _countryCode = '+1';
+
+  static const _countryCodes = [
+    ('+1', 'US'),
+    ('+44', 'UK'),
+    ('+52', 'MX'),
+    ('+34', 'ES'),
+    ('+33', 'FR'),
+    ('+49', 'DE'),
+  ];
+
+  Future<void> _sendOtp() async {
+    final phone = '$_countryCode${_phoneCtrl.text.trim()}';
+    if (_phoneCtrl.text.trim().length < 7) {
+      setState(() => _error = 'Please enter a valid phone number');
+      return;
+    }
+    setState(() { _sendingCode = true; _error = null; });
+
+    try {
+      await FirebaseAuth.instance.verifyPhoneNumber(
+        phoneNumber: phone,
+        verificationCompleted: (PhoneAuthCredential credential) async {
+          // Auto-verification on Android — sign in and link immediately
+          await _signInAndLink(credential);
+        },
+        verificationFailed: (FirebaseAuthException e) {
+          if (!mounted) return;
+          String msg = 'Verification failed';
+          if (e.code == 'invalid-phone-number') msg = 'Invalid phone number format';
+          else if (e.code == 'too-many-requests') msg = 'Too many attempts. Try later.';
+          else if (e.message != null) msg = e.message!;
+          setState(() { _sendingCode = false; _error = msg; });
+        },
+        codeSent: (String vId, int? resendToken) {
+          if (!mounted) return;
+          _verificationId = vId;
+          _resendToken = resendToken;
+          setState(() { _sendingCode = false; _codeSent = true; });
+        },
+        codeAutoRetrievalTimeout: (String vId) {
+          _verificationId = vId;
+        },
+        forceResendingToken: _resendToken,
+        timeout: const Duration(seconds: 60),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { _sendingCode = false; _error = 'Failed to send code: $e'; });
+    }
+  }
+
+  Future<void> _verifyAndLink() async {
+    if (_otpCtrl.text.trim().length < 6) {
+      setState(() => _error = 'Please enter the 6-digit code');
+      return;
+    }
+    if (_verificationId == null) {
+      setState(() => _error = 'No verification in progress');
+      return;
+    }
+    setState(() { _verifying = true; _error = null; });
+
+    try {
+      final credential = PhoneAuthProvider.credential(
+        verificationId: _verificationId!,
+        smsCode: _otpCtrl.text.trim(),
+      );
+      await _signInAndLink(credential);
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      String msg = 'Verification failed';
+      if (e.code == 'invalid-verification-code') msg = 'Invalid code. Check and try again.';
+      else if (e.code == 'session-expired') msg = 'Code expired. Request a new one.';
+      setState(() { _verifying = false; _error = msg; });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { _verifying = false; _error = 'Verification failed: $e'; });
+    }
+  }
+
+  /// Sign in with Firebase credential, get ID token, link via backend, sign out.
+  Future<void> _signInAndLink(PhoneAuthCredential credential) async {
+    try {
+      final userCred = await FirebaseAuth.instance.signInWithCredential(credential);
+      final user = userCred.user;
+      if (user == null) {
+        if (!mounted) return;
+        setState(() { _verifying = false; _error = 'Firebase authentication failed'; });
+        return;
+      }
+      final idToken = await user.getIdToken();
+      if (idToken == null) {
+        await FirebaseAuth.instance.signOut();
+        if (!mounted) return;
+        setState(() { _verifying = false; _error = 'Failed to get auth token'; });
+        return;
+      }
+
+      // Link phone to existing account via backend
+      final linked = await _linkService.linkPhoneToAccount(idToken);
+      await FirebaseAuth.instance.signOut();
+      if (!mounted) return;
+
+      if (linked) {
+        Navigator.pop(context, true);
+      } else {
+        setState(() { _verifying = false; _error = 'Failed to link phone number'; });
+      }
+    } catch (e) {
+      await FirebaseAuth.instance.signOut();
+      if (!mounted) return;
+      setState(() { _verifying = false; _error = 'Failed to link: $e'; });
+    }
+  }
+
+  @override
+  void dispose() {
+    _phoneCtrl.dispose();
+    _otpCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.fromLTRB(20, 12, 20, MediaQuery.of(context).viewInsets.bottom + 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle
+          Container(
+            width: 40,
+            height: 4,
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(
+              color: AppColors.borderMedium,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Text(
+            'Link Phone Number',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.textDark),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Add a phone number as an alternative sign-in method',
+            style: TextStyle(fontSize: 13, color: AppColors.textMuted),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 20),
+
+          if (!_codeSent) ...[
+            // Phone number input
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: AppColors.border),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _countryCode,
+                      items: _countryCodes.map((c) {
+                        return DropdownMenuItem(value: c.$1, child: Text('${c.$1} ${c.$2}', style: const TextStyle(fontSize: 14)));
+                      }).toList(),
+                      onChanged: (v) => setState(() => _countryCode = v ?? '+1'),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _phoneCtrl,
+                    decoration: const InputDecoration(
+                      hintText: 'Phone number',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                    ),
+                    keyboardType: TextInputType.phone,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _sendingCode ? null : _sendOtp,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.success,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: _sendingCode
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text('Send Verification Code', style: TextStyle(fontWeight: FontWeight.w600)),
+              ),
+            ),
+          ] else ...[
+            // OTP input
+            TextField(
+              controller: _otpCtrl,
+              decoration: const InputDecoration(
+                hintText: '6-digit code',
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+              ),
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(6)],
+              autofocus: true,
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _verifying ? null : _verifyAndLink,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.success,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: _verifying
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text('Verify & Link', style: TextStyle(fontWeight: FontWeight.w600)),
+              ),
+            ),
+          ],
+
+          if (_error != null) ...[
+            const SizedBox(height: 10),
+            Text(_error!, style: TextStyle(fontSize: 12, color: AppColors.error), textAlign: TextAlign.center),
+          ],
+        ],
       ),
     );
   }

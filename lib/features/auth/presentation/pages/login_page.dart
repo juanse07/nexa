@@ -7,6 +7,7 @@ import 'package:nexa/features/auth/data/services/auth_service.dart';
 import 'package:nexa/features/auth/data/services/apple_web_auth.dart';
 import 'package:nexa/features/auth/presentation/widgets/phone_login_widget.dart';
 import 'package:nexa/features/users/presentation/pages/manager_onboarding_page.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -113,7 +114,6 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final size = MediaQuery.of(context).size;
     final env = Environment.instance;
     final bool appleWebAvailable = kIsWeb &&
@@ -122,408 +122,255 @@ class _LoginPageState extends State<LoginPage> {
         env.contains('APPLE_REDIRECT_URI');
     final bool isiOS = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
     final bool showApple = isiOS || appleWebAvailable;
-    final bool isDesktop = ResponsiveLayout.shouldUseDesktopLayout(context);
 
     return PopScope(
       canPop: false,
       child: Scaffold(
-        body: Stack(
-          children: [
-            // Background
-            if (isDesktop)
-              // Professional white background with purple geometric shapes for desktop
-              Container(
-                color: Colors.white,
-                child: Stack(
-                  children: [
-                    // Top-left purple circle
-                    Positioned(
-                      top: -100,
-                      left: -100,
-                      child: Container(
-                        width: 300,
-                        height: 300,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: [
-                              theme.colorScheme.primary.withOpacity(0.15),
-                              theme.colorScheme.primary.withOpacity(0.05),
-                              Colors.transparent,
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    // Bottom-right purple shape
-                    Positioned(
-                      bottom: -150,
-                      right: -100,
-                      child: Container(
-                        width: 400,
-                        height: 400,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: [
-                              theme.colorScheme.secondary.withOpacity(0.12),
-                              theme.colorScheme.secondary.withOpacity(0.06),
-                              Colors.transparent,
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    // Middle accent shape
-                    Positioned(
-                      top: size.height * 0.3,
-                      right: size.width * 0.15,
-                      child: Container(
-                        width: 200,
-                        height: 200,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(40),
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              theme.colorScheme.primaryContainer.withOpacity(0.1),
-                              theme.colorScheme.secondaryContainer.withOpacity(0.08),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    // Small accent dot
-                    Positioned(
-                      top: size.height * 0.2,
-                      left: size.width * 0.25,
-                      child: Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: theme.colorScheme.tertiary.withOpacity(0.08),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            else
-              // Gradient background for mobile
-              Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      theme.colorScheme.primaryContainer.withOpacity(0.3),
-                      theme.colorScheme.surfaceContainerLowest,
-                      theme.colorScheme.secondaryContainer.withOpacity(0.2),
-                    ],
-                  ),
-                ),
-              ),
-            // Content
-            SafeArea(
+        body: Container(
+          width: double.infinity,
+          height: double.infinity,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                AppColors.primaryPurple,    // #2C3E50 navy
+                Color(0xFF1A252F),          // darker navy
+              ],
+            ),
+          ),
+          child: SafeArea(
             child: Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
+                padding: const EdgeInsets.symmetric(horizontal: 28),
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 440),
+                  constraints: const BoxConstraints(maxWidth: 420),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Logo Section
+                      const SizedBox(height: 40),
+
+                      // Logo
                       Container(
-                        padding: const EdgeInsets.all(20),
+                        padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: theme.colorScheme.surface,
                           shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: theme.colorScheme.primary.withOpacity(0.1),
-                              blurRadius: 20,
-                              offset: const Offset(0, 10),
-                            ),
-                          ],
+                          color: Colors.white.withValues(alpha: 0.1),
                         ),
                         child: Image.asset(
-                          'assets/appbar_logo.png',
+                          'assets/logo_icon_square_transparent.png',
                           height: 80,
                           width: 80,
                         ),
                       ),
+                      const SizedBox(height: 24),
+
+                      // Brand name
+                      const Text(
+                        'FlowShift',
+                        style: TextStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          letterSpacing: -1,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Manager',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w400,
+                          color: Colors.white.withValues(alpha: 0.6),
+                          letterSpacing: 4,
+                        ),
+                      ),
                       const SizedBox(height: 48),
 
-                      // Welcome Text
-                      Text(
-                        'Welcome Back',
-                        style: theme.textTheme.headlineLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: -0.5,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Sign in to continue to your account',
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          color: theme.colorScheme.onSurface.withOpacity(0.6),
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 48),
-
-                      // Auth Card
+                      // Sign-in card
                       Container(
-                        padding: const EdgeInsets.all(32),
+                        padding: const EdgeInsets.all(28),
                         decoration: BoxDecoration(
-                          color: theme.colorScheme.surface,
+                          color: Colors.white,
                           borderRadius: BorderRadius.circular(24),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 30,
-                              offset: const Offset(0, 10),
+                              color: Colors.black.withValues(alpha: 0.2),
+                              blurRadius: 40,
+                              offset: const Offset(0, 16),
                             ),
                           ],
                         ),
                         child: Column(
                           children: [
+                            Text(
+                              'Sign in to continue',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.primaryPurple,
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+
+                            // Error banner
                             if (_error != null) ...[
                               Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: theme.colorScheme.errorContainer,
+                                  color: AppColors.error.withValues(alpha: 0.08),
                                   borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: AppColors.errorBorder),
                                 ),
                                 child: Row(
                                   children: [
-                                    Icon(
-                                      Icons.error_outline,
-                                      color: theme.colorScheme.error,
-                                      size: 20,
-                                    ),
+                                    const Icon(Icons.error_outline, color: AppColors.error, size: 18),
                                     const SizedBox(width: 8),
                                     Expanded(
                                       child: Text(
                                         _error!,
-                                        style: TextStyle(
-                                          color: theme.colorScheme.error,
-                                          fontSize: 14,
-                                        ),
+                                        style: const TextStyle(color: AppColors.error, fontSize: 13),
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
-                              const SizedBox(height: 24),
+                              const SizedBox(height: 20),
                             ],
 
-                            // Google Sign In Button
-                            SizedBox(
-                              width: double.infinity,
-                              height: 56,
-                              child: FilledButton(
-                                onPressed: _loadingGoogle ? null : _handleGoogle,
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: const Color(0xFF4285F4), // Google Blue
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  elevation: 2,
-                                ),
-                                child: _loadingGoogle
-                                    ? const SizedBox(
-                                        width: 24,
-                                        height: 24,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2.5,
-                                          color: Colors.white,
-                                        ),
-                                      )
-                                    : Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          const Icon(
-                                            Icons.login,
-                                            size: 22,
-                                            color: Colors.white,
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Text(
-                                            'Continue with Google',
-                                            style: theme.textTheme.titleMedium?.copyWith(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                              ),
+                            // Google button
+                            _buildSignInButton(
+                              onPressed: _loadingGoogle ? null : _handleGoogle,
+                              loading: _loadingGoogle,
+                              icon: Icons.g_mobiledata_rounded,
+                              label: 'Continue with Google',
+                              backgroundColor: AppColors.secondaryPurple,
+                              foregroundColor: Colors.white,
+                              iconSize: 28,
                             ),
-                            const SizedBox(height: 16),
 
                             if (showApple) ...[
-                              // Divider
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Divider(
-                                      color: theme.colorScheme.outlineVariant,
-                                    ),
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                                    child: Text(
-                                      'OR',
-                                      style: theme.textTheme.bodySmall?.copyWith(
-                                        color: theme.colorScheme.onSurface.withOpacity(0.5),
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: Divider(
-                                      color: theme.colorScheme.outlineVariant,
-                                    ),
-                                  ),
-                                ],
+                              const SizedBox(height: 12),
+                              _buildSignInButton(
+                                onPressed: _loadingApple ? null : _handleApple,
+                                loading: _loadingApple,
+                                icon: Icons.apple_rounded,
+                                label: 'Continue with Apple',
+                                backgroundColor: AppColors.primaryPurple,
+                                foregroundColor: Colors.white,
                               ),
-                              const SizedBox(height: 16),
                             ],
 
-                            if (showApple)
-                              SizedBox(
-                                width: double.infinity,
-                                height: 56,
-                                child: OutlinedButton(
-                                  onPressed: _loadingApple ? null : _handleApple,
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: theme.colorScheme.onSurface,
-                                    side: BorderSide(
-                                      color: theme.colorScheme.outline.withOpacity(0.5),
-                                      width: 1.5,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                  ),
-                                  child: _loadingApple
-                                      ? SizedBox(
-                                          width: 24,
-                                          height: 24,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2.5,
-                                            color: theme.colorScheme.primary,
-                                          ),
-                                        )
-                                      : Row(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            const Icon(
-                                              Icons.apple,
-                                              size: 22,
-                                            ),
-                                            const SizedBox(width: 12),
-                                            Text(
-                                              'Continue with Apple',
-                                              style: theme.textTheme.titleMedium?.copyWith(
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                ),
-                              ),
-
-                            // Phone Login Divider
                             const SizedBox(height: 16),
+                            // Divider
                             Row(
                               children: [
-                                Expanded(
-                                  child: Divider(
-                                    color: theme.colorScheme.outlineVariant,
-                                  ),
-                                ),
+                                Expanded(child: Divider(color: AppColors.border)),
                                 Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14),
                                   child: Text(
-                                    'OR',
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: theme.colorScheme.onSurface.withOpacity(0.5),
+                                    'or',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: AppColors.textMuted,
                                       fontWeight: FontWeight.w500,
                                     ),
                                   ),
                                 ),
-                                Expanded(
-                                  child: Divider(
-                                    color: theme.colorScheme.outlineVariant,
-                                  ),
-                                ),
+                                Expanded(child: Divider(color: AppColors.border)),
                               ],
                             ),
                             const SizedBox(height: 16),
 
-                            // Phone Login Button
-                            SizedBox(
-                              width: double.infinity,
-                              height: 56,
-                              child: OutlinedButton(
-                                onPressed: _handlePhone,
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: theme.colorScheme.onSurface,
-                                  side: BorderSide(
-                                    color: theme.colorScheme.outline.withOpacity(0.5),
-                                    width: 1.5,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Icon(
-                                      Icons.phone_android,
-                                      size: 22,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Text(
-                                      'Continue with Phone',
-                                      style: theme.textTheme.titleMedium?.copyWith(
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                            // Phone button
+                            _buildSignInButton(
+                              onPressed: _handlePhone,
+                              loading: false,
+                              icon: Icons.phone_iphone_rounded,
+                              label: 'Continue with Phone',
+                              backgroundColor: Colors.white,
+                              foregroundColor: AppColors.primaryPurple,
+                              outlined: true,
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 32),
 
-                      // Footer Text
+                      const SizedBox(height: 28),
+
+                      // Footer
                       Text(
-                        'By continuing, you agree to our Terms of Service\nand Privacy Policy',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withOpacity(0.5),
+                        'By continuing, you agree to our\nTerms of Service and Privacy Policy',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white.withValues(alpha: 0.4),
+                          height: 1.5,
                         ),
                         textAlign: TextAlign.center,
                       ),
+                      const SizedBox(height: 32),
                     ],
                   ),
                 ),
               ),
             ),
           ),
-          ],
         ),
       ),
+    );
+  }
+
+  Widget _buildSignInButton({
+    required VoidCallback? onPressed,
+    required bool loading,
+    required IconData icon,
+    required String label,
+    required Color backgroundColor,
+    required Color foregroundColor,
+    bool outlined = false,
+    double iconSize = 22,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      height: 54,
+      child: outlined
+          ? OutlinedButton(
+              onPressed: onPressed,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: foregroundColor,
+                side: BorderSide(color: AppColors.borderMedium, width: 1.5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              child: _buildButtonContent(loading, icon, label, foregroundColor, iconSize),
+            )
+          : ElevatedButton(
+              onPressed: onPressed,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: backgroundColor,
+                foregroundColor: foregroundColor,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              child: _buildButtonContent(loading, icon, label, foregroundColor, iconSize),
+            ),
+    );
+  }
+
+  Widget _buildButtonContent(bool loading, IconData icon, String label, Color color, double iconSize) {
+    if (loading) {
+      return SizedBox(
+        width: 22,
+        height: 22,
+        child: CircularProgressIndicator(strokeWidth: 2.5, color: color),
+      );
+    }
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(icon, size: iconSize),
+        const SizedBox(width: 10),
+        Text(label, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+      ],
     );
   }
 }

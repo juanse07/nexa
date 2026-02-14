@@ -2106,16 +2106,16 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           switch (_eventsTabController.index) {
             case 0:
               print('[RENDER] Showing PENDING: ${filteredPending.length} items');
-              return _eventsInner(filteredPending, header: _buildExpiredEventsBanner(_eventsExpired?.length ?? 0)); // Pending tab
+              return _eventsInner(filteredPending, header: _buildExpiredEventsBanner(_eventsExpired?.length ?? 0), tabIndex: 0); // Pending tab
             case 1:
               print('[RENDER] Showing POSTED: ${filteredAvailable.length} items');
-              return _eventsInner(filteredAvailable, header: _buildExpiredEventsBanner(_eventsExpired?.length ?? 0)); // Posted tab
+              return _eventsInner(filteredAvailable, header: _buildExpiredEventsBanner(_eventsExpired?.length ?? 0), tabIndex: 1); // Posted tab
             case 2:
               print('[RENDER] Showing FULL: ${filteredFull.length} items');
-              return _eventsInner(filteredFull); // Full tab
+              return _eventsInner(filteredFull, tabIndex: 2); // Full tab
             case 3:
               print('[RENDER] Showing COMPLETED: ${filteredCompleted.length} items');
-              return _eventsInner(filteredCompleted); // Completed tab
+              return _eventsInner(filteredCompleted, tabIndex: 3); // Completed tab
             default:
               return _eventsInner(filteredPending);
           }
@@ -2124,10 +2124,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           return TabBarView(
             controller: _eventsTabController,
             children: [
-              _eventsInner(filteredPending, header: _buildExpiredEventsBanner(_eventsExpired?.length ?? 0)), // Pending tab
-              _eventsInner(filteredAvailable, header: _buildExpiredEventsBanner(_eventsExpired?.length ?? 0)), // Posted tab
-              _eventsInner(filteredFull), // Full tab
-              _eventsInner(filteredCompleted), // Completed tab
+              _eventsInner(filteredPending, header: _buildExpiredEventsBanner(_eventsExpired?.length ?? 0), tabIndex: 0), // Pending tab
+              _eventsInner(filteredAvailable, header: _buildExpiredEventsBanner(_eventsExpired?.length ?? 0), tabIndex: 1), // Posted tab
+              _eventsInner(filteredFull, tabIndex: 2), // Full tab
+              _eventsInner(filteredCompleted, tabIndex: 3), // Completed tab
             ],
           );
         }
@@ -2789,7 +2789,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 ),
                 const SizedBox(width: 12),
                 const Text(
-                  'Nexa',
+                  'FlowShift',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 24,
@@ -5704,6 +5704,118 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     }
   }
 
+  /// Shared empty state for events tabs.
+  /// [tabIndex]: 0=Pending, 1=Posted, 2=Full, 3=Completed
+  Widget _buildEventsEmptyState(int tabIndex) {
+    final terminology = context.read<TerminologyProvider>().plural.toLowerCase();
+
+    if (tabIndex == 2) {
+      // Full tab
+      return Column(
+        children: [
+          Image.asset(
+            'assets/full_jobs_placeholder.png',
+            height: 200,
+            fit: BoxFit.contain,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No full $terminology yet',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[700],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'When all positions are filled, they\'ll appear here',
+            style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+          ),
+        ],
+      );
+    }
+
+    if (tabIndex == 3) {
+      // Completed tab
+      return Column(
+        children: [
+          Image.asset(
+            'assets/completed_jobs_placeholder.png',
+            height: 200,
+            fit: BoxFit.contain,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No completed $terminology yet',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[700],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Completed $terminology will show up here',
+            style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+          ),
+        ],
+      );
+    }
+
+    if (tabIndex == 0) {
+      // Pending tab
+      return Column(
+        children: [
+          Image.asset(
+            'assets/pending_jobs_placeholder.png',
+            height: 200,
+            fit: BoxFit.contain,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No pending $terminology',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[700],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Draft $terminology waiting to be posted will appear here',
+            style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+          ),
+        ],
+      );
+    }
+
+    // Posted tab (index 1) or fallback
+    return Column(
+      children: [
+        Image.asset(
+          'assets/posted_jobs_placeholder.png',
+          height: 200,
+          fit: BoxFit.contain,
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'No posted $terminology',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey[700],
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Posted $terminology waiting for staff will appear here',
+          style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+        ),
+      ],
+    );
+  }
+
   List<Widget> _buildEventsSlivers() {
     final List<Map<String, dynamic>> pending = _filterEvents(_eventsPending);
     final List<Map<String, dynamic>> available = _filterEvents(_eventsAvailable);
@@ -5735,6 +5847,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
     // Build event cards as individual slivers for proper scrolling
     if (currentTabEvents.isEmpty) {
+      final tabIndex = _eventsTabController.index;
       return [
         if (showExpiredBanner && expiredCount > 0)
           SliverToBoxAdapter(
@@ -5747,13 +5860,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           child: Center(
             child: Padding(
               padding: const EdgeInsets.all(32),
-              child: Text(
-                'No ${context.read<TerminologyProvider>().plural.toLowerCase()} found',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[600],
-                ),
-              ),
+              child: _buildEventsEmptyState(tabIndex),
             ),
           ),
         ),
@@ -6029,9 +6136,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             Expanded(
               child: TabBarView(
                 children: [
-                  _eventsInner(pending), // Pending tab
-                  _eventsInner(available), // Available tab
-                  _eventsInner(full), // Full tab
+                  _eventsInner(pending, tabIndex: 0), // Pending tab
+                  _eventsInner(available, tabIndex: 1), // Available tab
+                  _eventsInner(full, tabIndex: 2), // Full tab
                 ],
               ),
             ),
@@ -6264,7 +6371,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     );
   }
 
-  Widget _eventsInner(List<Map<String, dynamic>> items, {Widget? header}) {
+  Widget _eventsInner(List<Map<String, dynamic>> items, {Widget? header, int tabIndex = -1}) {
     print('[EVENTS INNER] Received ${items.length} items');
     final sortedItems = _sortEvents(items);
     return RefreshIndicator(
@@ -6383,50 +6490,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       ),
                     ],
                   ),
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: ExColors.info.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Icon(
-                          Icons.event_available_outlined,
-                          color: ExColors.techBlue,
-                          size: 48,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Text(
-                        'No Events',
-                        style: TextStyle(
-                          color: ExColors.textPrimary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 20,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        kIsWeb
-                            ? 'Click Refresh to update.'
-                            : 'Pull to refresh.',
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 15,
-                          height: 1.5,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      if (kIsWeb)
-                        _maybeWebRefreshButton(
-                          onPressed: _loadEvents,
-                          label: 'Refresh',
-                          padding: const EdgeInsets.only(top: 12),
-                        ),
-                    ],
-                  ),
+                  child: _buildEventsEmptyState(tabIndex),
                 ),
               if (sortedItems.isNotEmpty)
                 Column(

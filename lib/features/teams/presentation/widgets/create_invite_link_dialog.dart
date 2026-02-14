@@ -75,7 +75,7 @@ class _CreateInviteLinkDialogState extends State<CreateInviteLinkDialog> {
     if (_createdLink == null) return;
     final message = _createdLink!['shareableMessage'] as String?;
     if (message != null) {
-      Share.share(message, subject: 'Join my team on Nexa');
+      Share.share(message, subject: 'Join my team on FlowShift');
     }
   }
 

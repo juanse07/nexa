@@ -73,10 +73,24 @@ class _SettingsPageState extends State<SettingsPage> {
 
           // Fallback to preferredCity for backward compatibility
           _preferredCity = data['preferredCity'] as String?;
-
-          final venueList = data['venueList'] as List?;
-          _venueCount = venueList?.length ?? 0;
           _venueUpdatedAt = data['venueListUpdatedAt'] as String?;
+        });
+      }
+
+      // Load venue count from the venues collection
+      final venuesResponse = await http.get(
+        Uri.parse('$baseUrl/venues'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (venuesResponse.statusCode == 200 && mounted) {
+        final venuesData = jsonDecode(venuesResponse.body);
+        final venuesList = venuesData['venues'] as List?;
+        setState(() {
+          _venueCount = venuesList?.length ?? 0;
         });
       }
     } catch (e) {
