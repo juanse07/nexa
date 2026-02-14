@@ -1,6 +1,11 @@
+import 'dart:ui';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:nexa/shared/widgets/web_content_wrapper.dart';
+import '../../statistics/data/models/statistics_models.dart';
+import '../../statistics/data/services/statistics_service.dart';
+import '../../statistics/presentation/widgets/ai_analysis_sheet.dart';
 import '../models/attendance_dashboard_models.dart';
 import '../services/attendance_dashboard_service.dart';
 import 'widgets/attendance_hero_header.dart';
@@ -21,6 +26,8 @@ class AttendanceDashboardScreen extends StatefulWidget {
 class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
   bool _isLoading = true;
   bool _isRefreshing = false;
+  bool _isAnalyzing = false;
+  bool _fabExtended = true;
 
   AttendanceAnalytics _analytics = AttendanceAnalytics.empty;
   List<ClockedInStaff> _clockedInStaff = [];
@@ -28,10 +35,27 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
   AttendanceFilters _filters = const AttendanceFilters();
   List<Map<String, dynamic>> _events = [];
 
+  final ScrollController _scrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    final extended = _scrollController.offset < 80;
+    if (extended != _fabExtended) {
+      setState(() => _fabExtended = extended);
+    }
   }
 
   Future<void> _loadData() async {
@@ -265,6 +289,126 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
     }
   }
 
+  Future<void> _showAIAnalysis() async {
+    setState(() => _isAnalyzing = true);
+
+    try {
+      // Fetch stats data on-demand for AI analysis
+      final results = await Future.wait([
+        StatisticsService.getManagerSummary(),
+        StatisticsService.getPayrollReport(),
+        StatisticsService.getTopPerformers(),
+      ]);
+
+      if (!mounted) return;
+
+      final sheetController = showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        isDismissible: true,
+        builder: (ctx) => AIAnalysisSheet(
+          statistics: results[0] as ManagerStatistics,
+          payroll: results[1] as PayrollReport,
+          topPerformers: results[2] as TopPerformersReport,
+        ),
+      );
+
+      sheetController.whenComplete(() {
+        if (mounted) setState(() => _isAnalyzing = false);
+      });
+    } catch (e) {
+      debugPrint('[AttendanceDashboard] AI analysis error: $e');
+      if (mounted) {
+        setState(() => _isAnalyzing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load analysis data: $e')),
+        );
+      }
+    }
+  }
+
+  Widget _buildValerioFab() {
+    final icon = _isAnalyzing
+        ? const SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            ),
+          )
+        : ClipOval(
+            child: Image.asset(
+              'assets/ai_assistant_logo.png',
+              width: 28,
+              height: 28,
+              fit: BoxFit.cover,
+            ),
+          );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 70, right: 4),
+      child: GestureDetector(
+        onTap: _isAnalyzing ? null : _showAIAnalysis,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutCubic,
+              width: _fabExtended ? 168 : 52,
+              height: 48,
+              decoration: BoxDecoration(
+                color: const Color(0xFF212C4A).withValues(alpha: 0.75),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.15),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF212C4A).withValues(alpha: 0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  icon,
+                  Flexible(
+                    child: AnimatedOpacity(
+                      opacity: _fabExtended ? 1.0 : 0.0,
+                      duration: const Duration(milliseconds: 150),
+                      child: _fabExtended
+                          ? Padding(
+                              padding: const EdgeInsets.only(left: 8),
+                              child: Text(
+                                _isAnalyzing ? 'Analyzing...' : 'AI Analysis',
+                                overflow: TextOverflow.clip,
+                                maxLines: 1,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -272,6 +416,7 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
       body: RefreshIndicator(
         onRefresh: _refresh,
         child: CustomScrollView(
+          controller: _scrollController,
           slivers: [
             // Hero header with collapsing behavior
             SliverAppBar(
@@ -411,16 +556,8 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
         ),
       ),
 
-      // Floating action button for export — extra bottom margin to clear MainScreen's overlaid nav bar
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 70),
-        child: FloatingActionButton.extended(
-          onPressed: _showExportOptions,
-          backgroundColor: const Color(0xFF212C4A),
-          icon: const Icon(Icons.download_rounded),
-          label: const Text('Export'),
-        ),
-      ),
+      // AI Analysis FAB (replaces old Export FAB)
+      floatingActionButton: _buildValerioFab(),
     );
   }
 
@@ -498,83 +635,6 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
           ],
         ],
       ),
-    );
-  }
-
-  void _showExportOptions() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              margin: const EdgeInsets.only(top: 12),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text(
-                'Export Attendance',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.table_chart, color: Colors.green),
-              ),
-              title: const Text('Export as CSV'),
-              subtitle: const Text('Spreadsheet format'),
-              onTap: () {
-                Navigator.pop(context);
-                _exportData('csv');
-              },
-            ),
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.picture_as_pdf, color: Colors.red),
-              ),
-              title: const Text('Export as PDF'),
-              subtitle: const Text('Formatted report'),
-              onTap: () {
-                Navigator.pop(context);
-                _exportData('pdf');
-              },
-            ),
-            const SizedBox(height: 24),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _exportData(String format) {
-    // TODO: Implement export functionality
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Exporting as ${format.toUpperCase()}...')),
     );
   }
 }
