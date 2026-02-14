@@ -2236,21 +2236,32 @@ Example: "February" in December 2025 → February 2026
     }
   }));
 
+  // Graduated reasoning: both tiers use medium effort
+  let reasoningEffort = 'medium';
+  let maxOutputTokens = 1500;
+  if (cascadeTier === 'complex') {
+    maxOutputTokens = 3000;
+  }
+
   // Build request body with model-specific optimizations
   const requestBody: any = {
     model: config.model,
     messages: processedMessages,
-    temperature: isReasoningModel ? 0.5 : temperature, // Lower temp for reasoning stability
-    max_tokens: isReasoningModel ? Math.max(maxTokens * 8, 4000) : maxTokens, // Reasoning needs large budget (thinking + answer)
+    temperature: isReasoningModel ? 0.5 : temperature,
+    max_tokens: isReasoningModel ? maxOutputTokens : maxTokens,
     tools: groqTools,
     tool_choice: 'auto'
   };
 
-  // Add reasoning parameters only when provider supports it (Groq gpt-oss only)
+  // Add provider-specific reasoning parameters
   if (isReasoningModel) {
-    requestBody.reasoning_format = 'parsed';
-    requestBody.reasoning_effort = 'high';
-    console.log(`[AI:${config.name}] Using reasoning mode with ${requestBody.max_tokens} max tokens`);
+    requestBody.reasoning_effort = reasoningEffort;
+    if (config.name === 'groq') {
+      requestBody.reasoning_format = 'parsed'; // Groq-only: separates reasoning into message.reasoning
+    } else if (config.name === 'together') {
+      requestBody.reasoning = { enabled: true }; // Together AI uses reasoning object
+    }
+    console.log(`[AI:${config.name}] Using reasoning mode (effort=${reasoningEffort}) with ${requestBody.max_tokens} max tokens`);
   }
 
   const headers = {
