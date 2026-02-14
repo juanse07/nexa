@@ -18,7 +18,9 @@ class ConversationsScreen extends StatefulWidget {
 
 class _ConversationsScreenState extends State<ConversationsScreen> {
   final ChatService _chatService = ChatService();
+  final TextEditingController _searchController = TextEditingController();
   List<Conversation> _conversations = <Conversation>[];
+  List<Conversation> _filteredConversations = <Conversation>[];
   bool _loading = true;
   String? _error;
 
@@ -27,6 +29,27 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     super.initState();
     _loadConversations();
     _listenToNewMessages();
+    _searchController.addListener(_filterConversations);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _filterConversations() {
+    final query = _searchController.text.toLowerCase().trim();
+    setState(() {
+      if (query.isEmpty) {
+        _filteredConversations = _conversations;
+      } else {
+        _filteredConversations = _conversations.where((c) {
+          return c.displayName.toLowerCase().contains(query) ||
+              (c.lastMessagePreview ?? '').toLowerCase().contains(query);
+        }).toList();
+      }
+    });
   }
 
   void _listenToNewMessages() {
@@ -47,8 +70,10 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
 
       setState(() {
         _conversations = conversations;
+        _filteredConversations = conversations;
         _loading = false;
       });
+      _filterConversations();
     } catch (e) {
       setState(() {
         _error = e.toString();
@@ -59,7 +84,9 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
       backgroundColor: AppColors.surfaceLight,
       appBar: AppBar(
         backgroundColor: Colors.white,
@@ -75,15 +102,67 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
         ),
         iconTheme: const IconThemeData(color: AppColors.charcoal),
       ),
-      body: WebContentWrapper.list(child: _buildBody()),
+      body: WebContentWrapper.list(
+        child: Column(
+          children: [
+            // Search bar
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'Search conversations...',
+                  hintStyle: TextStyle(
+                    color: Colors.grey.shade400,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w400,
+                  ),
+                  prefixIcon: Icon(
+                    Icons.search_rounded,
+                    color: Colors.grey.shade400,
+                    size: 22,
+                  ),
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: Icon(Icons.close, color: Colors.grey.shade400, size: 20),
+                          onPressed: () {
+                            _searchController.clear();
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFF1A1A2E), width: 1.5),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+              ),
+            ),
+            Expanded(child: _buildBody()),
+          ],
+        ),
+      ),
       floatingActionButton: Padding(
         padding: const EdgeInsets.only(bottom: 70),
         child: FloatingActionButton(
           onPressed: _showContactPicker,
-          backgroundColor: AppColors.tealInfo,
-          child: const Icon(Icons.add_comment, color: Colors.white),
+          backgroundColor: const Color(0xFF1A1A2E),
+          elevation: 4,
+          child: const Icon(Icons.add_comment_rounded, color: Color(0xFFDAA520), size: 24),
         ),
       ),
+    ),
     );
   }
 
@@ -139,7 +218,9 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
       );
     }
 
-    if (_conversations.isEmpty) {
+    final isSearching = _searchController.text.trim().isNotEmpty;
+
+    if (_filteredConversations.isEmpty && !isSearching) {
       // Still show Valerio Assistant even when empty
       return RefreshIndicator(
         onRefresh: _loadConversations,
@@ -180,18 +261,24 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     return RefreshIndicator(
       onRefresh: _loadConversations,
       child: ListView.separated(
-        itemCount: _conversations.length + 1, // +1 for Valerio Assistant
+        itemCount: _filteredConversations.length + (isSearching ? 0 : 1), // +1 for Valerio Assistant (hidden when searching)
         separatorBuilder: (_, __) => const Divider(height: 1),
         itemBuilder: (context, index) {
-          // First item is always the pinned Valerio Assistant
-          if (index == 0) {
-            return _AIChatTile(
-              onTap: () => _openAIChat(),
+          if (!isSearching) {
+            // First item is always the pinned Valerio Assistant
+            if (index == 0) {
+              return _AIChatTile(
+                onTap: () => _openAIChat(),
+              );
+            }
+            final conversation = _filteredConversations[index - 1];
+            return _ConversationTile(
+              conversation: conversation,
+              onTap: () => _openChat(conversation),
             );
           }
 
-          // All other items are regular conversations (offset by -1)
-          final conversation = _conversations[index - 1];
+          final conversation = _filteredConversations[index];
           return _ConversationTile(
             conversation: conversation,
             onTap: () => _openChat(conversation),

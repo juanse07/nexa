@@ -27,6 +27,9 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
   // Form controllers
   final _clientNameCtrl = TextEditingController();
   final _venueAddressCtrl = TextEditingController();
+  final _venueNameCtrl = TextEditingController();
+  final _contactPhoneCtrl = TextEditingController();
+  final _notesCtrl = TextEditingController();
 
   // Keys for scrolling to specific fields
   final _addressFieldKey = GlobalKey();
@@ -104,6 +107,9 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
   void dispose() {
     _clientNameCtrl.dispose();
     _venueAddressCtrl.dispose();
+    _venueNameCtrl.dispose();
+    _contactPhoneCtrl.dispose();
+    _notesCtrl.dispose();
     super.dispose();
   }
 
@@ -200,10 +206,19 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
       _venueAddressCtrl.text = details.formattedAddress;
       _venueLatitude = details.latitude;
       _venueLongitude = details.longitude;
-      // Generate Google Maps URL from coordinates
       _googleMapsUrl = 'https://www.google.com/maps/search/?api=1&query=${details.latitude},${details.longitude}';
       _city = details.addressComponents['city'];
       _state = details.addressComponents['state'];
+      // Auto-fill venue name from address
+      if (_venueNameCtrl.text.isEmpty) {
+        final street = details.addressComponents['street'];
+        if (street != null && street.isNotEmpty) {
+          _venueNameCtrl.text = street;
+        } else {
+          final firstPart = details.formattedAddress.split(',').first.trim();
+          if (firstPart.isNotEmpty) _venueNameCtrl.text = firstPart;
+        }
+      }
     });
   }
 
@@ -287,6 +302,15 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
       }
       if (_state != null) {
         payload['state'] = _state;
+      }
+      if (_venueNameCtrl.text.trim().isNotEmpty) {
+        payload['venue_name'] = _venueNameCtrl.text.trim();
+      }
+      if (_contactPhoneCtrl.text.trim().isNotEmpty) {
+        payload['contact_phone'] = _contactPhoneCtrl.text.trim();
+      }
+      if (_notesCtrl.text.trim().isNotEmpty) {
+        payload['notes'] = _notesCtrl.text.trim();
       }
 
       await _eventService.createEvent(payload);
@@ -445,6 +469,56 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
                     _buildRolesChips(),
                     const SizedBox(height: 12),
                     if (_roles.isNotEmpty) _buildSelectedRoles(),
+
+                    const SizedBox(height: 24),
+
+                    // Optional fields divider
+                    Row(
+                      children: [
+                        Expanded(child: Divider(color: Colors.grey.shade300)),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Text(
+                            'Optional Details',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                        ),
+                        Expanded(child: Divider(color: Colors.grey.shade300)),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Location Name (auto-filled from address)
+                    _buildInputField(
+                      label: 'Location Name',
+                      controller: _venueNameCtrl,
+                      icon: Icons.business_outlined,
+                      hint: 'Auto-filled from address',
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Contact Phone
+                    _buildInputField(
+                      label: 'Contact Phone',
+                      controller: _contactPhoneCtrl,
+                      icon: Icons.phone_outlined,
+                      hint: 'Optional',
+                      keyboardType: TextInputType.phone,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Notes
+                    _buildInputField(
+                      label: 'Notes',
+                      controller: _notesCtrl,
+                      icon: Icons.notes_outlined,
+                      hint: 'Special requirements, setup details, etc.',
+                      maxLines: 3,
+                    ),
 
                     const SizedBox(height: 32),
 
@@ -623,6 +697,8 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
     required IconData icon,
     required String hint,
     bool isRequired = false,
+    TextInputType? keyboardType,
+    int maxLines = 1,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -632,6 +708,8 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
         TextFormField(
           controller: controller,
           onChanged: (_) => setState(() {}),
+          keyboardType: keyboardType,
+          maxLines: maxLines,
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 16),

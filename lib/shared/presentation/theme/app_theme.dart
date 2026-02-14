@@ -347,7 +347,7 @@ class AppTheme {
   // App Bar Themes
 
   static AppBarTheme _lightAppBarTheme() {
-    return const AppBarTheme(
+    return AppBarTheme(
       elevation: 0,
       scrolledUnderElevation: 2,
       centerTitle: false,
@@ -363,7 +363,7 @@ class AppTheme {
         size: AppDimensions.iconMl,
       ),
       titleTextStyle: TextStyle(
-        fontFamily: 'SF Pro Display',
+        fontFamily: AppTextStyles.fontFamily,
         fontSize: 20,
         fontWeight: FontWeight.w600,
         color: Colors.white,
@@ -378,7 +378,7 @@ class AppTheme {
   }
 
   static AppBarTheme _darkAppBarTheme() {
-    return const AppBarTheme(
+    return AppBarTheme(
       elevation: 0,
       scrolledUnderElevation: 2,
       centerTitle: false,
@@ -394,7 +394,7 @@ class AppTheme {
         size: AppDimensions.iconMl,
       ),
       titleTextStyle: TextStyle(
-        fontFamily: 'SF Pro Display',
+        fontFamily: AppTextStyles.fontFamily,
         fontSize: 20,
         fontWeight: FontWeight.w600,
         color: AppColors.textLight,

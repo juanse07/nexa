@@ -31,8 +31,12 @@ import 'extraction_screen.dart';
 import 'pending_edit_screen.dart';
 import 'bulk_extraction_screen.dart';
 import '../../main/presentation/main_screen.dart';
+import '../../users/data/services/manager_service.dart';
 import 'dart:async';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
+import 'package:get_it/get_it.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:nexa/core/network/api_client.dart';
 import 'package:nexa/shared/widgets/web_content_wrapper.dart';
 import 'package:nexa/core/navigation/route_error_manager.dart';
 
@@ -60,6 +64,9 @@ class _AIChatScreenState extends State<AIChatScreen>
   // Track if user edited the event data
   bool _wasEdited = false;
   List<String> _editedFields = [];
+
+  // Profile picture
+  String? _profilePictureUrl;
 
   // Provider (replaces 15+ state variables)
   late ChatScreenStateProvider _stateProvider;
@@ -108,9 +115,26 @@ class _AIChatScreenState extends State<AIChatScreen>
       _loadGreeting();
     }
 
+    // Load profile picture
+    _loadProfilePicture();
+
     // Listen to provider changes
     _stateProvider.addListener(_onProviderStateChanged);
 
+  }
+
+  Future<void> _loadProfilePicture() async {
+    try {
+      final api = GetIt.I<ApiClient>();
+      final storage = GetIt.I<FlutterSecureStorage>();
+      final me = await ManagerService(api, storage).getMe();
+      if (!mounted) return;
+      setState(() {
+        _profilePictureUrl = me.picture;
+      });
+    } catch (_) {
+      // Silently ignore; avatar will fall back to icon
+    }
   }
 
   /// Handle provider state changes
@@ -206,7 +230,7 @@ class _AIChatScreenState extends State<AIChatScreen>
             ),
             const Divider(),
             ListTile(
-              leading: Icon(Icons.edit_note, color: AppColors.success),
+              leading: const Icon(Icons.post_add_rounded, color: Color(0xFF1A1A2E)),
               title: const Text('Quick Manual Entry'),
               subtitle: const Text('Create event without AI extraction'),
               onTap: () {
@@ -713,115 +737,17 @@ class _AIChatScreenState extends State<AIChatScreen>
                     ),
                   ),
                   actions: [
-                    // Manual Entry button (structured form)
-                    IconButton(
-                      icon: const Icon(Icons.edit_note, color: AppColors.successLight, size: 24),
-                      tooltip: 'Manual Entry',
-                      onPressed: () {
-                        // Navigate to ExtractionScreen with uncommented dashboard
-                        // Since dashboard is at index 0 but commented, we use initialScreenIndex: 0
-                        // and uncomment it temporarily, OR we navigate to the form directly
-                        RouteErrorManager.instance.navigateSafely(
-                          context,
-                          () => const ExtractionScreen(
-                            initialScreenIndex: 0, // Dashboard with tabs
-                            initialIndex: 2, // Manual Entry tab (0=Upload, 1=AI Chat, 2=Manual)
-                          ),
-                        );
-                      },
-                      padding: const EdgeInsets.all(8),
+                    // Manual Entry button - opens the same bottom sheet as + menu
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: IconButton(
+                        icon: const Icon(Icons.post_add_rounded, color: Color(0xFF1A1A2E), size: 26),
+                        tooltip: 'Manual Entry',
+                        onPressed: _showManualEntrySheet,
+                      ),
                     ),
                   ],
                 ),
-
-                // Info banner as SliverToBoxAdapter
-                SliverToBoxAdapter(
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Colors.blue.shade50,
-                          Colors.purple.shade50,
-                        ],
-                      ),
-                      border: Border(
-                        bottom: BorderSide(
-                          color: Colors.grey.shade200,
-                          width: 1,
-                        ),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.info_outline,
-                          size: 16,
-                          color: Colors.blue.shade700,
-                        ),
-                        const SizedBox(width: 8),
-                        const Expanded(
-                          child: Text(
-                            'Tell me about your event and I\'ll help you plan it!',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFF4B5563),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // Event data banner (if event is being created)
-                if (hasEventData)
-                  SliverToBoxAdapter(
-                    child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [AppColors.yellow, AppColors.pink],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.event, color: Colors.white, size: 16),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          currentData['event_name']?.toString() ?? 'Creating event...',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-                  ),
 
                 // Messages list as SliverList (not SliverFillRemaining to fix scroll issues)
                 messages.isEmpty
@@ -879,11 +805,20 @@ class _AIChatScreenState extends State<AIChatScreen>
                                 reasoning: message['reasoning'] as String?,
                               );
 
+                              // Show avatar only on the last message of a consecutive group from the same sender
+                              final currentRole = message['role'] as String? ?? 'user';
+                              final nextRole = index + 1 < messages.length
+                                  ? (messages[index + 1]['role'] as String? ?? 'user')
+                                  : null;
+                              final isLastInGroup = nextRole == null || nextRole != currentRole;
+
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 12),
                                 child: AnimatedChatMessageWidget(
                                   key: ValueKey('msg-$index'),
                                   message: chatMessage,
+                                  userProfilePicture: _profilePictureUrl,
+                                  showAvatar: isLastInGroup,
                                   showTypingAnimation: shouldAnimate,
                                   onTypingTick: shouldAnimate ? () {
                                     // Scroll to bottom as AI types each character
@@ -915,28 +850,44 @@ class _AIChatScreenState extends State<AIChatScreen>
                 bottom: 100,
                 left: 0,
                 right: 0,
-                child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.grey[400],
+                child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4A4A4A).withOpacity(0.90),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'AI is thinking...',
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 12,
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                          Color(0xFFE0E0E0),
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 10),
+                    const Text(
+                      'Thinking',
+                      style: TextStyle(
+                        color: Color(0xFFE0E0E0),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
               ),
@@ -948,15 +899,8 @@ class _AIChatScreenState extends State<AIChatScreen>
                 right: 0,
                 bottom: keyboardHeight,
                 child: Container(
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     color: Colors.white,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, -2),
-                      ),
-                    ],
                   ),
                   child: WebContentWrapper.chat(
                     child: Padding(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 /// Predefined text styles for the Nexa application.
@@ -9,13 +10,13 @@ class AppTextStyles {
   AppTextStyles._();
 
   // Font Family
-  static const String _fontFamily = 'SF Pro Display';
+  static final String fontFamily = GoogleFonts.inter().fontFamily!;
 
   // Heading Styles
   /// Heading 1 - Extra large heading
   /// Used for main page titles and hero sections
-  static const TextStyle h1 = TextStyle(
-    fontFamily: _fontFamily,
+  static final TextStyle h1 = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 32,
     fontWeight: FontWeight.w700,
     height: 1.2,
@@ -25,8 +26,8 @@ class AppTextStyles {
 
   /// Heading 2 - Large heading
   /// Used for section titles and important headers
-  static const TextStyle h2 = TextStyle(
-    fontFamily: _fontFamily,
+  static final TextStyle h2 = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 28,
     fontWeight: FontWeight.w700,
     height: 1.25,
@@ -36,8 +37,8 @@ class AppTextStyles {
 
   /// Heading 3 - Medium heading
   /// Used for card headers and subsection titles
-  static const TextStyle h3 = TextStyle(
-    fontFamily: _fontFamily,
+  static final TextStyle h3 = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 24,
     fontWeight: FontWeight.w600,
     height: 1.3,
@@ -47,8 +48,8 @@ class AppTextStyles {
 
   /// Heading 4 - Small heading
   /// Used for dialog titles and list group headers
-  static const TextStyle h4 = TextStyle(
-    fontFamily: _fontFamily,
+  static final TextStyle h4 = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 20,
     fontWeight: FontWeight.w600,
     height: 1.35,
@@ -58,8 +59,8 @@ class AppTextStyles {
 
   /// Heading 5 - Extra small heading
   /// Used for inline section headers
-  static const TextStyle h5 = TextStyle(
-    fontFamily: _fontFamily,
+  static final TextStyle h5 = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 18,
     fontWeight: FontWeight.w600,
     height: 1.4,
@@ -69,8 +70,8 @@ class AppTextStyles {
 
   /// Heading 6 - Smallest heading
   /// Used for labels and minor headers
-  static const TextStyle h6 = TextStyle(
-    fontFamily: _fontFamily,
+  static final TextStyle h6 = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 16,
     fontWeight: FontWeight.w600,
     height: 1.45,
@@ -81,8 +82,8 @@ class AppTextStyles {
   // Body Styles
   /// Body 1 - Large body text
   /// Used for main content and descriptions
-  static const TextStyle body1 = TextStyle(
-    fontFamily: _fontFamily,
+  static final TextStyle body1 = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 16,
     fontWeight: FontWeight.w400,
     height: 1.5,
@@ -91,8 +92,8 @@ class AppTextStyles {
   );
 
   /// Body 1 Medium - Large body text with medium weight
-  static const TextStyle body1Medium = TextStyle(
-    fontFamily: _fontFamily,
+  static final TextStyle body1Medium = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 16,
     fontWeight: FontWeight.w500,
     height: 1.5,
@@ -101,8 +102,8 @@ class AppTextStyles {
   );
 
   /// Body 1 Semibold - Large body text with semibold weight
-  static const TextStyle body1Semibold = TextStyle(
-    fontFamily: _fontFamily,
+  static final TextStyle body1Semibold = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 16,
     fontWeight: FontWeight.w600,
     height: 1.5,
@@ -112,8 +113,8 @@ class AppTextStyles {
 
   /// Body 2 - Regular body text
   /// Used for standard content and list items
-  static const TextStyle body2 = TextStyle(
-    fontFamily: _fontFamily,
+  static final TextStyle body2 = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 14,
     fontWeight: FontWeight.w400,
     height: 1.5,
@@ -122,8 +123,8 @@ class AppTextStyles {
   );
 
   /// Body 2 Medium - Regular body text with medium weight
-  static const TextStyle body2Medium = TextStyle(
-    fontFamily: _fontFamily,
+  static final TextStyle body2Medium = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 14,
     fontWeight: FontWeight.w500,
     height: 1.5,
@@ -132,8 +133,8 @@ class AppTextStyles {
   );
 
   /// Body 2 Semibold - Regular body text with semibold weight
-  static const TextStyle body2Semibold = TextStyle(
-    fontFamily: _fontFamily,
+  static final TextStyle body2Semibold = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 14,
     fontWeight: FontWeight.w600,
     height: 1.5,
@@ -143,8 +144,8 @@ class AppTextStyles {
 
   /// Body Small - Small body text
   /// Used for secondary information and metadata
-  static const TextStyle bodySmall = TextStyle(
-    fontFamily: _fontFamily,
+  static final TextStyle bodySmall = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 12,
     fontWeight: FontWeight.w400,
     height: 1.5,
@@ -153,8 +154,8 @@ class AppTextStyles {
   );
 
   /// Body Small Medium - Small body text with medium weight
-  static const TextStyle bodySmallMedium = TextStyle(
-    fontFamily: _fontFamily,
+  static final TextStyle bodySmallMedium = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 12,
     fontWeight: FontWeight.w500,
     height: 1.5,
@@ -165,8 +166,8 @@ class AppTextStyles {
   // Label Styles
   /// Label Large - Large label text
   /// Used for prominent labels and tags
-  static const TextStyle labelLarge = TextStyle(
-    fontFamily: _fontFamily,
+  static final TextStyle labelLarge = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 14,
     fontWeight: FontWeight.w600,
     height: 1.4,
@@ -176,8 +177,8 @@ class AppTextStyles {
 
   /// Label Medium - Regular label text
   /// Used for form labels and buttons
-  static const TextStyle labelMedium = TextStyle(
-    fontFamily: _fontFamily,
+  static final TextStyle labelMedium = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 12,
     fontWeight: FontWeight.w600,
     height: 1.4,
@@ -187,8 +188,8 @@ class AppTextStyles {
 
   /// Label Small - Small label text
   /// Used for tiny labels and badges
-  static const TextStyle labelSmall = TextStyle(
-    fontFamily: _fontFamily,
+  static final TextStyle labelSmall = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 11,
     fontWeight: FontWeight.w600,
     height: 1.4,
@@ -199,8 +200,8 @@ class AppTextStyles {
   // Caption Styles
   /// Caption - Caption text
   /// Used for hints, helper text, and timestamps
-  static const TextStyle caption = TextStyle(
-    fontFamily: _fontFamily,
+  static final TextStyle caption = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 12,
     fontWeight: FontWeight.w400,
     height: 1.4,
@@ -209,8 +210,8 @@ class AppTextStyles {
   );
 
   /// Caption Medium - Caption text with medium weight
-  static const TextStyle captionMedium = TextStyle(
-    fontFamily: _fontFamily,
+  static final TextStyle captionMedium = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 12,
     fontWeight: FontWeight.w500,
     height: 1.4,
@@ -220,8 +221,8 @@ class AppTextStyles {
 
   /// Overline - Small uppercase text
   /// Used for overline text and category labels
-  static const TextStyle overline = TextStyle(
-    fontFamily: _fontFamily,
+  static final TextStyle overline = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 10,
     fontWeight: FontWeight.w600,
     height: 1.4,
@@ -231,8 +232,8 @@ class AppTextStyles {
 
   // Button Text Styles
   /// Button Large - Large button text
-  static const TextStyle buttonLarge = TextStyle(
-    fontFamily: _fontFamily,
+  static final TextStyle buttonLarge = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 16,
     fontWeight: FontWeight.w600,
     height: 1.2,
@@ -241,8 +242,8 @@ class AppTextStyles {
   );
 
   /// Button Medium - Regular button text
-  static const TextStyle buttonMedium = TextStyle(
-    fontFamily: _fontFamily,
+  static final TextStyle buttonMedium = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 14,
     fontWeight: FontWeight.w600,
     height: 1.2,
@@ -251,8 +252,8 @@ class AppTextStyles {
   );
 
   /// Button Small - Small button text
-  static const TextStyle buttonSmall = TextStyle(
-    fontFamily: _fontFamily,
+  static final TextStyle buttonSmall = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 12,
     fontWeight: FontWeight.w600,
     height: 1.2,
@@ -262,8 +263,8 @@ class AppTextStyles {
 
   // Link Styles
   /// Link - Regular link text
-  static const TextStyle link = TextStyle(
-    fontFamily: _fontFamily,
+  static final TextStyle link = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 14,
     fontWeight: FontWeight.w500,
     height: 1.5,
@@ -273,8 +274,8 @@ class AppTextStyles {
   );
 
   /// Link Small - Small link text
-  static const TextStyle linkSmall = TextStyle(
-    fontFamily: _fontFamily,
+  static final TextStyle linkSmall = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 12,
     fontWeight: FontWeight.w500,
     height: 1.5,
@@ -285,8 +286,8 @@ class AppTextStyles {
 
   // Error Text Style
   /// Error text style
-  static const TextStyle error = TextStyle(
-    fontFamily: _fontFamily,
+  static final TextStyle error = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 12,
     fontWeight: FontWeight.w400,
     height: 1.4,

@@ -14,6 +14,7 @@ class AnimatedChatMessageWidget extends StatefulWidget {
   final void Function(String)? onLinkTap;
   final bool showTypingAnimation;
   final VoidCallback? onTypingTick; // Callback when typing animation updates
+  final bool showAvatar; // Only show avatar on last message of consecutive group
 
   const AnimatedChatMessageWidget({
     super.key,
@@ -22,6 +23,7 @@ class AnimatedChatMessageWidget extends StatefulWidget {
     this.userProfilePicture,
     this.showTypingAnimation = false,
     this.onTypingTick,
+    this.showAvatar = true,
   });
 
   @override
@@ -178,7 +180,7 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
 
   void _startTypewriterEffect() {
     final text = widget.message.content;
-    final duration = Duration(milliseconds: kIsWeb ? 4 : 8); // 2x faster on web to compensate for browser overhead
+    final duration = Duration(milliseconds: kIsWeb ? 12 : 20); // Slower for a more enjoyable reading pace
 
     _typewriterTimer = Timer.periodic(duration, (timer) {
       if (!mounted) {
@@ -188,10 +190,9 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
 
       setState(() {
         if (_currentCharIndex < text.length) {
-          // Add 2 characters at a time for even faster, smoother effect
-          final charsToAdd = (_currentCharIndex + 2 <= text.length) ? 2 : 1;
-          _displayedText = text.substring(0, _currentCharIndex + charsToAdd);
-          _currentCharIndex += charsToAdd;
+          // Add 1 character at a time for a smooth, readable typing effect
+          _displayedText = text.substring(0, _currentCharIndex + 1);
+          _currentCharIndex += 1;
 
           // Notify parent to scroll to bottom
           widget.onTypingTick?.call();
@@ -232,7 +233,10 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               if (!isUser) ...[
-                _buildAiAvatar(),
+                if (widget.showAvatar)
+                  _buildAiAvatar()
+                else
+                  const SizedBox(width: 32),
                 const SizedBox(width: 8),
               ],
               Flexible(
@@ -304,7 +308,10 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
               ),
               if (isUser) ...[
                 const SizedBox(width: 8),
-                _buildUserAvatar(),
+                if (widget.showAvatar)
+                  _buildUserAvatar()
+                else
+                  const SizedBox(width: 32),
               ],
             ],
           ),
@@ -338,7 +345,7 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  'View thinking',
+                  'View reasoning',
                   style: TextStyle(
                     color: Colors.grey.shade600,
                     fontSize: 12,

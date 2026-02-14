@@ -10,12 +10,14 @@ class ChatMessageWidget extends StatefulWidget {
   final ChatMessage message;
   final String? userProfilePicture;
   final void Function(String)? onLinkTap;
+  final bool showAvatar;
 
   const ChatMessageWidget({
     super.key,
     required this.message,
     this.onLinkTap,
     this.userProfilePicture,
+    this.showAvatar = true,
   });
 
   @override
@@ -61,7 +63,7 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  'View thinking',
+                  'View reasoning',
                   style: TextStyle(
                     color: Colors.grey.shade600,
                     fontSize: 12,
@@ -117,75 +119,78 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!isUser) ...[
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [AppColors.tealInfo, AppColors.oceanBlue],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.tealInfo.withOpacity(0.3),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
+            if (widget.showAvatar)
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [AppColors.tealInfo, AppColors.oceanBlue],
                   ),
-                ],
-              ),
-              child: Center(
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Container(
-                      width: 14,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.4),
-                          width: 1,
-                        ),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    Transform.rotate(
-                      angle: 0.785398,
-                      child: Container(
-                        width: 7,
-                        height: 7,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 1,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: 6,
-                      child: Container(
-                        width: 0.8,
-                        height: 3.5,
-                        color: Colors.white.withOpacity(0.6),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 6,
-                      child: Container(
-                        width: 0.8,
-                        height: 3.5,
-                        color: Colors.white.withOpacity(0.6),
-                      ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.tealInfo.withOpacity(0.3),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
                     ),
                   ],
                 ),
-              ),
-            ),
+                child: Center(
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Container(
+                        width: 14,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.4),
+                            width: 1,
+                          ),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      Transform.rotate(
+                        angle: 0.785398,
+                        child: Container(
+                          width: 7,
+                          height: 7,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 1,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        top: 6,
+                        child: Container(
+                          width: 0.8,
+                          height: 3.5,
+                          color: Colors.white.withOpacity(0.6),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 6,
+                        child: Container(
+                          width: 0.8,
+                          height: 3.5,
+                          color: Colors.white.withOpacity(0.6),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              const SizedBox(width: 32),
             const SizedBox(width: 8),
           ],
           Flexible(
@@ -282,42 +287,45 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
           ),
           if (isUser) ...[
             const SizedBox(width: 8),
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: AppColors.techBlue,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: widget.userProfilePicture != null && widget.userProfilePicture!.isNotEmpty
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: Image.network(
-                        widget.userProfilePicture!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return const Icon(
-                            Icons.person,
-                            size: 20,
-                            color: Colors.white,
-                          );
-                        },
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return const Icon(
-                            Icons.person,
-                            size: 20,
-                            color: Colors.white,
-                          );
-                        },
-                      ),
-                    )
-                  : const Icon(
-                      Icons.person,
-                      size: 20,
+            if (widget.showAvatar)
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: AppColors.techBlue,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: widget.userProfilePicture != null && widget.userProfilePicture!.isNotEmpty
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Image.network(
+                          widget.userProfilePicture!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return const Icon(
+                              Icons.person,
+                              size: 20,
+                              color: Colors.white,
+                            );
+                          },
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return const Icon(
+                              Icons.person,
+                              size: 20,
+                              color: Colors.white,
+                            );
+                          },
+                        ),
+                      )
+                    : const Icon(
+                        Icons.person,
+                        size: 20,
                       color: Colors.white,
                     ),
-            ),
+              )
+            else
+              const SizedBox(width: 32),
           ],
         ],
       ),

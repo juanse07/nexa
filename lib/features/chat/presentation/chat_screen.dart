@@ -904,6 +904,12 @@ class _ChatScreenState extends State<ChatScreen> {
             final showDate = reversedIndex == 0 ||
                 !_isSameDay(_messages[reversedIndex - 1].createdAt, message.createdAt);
 
+            // Show avatar only on the last message of a consecutive group
+            // In reversed list, "last" visually means the next item in reversed order has a different sender
+            final nextReversedIndex = reversedIndex + 1;
+            final isLastInGroup = nextReversedIndex >= _messages.length ||
+                _messages[nextReversedIndex].senderType != message.senderType;
+
             return Column(
               key: ValueKey(message.id), // Prevent unnecessary rebuilds
               children: <Widget>[
@@ -914,6 +920,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         key: ValueKey('bubble_${message.id}'),
                         message: message,
                         isMe: isMe,
+                        showAvatar: isLastInGroup,
                       ),
                 // Add small spacing between messages
                 const SizedBox(height: 4),
@@ -1313,10 +1320,12 @@ class _MessageBubble extends StatelessWidget {
     super.key,
     required this.message,
     required this.isMe,
+    this.showAvatar = true,
   });
 
   final ChatMessage message;
   final bool isMe;
+  final bool showAvatar;
 
   @override
   Widget build(BuildContext context) {
@@ -1339,11 +1348,14 @@ class _MessageBubble extends StatelessWidget {
             children: <Widget>[
               // Incoming message avatar
               if (!isMe) ...<Widget>[
-                UserAvatar(
-                  imageUrl: message.senderPicture,
-                  fullName: message.senderName,
-                  radius: 14,
-                ),
+                if (showAvatar)
+                  UserAvatar(
+                    imageUrl: message.senderPicture,
+                    fullName: message.senderName,
+                    radius: 14,
+                  )
+                else
+                  const SizedBox(width: 28),
                 const SizedBox(width: 8),
               ],
 

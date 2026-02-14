@@ -436,9 +436,9 @@ class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProv
                 gradient: _hasText && !widget.isLoading
                     ? const LinearGradient(
                         colors: [
-                          AppColors.yellow, // Light purple
-                          AppColors.techBlue, // Medium purple
-                          AppColors.indigoPurple, // Darker purple
+                          Color(0xFF1A1A2E), // Dark navy
+                          Color(0xFF16213E), // Deep charcoal blue
+                          Color(0xFF0F0F1A), // Near black
                         ],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
@@ -479,7 +479,7 @@ class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProv
                           )
                         : Icon(
                             Icons.send,
-                            color: _hasText ? const Color(0xFFB8860B) : Colors.grey.shade500,
+                            color: _hasText ? const Color(0xFFDAA520) : Colors.grey.shade500,
                             size: 18,
                           ),
                   ),

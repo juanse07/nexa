@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nexa/shared/presentation/theme/app_text_styles.dart';
 
 /// FlowShift Premium Splash Screen
 ///
@@ -158,10 +159,10 @@ class _FlowShiftSplashScreenState extends State<FlowShiftSplashScreen>
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Text(
+                          Text(
                             'FlowShift',
                             style: TextStyle(
-                              fontFamily: 'SF Pro Display',
+                              fontFamily: AppTextStyles.fontFamily,
                               fontSize: 42,
                               fontWeight: FontWeight.w300,
                               color: Colors.white,
@@ -173,7 +174,7 @@ class _FlowShiftSplashScreenState extends State<FlowShiftSplashScreen>
                             Text(
                               widget.variant!,
                               style: TextStyle(
-                                fontFamily: 'SF Pro Display',
+                                fontFamily: AppTextStyles.fontFamily,
                                 fontSize: 16,
                                 fontWeight: FontWeight.w400,
                                 color: Colors.white.withAlpha(179), // 70% opacity
@@ -192,11 +193,11 @@ class _FlowShiftSplashScreenState extends State<FlowShiftSplashScreen>
                     bottom: 48,
                     child: Opacity(
                       opacity: _subtitleOpacity.value,
-                      child: const Text(
+                      child: Text(
                         'by PyMESoft',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          fontFamily: 'SF Pro Display',
+                          fontFamily: AppTextStyles.fontFamily,
                           fontSize: 12,
                           fontWeight: FontWeight.w400,
                           color: _subtleGray,
