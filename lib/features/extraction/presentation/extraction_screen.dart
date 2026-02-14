@@ -5760,6 +5760,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       ];
     }
 
+    final sortedEvents = _sortEvents(currentTabEvents);
+
     return [
       if (showExpiredBanner && expiredCount > 0)
         SliverToBoxAdapter(
@@ -5771,10 +5773,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       SliverList(
         delegate: SliverChildBuilderDelegate(
           (context, index) {
-            final event = currentTabEvents[index];
+            final event = sortedEvents[index];
             return _buildEventCard(event);
           },
-          childCount: currentTabEvents.length,
+          childCount: sortedEvents.length,
         ),
       ),
     ];

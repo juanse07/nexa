@@ -146,11 +146,9 @@ class _StatisticsDashboardScreenState extends State<StatisticsDashboardScreen> {
             ),
           );
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 70, right: 4),
-      child: GestureDetector(
-        onTap: _isAnalyzing ? null : _showAIAnalysis,
-        child: ClipRRect(
+    return GestureDetector(
+      onTap: _isAnalyzing ? null : _showAIAnalysis,
+      child: ClipRRect(
           borderRadius: BorderRadius.circular(24),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
@@ -204,13 +202,14 @@ class _StatisticsDashboardScreenState extends State<StatisticsDashboardScreen> {
             ),
           ),
         ),
-      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final content = Scaffold(
+    final content = Stack(
+      children: [
+        Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
         title: const Text('Stats'),
@@ -258,7 +257,14 @@ class _StatisticsDashboardScreenState extends State<StatisticsDashboardScreen> {
                 ],
               ),
             ),
-      floatingActionButton: _isLoading ? null : _buildValerioFab(),
+    ),
+        if (!_isLoading)
+          Positioned(
+            bottom: 100,
+            right: 16,
+            child: _buildValerioFab(),
+          ),
+      ],
     );
 
     if (kIsWeb) {

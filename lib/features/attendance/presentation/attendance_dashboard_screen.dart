@@ -347,11 +347,9 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
             ),
           );
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 70, right: 4),
-      child: GestureDetector(
-        onTap: _isAnalyzing ? null : _showAIAnalysis,
-        child: ClipRRect(
+    return GestureDetector(
+      onTap: _isAnalyzing ? null : _showAIAnalysis,
+      child: ClipRRect(
           borderRadius: BorderRadius.circular(24),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
@@ -405,13 +403,14 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
             ),
           ),
         ),
-      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return Stack(
+      children: [
+        Scaffold(
       backgroundColor: Colors.grey[100],
       body: RefreshIndicator(
         onRefresh: _refresh,
@@ -556,8 +555,13 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
         ),
       ),
 
-      // AI Analysis FAB (replaces old Export FAB)
-      floatingActionButton: _buildValerioFab(),
+    ),
+        Positioned(
+          bottom: 100,
+          right: 16,
+          child: _buildValerioFab(),
+        ),
+      ],
     );
   }
 
