@@ -668,23 +668,25 @@ function buildPrompt(role: CaricatureRole, artStyle: ArtStyle, model: Caricature
   if (!roleDef) throw new Error(`Unknown role: ${role}`);
   if (!styleDef) throw new Error(`Unknown art style: ${artStyle}`);
 
-  if (model === 'dev') {
-    // Dev model: shorter prompt with identity anchored to "the person in this uploaded photo"
-    const shortScene = roleDef.scene.replace(
-      /^Depict this person as/,
-      'Transform the person in this uploaded photo into',
-    );
-    const prompt = [
-      'IMPORTANT: Keep the EXACT same person from the uploaded photo — same face, same gender, same skin tone, same hair. Do NOT change who they are.',
-      '',
-      shortScene,
-      '',
-      styleDef.rendering,
-    ].join('\n');
-    return { prompt, negativePrompt: styleDef.negativePrompt };
-  }
+  // NOTE: Dev-specific short prompt commented out — using full pro prompt for both tiers.
+  // Uncomment this block to restore the shorter dev prompt if results are worse.
+  // if (model === 'dev') {
+  //   // Dev model: shorter prompt with identity anchored to "the person in this uploaded photo"
+  //   const shortScene = roleDef.scene.replace(
+  //     /^Depict this person as/,
+  //     'Transform the person in this uploaded photo into',
+  //   );
+  //   const prompt = [
+  //     'IMPORTANT: Keep the EXACT same person from the uploaded photo — same face, same gender, same skin tone, same hair. Do NOT change who they are.',
+  //     '',
+  //     shortScene,
+  //     '',
+  //     styleDef.rendering,
+  //   ].join('\n');
+  //   return { prompt, negativePrompt: styleDef.negativePrompt };
+  // }
 
-  // Pro model: full detailed prompt — stronger model handles the length well
+  // Full detailed prompt — used for BOTH dev and pro tiers
   const genderAnchor = 'Keeping this person\'s exact gender, face, and appearance from the uploaded photo,';
   const anchoredScene = roleDef.scene.replace(/^Depict this person as/, `${genderAnchor} depict them as`);
 
