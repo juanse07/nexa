@@ -72,7 +72,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get notes => 'Notas';
 
   @override
-  String get shift => 'Shift';
+  String get shift => 'Turno';
 
   @override
   String get client => 'Cliente';
@@ -119,7 +119,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get jobDetailsCopied => 'Detalles del turno copiados al portapapeles';
 
   @override
-  String get jobPosted => 'Shift posted';
+  String get jobPosted => 'Turno publicado';
 
   @override
   String get sendJobInvitation => 'Enviar Invitación de Turno';
@@ -159,7 +159,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get errorJobIdMissing => 'Error: Falta el ID del turno...';
 
   @override
-  String get postJob => 'Post Shift';
+  String get postJob => 'Publicar Turno';
 
   @override
   String get setRolesForJob => 'Establecer roles para este turno';

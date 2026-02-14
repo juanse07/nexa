@@ -9,6 +9,8 @@ import 'package:nexa/shared/presentation/theme/app_colors.dart';
 class ChatMessageWidget extends StatefulWidget {
   final ChatMessage message;
   final String? userProfilePicture;
+  final String? userFirstName;
+  final String? userLastName;
   final void Function(String)? onLinkTap;
   final bool showAvatar;
 
@@ -17,6 +19,8 @@ class ChatMessageWidget extends StatefulWidget {
     required this.message,
     this.onLinkTap,
     this.userProfilePicture,
+    this.userFirstName,
+    this.userLastName,
     this.showAvatar = true,
   });
 
@@ -26,6 +30,25 @@ class ChatMessageWidget extends StatefulWidget {
 
 class _ChatMessageWidgetState extends State<ChatMessageWidget> {
   bool _reasoningExpanded = false;
+
+  Widget _buildInitialsFallback() {
+    final first = widget.userFirstName?.trim() ?? '';
+    final last = widget.userLastName?.trim() ?? '';
+    final initials = '${first.isNotEmpty ? first[0] : ''}${last.isNotEmpty ? last[0] : ''}'.toUpperCase();
+
+    if (initials.isEmpty) {
+      return const Icon(Icons.person, size: 20, color: Colors.white);
+    }
+
+    return Text(
+      initials,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
 
   /// Strips JSON command blocks from message content for display
   /// These blocks are used by the backend but shouldn't be shown to users
@@ -318,11 +341,7 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
                           },
                         ),
                       )
-                    : const Icon(
-                        Icons.person,
-                        size: 20,
-                      color: Colors.white,
-                    ),
+                    : _buildInitialsFallback(),
               )
             else
               const SizedBox(width: 32),

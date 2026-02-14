@@ -69,12 +69,9 @@ export function selectModelForQuery(
     return { provider: 'groq', model: 'openai/gpt-oss-120b', tier: 'complex' };
   }
 
-  // Fall back to groq if Together key is missing
-  if (!process.env.TOGETHER_API_KEY) {
-    return { provider: 'groq', model: 'openai/gpt-oss-20b', tier: 'simple' };
-  }
-
-  return { provider: 'together', model: 'openai/gpt-oss-20b', tier: 'simple' };
+  // Route simple tier through Groq — Together AI has chronic latency issues (60s+ timeouts).
+  // Groq serves the same gpt-oss-20b model in <1s. Re-enable Together when their infra stabilizes.
+  return { provider: 'groq', model: 'openai/gpt-oss-20b', tier: 'simple' };
 }
 
 // ---------------------------------------------------------------------------

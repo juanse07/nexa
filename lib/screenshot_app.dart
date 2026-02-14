@@ -6,8 +6,11 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:get_it/get_it.dart';
 import 'package:provider/provider.dart';
 
+import 'package:nexa/core/network/api_client.dart';
+import 'package:nexa/features/brand/data/providers/brand_provider.dart';
 import 'package:nexa/features/main/presentation/main_screen.dart';
 import 'package:nexa/l10n/app_localizations.dart';
 import 'package:nexa/services/terminology_provider.dart';
@@ -31,17 +34,36 @@ class ScreenshotApp extends StatelessWidget {
   /// Which tab to start on (default 0 = Events).
   final int initialTabIndex;
 
+  /// Optional: render an arbitrary widget instead of MainScreen.
+  /// When set, [initialTabIndex] is ignored.
+  final Widget? child;
+
   const ScreenshotApp({
     super.key,
     this.locale = const Locale('en'),
     this.terminologyProvider,
     this.initialTabIndex = 0,
+    this.child,
   });
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider<TerminologyProvider>(
-      create: (_) => terminologyProvider ?? TerminologyProvider(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider<TerminologyProvider>(
+          create: (_) => terminologyProvider ?? TerminologyProvider(),
+        ),
+        ChangeNotifierProvider<BrandProvider>(
+          create: (_) {
+            try {
+              return GetIt.instance<BrandProvider>();
+            } catch (_) {
+              // Fallback if not registered yet
+              return BrandProvider(GetIt.instance<ApiClient>());
+            }
+          },
+        ),
+      ],
       child: MaterialApp(
         title: 'FlowShift Manager',
         debugShowCheckedModeBanner: false,
@@ -66,8 +88,8 @@ class ScreenshotApp extends StatelessWidget {
         darkTheme: AppTheme.darkTheme(),
         themeMode: ThemeMode.light,
 
-        // Go straight to MainScreen — no splash, no auth
-        home: MainScreen(initialIndex: initialTabIndex),
+        // Render custom child or default to MainScreen
+        home: child ?? MainScreen(initialIndex: initialTabIndex),
 
         // Disable text scaling for consistent screenshots
         builder: (BuildContext context, Widget? child) {

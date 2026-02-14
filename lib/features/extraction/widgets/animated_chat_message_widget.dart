@@ -11,19 +11,23 @@ import 'package:nexa/shared/presentation/theme/app_colors.dart';
 class AnimatedChatMessageWidget extends StatefulWidget {
   final ChatMessage message;
   final String? userProfilePicture;
+  final String? userFirstName;
+  final String? userLastName;
+  final bool showAvatar;
   final void Function(String)? onLinkTap;
   final bool showTypingAnimation;
   final VoidCallback? onTypingTick; // Callback when typing animation updates
-  final bool showAvatar; // Only show avatar on last message of consecutive group
 
   const AnimatedChatMessageWidget({
     super.key,
     required this.message,
     this.onLinkTap,
     this.userProfilePicture,
+    this.userFirstName,
+    this.userLastName,
+    this.showAvatar = true,
     this.showTypingAnimation = false,
     this.onTypingTick,
-    this.showAvatar = true,
   });
 
   @override
@@ -455,7 +459,32 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
     );
   }
 
+  Widget _buildInitialsFallback() {
+    final first = widget.userFirstName?.trim() ?? '';
+    final last = widget.userLastName?.trim() ?? '';
+    final initials = '${first.isNotEmpty ? first[0] : ''}${last.isNotEmpty ? last[0] : ''}'.toUpperCase();
+
+    if (initials.isEmpty) {
+      return const Icon(Icons.person, size: 20, color: Colors.white);
+    }
+
+    return Center(
+      child: Text(
+        initials,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
   Widget _buildUserAvatar() {
+    if (!widget.showAvatar) {
+      return const SizedBox(width: 32);
+    }
     return Container(
       width: 32,
       height: 32,
@@ -470,19 +499,11 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
                 widget.userProfilePicture!,
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) {
-                  return const Icon(
-                    Icons.person,
-                    size: 20,
-                    color: Colors.white,
-                  );
+                  return _buildInitialsFallback();
                 },
               ),
             )
-          : const Icon(
-              Icons.person,
-              size: 20,
-              color: Colors.white,
-            ),
+          : _buildInitialsFallback(),
     );
   }
 

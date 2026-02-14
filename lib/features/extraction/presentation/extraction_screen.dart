@@ -2152,8 +2152,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               // Floating Action Button for adding items (hide during merge mode)
               if (!_isMergeMode)
                 Positioned(
-                  bottom: 120,
-                  right: 20,
+                  bottom: 100,
+                  right: 16,
                   child: FloatingActionButton(
                     onPressed: _showAddItemDialog,
                     backgroundColor: Colors.white.withOpacity(0.9),
@@ -2168,8 +2168,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               // Merge action button
               if (_isMergeMode && _mergeSelectedIds.length >= 2)
                 Positioned(
-                  bottom: 120,
-                  left: 20,
+                  bottom: 100,
+                  left: 16,
                   right: 20,
                   child: Center(
                     child: ElevatedButton.icon(
@@ -5872,8 +5872,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             // Floating Action Button (hide during merge mode)
             if (!_isMergeMode)
               Positioned(
-                bottom: 120,
-                right: 20,
+                bottom: 100,
+                right: 16,
                 child: FloatingActionButton(
                   onPressed: _showAddItemDialog,
                   backgroundColor: Colors.white.withOpacity(0.8),
@@ -5888,8 +5888,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             // Merge action button
             if (_isMergeMode && _mergeSelectedIds.length >= 2)
               Positioned(
-                bottom: 120,
-                left: 20,
+                bottom: 100,
+                left: 16,
                 right: 20,
                 child: Center(
                   child: ElevatedButton.icon(
@@ -10394,9 +10394,15 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           padding: const EdgeInsets.symmetric(vertical: 8),
                           itemCount: messages.length,
                           itemBuilder: (context, index) {
+                            final isUserMsg = messages[index].role == 'user';
+                            final nextIsUser = index + 1 < messages.length &&
+                                messages[index + 1].role == 'user';
                             return ChatMessageWidget(
                               message: messages[index],
                               userProfilePicture: _profilePictureUrl,
+                              userFirstName: _profileFirstName,
+                              userLastName: _profileLastName,
+                              showAvatar: !isUserMsg || !nextIsUser,
                             );
                           },
                         ),

@@ -6,12 +6,18 @@ library;
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get_it/get_it.dart';
 import 'package:logger/logger.dart';
 import 'package:nexa/core/network/api_client.dart';
 import 'package:nexa/core/network/network_info.dart';
+import 'package:nexa/features/brand/data/providers/brand_provider.dart';
+import 'package:nexa/features/cities/data/services/city_service.dart';
+import 'package:nexa/features/subscription/data/services/subscription_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'mock_dio_interceptor.dart';
 
 /// Register all mock dependencies in GetIt for screenshot mode.
 ///
@@ -23,42 +29,70 @@ Future<void> registerMockDependencies() async {
   // Reset any previous registrations
   await getIt.reset();
 
-  // SharedPreferences — in-memory test instance
+  // ── Environment ─────────────────────────────────────────────────
+  dotenv.testLoad(fileInput: '''
+API_BASE_URL=http://localhost:3000
+API_PATH_PREFIX=/api
+ENVIRONMENT=development
+DEBUG_MODE=false
+''');
+
+  // ── SharedPreferences ───────────────────────────────────────────
   SharedPreferences.setMockInitialValues({
     'work_terminology': 'Events',
   });
   final prefs = await SharedPreferences.getInstance();
   getIt.registerLazySingleton<SharedPreferences>(() => prefs);
 
-  // FlutterSecureStorage — mock that returns our dummy JWT
+  // ── FlutterSecureStorage ────────────────────────────────────────
   getIt.registerLazySingleton<FlutterSecureStorage>(
     () => const FlutterSecureStorage(),
   );
 
-  // Connectivity
+  // ── Connectivity ────────────────────────────────────────────────
   getIt.registerLazySingleton<Connectivity>(() => Connectivity());
 
-  // Dio (never used in screenshot mode)
-  getIt.registerLazySingleton<Dio>(() => Dio());
+  // ── Dio (with mock interceptor) ─────────────────────────────────
+  final dio = Dio(BaseOptions(
+    baseUrl: 'http://localhost:3000/api',
+    connectTimeout: const Duration(seconds: 5),
+    receiveTimeout: const Duration(seconds: 5),
+  ));
+  dio.interceptors.insert(0, MockDioInterceptor());
+  getIt.registerLazySingleton<Dio>(() => dio);
 
-  // Logger
+  // ── Logger ──────────────────────────────────────────────────────
   getIt.registerLazySingleton<Logger>(
-    () => Logger(level: Level.off), // Silence logs during screenshots
+    () => Logger(level: Level.off),
   );
 
-  // NetworkInfo
+  // ── NetworkInfo ─────────────────────────────────────────────────
   getIt.registerLazySingleton<NetworkInfo>(
     () => _AlwaysConnectedNetworkInfo(),
   );
 
-  // ApiClient — real instance but it won't be called since
-  // the screenshot app navigates directly to MainScreen
+  // ── ApiClient ───────────────────────────────────────────────────
   getIt.registerLazySingleton<ApiClient>(
     () => ApiClient(
       secureStorage: getIt<FlutterSecureStorage>(),
       logger: getIt<Logger>(),
       dio: getIt<Dio>(),
     ),
+  );
+
+  // ── CityService ─────────────────────────────────────────────────
+  getIt.registerLazySingleton<CityService>(
+    () => CityService(getIt<ApiClient>()),
+  );
+
+  // ── SubscriptionService ─────────────────────────────────────────
+  getIt.registerLazySingleton<SubscriptionService>(
+    () => SubscriptionService(getIt<ApiClient>()),
+  );
+
+  // ── BrandProvider ───────────────────────────────────────────────
+  getIt.registerLazySingleton<BrandProvider>(
+    () => BrandProvider(getIt<ApiClient>()),
   );
 }
 
