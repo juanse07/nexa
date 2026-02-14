@@ -292,6 +292,80 @@ class TeamsService {
     }
   }
 
+  /// Create a public recruitment link for a team
+  Future<Map<String, dynamic>> createPublicLink(String teamId) async {
+    try {
+      final response = await _apiClient.post(
+        '/teams/$teamId/invites/create-public-link',
+        data: {},
+      );
+      if (_isSuccess(response.statusCode)) {
+        return Map<String, dynamic>.from(response.data as Map);
+      }
+      throw Exception('Failed to create public link (${response.statusCode})');
+    } on DioException catch (e) {
+      throw Exception('Failed to create public link: ${e.message}');
+    }
+  }
+
+  /// Fetch applicants for a team
+  Future<List<Map<String, dynamic>>> fetchApplicants(
+    String teamId, {
+    String status = 'pending',
+  }) async {
+    try {
+      final response = await _apiClient.get(
+        '/teams/$teamId/applicants',
+        queryParameters: {'status': status},
+      );
+      if (_isSuccess(response.statusCode)) {
+        final dynamic data = response.data;
+        if (data is Map<String, dynamic>) {
+          final dynamic applicants = data['applicants'];
+          if (applicants is List) {
+            return applicants.whereType<Map<String, dynamic>>().toList(
+              growable: false,
+            );
+          }
+        }
+        return const <Map<String, dynamic>>[];
+      }
+      throw Exception('Failed to fetch applicants (${response.statusCode})');
+    } on DioException catch (e) {
+      throw Exception('Failed to fetch applicants: ${e.message}');
+    }
+  }
+
+  /// Approve an applicant
+  Future<void> approveApplicant(String teamId, String applicantId) async {
+    try {
+      final response = await _apiClient.post(
+        '/teams/$teamId/applicants/$applicantId/approve',
+        data: {},
+      );
+      if (!_isSuccess(response.statusCode)) {
+        throw Exception('Failed to approve applicant (${response.statusCode})');
+      }
+    } on DioException catch (e) {
+      throw Exception('Failed to approve applicant: ${e.message}');
+    }
+  }
+
+  /// Deny an applicant
+  Future<void> denyApplicant(String teamId, String applicantId) async {
+    try {
+      final response = await _apiClient.post(
+        '/teams/$teamId/applicants/$applicantId/deny',
+        data: {},
+      );
+      if (!_isSuccess(response.statusCode)) {
+        throw Exception('Failed to deny applicant (${response.statusCode})');
+      }
+    } on DioException catch (e) {
+      throw Exception('Failed to deny applicant: ${e.message}');
+    }
+  }
+
   /// Fetch availability for all team members
   Future<List<Map<String, dynamic>>> fetchMembersAvailability() async {
     try {

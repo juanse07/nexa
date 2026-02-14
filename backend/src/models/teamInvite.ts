@@ -1,7 +1,7 @@
 import mongoose, { Document, Model, Schema } from 'mongoose';
 
 export type TeamInviteStatus = 'pending' | 'accepted' | 'declined' | 'cancelled' | 'expired';
-export type TeamInviteType = 'targeted' | 'link';
+export type TeamInviteType = 'targeted' | 'link' | 'public';
 
 export interface InviteUsageEntry {
   userKey: string;
@@ -39,7 +39,7 @@ const TeamInviteSchema = new Schema<TeamInviteDocument>(
     invitedBy: { type: Schema.Types.ObjectId, ref: 'Manager' },
     token: { type: String, required: true, unique: true, index: true },
     shortCode: { type: String, sparse: true, unique: true, index: true, uppercase: true }, // NEW
-    inviteType: { type: String, enum: ['targeted', 'link'], default: 'targeted' }, // NEW
+    inviteType: { type: String, enum: ['targeted', 'link', 'public'], default: 'targeted' }, // NEW
     email: { type: String, trim: true },
     provider: { type: String, trim: true },
     subject: { type: String, trim: true },

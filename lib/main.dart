@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 
 import 'package:nexa/app.dart';
 import 'package:nexa/core/config/environment.dart';
+import 'package:nexa/core/deep_link/deep_link_service.dart';
 import 'package:nexa/core/di/injection.dart';
 import 'package:nexa/core/utils/logger.dart';
 import 'package:nexa/services/notification_service.dart';
@@ -80,6 +81,16 @@ Future<void> main() async {
         AppLogger.instance.i('NotificationService initialized successfully');
       } catch (e) {
         AppLogger.instance.e('Failed to initialize NotificationService', error: e);
+      }
+    }
+
+    // Initialize deep link service (mobile only)
+    if (!kIsWeb) {
+      try {
+        await DeepLinkService.instance.initialize();
+        AppLogger.instance.i('DeepLinkService initialized successfully');
+      } catch (e) {
+        AppLogger.instance.e('Failed to initialize DeepLinkService', error: e);
       }
     }
 

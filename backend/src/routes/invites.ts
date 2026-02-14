@@ -11,9 +11,10 @@ import { UserModel } from '../models/user';
 import { ManagerModel } from '../models/manager';
 import { ConversationModel } from '../models/conversation';
 import { ChatMessageModel } from '../models/chatMessage';
+import { TeamApplicantModel } from '../models/teamApplicant';
 import { isValidShortCodeFormat } from '../utils/inviteCodeGenerator';
 import { inviteValidateLimiter, inviteRedeemLimiter } from '../middleware/rateLimiter';
-import { emitToUser } from '../socket/server';
+import { emitToUser, emitToManager } from '../socket/server';
 
 const router = Router();
 
@@ -44,10 +45,10 @@ router.get('/invites/validate/:shortCode', inviteValidateLimiter, async (req, re
       });
     }
 
-    // Find invite by short code
+    // Find invite by short code (match both 'link' and 'public' types)
     const invite = await TeamInviteModel.findOne({
       shortCode: shortCode.toUpperCase(),
-      inviteType: 'link',
+      inviteType: { $in: ['link', 'public'] },
     }).lean();
 
     if (!invite) {
@@ -114,6 +115,7 @@ router.get('/invites/validate/:shortCode', inviteValidateLimiter, async (req, re
       expiresAt: invite.expiresAt,
       requiresApproval: invite.requireApproval,
       hasPassword: !!invite.passwordHash,
+      isPublicLink: invite.inviteType === 'public',
       usesRemaining:
         invite.maxUses ? invite.maxUses - invite.usedCount : null,
     });
@@ -151,10 +153,10 @@ router.post('/invites/redeem', inviteRedeemLimiter, requireAuth, async (req, res
       return res.status(400).json({ message: 'Invalid invite code format' });
     }
 
-    // Find invite
+    // Find invite (match both 'link' and 'public' types)
     const invite = await TeamInviteModel.findOne({
       shortCode: shortCode.toUpperCase(),
-      inviteType: 'link',
+      inviteType: { $in: ['link', 'public'] },
     });
 
     if (!invite) {
@@ -223,9 +225,6 @@ router.post('/invites/redeem', inviteRedeemLimiter, requireAuth, async (req, res
       });
     }
 
-    // Determine member status based on requireApproval
-    const memberStatus = invite.requireApproval ? 'pending' : 'active';
-
     // Create or update user record (required for chat functionality)
     await UserModel.findOneAndUpdate(
       {
@@ -246,6 +245,78 @@ router.post('/invites/redeem', inviteRedeemLimiter, requireAuth, async (req, res
       },
       { upsert: true, setDefaultsOnInsert: true }
     );
+
+    const userKey = `${authUser.provider}:${authUser.sub}`;
+
+    // PUBLIC LINK: Create an applicant record instead of a team member
+    if (invite.inviteType === 'public') {
+      // Check if already applied
+      const existingApplicant = await TeamApplicantModel.findOne({
+        teamId: invite.teamId,
+        provider: authUser.provider,
+        subject: authUser.sub,
+      }).lean();
+
+      if (existingApplicant) {
+        return res.status(409).json({
+          message: existingApplicant.status === 'pending'
+            ? 'You have already applied to this team. Please wait for manager approval.'
+            : `Your application was previously ${existingApplicant.status}.`,
+          applicationSubmitted: existingApplicant.status === 'pending',
+          applicationStatus: existingApplicant.status,
+        });
+      }
+
+      // Create applicant
+      const applicant = await TeamApplicantModel.create({
+        teamId: invite.teamId,
+        managerId: invite.managerId,
+        inviteId: invite._id,
+        provider: authUser.provider,
+        subject: authUser.sub,
+        name: authUser.name,
+        email: authUser.email,
+        status: 'pending',
+        appliedAt: new Date(),
+      });
+
+      // Increment usage
+      await TeamInviteModel.updateOne(
+        { _id: invite._id },
+        {
+          $inc: { usedCount: 1 },
+          $push: {
+            usageLog: {
+              userKey,
+              userName: authUser.name,
+              joinedAt: new Date(),
+            },
+          },
+        }
+      );
+
+      // Notify manager of new applicant
+      emitToManager(String(invite.managerId), 'applicant:new', {
+        applicantId: String(applicant._id),
+        teamId: String(invite.teamId),
+        teamName: team.name,
+        applicantName: authUser.name,
+      });
+
+      return res.json({
+        success: true,
+        applicationSubmitted: true,
+        team: {
+          id: String(team._id),
+          name: team.name,
+          description: team.description,
+        },
+        message: `Thanks for applying to ${team.name}! The manager has been notified and will review your application.`,
+      });
+    }
+
+    // STANDARD LINK: Create team member directly
+    const memberStatus = invite.requireApproval ? 'pending' : 'active';
 
     // Create team member
     const member = await TeamMemberModel.findOneAndUpdate(
@@ -268,7 +339,6 @@ router.post('/invites/redeem', inviteRedeemLimiter, requireAuth, async (req, res
     );
 
     // Increment used count and log usage
-    const userKey = `${authUser.provider}:${authUser.sub}`;
     await TeamInviteModel.updateOne(
       { _id: invite._id },
       {
@@ -302,9 +372,6 @@ router.post('/invites/redeem', inviteRedeemLimiter, requireAuth, async (req, res
         // Get manager details for the message sender
         const manager = await ManagerModel.findById(invite.managerId).lean();
         if (manager) {
-          // Build userKey for the new member
-          const userKey = `${authUser.provider}:${authUser.sub}`;
-
           // Use team's custom welcome message or default template
           const welcomeText = team.welcomeMessage
             ? team.welcomeMessage.replace('{teamName}', team.name)
@@ -386,6 +453,7 @@ router.post('/invites/redeem', inviteRedeemLimiter, requireAuth, async (req, res
 
     return res.json({
       success: true,
+      applicationSubmitted: false,
       team: {
         id: String(team._id),
         name: team.name,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 
 class CreateInviteLinkDialog extends StatefulWidget {
@@ -77,6 +78,51 @@ class _CreateInviteLinkDialogState extends State<CreateInviteLinkDialog> {
     if (message != null) {
       Share.share(message, subject: 'Join my team on FlowShift');
     }
+  }
+
+  void _showQrCode(BuildContext context, String deepLink, String shortCode) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Scan to join ${widget.teamName}',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              QrImageView(
+                data: deepLink,
+                version: QrVersions.auto,
+                size: 250,
+                gapless: true,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Code: $shortCode',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 2,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -297,7 +343,7 @@ class _CreateInviteLinkDialogState extends State<CreateInviteLinkDialog> {
               const SizedBox(height: 8),
             ],
 
-            // Share button
+            // Share & QR buttons
             const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
@@ -306,6 +352,18 @@ class _CreateInviteLinkDialogState extends State<CreateInviteLinkDialog> {
                 label: const Text('Share via WhatsApp, SMS, etc.'),
                 onPressed: _shareMessage,
                 style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.qr_code),
+                label: const Text('Show QR Code'),
+                onPressed: () => _showQrCode(context, deepLink, shortCode),
+                style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
               ),

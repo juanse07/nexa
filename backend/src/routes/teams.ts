@@ -10,6 +10,7 @@ import { emitToManager, emitToTeams, emitToUser } from '../socket/server';
 import { TeamModel, normalizeTeamName } from '../models/team';
 import { TeamMemberModel } from '../models/teamMember';
 import { TeamInviteModel } from '../models/teamInvite';
+import { TeamApplicantModel } from '../models/teamApplicant';
 import { TeamMessageModel } from '../models/teamMessage';
 import { EventModel } from '../models/event';
 import { UserModel } from '../models/user';
@@ -1041,24 +1042,20 @@ router.post('/teams/:teamId/invites/create-link', inviteCreateLimiter, requireAu
       expiresAt,
     });
 
-    // Build deep link and store links
-    const deepLink = `nexaapp://invite/${shortCode}`;
-    const appStoreLink = 'https://apps.apple.com/app/nexa/id123456789'; // TODO: Replace with actual App Store ID
-    const playStoreLink = 'https://play.google.com/store/apps/details?id=com.nexa.app'; // TODO: Replace with actual package name
+    // Build universal link
+    const deepLink = `https://join.flowshift.app/invite/${shortCode}`;
 
     // Generate shareable message
     const expiryText = expiresAt
       ? `Expires: ${expiresAt.toLocaleDateString()}`
       : 'Never expires';
 
-    const shareableMessage = `Join my team on Tie! 🎉
+    const shareableMessage = `Join my team on FlowShift! 🎉
 
-Already have the app?
-Tap: ${deepLink}
+Tap this link to join:
+${deepLink}
 
-Don't have it yet?
-1. Download Tie from your app store
-2. Enter code: ${shortCode}
+Or enter code: ${shortCode} in the app.
 
 ${expiryText}`;
 
@@ -1066,8 +1063,6 @@ ${expiryText}`;
       inviteId: String(invite._id),
       shortCode: invite.shortCode,
       deepLink,
-      appStoreLink,
-      playStoreLink,
       shareableMessage,
       expiresAt: invite.expiresAt,
       maxUses: invite.maxUses,
@@ -1104,11 +1099,11 @@ router.get('/teams/:teamId/invites/links', requireAuth, async (req, res) => {
       return res.status(404).json({ message: 'Team not found' });
     }
 
-    // Get all link-type invites for this team
+    // Get all link-type and public-type invites for this team
     const invites = await TeamInviteModel.find({
       teamId: teamObjectId,
       managerId,
-      inviteType: 'link',
+      inviteType: { $in: ['link', 'public'] },
     })
       .sort({ createdAt: -1 })
       .limit(50)
@@ -1117,7 +1112,8 @@ router.get('/teams/:teamId/invites/links', requireAuth, async (req, res) => {
     const payload = invites.map((invite) => ({
       id: String(invite._id),
       shortCode: invite.shortCode,
-      deepLink: `nexaapp://invite/${invite.shortCode}`,
+      deepLink: `https://join.flowshift.app/invite/${invite.shortCode}`,
+      inviteType: invite.inviteType,
       status: invite.status,
       usedCount: invite.usedCount,
       maxUses: invite.maxUses,
@@ -1487,6 +1483,269 @@ router.get('/teams/members/availability', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[teams] GET /teams/members/availability failed', err);
     return res.status(500).json({ message: 'Failed to fetch team members availability' });
+  }
+});
+
+// Create public recruitment link
+router.post('/teams/:teamId/invites/create-public-link', inviteCreateLimiter, requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const teamIdParam = req.params.teamId ?? '';
+
+    if (!mongoose.Types.ObjectId.isValid(teamIdParam)) {
+      return res.status(400).json({ message: 'Invalid team id' });
+    }
+    const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
+
+    // Verify team exists and belongs to manager
+    const team = await TeamModel.findOne({ _id: teamObjectId, managerId }).lean();
+    if (!team) {
+      return res.status(404).json({ message: 'Team not found' });
+    }
+
+    // Revoke any existing active public link for this team
+    await TeamInviteModel.updateMany(
+      {
+        teamId: teamObjectId,
+        managerId,
+        inviteType: 'public',
+        status: 'pending',
+      },
+      { $set: { status: 'cancelled', updatedAt: new Date() } }
+    );
+
+    // Generate unique short code
+    const shortCode = await generateUniqueShortCode();
+    const token = crypto.randomBytes(32).toString('hex');
+
+    // Default expiry: 90 days
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 90);
+
+    const invite = await TeamInviteModel.create({
+      teamId: teamObjectId,
+      managerId,
+      invitedBy: managerId,
+      token,
+      shortCode,
+      inviteType: 'public',
+      status: 'pending',
+      maxUses: null, // unlimited
+      usedCount: 0,
+      requireApproval: true, // always requires approval for public links
+      usageLog: [],
+      expiresAt,
+    });
+
+    const deepLink = `https://join.flowshift.app/p/${shortCode}`;
+
+    const shareableMessage = `We're hiring! Join our team on FlowShift 🚀
+
+Apply here: ${deepLink}
+
+Or enter code: ${shortCode} in the FlowShift app.`;
+
+    return res.status(201).json({
+      inviteId: String(invite._id),
+      shortCode: invite.shortCode,
+      deepLink,
+      shareableMessage,
+      expiresAt: invite.expiresAt,
+      inviteType: 'public',
+    });
+  } catch (err) {
+    console.error('[teams] POST /teams/:teamId/invites/create-public-link failed', err);
+    return res.status(500).json({ message: 'Failed to create public link' });
+  }
+});
+
+// Get applicants for a team
+router.get('/teams/:teamId/applicants', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const teamIdParam = req.params.teamId ?? '';
+
+    if (!mongoose.Types.ObjectId.isValid(teamIdParam)) {
+      return res.status(400).json({ message: 'Invalid team id' });
+    }
+    const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
+
+    // Verify team belongs to manager
+    const team = await TeamModel.findOne({ _id: teamObjectId, managerId }).lean();
+    if (!team) {
+      return res.status(404).json({ message: 'Team not found' });
+    }
+
+    const statusFilter = (req.query.status as string) || 'pending';
+    const applicants = await TeamApplicantModel.find({
+      teamId: teamObjectId,
+      status: statusFilter,
+    })
+      .sort({ appliedAt: -1 })
+      .limit(100)
+      .lean();
+
+    const payload = applicants.map((a) => ({
+      id: String(a._id),
+      teamId: String(a.teamId),
+      inviteId: String(a.inviteId),
+      provider: a.provider,
+      subject: a.subject,
+      name: a.name,
+      email: a.email,
+      phoneNumber: a.phoneNumber,
+      status: a.status,
+      appliedAt: a.appliedAt,
+      reviewedAt: a.reviewedAt,
+    }));
+
+    return res.json({ applicants: payload });
+  } catch (err) {
+    console.error('[teams] GET /teams/:teamId/applicants failed', err);
+    return res.status(500).json({ message: 'Failed to fetch applicants' });
+  }
+});
+
+// Approve an applicant
+router.post('/teams/:teamId/applicants/:applicantId/approve', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const { teamId: teamIdParam, applicantId: applicantIdParam } = req.params;
+
+    if (
+      !mongoose.Types.ObjectId.isValid(teamIdParam || '') ||
+      !mongoose.Types.ObjectId.isValid(applicantIdParam || '')
+    ) {
+      return res.status(400).json({ message: 'Invalid identifiers' });
+    }
+    const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
+    const applicantObjectId = new mongoose.Types.ObjectId(applicantIdParam);
+
+    // Find the applicant
+    const applicant = await TeamApplicantModel.findOne({
+      _id: applicantObjectId,
+      teamId: teamObjectId,
+      status: 'pending',
+    });
+
+    if (!applicant) {
+      return res.status(404).json({ message: 'Applicant not found or already reviewed' });
+    }
+
+    // Verify team belongs to manager
+    const team = await TeamModel.findOne({ _id: teamObjectId, managerId }).lean();
+    if (!team) {
+      return res.status(404).json({ message: 'Team not found' });
+    }
+
+    // Create team member
+    await TeamMemberModel.findOneAndUpdate(
+      {
+        teamId: teamObjectId,
+        provider: applicant.provider,
+        subject: applicant.subject,
+      },
+      {
+        $set: {
+          managerId,
+          email: applicant.email,
+          name: applicant.name,
+          status: 'active',
+          joinedAt: new Date(),
+          updatedAt: new Date(),
+        },
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    // Update applicant status
+    applicant.status = 'approved';
+    applicant.reviewedAt = new Date();
+    applicant.reviewedBy = managerId;
+    await applicant.save();
+
+    // Log a team message
+    const displayName = applicant.name || applicant.email || `${applicant.provider}:${applicant.subject}`;
+    await TeamMessageModel.create({
+      teamId: teamObjectId,
+      managerId,
+      messageType: 'text',
+      body: `${displayName} was approved and joined the team`,
+    });
+
+    // Notify user via Socket.IO
+    const userKey = `${applicant.provider}:${applicant.subject}`;
+    emitToUser(userKey, 'applicant:approved', {
+      teamId: String(teamObjectId),
+      teamName: team.name,
+    });
+    emitToManager(String(managerId), 'applicant:approved', {
+      applicantId: String(applicant._id),
+      teamId: String(teamObjectId),
+    });
+
+    return res.json({
+      message: 'Applicant approved',
+      applicantId: String(applicant._id),
+    });
+  } catch (err) {
+    console.error('[teams] POST /teams/:teamId/applicants/:applicantId/approve failed', err);
+    return res.status(500).json({ message: 'Failed to approve applicant' });
+  }
+});
+
+// Deny an applicant
+router.post('/teams/:teamId/applicants/:applicantId/deny', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const { teamId: teamIdParam, applicantId: applicantIdParam } = req.params;
+
+    if (
+      !mongoose.Types.ObjectId.isValid(teamIdParam || '') ||
+      !mongoose.Types.ObjectId.isValid(applicantIdParam || '')
+    ) {
+      return res.status(400).json({ message: 'Invalid identifiers' });
+    }
+    const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
+    const applicantObjectId = new mongoose.Types.ObjectId(applicantIdParam);
+
+    const applicant = await TeamApplicantModel.findOne({
+      _id: applicantObjectId,
+      teamId: teamObjectId,
+      status: 'pending',
+    });
+
+    if (!applicant) {
+      return res.status(404).json({ message: 'Applicant not found or already reviewed' });
+    }
+
+    // Verify team belongs to manager
+    const team = await TeamModel.findOne({ _id: teamObjectId, managerId }).lean();
+    if (!team) {
+      return res.status(404).json({ message: 'Team not found' });
+    }
+
+    applicant.status = 'denied';
+    applicant.reviewedAt = new Date();
+    applicant.reviewedBy = managerId;
+    await applicant.save();
+
+    emitToManager(String(managerId), 'applicant:denied', {
+      applicantId: String(applicant._id),
+      teamId: String(teamObjectId),
+    });
+
+    return res.json({
+      message: 'Applicant denied',
+      applicantId: String(applicant._id),
+    });
+  } catch (err) {
+    console.error('[teams] POST /teams/:teamId/applicants/:applicantId/deny failed', err);
+    return res.status(500).json({ message: 'Failed to deny applicant' });
   }
 });
 

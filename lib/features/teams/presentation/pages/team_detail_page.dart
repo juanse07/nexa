@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get_it/get_it.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:nexa/features/teams/data/services/teams_service.dart';
 import 'package:nexa/features/extraction/services/users_service.dart';
 import 'package:nexa/features/chat/presentation/chat_screen.dart';
 import 'package:nexa/features/teams/presentation/widgets/create_invite_link_dialog.dart';
+import 'package:nexa/features/teams/presentation/widgets/applicant_list_tile.dart';
 import 'package:nexa/features/subscription/data/services/subscription_service.dart';
 import 'package:nexa/features/subscription/presentation/pages/subscription_paywall_page.dart';
 
@@ -31,7 +34,9 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
   List<Map<String, dynamic>> _members = const [];
   List<Map<String, dynamic>> _invites = const [];
   List<Map<String, dynamic>> _inviteLinks = const [];
+  List<Map<String, dynamic>> _applicants = const [];
   bool _addingMember = false;
+  String? _processingApplicantId;
 
   @override
   void initState() {
@@ -50,10 +55,18 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
         _teamsService.fetchInvites(widget.teamId),
         _teamsService.fetchInviteLinks(widget.teamId),
       ]);
+      // Fetch applicants separately — endpoint may not be deployed yet
+      List<Map<String, dynamic>> applicants = const [];
+      try {
+        applicants = await _teamsService.fetchApplicants(widget.teamId);
+      } catch (_) {
+        // Silently ignore — applicants endpoint may not exist yet
+      }
       setState(() {
         _members = results[0];
         _invites = results[1];
         _inviteLinks = results[2];
+        _applicants = applicants;
         _loading = false;
       });
     } catch (e) {
@@ -271,6 +284,179 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
           SnackBar(content: Text('Error loading usage: $e')),
         );
       }
+    }
+  }
+
+  Future<void> _createPublicLink() async {
+    try {
+      final result = await _teamsService.createPublicLink(widget.teamId);
+      if (!mounted) return;
+
+      final shortCode = result['shortCode'] as String? ?? '';
+      final deepLink = result['deepLink'] as String? ?? '';
+      final shareableMessage = result['shareableMessage'] as String? ?? '';
+
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.public, color: Colors.blue),
+              SizedBox(width: 8),
+              Expanded(child: Text('Public Link Created!')),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Share this link on social media to recruit new team members. All applicants will require your approval.',
+                  style: TextStyle(fontSize: 13, color: Colors.grey),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          deepLink,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.copy, size: 18),
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: deepLink));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Link copied!')),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Code: $shortCode',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.copy, size: 18),
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: shortCode));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Code copied!')),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.share),
+                    label: const Text('Share'),
+                    onPressed: () {
+                      Share.share(shareableMessage, subject: 'Join our team on FlowShift');
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      );
+
+      await _loadData();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
+  }
+
+  Future<void> _approveApplicant(String applicantId) async {
+    setState(() => _processingApplicantId = applicantId);
+    try {
+      await _teamsService.approveApplicant(widget.teamId, applicantId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Applicant approved!')),
+      );
+      await _loadData();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _processingApplicantId = null);
+    }
+  }
+
+  Future<void> _denyApplicant(String applicantId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Deny Applicant'),
+        content: const Text('Are you sure you want to deny this applicant?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Deny', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _processingApplicantId = applicantId);
+    try {
+      await _teamsService.denyApplicant(widget.teamId, applicantId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Applicant denied')),
+      );
+      await _loadData();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _processingApplicantId = null);
     }
   }
 
@@ -730,21 +916,32 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
               child: ElevatedButton.icon(
                 onPressed: _createInviteLink,
                 icon: const Icon(Icons.link, size: 18),
-                label: const Text('Create Invite Link'),
+                label: const Text('Invite Link'),
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
                 ),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _sendInvite,
-                icon: const Icon(Icons.mail_outline, size: 18),
-                label: const Text('Send email'),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              child: ElevatedButton.icon(
+                onPressed: _createPublicLink,
+                icon: const Icon(Icons.public, size: 18),
+                label: const Text('Public Link'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                  backgroundColor: Colors.teal,
+                  foregroundColor: Colors.white,
                 ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            OutlinedButton.icon(
+              onPressed: _sendInvite,
+              icon: const Icon(Icons.mail_outline, size: 18),
+              label: const Text('Email'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
               ),
             ),
           ],
@@ -802,6 +999,44 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
               ),
             );
           }),
+        // Applicants Section
+        if (_applicants.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              const Text(
+                'Pending Applicants',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.orange,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${_applicants.length}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ..._applicants.map((applicant) {
+            final applicantId = (applicant['id'] ?? '').toString();
+            return ApplicantListTile(
+              applicant: applicant,
+              isLoading: _processingApplicantId == applicantId,
+              onApprove: () => _approveApplicant(applicantId),
+              onDeny: () => _denyApplicant(applicantId),
+            );
+          }),
+        ],
         // Active Invite Links Section
         if (_inviteLinks.isNotEmpty) ...[
           const SizedBox(height: 24),
@@ -818,6 +1053,8 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
             final status = (link['status'] ?? '').toString();
             final hasPassword = link['hasPassword'] as bool? ?? false;
             final usageCount = link['usageCount'] as int? ?? usedCount;
+            final inviteType = (link['inviteType'] ?? 'link').toString();
+            final isPublic = inviteType == 'public';
 
             String usageText;
             if (maxUses != null) {
@@ -829,13 +1066,30 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
             return Card(
               margin: const EdgeInsets.only(bottom: 8),
               child: ListTile(
-                leading: const CircleAvatar(
-                  backgroundColor: Colors.blue,
-                  child: Icon(Icons.link, color: Colors.white),
+                leading: CircleAvatar(
+                  backgroundColor: isPublic ? Colors.teal : Colors.blue,
+                  child: Icon(
+                    isPublic ? Icons.public : Icons.link,
+                    color: Colors.white,
+                  ),
                 ),
                 title: Row(
                   children: [
                     Text('Code: $shortCode'),
+                    if (isPublic) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: Colors.teal.shade100,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'PUBLIC',
+                          style: TextStyle(fontSize: 10, color: Colors.teal.shade700, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
                     if (hasPassword) ...[
                       const SizedBox(width: 6),
                       const Icon(Icons.lock, size: 14, color: Colors.orange),

@@ -1,0 +1,12 @@
+name = "join-flowshift"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[vars]
+API_BASE_URL = "https://api.flowshift.app"
+APP_STORE_URL = "https://apps.apple.com/app/flowshift-manager/id6740008498"
+PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.pymesoft.nexa"
+
+# Route configuration
+# After deploying, add a custom domain: join.flowshift.app
+# workers.dev route will also work for testing
