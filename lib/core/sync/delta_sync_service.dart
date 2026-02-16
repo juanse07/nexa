@@ -1,9 +1,7 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:logger/logger.dart';
-import 'package:nexa/core/config/app_config.dart';
 import 'package:nexa/core/constants/storage_keys.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -12,7 +10,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// This service implements efficient data syncing by:
 /// - Only fetching documents that changed since last sync
 /// - Using server timestamps for accurate sync tracking
-/// - Supporting real-time updates via Server-Sent Events
 class DeltaSyncService {
   DeltaSyncService({
     required Dio dio,
@@ -25,13 +22,6 @@ class DeltaSyncService {
   final Dio _dio;
   final SharedPreferences _prefs;
   final Logger _logger;
-
-  // SSE connection
-  StreamSubscription<String>? _sseSubscription;
-  final _changeController = StreamController<SyncChange>.broadcast();
-
-  /// Stream of real-time changes from the server
-  Stream<SyncChange> get changes => _changeController.stream;
 
   /// Gets the last sync timestamp for a collection
   String? getLastSyncTimestamp(String collection) {
@@ -124,38 +114,6 @@ class DeltaSyncService {
     }
   }
 
-  /// Starts listening to real-time changes via Server-Sent Events
-  Future<void> startRealtimeSync() async {
-    if (_sseSubscription != null) {
-      _logger.w('Realtime sync already active');
-      return;
-    }
-
-    try {
-      final config = AppConfig.instance;
-      final sseUrl = '${config.baseUrl}/api/sync/stream';
-
-      _logger.i('Starting realtime sync: $sseUrl');
-
-      // Note: Dio doesn't support SSE natively, so we'd need to use http package
-      // or a specialized SSE library. For now, this is a placeholder structure.
-      // In production, you'd use package:eventsource or similar.
-
-      _logger.w('SSE implementation requires eventsource package');
-      // TODO: Implement with eventsource package
-    } catch (e) {
-      _logger.e('Failed to start realtime sync', error: e);
-      rethrow;
-    }
-  }
-
-  /// Stops listening to real-time changes
-  Future<void> stopRealtimeSync() async {
-    await _sseSubscription?.cancel();
-    _sseSubscription = null;
-    _logger.i('Stopped realtime sync');
-  }
-
   /// Clears all sync timestamps (forces full sync for all collections)
   Future<void> resetAllSyncTimestamps() async {
     final collections = [
@@ -175,8 +133,7 @@ class DeltaSyncService {
 
   /// Disposes resources
   void dispose() {
-    _sseSubscription?.cancel();
-    _changeController.close();
+    // No-op; retained for API compatibility
   }
 
   String _getSyncKey(String collection) =>
@@ -214,36 +171,4 @@ class DeltaSyncResult<T> {
     }
     return 'DeltaSyncResult(full: ${items.length} items, timestamp: $serverTimestamp)';
   }
-}
-
-/// Represents a real-time change from the server
-class SyncChange {
-  SyncChange({
-    required this.collection,
-    required this.operationType,
-    required this.documentId,
-    this.fullDocument,
-    required this.timestamp,
-  });
-
-  factory SyncChange.fromJson(Map<String, dynamic> json) {
-    return SyncChange(
-      collection: json['collection'] as String,
-      operationType: json['operationType'] as String,
-      documentId: json['documentId'] as String,
-      fullDocument: json['fullDocument'] as Map<String, dynamic>?,
-      timestamp: json['timestamp'] as String,
-    );
-  }
-
-  final String collection;
-  final String operationType; // 'insert', 'update', 'delete', 'replace'
-  final String documentId;
-  final Map<String, dynamic>? fullDocument;
-  final String timestamp;
-
-  bool get isInsert => operationType == 'insert';
-  bool get isUpdate => operationType == 'update';
-  bool get isDelete => operationType == 'delete';
-  bool get isReplace => operationType == 'replace';
 }
