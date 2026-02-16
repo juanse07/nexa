@@ -10,7 +10,7 @@
 	<string>production</string>
 	<key>com.apple.developer.associated-domains</key>
 	<array>
-		<string>applinks:join.flowshift.app</string>
+		<string>applinks:flowshift.work</string>
 	</array>
 </dict>
 </plist>

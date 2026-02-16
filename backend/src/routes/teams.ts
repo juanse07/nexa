@@ -1043,7 +1043,7 @@ router.post('/teams/:teamId/invites/create-link', inviteCreateLimiter, requireAu
     });
 
     // Build universal link
-    const deepLink = `https://join.flowshift.app/invite/${shortCode}`;
+    const deepLink = `https://flowshift.work/invite/${shortCode}`;
 
     // Generate shareable message
     const expiryText = expiresAt
@@ -1112,7 +1112,7 @@ router.get('/teams/:teamId/invites/links', requireAuth, async (req, res) => {
     const payload = invites.map((invite) => ({
       id: String(invite._id),
       shortCode: invite.shortCode,
-      deepLink: `https://join.flowshift.app/invite/${invite.shortCode}`,
+      deepLink: `https://flowshift.work/invite/${invite.shortCode}`,
       inviteType: invite.inviteType,
       status: invite.status,
       usedCount: invite.usedCount,
@@ -1538,7 +1538,7 @@ router.post('/teams/:teamId/invites/create-public-link', inviteCreateLimiter, re
       expiresAt,
     });
 
-    const deepLink = `https://join.flowshift.app/p/${shortCode}`;
+    const deepLink = `https://flowshift.work/p/${shortCode}`;
 
     const shareableMessage = `We're hiring! Join our team on FlowShift 🚀
 

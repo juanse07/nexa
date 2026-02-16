@@ -5,8 +5,8 @@ import 'package:flutter/foundation.dart';
 /// Service that handles incoming deep links (Universal Links / App Links).
 ///
 /// Listens for links matching:
-///   https://join.flowshift.app/invite/:shortCode
-///   https://join.flowshift.app/p/:shortCode
+///   https://flowshift.work/invite/:shortCode
+///   https://flowshift.work/p/:shortCode
 ///
 /// Stores a pending invite code if the user is not yet authenticated,
 /// so it can be consumed after login.

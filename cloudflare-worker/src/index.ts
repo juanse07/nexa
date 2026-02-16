@@ -1,5 +1,5 @@
 /**
- * Cloudflare Worker for join.flowshift.app
+ * Cloudflare Worker for flowshift.work
  *
  * Serves:
  * - /.well-known/apple-app-site-association (iOS Universal Links)
