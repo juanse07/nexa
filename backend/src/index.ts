@@ -22,7 +22,6 @@ import rolesRouter from './routes/roles';
 import managersRouter from './routes/managers';
 import tariffsRouter from './routes/tariffs';
 import usersRouter from './routes/users';
-import syncRouter from './routes/sync';
 import chatRouter from './routes/chat';
 import aiRouter from './routes/ai';
 import staffAiRouter from './routes/staff-ai';
@@ -104,7 +103,6 @@ export async function createServer() {
   app.use('/api/chat', chatRouter);
   app.use('/api/auth', authRouter);
   app.use('/api/notifications', notificationsRouter);
-  app.use('/api', syncRouter);
   app.use('/api', aiRouter);
   app.use('/api', staffAiRouter);
   app.use('/api', subscriptionRouter);
