@@ -17,6 +17,7 @@ import { ConversationModel } from '../models/conversation';
 import { ChatMessageModel } from '../models/chatMessage';
 import { ManagerModel } from '../models/manager';
 import { emitToManager } from '../socket/server';
+import { computeRoleStats } from '../utils/eventCapacity';
 
 const router = Router();
 
@@ -490,11 +491,18 @@ router.get('/ai/staff/context', requireAuth, async (req, res) => {
     // Free: 10 events (~750 tokens) | Pro: 50 events (~3,750 tokens)
     const eventLimit = subscriptionTier === 'pro' ? 50 : 10;
 
-    const assignedEvents = await EventModel.find(query)
+    // Load upcoming events (future first) for context — past events should use tools
+    const now = new Date();
+    const upcomingQuery = { ...query, date: { $gte: now } };
+    const assignedEvents = await EventModel.find(upcomingQuery)
     .sort({ date: 1 })
     .limit(eventLimit)
-    .select('event_name client_name date start_time end_time venue_name venue_address city state roles accepted_staff status')
+    .select('shift_name event_name client_name date start_time end_time venue_name venue_address city state roles accepted_staff status')
     .lean();
+
+    // Get total count so the model knows there are more events
+    const totalEventCount = await EventModel.countDocuments(query);
+    const pastEventCount = totalEventCount - assignedEvents.length;
 
     console.log('[ai/staff/context] Found', assignedEvents.length, 'events');
     if (assignedEvents.length > 0 && assignedEvents[0]) {
@@ -555,6 +563,14 @@ router.get('/ai/staff/context', requireAuth, async (req, res) => {
         appId: user.app_id || null,
       },
       assignedEvents: eventsWithUserData,
+      eventSummary: {
+        upcomingShown: assignedEvents.length,
+        totalEvents: totalEventCount,
+        pastEvents: pastEventCount,
+        note: pastEventCount > 0
+          ? `Staff has ${pastEventCount} past events. Use get_my_schedule with a date_range to query them.`
+          : undefined,
+      },
       availabilityHistory,
       earnings: {
         totalEarnings: Math.round(totalEarnings * 100) / 100,
@@ -710,31 +726,31 @@ const chatMessageSchema = z.object({
 const STAFF_AI_TOOLS = [
   {
     name: 'get_my_schedule',
-    description: 'Get my shifts and assigned events. Returns up to 10 upcoming events by default. Use this when I ask about my schedule, upcoming shifts, past shifts, specific dates, or "when do I work".',
+    description: 'Get my shifts and assigned events. Use this when I ask about my schedule, upcoming shifts, past shifts, work history, specific dates, or "when do I work". Supports both future and past queries.',
     parameters: {
       type: 'object',
       properties: {
         date_range: {
           type: ['string', 'null'],
-          description: 'Optional date filter. For general schedule questions, LEAVE EMPTY to show upcoming events. Use specific ranges when explicitly asked: "this_week", "next_week", "this_month", "last_month", or "YYYY-MM-DD" for a specific date.'
+          description: 'Date filter. LEAVE EMPTY for upcoming events. Options: "this_week", "last_week", "next_week", "this_month", "last_month", "last_3_months", "last_6_months", "all_past", "YYYY-MM-DD" for a specific date, or "YYYY-MM-DD:YYYY-MM-DD" for a custom range (start:end).'
         },
         limit: {
           type: ['number', 'null'],
-          description: 'Number of events to return. Default is 10. Use 1 for "next shift", use specified number for "next N shifts", use 10 for general "my schedule" queries.'
+          description: 'Number of events to return. Default is 10. Use 1 for "next shift", use specified number for "next N shifts".'
         }
       }
     }
   },
   {
     name: 'mark_availability',
-    description: 'Mark my availability for specific dates. Use when I say "I\'m available" or "I can\'t work on...". 🚨 IMPORTANT: If user mentions a month that has already passed this year, use NEXT year.',
+    description: 'Mark my availability for specific dates. Use when I say "I\'m available" or "I can\'t work on...".',
     parameters: {
       type: 'object',
       properties: {
         dates: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Array of ISO dates (YYYY-MM-DD). If user says a month that already passed this year, use next year. Example: "February" in December 2025 → "2026-02-XX"'
+          description: 'Array of ISO dates (YYYY-MM-DD). If user says a month that already passed this year, use next year.'
         },
         status: {
           type: 'string',
@@ -751,13 +767,17 @@ const STAFF_AI_TOOLS = [
   },
   {
     name: 'accept_shift',
-    description: 'Accept a shift offer or pending event assignment. Use when I say "accept the shift" or "I\'ll take it".',
+    description: 'Accept a shift/event. Use when I say "accept the shift" or "I\'ll take it". Requires event_id (from get_my_schedule). Role is auto-detected from invitation or must be specified.',
     parameters: {
       type: 'object',
       properties: {
         event_id: {
           type: 'string',
-          description: 'The event ID to accept'
+          description: 'The event ID to accept (get this from get_my_schedule results)'
+        },
+        role: {
+          type: ['string', 'null'],
+          description: 'The role to accept for (e.g. "Server", "Bartender"). Optional if user was invited for a specific role.'
         }
       },
       required: ['event_id']
@@ -765,7 +785,7 @@ const STAFF_AI_TOOLS = [
   },
   {
     name: 'decline_shift',
-    description: 'Decline a shift offer or pending event assignment. Use when I say "decline" or "I can\'t make it".',
+    description: 'Decline a shift/event. Use when I say "decline" or "I can\'t make it".',
     parameters: {
       type: 'object',
       properties: {
@@ -789,49 +809,40 @@ const STAFF_AI_TOOLS = [
       properties: {
         date_range: {
           type: ['string', 'null'],
-          description: 'Optional: "this_week", "last_week", "this_month", "last_month", or ISO date'
+          description: 'Optional: "this_week", "last_week", "this_month", "last_month", "last_3_months", "last_6_months", or ISO date'
         }
       }
     }
   },
   {
-    name: 'get_all_my_events',
-    description: 'Get ALL my upcoming events/shifts (not limited to a date range). Use when I ask "show me all my events", "what are all my upcoming shifts", "list everything I\'m scheduled for". Shows first 10 in detail, summarizes the rest if more than 10.',
-    parameters: {
-      type: 'object',
-      properties: {}
-    }
-  },
-  {
     name: 'get_my_unavailable_dates',
-    description: 'Get dates I\'ve marked as unavailable. Use when I ask "when am I unavailable", "what days did I block off", "show my unavailable dates". Returns first 10 dates if more than 10.',
+    description: 'Get dates I\'ve marked as unavailable. Use when I ask "when am I unavailable", "what days did I block off", "am I available on [date]?".',
     parameters: {
       type: 'object',
-      properties: {}
+      properties: {
+        from_date: {
+          type: ['string', 'null'],
+          description: 'Optional start date (YYYY-MM-DD) to filter. Useful for "am I unavailable next week?"'
+        },
+        to_date: {
+          type: ['string', 'null'],
+          description: 'Optional end date (YYYY-MM-DD) to filter.'
+        }
+      }
     }
   },
   {
-    name: 'performance_current_month',
-    description: 'Get my performance statistics for the current month. Shows events/shifts analyzed by position (bartender, server, etc), total money earned, and hours worked. Use when I ask about my current month performance, "how am I doing this month", or "my stats this month".',
+    name: 'get_performance',
+    description: 'Get my performance statistics: events worked, hours, earnings, breakdown by role. Use for "how am I doing", "my stats", "performance this month/year".',
     parameters: {
       type: 'object',
-      properties: {}
-    }
-  },
-  {
-    name: 'performance_last_month',
-    description: 'Get my performance statistics for last month. Shows events/shifts analyzed by position (bartender, server, etc), total money earned, and hours worked. Use when I ask about last month\'s performance, "how did I do last month", or "my stats last month".',
-    parameters: {
-      type: 'object',
-      properties: {}
-    }
-  },
-  {
-    name: 'performance_last_year',
-    description: 'Get my performance statistics for the last 12 months. Shows events/shifts analyzed by position (bartender, server, etc), total money earned, and hours worked. Use when I ask about yearly performance, "how did I do this year", "annual stats", or "year in review".',
-    parameters: {
-      type: 'object',
-      properties: {}
+      properties: {
+        period: {
+          type: 'string',
+          enum: ['current_month', 'last_month', 'last_3_months', 'last_6_months', 'last_year'],
+          description: 'Time period. Default: current_month. Use last_year for annual/12-month review.'
+        }
+      }
     }
   },
   {
@@ -855,7 +866,7 @@ const STAFF_AI_TOOLS = [
   },
   {
     name: 'send_message_to_manager',
-    description: 'Send a message to the staff member\'s manager via the chat system. Use ONLY after composing a message and getting user confirmation to send. The user must explicitly say "yes send it" or "go ahead".',
+    description: 'Send a message to the staff member\'s manager via the chat system. Use ONLY after composing a message and getting user confirmation to send.',
     parameters: {
       type: 'object',
       properties: {
@@ -873,13 +884,13 @@ const STAFF_AI_TOOLS = [
   },
   {
     name: 'get_shift_details',
-    description: 'Get full details about a specific shift/event including pay info, notes, dress code, and all role details. Use when staff asks "what are the details for...", "how much does it pay", "what should I wear", "any notes for the event".',
+    description: 'Get full details about a specific shift/event including pay info, notes, dress code, and all role details. Use when staff asks "what are the details for...", "how much does it pay", "what should I wear".',
     parameters: {
       type: 'object',
       properties: {
         event_id: {
           type: 'string',
-          description: 'The event ID to get details for'
+          description: 'The event ID to get details for (get this from get_my_schedule results)'
         }
       },
       required: ['event_id']
@@ -937,6 +948,25 @@ async function executeMarkAvailability(
 }
 
 /**
+ * Parse pay rate from various formats:
+ * - String: "$18/hr", "$25.50/hr", "$30 per hour"
+ * - Object: { amount: 18, type: 'hourly' }
+ * - Number: 18
+ * Returns hourly rate as number, or 0 if unparseable
+ */
+function parsePayRate(payRateInfo: any): number {
+  if (!payRateInfo) return 0;
+  if (typeof payRateInfo === 'number') return payRateInfo;
+  if (typeof payRateInfo === 'object' && payRateInfo.amount) return Number(payRateInfo.amount) || 0;
+  if (typeof payRateInfo === 'string') {
+    // Extract number from strings like "$18/hr", "$25.50/hr", "$30 per hour"
+    const match = payRateInfo.match(/\$?([\d.]+)/);
+    return match ? parseFloat(match[1] || '0') : 0;
+  }
+  return 0;
+}
+
+/**
  * Execute get_my_schedule function
  * Returns upcoming shifts and assigned events
  */
@@ -958,25 +988,53 @@ async function executeGetMySchedule(
       if (dateRange === 'this_week') {
         const startOfWeek = new Date(now);
         startOfWeek.setDate(now.getDate() - now.getDay());
+        startOfWeek.setHours(0, 0, 0, 0);
         const endOfWeek = new Date(startOfWeek);
-        endOfWeek.setDate(startOfWeek.getDate() + 7);
-        dateFilter = { date: { $gte: startOfWeek, $lt: endOfWeek } };
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        endOfWeek.setHours(23, 59, 59, 999);
+        dateFilter = { date: { $gte: startOfWeek, $lte: endOfWeek } };
+      } else if (dateRange === 'last_week') {
+        const startOfLastWeek = new Date(now);
+        startOfLastWeek.setDate(now.getDate() - now.getDay() - 7);
+        startOfLastWeek.setHours(0, 0, 0, 0);
+        const endOfLastWeek = new Date(startOfLastWeek);
+        endOfLastWeek.setDate(startOfLastWeek.getDate() + 6);
+        endOfLastWeek.setHours(23, 59, 59, 999);
+        dateFilter = { date: { $gte: startOfLastWeek, $lte: endOfLastWeek } };
       } else if (dateRange === 'next_week') {
         const startOfNextWeek = new Date(now);
         startOfNextWeek.setDate(now.getDate() - now.getDay() + 7);
+        startOfNextWeek.setHours(0, 0, 0, 0);
         const endOfNextWeek = new Date(startOfNextWeek);
-        endOfNextWeek.setDate(startOfNextWeek.getDate() + 7);
-        dateFilter = { date: { $gte: startOfNextWeek, $lt: endOfNextWeek } };
+        endOfNextWeek.setDate(startOfNextWeek.getDate() + 6);
+        endOfNextWeek.setHours(23, 59, 59, 999);
+        dateFilter = { date: { $gte: startOfNextWeek, $lte: endOfNextWeek } };
       } else if (dateRange === 'this_month') {
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
         dateFilter = { date: { $gte: startOfMonth, $lte: endOfMonth } };
       } else if (dateRange === 'last_month') {
         const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
-        endOfLastMonth.setHours(23, 59, 59, 999);
+        const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
         dateFilter = { date: { $gte: startOfLastMonth, $lte: endOfLastMonth } };
-        console.log(`[executeGetMySchedule] Last month filter: ${startOfLastMonth.toISOString()} to ${endOfLastMonth.toISOString()}`);
+      } else if (dateRange === 'last_3_months') {
+        const start = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+        start.setHours(0, 0, 0, 0);
+        dateFilter = { date: { $gte: start, $lte: now } };
+      } else if (dateRange === 'last_6_months') {
+        const start = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+        start.setHours(0, 0, 0, 0);
+        dateFilter = { date: { $gte: start, $lte: now } };
+      } else if (dateRange === 'all_past') {
+        dateFilter = { date: { $lt: now } };
+      } else if (dateRange.includes(':')) {
+        // Custom range: "YYYY-MM-DD:YYYY-MM-DD"
+        const parts = dateRange.split(':');
+        const startDate = new Date(parts[0] || dateRange);
+        startDate.setHours(0, 0, 0, 0);
+        const endDate = new Date(parts[1] || parts[0] || dateRange);
+        endDate.setHours(23, 59, 59, 999);
+        dateFilter = { date: { $gte: startDate, $lte: endDate } };
       } else {
         // Assume ISO date (YYYY-MM-DD) - match the entire day
         const specificDate = new Date(dateRange);
@@ -985,12 +1043,12 @@ async function executeGetMySchedule(
         const endOfDay = new Date(specificDate);
         endOfDay.setHours(23, 59, 59, 999);
         dateFilter = { date: { $gte: startOfDay, $lte: endOfDay } };
-        console.log(`[executeGetMySchedule] Specific date filter: ${dateRange} -> ${startOfDay.toISOString()} to ${endOfDay.toISOString()}`);
       }
+      console.log(`[executeGetMySchedule] Date filter for '${dateRange}':`, JSON.stringify(dateFilter));
     } else {
-      // No date filter specified - return ALL upcoming events
+      // No date filter specified - return upcoming events
       dateFilter = { date: { $gte: now } };
-      console.log(`[executeGetMySchedule] No date filter - returning all upcoming events from ${now.toISOString()}`);
+      console.log(`[executeGetMySchedule] No date filter - returning upcoming events from ${now.toISOString()}`);
     }
 
     const query = {
@@ -1000,20 +1058,19 @@ async function executeGetMySchedule(
     };
     console.log('[executeGetMySchedule] Query:', JSON.stringify(query, null, 2));
 
-    // Dynamic limit with user override
-    // If limit specified, use it (constrained by subscription tier)
-    // Otherwise use default: Free: 10 events | Pro: 50 events
-    const maxLimit = subscriptionTier === 'pro' ? 50 : 10;
+    // Dynamic limit: generous for reading own history, model needs full picture
+    // Free: 30 events | Pro: 100 events
+    const maxLimit = subscriptionTier === 'pro' ? 100 : 30;
     const eventLimit = limit
-      ? Math.min(limit, maxLimit)  // Use user limit but cap at subscription max
-      : maxLimit;  // Default to max for tier
+      ? Math.min(limit, maxLimit)
+      : maxLimit;
 
     console.log(`[executeGetMySchedule] Using limit: ${eventLimit} (requested: ${limit || 'default'}, max: ${maxLimit})`);
 
     const events = await EventModel.find(query)
     .sort({ date: 1 })
     .limit(eventLimit)
-    .select('event_name client_name date start_time end_time venue_name venue_address city state accepted_staff status')
+    .select('shift_name event_name client_name date start_time end_time venue_name venue_address city state accepted_staff status')
     .lean();
 
     console.log('[executeGetMySchedule] Found', events.length, 'events');
@@ -1036,7 +1093,7 @@ async function executeGetMySchedule(
       );
       return {
         id: event._id,
-        name: event.event_name,
+        name: event.shift_name || event.event_name || event.client_name || 'Untitled',
         client: event.client_name,
         date: event.date,
         time: `${event.start_time}-${event.end_time}`,
@@ -1105,6 +1162,14 @@ async function executeGetEarningsSummary(
         startOfLastMonth.setHours(0, 0, 0, 0);
         const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
         dateFilter = { date: { $gte: startOfLastMonth, $lte: endOfLastMonth } };
+      } else if (dateRange === 'last_3_months') {
+        const start = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+        start.setHours(0, 0, 0, 0);
+        dateFilter = { date: { $gte: start, $lte: now } };
+      } else if (dateRange === 'last_6_months') {
+        const start = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+        start.setHours(0, 0, 0, 0);
+        dateFilter = { date: { $gte: start, $lte: now } };
       }
     }
 
@@ -1114,7 +1179,7 @@ async function executeGetEarningsSummary(
       status: { $ne: 'cancelled' },
       ...dateFilter
     })
-    .select('date start_time end_time accepted_staff')
+    .select('date start_time end_time accepted_staff roles pay_rate_info')
     .lean();
 
     let totalEarnings = 0;
@@ -1127,13 +1192,18 @@ async function executeGetEarningsSummary(
       );
 
       if (userInEvent && event.start_time && event.end_time) {
-        // Calculate hours worked (payRate not available in accepted_staff)
         const start = new Date(`1970-01-01T${event.start_time}`);
         const end = new Date(`1970-01-01T${event.end_time}`);
-        const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+        let hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+        if (hours < 0) hours += 24; // Handle overnight shifts
 
         totalHoursWorked += hours;
-        // Note: payRate not stored in accepted_staff, cannot calculate earnings
+
+        // Try to find pay rate: first from user's role in roles array, then from event-level pay_rate_info
+        const userRole = userInEvent.role || userInEvent.position;
+        const roleInfo = event.roles?.find((r: any) => r.role_name === userRole || r.role === userRole);
+        const wage = parsePayRate(roleInfo?.pay_rate_info) || parsePayRate(event.pay_rate_info);
+        totalEarnings += wage * hours;
         eventCount++;
       }
     });
@@ -1179,11 +1249,11 @@ async function executeGetAllMyEvents(
     const totalCount = await EventModel.countDocuments(query);
     console.log(`[executeGetAllMyEvents] Total upcoming events: ${totalCount}`);
 
-    // Get first 10 events in detail
+    // Get first 30 events in detail
     const events = await EventModel.find(query)
       .sort({ date: 1 })
-      .limit(10)
-      .select('event_name client_name date start_time end_time venue_name venue_address city state accepted_staff status')
+      .limit(30)
+      .select('shift_name event_name client_name date start_time end_time venue_name venue_address city state accepted_staff status')
       .lean();
 
     // Extract user's data from accepted_staff for each event
@@ -1193,7 +1263,7 @@ async function executeGetAllMyEvents(
       );
       return {
         id: event._id,
-        name: event.event_name,
+        name: event.shift_name || event.event_name || event.client_name || 'Untitled',
         client: event.client_name,
         date: event.date,
         time: `${event.start_time}-${event.end_time}`,
@@ -1229,28 +1299,39 @@ async function executeGetAllMyEvents(
 
 /**
  * Execute get_my_unavailable_dates function
- * Returns dates marked as unavailable, first 10 if more than 10 exist
+ * Returns dates marked as unavailable, with optional date range filtering
  */
 async function executeGetMyUnavailableDates(
-  userKey: string
+  userKey: string,
+  fromDate?: string,
+  toDate?: string
 ): Promise<{ success: boolean; message: string; data?: any }> {
   try {
-    console.log(`[executeGetMyUnavailableDates] Getting unavailable dates for userKey ${userKey}`);
+    console.log(`[executeGetMyUnavailableDates] Getting unavailable dates for userKey ${userKey}, from: ${fromDate || 'any'}, to: ${toDate || 'any'}`);
 
-    // Get all unavailable dates, sorted by date
-    const totalCount = await AvailabilityModel.countDocuments({
-      userKey,
-      status: 'unavailable'
-    });
+    const query: any = { userKey, status: 'unavailable' };
 
-    console.log(`[executeGetMyUnavailableDates] Total unavailable dates: ${totalCount}`);
+    // Add date filter if provided
+    if (fromDate || toDate) {
+      query.date = {};
+      if (fromDate) {
+        const start = new Date(fromDate);
+        start.setHours(0, 0, 0, 0);
+        query.date.$gte = start;
+      }
+      if (toDate) {
+        const end = new Date(toDate);
+        end.setHours(23, 59, 59, 999);
+        query.date.$lte = end;
+      }
+    }
 
-    const unavailableDates = await AvailabilityModel.find({
-      userKey,
-      status: 'unavailable'
-    })
+    const totalCount = await AvailabilityModel.countDocuments(query);
+    console.log(`[executeGetMyUnavailableDates] Total matching: ${totalCount}`);
+
+    const unavailableDates = await AvailabilityModel.find(query)
       .sort({ date: 1 })
-      .limit(10)
+      .limit(20)
       .select('date notes')
       .lean();
 
@@ -1258,8 +1339,6 @@ async function executeGetMyUnavailableDates(
       date: record.date,
       notes: record.notes || null
     }));
-
-    const remainingCount = totalCount - dates.length;
 
     return {
       success: true,
@@ -1270,65 +1349,131 @@ async function executeGetMyUnavailableDates(
         dates,
         total: totalCount,
         showing: dates.length,
-        remaining: remainingCount > 0 ? remainingCount : 0
+        remaining: Math.max(totalCount - dates.length, 0)
       }
     };
   } catch (error: any) {
     console.error('[executeGetMyUnavailableDates] Error:', error);
-    return {
-      success: false,
-      message: `Failed to get unavailable dates: ${error.message}`
-    };
+    return { success: false, message: `Failed to get unavailable dates: ${error.message}` };
   }
 }
 
 /**
  * Execute accept_shift function
- * Moves user from pending to accepted in event assignments
+ * Atomically adds user to accepted_staff, removes from declined_staff if present
+ * Matches the logic in events.ts POST /events/:id/respond
  */
 async function executeAcceptShift(
   userId: string,
   userKey: string,
-  eventId: string
+  eventId: string,
+  role?: string
 ): Promise<{ success: boolean; message: string; data?: any }> {
   try {
-    console.log(`[executeAcceptShift] Accepting shift ${eventId} for userId ${userId}`);
+    console.log(`[executeAcceptShift] Accepting shift ${eventId} for userKey ${userKey}, role: ${role || 'auto-detect'}`);
 
-    const event = await EventModel.findById(eventId);
+    const event = await EventModel.findById(eventId).lean();
     if (!event) {
       return { success: false, message: 'Event not found' };
     }
 
-    // Find user in assignments
-    const assignment = (event as any).assignments?.find((a: any) => a.memberId?.toString() === userId);
-    if (!assignment) {
-      return { success: false, message: 'You are not assigned to this event' };
+    // Check if already accepted
+    const alreadyAccepted = (event.accepted_staff || []).some((s: any) => s.userKey === userKey);
+    if (alreadyAccepted) {
+      const eventName = (event as any).shift_name || (event as any).event_name || (event as any).client_name || 'this shift';
+      return { success: false, message: `You already accepted ${eventName}` };
     }
 
-    // Update assignment status
-    assignment.status = 'accepted';
-    assignment.respondedAt = new Date();
+    // Determine role: explicit > invited_staff > first role with capacity
+    let resolvedRole = role;
+    if (!resolvedRole) {
+      // Check if user was invited for a specific role
+      const invitation = (event as any).invited_staff?.find((s: any) => s.userKey === userKey);
+      if (invitation?.roleName) {
+        resolvedRole = invitation.roleName;
+      }
+    }
+    if (!resolvedRole) {
+      // Find first role with available spots
+      const roleStats = computeRoleStats((event.roles || []) as any[], (event.accepted_staff || []) as any[]);
+      const availableRole = roleStats.find(r => !r.is_full && r.remaining > 0);
+      if (availableRole) {
+        resolvedRole = availableRole.role;
+      }
+    }
+    if (!resolvedRole) {
+      return { success: false, message: 'No available roles for this event. Please specify which role you want.' };
+    }
 
-    await event.save();
+    // Verify role exists and has capacity
+    const roleReq = (event.roles || []).find((r: any) => (r.role || '').toLowerCase() === resolvedRole!.toLowerCase());
+    if (!roleReq) {
+      const availableRoles = (event.roles || []).map((r: any) => r.role).join(', ');
+      return { success: false, message: `Role '${resolvedRole}' not found. Available roles: ${availableRoles}` };
+    }
 
-    // Cost optimization: Compressed response format
+    // Look up staff user info
+    const user = await UserModel.findById(userId).select('first_name last_name email name picture provider subject').lean();
+
+    const staffDoc = {
+      userKey,
+      provider: (user as any)?.provider,
+      subject: (user as any)?.subject,
+      email: (user as any)?.email,
+      name: (user as any)?.name || `${(user as any)?.first_name || ''} ${(user as any)?.last_name || ''}`.trim(),
+      first_name: (user as any)?.first_name,
+      last_name: (user as any)?.last_name,
+      picture: (user as any)?.picture,
+      response: 'accepted',
+      role: resolvedRole,
+      respondedAt: new Date(),
+    };
+
+    // Atomic update: push to accepted_staff, pull from declined_staff
+    const roleCapacity = roleReq.count || 0;
+    const updatedEvent = await EventModel.findOneAndUpdate(
+      {
+        _id: eventId,
+        'accepted_staff.userKey': { $ne: userKey },
+        $expr: {
+          $lt: [
+            { $size: { $filter: { input: { $ifNull: ['$accepted_staff', []] }, as: 'staff', cond: { $eq: [{ $toLower: { $ifNull: ['$$staff.role', ''] } }, resolvedRole!.toLowerCase()] } } } },
+            roleCapacity
+          ]
+        }
+      },
+      {
+        $pull: { declined_staff: { userKey } } as any,
+        $push: { accepted_staff: staffDoc } as any,
+        $inc: { version: 1 },
+        $set: { updatedAt: new Date() }
+      },
+      { new: true }
+    );
+
+    if (!updatedEvent) {
+      return { success: false, message: `No spots left for role '${resolvedRole}'` };
+    }
+
+    // Update role_stats
+    const newRoleStats = computeRoleStats((updatedEvent.roles as any[]) || [], (updatedEvent.accepted_staff as any[]) || []);
+    await EventModel.updateOne({ _id: eventId }, { $set: { role_stats: newRoleStats } });
+
+    const eventName = (updatedEvent as any).shift_name || (updatedEvent as any).event_name || (updatedEvent as any).client_name || 'shift';
     return {
       success: true,
-      message: `Accepted ${(event as any).eventName || 'shift'}`,
-      data: { id: eventId, name: (event as any).eventName, date: (event as any).date }
+      message: `Accepted ${eventName} as ${resolvedRole}`,
+      data: { id: eventId, name: eventName, date: (updatedEvent as any).date, role: resolvedRole }
     };
   } catch (error: any) {
     console.error('[executeAcceptShift] Error:', error);
-    return {
-      success: false,
-      message: `Failed to accept shift: ${error.message}`
-    };
+    return { success: false, message: `Failed to accept shift: ${error.message}` };
   }
 }
 
 /**
  * Execute decline_shift function
- * Moves user from pending to declined in event assignments
+ * Atomically removes from accepted_staff (if previously accepted), adds to declined_staff
  */
 async function executeDeclineShift(
   userId: string,
@@ -1337,276 +1482,126 @@ async function executeDeclineShift(
   reason?: string
 ): Promise<{ success: boolean; message: string; data?: any }> {
   try {
-    console.log(`[executeDeclineShift] Declining shift ${eventId} for userId ${userId}, reason: ${reason || 'none'}`);
+    console.log(`[executeDeclineShift] Declining shift ${eventId} for userKey ${userKey}, reason: ${reason || 'none'}`);
 
-    const event = await EventModel.findById(eventId);
+    const event = await EventModel.findById(eventId).lean();
     if (!event) {
       return { success: false, message: 'Event not found' };
     }
 
-    // Find user in assignments
-    const assignment = (event as any).assignments?.find((a: any) => a.memberId?.toString() === userId);
-    if (!assignment) {
-      return { success: false, message: 'You are not assigned to this event' };
+    // Check if already declined
+    const alreadyDeclined = (event as any).declined_staff?.some((s: any) => s.userKey === userKey);
+    if (alreadyDeclined) {
+      return { success: false, message: 'You already declined this shift' };
     }
 
-    // Update assignment status
-    assignment.status = 'declined';
-    assignment.respondedAt = new Date();
-    if (reason) {
-      assignment.response = reason;
+    // Look up staff user info
+    const user = await UserModel.findById(userId).select('first_name last_name email name picture provider subject').lean();
+
+    const staffDoc = {
+      userKey,
+      provider: (user as any)?.provider,
+      subject: (user as any)?.subject,
+      email: (user as any)?.email,
+      name: (user as any)?.name || `${(user as any)?.first_name || ''} ${(user as any)?.last_name || ''}`.trim(),
+      first_name: (user as any)?.first_name,
+      last_name: (user as any)?.last_name,
+      picture: (user as any)?.picture,
+      response: reason || 'decline',
+      respondedAt: new Date(),
+    };
+
+    // Atomic: pull from accepted_staff, push to declined_staff
+    const updatedEvent = await EventModel.findOneAndUpdate(
+      { _id: eventId },
+      {
+        $pull: { accepted_staff: { userKey } } as any,
+        $push: { declined_staff: staffDoc } as any,
+        $inc: { version: 1 },
+        $set: { updatedAt: new Date() }
+      },
+      { new: true }
+    );
+
+    if (!updatedEvent) {
+      return { success: false, message: 'Event not found' };
     }
 
-    await event.save();
+    // Update role_stats
+    const newRoleStats = computeRoleStats((updatedEvent.roles as any[]) || [], (updatedEvent.accepted_staff as any[]) || []);
+    await EventModel.updateOne({ _id: eventId }, { $set: { role_stats: newRoleStats } });
 
-    // Cost optimization: Compressed response format
+    const eventName = (updatedEvent as any).shift_name || (updatedEvent as any).event_name || (updatedEvent as any).client_name || 'shift';
     return {
       success: true,
-      message: `Declined ${(event as any).eventName || 'shift'}`,
-      data: { id: eventId, name: (event as any).eventName }
+      message: `Declined ${eventName}`,
+      data: { id: eventId, name: eventName }
     };
   } catch (error: any) {
     console.error('[executeDeclineShift] Error:', error);
-    return {
-      success: false,
-      message: `Failed to decline shift: ${error.message}`
-    };
+    return { success: false, message: `Failed to decline shift: ${error.message}` };
   }
 }
 
 /**
- * Execute performance_current_month function
- * Returns performance statistics for the current month
+ * Unified performance function — replaces 3 separate tools
+ * Supports: current_month, last_month, last_3_months, last_6_months, last_year
  */
-async function executePerformanceCurrentMonth(
+async function executeGetPerformance(
   userId: string,
-  userKey: string
+  userKey: string,
+  period: string = 'current_month'
 ): Promise<{ success: boolean; message: string; data?: any }> {
   try {
-    console.log(`[executePerformanceCurrentMonth] Getting current month stats for userKey ${userKey}`);
+    console.log(`[executeGetPerformance] Getting ${period} stats for userKey ${userKey}`);
 
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    startOfMonth.setHours(0, 0, 0, 0);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    let start: Date;
+    let end: Date = new Date(now);
+    end.setHours(23, 59, 59, 999);
+    let periodLabel: string;
 
-    console.log(`[executePerformanceCurrentMonth] Date range: ${startOfMonth.toISOString()} to ${endOfMonth.toISOString()}`);
-
-    // Query shifts for this month where user is in accepted_staff
-    // Use same criteria as earnings section: all non-cancelled events
-    // All dates are stored as Date objects (standardized by migration)
-    const events = await EventModel.find({
-      'accepted_staff.userKey': userKey,
-      status: { $ne: 'cancelled' },
-      date: { $gte: startOfMonth, $lte: endOfMonth }
-    }).lean();
-
-    console.log(`[executePerformanceCurrentMonth] Found ${events.length} events in current month`);
-
-    // Analyze by role/position
-    const positionStats: Record<string, { count: number; hours: number; earnings: number }> = {};
-    let totalHours = 0;
-    let totalEarnings = 0;
-    let totalEvents = 0;
-
-    for (const event of events) {
-      const acceptedStaff = (event as any).accepted_staff || [];
-      const userInShift = acceptedStaff.find((staff: any) => staff.userKey === userKey);
-
-      if (userInShift && (userInShift.response === 'accepted' || userInShift.response === 'accept')) {
-        const position = userInShift.role || 'Staff';
-
-        // Calculate hours from start_time and end_time
-        let hours = 0;
-        if ((event as any).start_time && (event as any).end_time) {
-          const start = new Date(`1970-01-01T${(event as any).start_time}`);
-          const end = new Date(`1970-01-01T${(event as any).end_time}`);
-          hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-          if (hours < 0) hours += 24; // Handle overnight shifts
-        } else {
-          hours = 6; // Default assumption if times not specified
-        }
-
-        // Extract pay rate from roles array if available
-        const roles = (event as any).roles || [];
-        const roleInfo = roles.find((r: any) => r.role_name === position);
-        const wage = roleInfo?.pay_rate_info?.amount || 0;
-        const earnings = wage * hours;
-
-        if (!positionStats[position]) {
-          positionStats[position] = { count: 0, hours: 0, earnings: 0 };
-        }
-
-        positionStats[position].count++;
-        positionStats[position].hours += hours;
-        positionStats[position].earnings += earnings;
-
-        totalHours += hours;
-        totalEarnings += earnings;
-        totalEvents++;
+    switch (period) {
+      case 'last_month': {
+        start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+        periodLabel = start.toLocaleString('default', { month: 'long', year: 'numeric' });
+        break;
+      }
+      case 'last_3_months': {
+        start = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+        periodLabel = 'Last 3 months';
+        break;
+      }
+      case 'last_6_months': {
+        start = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+        periodLabel = 'Last 6 months';
+        break;
+      }
+      case 'last_year': {
+        start = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+        periodLabel = 'Last 12 months';
+        break;
+      }
+      default: { // current_month
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        periodLabel = now.toLocaleString('default', { month: 'long', year: 'numeric' });
+        break;
       }
     }
+    start.setHours(0, 0, 0, 0);
 
-    // Format response
-    const positionBreakdown = Object.entries(positionStats).map(([position, stats]) => ({
-      position,
-      events: stats.count,
-      hours: Math.round(stats.hours * 10) / 10,
-      earnings: Math.round(stats.earnings * 100) / 100
-    }));
+    console.log(`[executeGetPerformance] Date range: ${start.toISOString()} to ${end.toISOString()}`);
 
-    return {
-      success: true,
-      message: `Performance for ${now.toLocaleString('default', { month: 'long', year: 'numeric' })}`,
-      data: {
-        period: 'current_month',
-        totalEvents,
-        totalHours: Math.round(totalHours * 10) / 10,
-        totalEarnings: Math.round(totalEarnings * 100) / 100,
-        byPosition: positionBreakdown,
-        averageWage: totalHours > 0 ? Math.round((totalEarnings / totalHours) * 100) / 100 : 0
-      }
-    };
-  } catch (error: any) {
-    console.error('[executePerformanceCurrentMonth] Error:', error);
-    return {
-      success: false,
-      message: `Failed to get performance data: ${error.message}`
-    };
-  }
-}
-
-/**
- * Execute performance_last_month function
- * Returns performance statistics for last month
- */
-async function executePerformanceLastMonth(
-  userId: string,
-  userKey: string
-): Promise<{ success: boolean; message: string; data?: any }> {
-  try {
-    console.log(`[executePerformanceLastMonth] Getting last month stats for userKey ${userKey}`);
-
-    const now = new Date();
-    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    startOfLastMonth.setHours(0, 0, 0, 0);
-    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
-
-    console.log(`[executePerformanceLastMonth] Date range: ${startOfLastMonth.toISOString()} to ${endOfLastMonth.toISOString()}`);
-
-    // Query shifts for last month where user is in accepted_staff
-    // Use same criteria as earnings section: all non-cancelled events
-    // All dates are stored as Date objects (standardized by migration)
     const events = await EventModel.find({
       'accepted_staff.userKey': userKey,
       status: { $ne: 'cancelled' },
-      date: { $gte: startOfLastMonth, $lte: endOfLastMonth }
+      date: { $gte: start, $lte: end }
     }).lean();
 
-    console.log(`[executePerformanceLastMonth] Found ${events.length} events in last month`);
+    console.log(`[executeGetPerformance] Found ${events.length} events`);
 
-    // Analyze by role/position
-    const positionStats: Record<string, { count: number; hours: number; earnings: number }> = {};
-    let totalHours = 0;
-    let totalEarnings = 0;
-    let totalEvents = 0;
-
-    for (const event of events) {
-      const acceptedStaff = (event as any).accepted_staff || [];
-      const userInShift = acceptedStaff.find((staff: any) => staff.userKey === userKey);
-
-      if (userInShift && (userInShift.response === 'accepted' || userInShift.response === 'accept')) {
-        const position = userInShift.role || 'Staff';
-
-        // Calculate hours from start_time and end_time
-        let hours = 0;
-        if ((event as any).start_time && (event as any).end_time) {
-          const start = new Date(`1970-01-01T${(event as any).start_time}`);
-          const end = new Date(`1970-01-01T${(event as any).end_time}`);
-          hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-          if (hours < 0) hours += 24; // Handle overnight shifts
-        } else {
-          hours = 6; // Default assumption if times not specified
-        }
-
-        // Extract pay rate from roles array if available
-        const roles = (event as any).roles || [];
-        const roleInfo = roles.find((r: any) => r.role_name === position);
-        const wage = roleInfo?.pay_rate_info?.amount || 0;
-        const earnings = wage * hours;
-
-        if (!positionStats[position]) {
-          positionStats[position] = { count: 0, hours: 0, earnings: 0 };
-        }
-
-        positionStats[position].count++;
-        positionStats[position].hours += hours;
-        positionStats[position].earnings += earnings;
-
-        totalHours += hours;
-        totalEarnings += earnings;
-        totalEvents++;
-      }
-    }
-
-    const positionBreakdown = Object.entries(positionStats).map(([position, stats]) => ({
-      position,
-      events: stats.count,
-      hours: Math.round(stats.hours * 10) / 10,
-      earnings: Math.round(stats.earnings * 100) / 100
-    }));
-
-    return {
-      success: true,
-      message: `Performance for ${startOfLastMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}`,
-      data: {
-        period: 'last_month',
-        totalEvents,
-        totalHours: Math.round(totalHours * 10) / 10,
-        totalEarnings: Math.round(totalEarnings * 100) / 100,
-        byPosition: positionBreakdown,
-        averageWage: totalHours > 0 ? Math.round((totalEarnings / totalHours) * 100) / 100 : 0
-      }
-    };
-  } catch (error: any) {
-    console.error('[executePerformanceLastMonth] Error:', error);
-    return {
-      success: false,
-      message: `Failed to get performance data: ${error.message}`
-    };
-  }
-}
-
-/**
- * Execute performance_last_year function
- * Returns performance statistics for the last 12 months
- */
-async function executePerformanceLastYear(
-  userId: string,
-  userKey: string
-): Promise<{ success: boolean; message: string; data?: any }> {
-  try {
-    console.log(`[executePerformanceLastYear] Getting last 12 months stats for userKey ${userKey}`);
-
-    const now = new Date();
-    const startOfYear = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
-    startOfYear.setHours(0, 0, 0, 0);
-    now.setHours(23, 59, 59, 999);
-
-    console.log(`[executePerformanceLastYear] Date range: ${startOfYear.toISOString()} to ${now.toISOString()}`);
-
-    // Query shifts for last 12 months where user is in accepted_staff
-    // Use same criteria as earnings section: all non-cancelled events
-    // All dates are stored as Date objects (standardized by migration)
-    const events = await EventModel.find({
-      'accepted_staff.userKey': userKey,
-      status: { $ne: 'cancelled' },
-      date: { $gte: startOfYear, $lte: now }
-    }).lean();
-
-    console.log(`[executePerformanceLastYear] Found ${events.length} events in last 12 months`);
-
-    // Analyze by role/position and by month
     const positionStats: Record<string, { count: number; hours: number; earnings: number }> = {};
     const monthlyStats: Record<string, { events: number; hours: number; earnings: number }> = {};
     let totalHours = 0;
@@ -1622,35 +1617,27 @@ async function executePerformanceLastYear(
         const eventDate = new Date((event as any).date);
         const monthKey = `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, '0')}`;
 
-        // Calculate hours from start_time and end_time
         let hours = 0;
         if ((event as any).start_time && (event as any).end_time) {
-          const start = new Date(`1970-01-01T${(event as any).start_time}`);
-          const end = new Date(`1970-01-01T${(event as any).end_time}`);
-          hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-          if (hours < 0) hours += 24; // Handle overnight shifts
+          const s = new Date(`1970-01-01T${(event as any).start_time}`);
+          const e = new Date(`1970-01-01T${(event as any).end_time}`);
+          hours = (e.getTime() - s.getTime()) / (1000 * 60 * 60);
+          if (hours < 0) hours += 24;
         } else {
-          hours = 6; // Default assumption if times not specified
+          hours = 6;
         }
 
-        // Extract pay rate from roles array if available
         const roles = (event as any).roles || [];
-        const roleInfo = roles.find((r: any) => r.role_name === position);
-        const wage = roleInfo?.pay_rate_info?.amount || 0;
+        const roleInfo = roles.find((r: any) => r.role_name === position || r.role === position);
+        const wage = parsePayRate(roleInfo?.pay_rate_info) || parsePayRate((event as any).pay_rate_info);
         const earnings = wage * hours;
 
-        // Update position stats
-        if (!positionStats[position]) {
-          positionStats[position] = { count: 0, hours: 0, earnings: 0 };
-        }
+        if (!positionStats[position]) positionStats[position] = { count: 0, hours: 0, earnings: 0 };
         positionStats[position].count++;
         positionStats[position].hours += hours;
         positionStats[position].earnings += earnings;
 
-        // Update monthly stats
-        if (!monthlyStats[monthKey]) {
-          monthlyStats[monthKey] = { events: 0, hours: 0, earnings: 0 };
-        }
+        if (!monthlyStats[monthKey]) monthlyStats[monthKey] = { events: 0, hours: 0, earnings: 0 };
         monthlyStats[monthKey].events++;
         monthlyStats[monthKey].hours += hours;
         monthlyStats[monthKey].earnings += earnings;
@@ -1661,41 +1648,38 @@ async function executePerformanceLastYear(
       }
     }
 
-    const positionBreakdown = Object.entries(positionStats).map(([position, stats]) => ({
+    const byPosition = Object.entries(positionStats).map(([position, stats]) => ({
       position,
       events: stats.count,
       hours: Math.round(stats.hours * 10) / 10,
       earnings: Math.round(stats.earnings * 100) / 100
     }));
 
-    // Calculate monthly average
-    const monthCount = Object.keys(monthlyStats).length || 1;
-    const monthlyAverage = {
-      events: Math.round(totalEvents / monthCount * 10) / 10,
-      hours: Math.round(totalHours / monthCount * 10) / 10,
-      earnings: Math.round(totalEarnings / monthCount * 100) / 100
+    const result: any = {
+      period,
+      periodLabel,
+      totalEvents,
+      totalHours: Math.round(totalHours * 10) / 10,
+      totalEarnings: Math.round(totalEarnings * 100) / 100,
+      byPosition,
+      averageWage: totalHours > 0 ? Math.round((totalEarnings / totalHours) * 100) / 100 : 0
     };
 
-    return {
-      success: true,
-      message: 'Performance for last 12 months',
-      data: {
-        period: 'last_year',
-        totalEvents,
-        totalHours: Math.round(totalHours * 10) / 10,
-        totalEarnings: Math.round(totalEarnings * 100) / 100,
-        byPosition: positionBreakdown,
-        monthlyAverage,
-        averageWage: totalHours > 0 ? Math.round((totalEarnings / totalHours) * 100) / 100 : 0,
-        monthsCovered: monthCount
-      }
-    };
+    // Add monthly breakdown for multi-month periods
+    if (period !== 'current_month' && period !== 'last_month') {
+      const monthCount = Object.keys(monthlyStats).length || 1;
+      result.monthlyAverage = {
+        events: Math.round(totalEvents / monthCount * 10) / 10,
+        hours: Math.round(totalHours / monthCount * 10) / 10,
+        earnings: Math.round(totalEarnings / monthCount * 100) / 100
+      };
+      result.monthsCovered = monthCount;
+    }
+
+    return { success: true, message: `Performance for ${periodLabel}`, data: result };
   } catch (error: any) {
-    console.error('[executePerformanceLastYear] Error:', error);
-    return {
-      success: false,
-      message: `Failed to get performance data: ${error.message}`
-    };
+    console.error('[executeGetPerformance] Error:', error);
+    return { success: false, message: `Failed to get performance data: ${error.message}` };
   }
 }
 
@@ -1873,7 +1857,7 @@ async function executeGetShiftDetails(
     console.log(`[executeGetShiftDetails] Getting details for event ${eventId}`);
 
     const event = await EventModel.findById(eventId)
-      .select('event_name client_name date start_time end_time venue_name venue_address city state notes roles accepted_staff status')
+      .select('shift_name event_name client_name date start_time end_time venue_name venue_address city state notes roles pay_rate_info uniform accepted_staff status')
       .lean();
 
     if (!event) {
@@ -1893,7 +1877,7 @@ async function executeGetShiftDetails(
       success: true,
       message: 'Event details found',
       data: {
-        name: e.event_name,
+        name: e.shift_name || e.event_name || e.client_name || 'Untitled',
         client: e.client_name,
         date: e.date,
         time: `${e.start_time} - ${e.end_time}`,
@@ -1905,15 +1889,16 @@ async function executeGetShiftDetails(
         status: e.status,
         yourRole: userRole || 'Not assigned',
         yourStatus: userInEvent?.response || 'unknown',
-        payRate: roleInfo?.pay_rate_info || null,
+        payRate: roleInfo?.pay_rate_info || e.pay_rate_info || null,
+        uniform: e.uniform || null,
         roleDetails: roleInfo ? {
           name: roleInfo.role_name || roleInfo.role,
-          quantity: roleInfo.quantity,
+          quantity: roleInfo.quantity || roleInfo.count,
           payRate: roleInfo.pay_rate_info,
         } : null,
         allRoles: e.roles?.map((r: any) => ({
           name: r.role_name || r.role,
-          quantity: r.quantity,
+          quantity: r.quantity || r.count,
           payRate: r.pay_rate_info,
         })) || [],
       }
@@ -1952,25 +1937,28 @@ async function executeStaffFunction(
       return await executeGetEarningsSummary(userId, userKey, functionArgs.date_range);
 
     case 'get_all_my_events':
+      // Backward compat: redirect to get_my_schedule with no date filter
       return await executeGetAllMyEvents(userId, userKey);
 
     case 'get_my_unavailable_dates':
-      return await executeGetMyUnavailableDates(userKey);
+      return await executeGetMyUnavailableDates(userKey, functionArgs.from_date, functionArgs.to_date);
 
     case 'accept_shift':
-      return await executeAcceptShift(userId, userKey, functionArgs.event_id);
+      return await executeAcceptShift(userId, userKey, functionArgs.event_id, functionArgs.role);
 
     case 'decline_shift':
       return await executeDeclineShift(userId, userKey, functionArgs.event_id, functionArgs.reason);
 
+    case 'get_performance':
+      return await executeGetPerformance(userId, userKey, functionArgs.period || 'current_month');
+
+    // Backward compat: old tool names still work
     case 'performance_current_month':
-      return await executePerformanceCurrentMonth(userId, userKey);
-
+      return await executeGetPerformance(userId, userKey, 'current_month');
     case 'performance_last_month':
-      return await executePerformanceLastMonth(userId, userKey);
-
+      return await executeGetPerformance(userId, userKey, 'last_month');
     case 'performance_last_year':
-      return await executePerformanceLastYear(userId, userKey);
+      return await executeGetPerformance(userId, userKey, 'last_year');
 
     case 'compose_message':
       return await executeComposeMessage(userKey, functionArgs.scenario, functionArgs.details);
@@ -2171,11 +2159,22 @@ When showing schedule information, use this friendly format:
 - "next 7 jobs" → Show exactly 7
 - "this week" / "this month" → All events in that period
 
-🗓️ DATE HANDLING:
-If user mentions a month that ALREADY PASSED this year → use NEXT year
-Example: "February" in December 2025 → February 2026
+🔧 CRITICAL TOOL USAGE:
+- The context data only shows UPCOMING events. It does NOT contain past/completed events.
+- When user asks about ANY specific date range, past events, history, or "show me shifts from X to Y":
+  → You MUST call get_my_schedule with the appropriate date_range. NEVER answer from context alone.
+- The eventSummary.pastEvents count tells you how many past events exist — use the tool to fetch them.
 
-📅 AVAILABILITY:
+🗓️ DATE HANDLING FOR SCHEDULE QUERIES:
+- When user asks about past months (e.g. "October to December", "last summer", "January shifts"):
+  → These are PAST events. Use the most recent past occurrence (e.g. Oct-Dec 2025, NOT 2026).
+  → Staff want to review their work history. Default to PAST unless they say "upcoming" or "next".
+- When ambiguous and could be past OR future, ASK: "Do you mean October-December 2025 or 2026?"
+- Only use future dates when user explicitly says "next", "upcoming", or the month hasn't happened yet this year.
+
+📅 AVAILABILITY (mark_availability only):
+- The "already passed → next year" rule ONLY applies here: when MARKING availability for future dates.
+  Example: User says "I'm unavailable in February" in December 2025 → use February 2026.
 - Use mark_availability tool directly — it saves to the database immediately
 - After marking, confirm naturally: "Done! Marked you as unavailable for Feb 15-17."
 - Expand date ranges to individual ISO dates: "Feb 15-17" → ["2026-02-15", "2026-02-16", "2026-02-17"]
@@ -2323,6 +2322,22 @@ Example: "February" in December 2025 → February 2026
 
       const assistantMessage = choice.message;
 
+      // Track token usage across all requests in this conversation turn
+      const totalUsage = {
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        reasoning_tokens: 0,
+        total_tokens: 0,
+      };
+      const apiUsage = response.data.usage;
+      if (apiUsage) {
+        totalUsage.prompt_tokens += apiUsage.prompt_tokens || 0;
+        totalUsage.completion_tokens += apiUsage.completion_tokens || 0;
+        totalUsage.reasoning_tokens += apiUsage.completion_tokens_details?.reasoning_tokens || 0;
+        totalUsage.total_tokens += apiUsage.total_tokens || 0;
+        console.log(`[AI:${config.name}] Usage - prompt: ${totalUsage.prompt_tokens}, completion: ${totalUsage.completion_tokens}, reasoning: ${totalUsage.reasoning_tokens}, total: ${totalUsage.total_tokens}`);
+      }
+
       // Capture reasoning from first request
       const firstRequestReasoning = assistantMessage.reasoning || null;
       if (firstRequestReasoning) console.log(`[AI:${config.name}] Reasoning received:`, firstRequestReasoning.length, 'chars');
@@ -2420,6 +2435,15 @@ Example: "February" in December 2025 → February 2026
             },
             { headers: synthesisHeaders, validateStatus: () => true, timeout: secondTimeout }
           );
+
+          // Accumulate usage from follow-up request
+          const followUpUsage = response.data?.usage;
+          if (followUpUsage) {
+            totalUsage.prompt_tokens += followUpUsage.prompt_tokens || 0;
+            totalUsage.completion_tokens += followUpUsage.completion_tokens || 0;
+            totalUsage.reasoning_tokens += followUpUsage.completion_tokens_details?.reasoning_tokens || 0;
+            totalUsage.total_tokens += followUpUsage.total_tokens || 0;
+          }
 
           // Handle tool_use_failed - use context-aware fallback
           if (response.status === 400 && response.data?.error?.code === 'tool_use_failed') {
@@ -2553,12 +2577,14 @@ Example: "February" in December 2025 → February 2026
           throw new Error('No content after tool call processing');
         }
 
+        console.log(`[AI:${synthesisConfig.name}] Total usage - prompt: ${totalUsage.prompt_tokens}, completion: ${totalUsage.completion_tokens}, reasoning: ${totalUsage.reasoning_tokens}, total: ${totalUsage.total_tokens}`);
         return res.json({
           content: finalContent,
           reasoning: finalReasoning || firstRequestReasoning || null,
           provider: synthesisConfig.name,
           model: synthesisModel,
-          toolsUsed: allToolsUsed
+          toolsUsed: allToolsUsed,
+          usage: totalUsage,
         });
       }
 
@@ -2577,7 +2603,8 @@ Example: "February" in December 2025 → February 2026
         content,
         reasoning: reasoningContent,
         provider: config.name,
-        model: requestBody.model
+        model: requestBody.model,
+        usage: totalUsage,
       });
 
     } catch (error: any) {

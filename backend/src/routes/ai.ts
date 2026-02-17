@@ -3637,6 +3637,22 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
 
       const assistantMessage = choice.message;
 
+      // Track token usage across all requests in this conversation turn
+      const totalUsage = {
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        reasoning_tokens: 0,
+        total_tokens: 0,
+      };
+      const apiUsage = response.data.usage;
+      if (apiUsage) {
+        totalUsage.prompt_tokens += apiUsage.prompt_tokens || 0;
+        totalUsage.completion_tokens += apiUsage.completion_tokens || 0;
+        totalUsage.reasoning_tokens += apiUsage.completion_tokens_details?.reasoning_tokens || 0;
+        totalUsage.total_tokens += apiUsage.total_tokens || 0;
+        console.log(`[AI:${config.name}] Usage - prompt: ${totalUsage.prompt_tokens}, completion: ${totalUsage.completion_tokens}, reasoning: ${totalUsage.reasoning_tokens}, total: ${totalUsage.total_tokens}`);
+      }
+
       // Capture reasoning from first request
       const firstRequestReasoning = assistantMessage.reasoning || null;
       if (firstRequestReasoning) console.log(`[AI:${config.name}] Reasoning received:`, firstRequestReasoning.length, 'chars');
@@ -3755,6 +3771,15 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
             },
             { headers: synthesisHeaders, validateStatus: () => true, timeout: secondTimeout }
           );
+
+          // Accumulate usage from follow-up request
+          const followUpUsage = response.data?.usage;
+          if (followUpUsage) {
+            totalUsage.prompt_tokens += followUpUsage.prompt_tokens || 0;
+            totalUsage.completion_tokens += followUpUsage.completion_tokens || 0;
+            totalUsage.reasoning_tokens += followUpUsage.completion_tokens_details?.reasoning_tokens || 0;
+            totalUsage.total_tokens += followUpUsage.total_tokens || 0;
+          }
 
           // Handle tool_use_failed - use context-aware fallback
           if (response.status === 400 && response.data?.error?.code === 'tool_use_failed') {
@@ -3882,12 +3907,14 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
           throw new Error('No content after tool call processing');
         }
 
+        console.log(`[AI:${synthesisConfig.name}] Total usage - prompt: ${totalUsage.prompt_tokens}, completion: ${totalUsage.completion_tokens}, reasoning: ${totalUsage.reasoning_tokens}, total: ${totalUsage.total_tokens}`);
         return res.json({
           content: finalContent,
           reasoning: finalReasoning || firstRequestReasoning || null,
           provider: synthesisConfig.name,
           model: synthesisModel,
-          toolsUsed: allToolsUsed
+          toolsUsed: allToolsUsed,
+          usage: totalUsage,
         });
       }
 
@@ -3906,7 +3933,8 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
         content,
         reasoning: reasoningContent,
         provider: config.name,
-        model: requestBody.model
+        model: requestBody.model,
+        usage: totalUsage,
       });
 
     } catch (error: any) {
