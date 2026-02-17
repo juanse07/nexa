@@ -1,0 +1,12 @@
+FlowShift Manager te da el control total de tus operaciones de personal para eventos. Crea y publica eventos, gestiona tu equipo, monitorea la asistencia en tiempo real y comunícate con tu personal — todo desde una sola app.
+
+Características:
+- Publica eventos y turnos con requisitos detallados
+- Asistente de IA para ayudarte a gestionar tus operaciones
+- Seguimiento de asistencia en tiempo real
+- Mensajería y conversaciones con tu equipo
+- Análisis de rendimiento y estadísticas del personal
+- Gestión de catálogo de clientes y servicios
+- Gestión de suscripción para funciones premium
+
+Ya sea que dirijas una empresa de catering, una agencia de personal para eventos o cualquier negocio de servicios que dependa de personal temporal, FlowShift Manager optimiza tu flujo de trabajo desde la publicación hasta el pago.

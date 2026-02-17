@@ -1,0 +1,9 @@
+¡Bienvenido a FlowShift Manager 1.0!
+
+- Publica y gestiona eventos con requisitos detallados
+- Asistente de IA para encontrar y gestionar personal
+- Seguimiento de asistencia en tiempo real
+- Mensajería y conversaciones con tu equipo
+- Panel de rendimiento del personal
+- Catálogo de clientes y servicios
+- Inicio de sesión con Google y Apple

@@ -1364,6 +1364,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.5.0"
+  qonversion_flutter:
+    dependency: "direct main"
+    description:
+      name: qonversion_flutter
+      sha256: "675a7574727f3027da481b1f94032680c50f46b6a3eca51e4155ab58284d262c"
+      url: "https://pub.dev"
+    source: hosted
+    version: "11.3.0"
   qr:
     dependency: transitive
     description:

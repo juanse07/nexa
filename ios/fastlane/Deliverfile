@@ -1,0 +1,23 @@
+# FlowShift Manager - Deliverfile
+# Configuration for fastlane deliver (App Store uploads)
+
+# App identifier
+app_identifier "com.pymesoft.nexa"
+
+# Metadata and screenshots paths
+metadata_path "./fastlane/metadata"
+screenshots_path "./fastlane/screenshots"
+
+# Pricing: Set to Free in App Store Connect directly
+# (price_tier is incompatible with current ASC API)
+
+# Submission information
+submission_information({
+  add_id_info_uses_idfa: false
+})
+
+# Skip warnings prompt (use metadata files as source of truth)
+force true
+
+# Age rating (loaded from rating_config.json)
+app_rating_config_path "./fastlane/rating_config.json"

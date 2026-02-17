@@ -201,6 +201,14 @@ PODS:
     - Flutter
     - FlutterMacOS
   - PromisesObjC (2.4.0)
+  - Qonversion (6.5.0):
+    - Qonversion/Main (= 6.5.0)
+  - Qonversion/Main (6.5.0)
+  - qonversion_flutter (9.3.0):
+    - Flutter
+    - QonversionSandwich (= 7.5.0)
+  - QonversionSandwich (7.5.0):
+    - Qonversion (= 6.5.0)
   - RecaptchaInterop (101.0.0)
   - record_darwin (1.0.0):
     - Flutter
@@ -236,6 +244,7 @@ DEPENDENCIES:
   - onesignal_flutter (from `.symlinks/plugins/onesignal_flutter/ios`)
   - package_info_plus (from `.symlinks/plugins/package_info_plus/ios`)
   - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
+  - qonversion_flutter (from `.symlinks/plugins/qonversion_flutter/ios`)
   - record_darwin (from `.symlinks/plugins/record_darwin/ios`)
   - share_plus (from `.symlinks/plugins/share_plus/ios`)
   - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
@@ -263,6 +272,8 @@ SPEC REPOS:
     - GTMSessionFetcher
     - OneSignalXCFramework
     - PromisesObjC
+    - Qonversion
+    - QonversionSandwich
     - RecaptchaInterop
     - SDWebImage
     - SwiftyGif
@@ -302,6 +313,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/package_info_plus/ios"
   path_provider_foundation:
     :path: ".symlinks/plugins/path_provider_foundation/darwin"
+  qonversion_flutter:
+    :path: ".symlinks/plugins/qonversion_flutter/ios"
   record_darwin:
     :path: ".symlinks/plugins/record_darwin/ios"
   share_plus:
@@ -350,6 +363,9 @@ SPEC CHECKSUMS:
   package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499
   path_provider_foundation: 080d55be775b7414fd5a5ef3ac137b97b097e564
   PromisesObjC: f5707f49cb48b9636751c5b2e7d227e43fba9f47
+  Qonversion: 6effd70ae4b0f2f0056d37e9a154a0f3bd56ff19
+  qonversion_flutter: 0bf1665d705b3ad0e85d37ab209e722f4ff72f8d
+  QonversionSandwich: a1fc3a7c5a213149912dc25828a1f5b26026ea82
   RecaptchaInterop: 11e0b637842dfb48308d242afc3f448062325aba
   record_darwin: fb1f375f1d9603714f55b8708a903bbb91ffdb0a
   SDWebImage: e9c98383c7572d713c1a0d7dd2783b10599b9838

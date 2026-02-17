@@ -1,6 +1,237 @@
+# FlowShift Manager iOS Fastfile
+# Complete Fastlane configuration for TestFlight and App Store deployment
+
 default_platform(:ios)
 
 platform :ios do
+
+  # ============================================
+  # CONFIGURATION
+  # ============================================
+
+  before_all do
+    # Ensure we're on the latest version of Fastlane
+    # update_fastlane
+
+    # Set up environment
+    setup_ci if ENV['CI']
+
+    # Ensure Homebrew and Flutter are on PATH for sh() subprocesses
+    ENV['PATH'] = [
+      "/opt/homebrew/bin",
+      "/opt/homebrew/sbin",
+      File.expand_path("~/Library/Android/sdk/platform-tools"),
+      "/opt/homebrew/Caskroom/flutter/latest/flutter/bin",
+      ENV['PATH']
+    ].compact.join(":")
+
+    # App Store Connect API Key authentication (avoids 2FA)
+    app_store_connect_api_key(
+      key_id: "86438U445K",
+      issuer_id: "f690c888-4e3c-4956-a9a2-7ceae35749dd",
+      key_filepath: File.expand_path("~/.appstoreconnect/private_keys/AuthKey_86438U445K.p8"),
+      in_house: false
+    )
+  end
+
+  # ============================================
+  # LANES: BUILD
+  # ============================================
+
+  desc "Build the iOS app for release"
+  lane :build do
+    # Increment build number based on TestFlight
+    increment_build_number(
+      build_number: latest_testflight_build_number + 1,
+      xcodeproj: "Runner.xcodeproj"
+    )
+
+    # Switch to manual code signing for release builds
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: "Runner.xcodeproj",
+      team_id: "4AUBUCLG7D",
+      bundle_identifier: "com.pymesoft.nexa",
+      code_sign_identity: "Apple Distribution",
+      profile_name: "match AppStore com.pymesoft.nexa"
+    )
+
+    # Build the app using Flutter
+    # Unset Fastlane's Ruby env vars that break CocoaPods in Flutter's subprocess
+    sh("unset GEM_HOME GEM_PATH BUNDLE_GEMFILE BUNDLE_BIN_PATH RUBYLIB RUBYOPT; " \
+       "export PATH=/opt/homebrew/bin:/opt/homebrew/sbin:/opt/homebrew/Caskroom/flutter/latest/flutter/bin:$PATH; " \
+       "cd ../.. && flutter build ios --release --no-codesign")
+
+    # Build and sign the IPA
+    build_app(
+      workspace: "Runner.xcworkspace",
+      scheme: "Runner",
+      export_method: "app-store",
+      output_directory: "./build/ios/ipa",
+      output_name: "flowshift-manager.ipa",
+      clean: true,
+      include_bitcode: false,
+      export_options: {
+        provisioningProfiles: {
+          "com.pymesoft.nexa" => "match AppStore com.pymesoft.nexa"
+        }
+      }
+    )
+  end
+
+  # ============================================
+  # LANES: CODE SIGNING
+  # ============================================
+
+  desc "Sync code signing certificates and profiles (Development)"
+  lane :sync_dev do
+    match(
+      type: "development",
+      app_identifier: "com.pymesoft.nexa",
+      readonly: false
+    )
+  end
+
+  desc "Sync code signing certificates and profiles (App Store)"
+  lane :sync_appstore do
+    match(
+      type: "appstore",
+      app_identifier: "com.pymesoft.nexa",
+      readonly: false
+    )
+  end
+
+  desc "Sync all code signing (Development + App Store)"
+  lane :sync_all do
+    sync_dev
+    sync_appstore
+  end
+
+  # ============================================
+  # LANES: TESTFLIGHT
+  # ============================================
+
+  desc "Deploy a new build to TestFlight"
+  lane :beta do
+    # Ensure we have valid certificates
+    sync_appstore
+
+    # Build the app
+    build
+
+    # Upload to TestFlight
+    upload_to_testflight(
+      skip_waiting_for_build_processing: false,
+      skip_submission: true,
+      distribute_external: false,
+      notify_external_testers: false,
+      changelog: "Bug fixes and improvements"
+    )
+
+    # Notify team
+    slack(
+      message: "FlowShift Manager iOS build successfully uploaded to TestFlight!",
+      success: true
+    ) if ENV['SLACK_URL']
+  end
+
+  desc "Deploy to TestFlight with external testing"
+  lane :beta_external do
+    # Ensure we have valid certificates
+    sync_appstore
+
+    # Build the app
+    build
+
+    # Upload to TestFlight with external distribution
+    upload_to_testflight(
+      skip_waiting_for_build_processing: false,
+      skip_submission: false,
+      distribute_external: true,
+      notify_external_testers: true,
+      groups: ["External Testers"],
+      changelog: "New features and improvements ready for testing"
+    )
+
+    # Notify team
+    slack(
+      message: "FlowShift Manager iOS build successfully uploaded to TestFlight (External)!",
+      success: true
+    ) if ENV['SLACK_URL']
+  end
+
+  # ============================================
+  # LANES: APP STORE
+  # ============================================
+
+  desc "Deploy a new version to the App Store"
+  lane :release do
+    # Ensure we have valid certificates
+    sync_appstore
+
+    # Build the app
+    build
+
+    # Upload to App Store Connect
+    upload_to_app_store(
+      submit_for_review: false,
+      automatic_release: false,
+      force: true,
+      skip_metadata: false,
+      skip_screenshots: true,
+      precheck_include_in_app_purchases: false
+    )
+
+    # Notify team
+    slack(
+      message: "FlowShift Manager iOS successfully uploaded to App Store Connect!",
+      success: true
+    ) if ENV['SLACK_URL']
+  end
+
+  desc "Submit the current version for App Store review"
+  lane :submit_review do
+    upload_to_app_store(
+      submit_for_review: true,
+      automatic_release: false,
+      submission_information: {
+        add_id_info_uses_idfa: false
+      },
+      skip_binary_upload: true,
+      skip_metadata: true,
+      skip_screenshots: true
+    )
+
+    slack(
+      message: "FlowShift Manager iOS submitted for App Store review!",
+      success: true
+    ) if ENV['SLACK_URL']
+  end
+
+  # ============================================
+  # LANES: METADATA
+  # ============================================
+
+  desc "Update App Store metadata only (no binary upload)"
+  lane :update_metadata do
+    upload_to_app_store(
+      skip_binary_upload: true,
+      skip_screenshots: false,
+      force: true
+    )
+  end
+
+  desc "Download metadata from App Store Connect"
+  lane :download_metadata do
+    download_from_app_store(
+      app_identifier: "com.pymesoft.nexa"
+    )
+  end
+
+  # ============================================
+  # LANES: SCREENSHOTS
+  # ============================================
+
   desc "Capture App Store screenshots on multiple iOS simulators"
   lane :screenshots do
     # Target simulators — App Store requires 6.7", 6.1", and iPad 12.9"
@@ -11,7 +242,7 @@ platform :ios do
     ]
 
     devices.each do |device|
-      UI.message("📸 Capturing screenshots on #{device}...")
+      UI.message("Capturing screenshots on #{device}...")
 
       # Boot simulator
       sh("xcrun simctl boot '#{device}' 2>/dev/null || true")
@@ -37,7 +268,7 @@ platform :ios do
       sh("xcrun simctl status_bar '#{device}' clear 2>/dev/null || true")
     end
 
-    UI.success("✅ All iOS screenshots captured!")
+    UI.success("All iOS screenshots captured!")
   end
 
   desc "Apply device frames to screenshots"
@@ -46,5 +277,102 @@ platform :ios do
       path: "../screenshots/store",
       white: true,
     )
+  end
+
+  desc "Select and organize the 10 best screenshots for App Store submission"
+  lane :prepare_store_screenshots do
+    require 'fileutils'
+
+    # Source: screenshots captured by `flutter drive` via screenshot_driver.dart
+    source_dir = File.expand_path("../../screenshots/simulator")
+
+    # Destination: fastlane metadata screenshots directories
+    en_dir = File.expand_path("screenshots/en-US", __dir__)
+    es_dir = File.expand_path("screenshots/es-MX", __dir__)
+
+    FileUtils.mkdir_p(en_dir)
+    FileUtils.mkdir_p(es_dir)
+
+    # The 10 best screenshots (out of 49) for the App Store listing.
+    # Numbers correspond to scenario order in screenshot_gallery_app.dart.
+    selected = {
+      "01_events_posted"        => "01",
+      "02_conversations_list"   => "02",
+      "03_catalog_clients"      => "03",
+      "04_attendance_dashboard" => "04",
+      "05_statistics_dashboard" => "05",
+      "10_event_detail"         => "06",
+      "20_ai_chat"              => "07",
+      "24_post_job_upload"      => "08",
+      "33_teams_management"     => "09",
+      "42_subscription_paywall" => "10",
+    }
+
+    unless Dir.exist?(source_dir)
+      UI.user_error!("Source directory not found: #{source_dir}\nRun `fastlane screenshots` first to capture screenshots.")
+    end
+
+    selected.each do |src_name, dest_num|
+      # English
+      src_en = File.join(source_dir, "#{src_name}_en.png")
+      if File.exist?(src_en)
+        FileUtils.cp(src_en, File.join(en_dir, "#{dest_num}_screenshot.png"))
+        UI.message("Copied #{src_name}_en → en-US/#{dest_num}_screenshot.png")
+      else
+        UI.important("Missing: #{src_en}")
+      end
+
+      # Spanish
+      src_es = File.join(source_dir, "#{src_name}_es.png")
+      if File.exist?(src_es)
+        FileUtils.cp(src_es, File.join(es_dir, "#{dest_num}_screenshot.png"))
+        UI.message("Copied #{src_name}_es → es-MX/#{dest_num}_screenshot.png")
+      else
+        UI.important("Missing: #{src_es}")
+      end
+    end
+
+    UI.success("App Store screenshots organized: #{selected.size} screenshots × 2 locales")
+  end
+
+  # ============================================
+  # LANES: UTILITIES
+  # ============================================
+
+  desc "Run tests"
+  lane :test do
+    sh("cd ../.. && flutter test")
+  end
+
+  desc "Clean build artifacts"
+  lane :clean do
+    sh("cd ../.. && flutter clean")
+    clear_derived_data
+  end
+
+  desc "Register new device for development"
+  lane :add_device do |options|
+    register_devices(
+      devices: {
+        options[:name] => options[:udid]
+      }
+    )
+    sync_dev
+  end
+
+  # ============================================
+  # ERROR HANDLING
+  # ============================================
+
+  error do |lane, exception|
+    slack(
+      message: "Error in lane '#{lane}': #{exception.message}",
+      success: false
+    ) if ENV['SLACK_URL']
+  end
+
+  after_all do |lane|
+    # Clean up
+    # clean_build_artifacts
   end
 end

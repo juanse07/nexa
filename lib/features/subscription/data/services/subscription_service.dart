@@ -1,5 +1,5 @@
 import 'package:injectable/injectable.dart';
-// import 'package:qonversion_flutter/qonversion_flutter.dart';  // TEMPORARILY DISABLED
+import 'package:qonversion_flutter/qonversion_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import '../../../../core/network/api_client.dart';
@@ -24,26 +24,24 @@ class SubscriptionService {
       // Get Qonversion project key from environment
       final projectKey = dotenv.env['QONVERSION_PROJECT_KEY'];
       if (projectKey == null || projectKey.isEmpty) {
-        print('[SubscriptionService] ⚠️  QONVERSION_PROJECT_KEY not found - subscription disabled');
+        print('[SubscriptionService] QONVERSION_PROJECT_KEY not found - subscription disabled');
         _initialized = true;
         return;
       }
 
       print('[SubscriptionService] Initializing Qonversion SDK...');
 
-      // TEMPORARILY DISABLED - Qonversion API changes
-      // TODO: Re-enable when ready to configure Qonversion
-      // Initialize Qonversion SDK
-      // final config = QonversionConfigBuilder(
-      //   projectKey,
-      //   QLaunchMode.subscriptionManagement,
-      // );
-      // await Qonversion.getSharedInstance().initialize(config.build());
+      // Initialize Qonversion SDK (v11 API)
+      final config = QonversionConfigBuilder(
+        projectKey,
+        QLaunchMode.subscriptionManagement,
+      ).build();
+      Qonversion.initialize(config);
 
-      // Get Qonversion user ID
-      // _qonversionUserId = await Qonversion.getSharedInstance().userID();
-      _qonversionUserId = null; // Temporarily disabled
-      print('[SubscriptionService] ⚠️  Qonversion TEMPORARILY DISABLED');
+      // Get Qonversion user info
+      final userInfo = await Qonversion.getSharedInstance().userInfo();
+      _qonversionUserId = userInfo.qonversionId;
+      print('[SubscriptionService] Qonversion initialized, user ID: $_qonversionUserId');
 
       // Link to backend
       if (_qonversionUserId != null && _qonversionUserId!.isNotEmpty) {
@@ -52,7 +50,7 @@ class SubscriptionService {
 
       _initialized = true;
     } catch (e) {
-      print('[SubscriptionService] ❌ Initialization failed: $e');
+      print('[SubscriptionService] Initialization failed: $e');
       _initialized = true; // Mark as initialized to prevent retry loops
     }
   }
@@ -69,28 +67,25 @@ class SubscriptionService {
         return {'tier': 'free', 'isActive': false};
       }
 
-      // TEMPORARILY DISABLED - Qonversion API changes
-      // TODO: Re-enable when ready to configure Qonversion
       // Check Qonversion entitlements
-      // final entitlements = await Qonversion.getSharedInstance().checkEntitlements();
+      final entitlements = await Qonversion.getSharedInstance().checkEntitlements();
 
       // Look for 'pro' entitlement
-      // final proEntitlement = entitlements['pro'];
-      // final isActive = proEntitlement != null && proEntitlement.isActive;
+      final proEntitlement = entitlements['pro'];
+      final isActive = proEntitlement != null && proEntitlement.isActive;
 
-      // Temporarily return free tier
-      print('[SubscriptionService] Status check: Free (Qonversion disabled)');
+      print('[SubscriptionService] Status check: ${isActive ? 'Pro' : 'Free'}');
 
       // Sync with backend
       await _syncWithBackend();
 
       return {
-        'tier': 'free',
-        'isActive': false,
-        'expirationDate': null,
+        'tier': isActive ? 'pro' : 'free',
+        'isActive': isActive,
+        'expirationDate': proEntitlement?.expirationDate?.toIso8601String(),
       };
     } catch (e) {
-      print('[SubscriptionService] ❌ Error getting status: $e');
+      print('[SubscriptionService] Error getting status: $e');
       return {'tier': 'free', 'isActive': false};
     }
   }
@@ -104,50 +99,51 @@ class SubscriptionService {
 
       // If Qonversion isn't configured, return false
       if (_qonversionUserId == null) {
-        print('[SubscriptionService] ⚠️  Cannot purchase - Qonversion not initialized');
+        print('[SubscriptionService] Cannot purchase - Qonversion not initialized');
         return false;
       }
 
-      // TEMPORARILY DISABLED - Qonversion API changes
-      // TODO: Re-enable when ready to configure Qonversion
-      print('[SubscriptionService] Purchase temporarily disabled (Qonversion not configured)');
-
       // Get available offerings
-      // final offerings = await Qonversion.getSharedInstance().offerings();
-      // final mainOffering = offerings.main;
+      final offerings = await Qonversion.getSharedInstance().offerings();
+      final mainOffering = offerings.main;
 
-      // if (mainOffering == null) {
-      //   print('[SubscriptionService] ❌ No offerings available');
-      //   return false;
-      // }
+      if (mainOffering == null) {
+        print('[SubscriptionService] No offerings available');
+        return false;
+      }
 
       // Find Pro subscription product (monthly subscription)
-      // final proProduct = mainOffering.products['manager_pro_monthly'];
+      QProduct? proProduct;
+      for (final product in mainOffering.products) {
+        if (product.qonversionId == 'manager_pro_monthly') {
+          proProduct = product;
+          break;
+        }
+      }
 
-      // if (proProduct == null) {
-      //   print('[SubscriptionService] ❌ Pro product not found');
-      //   return false;
-      // }
+      if (proProduct == null) {
+        print('[SubscriptionService] Pro product not found');
+        return false;
+      }
 
-      // print('[SubscriptionService] Purchasing ${proProduct.qonversionID}...');
+      print('[SubscriptionService] Purchasing ${proProduct.qonversionId}...');
 
-      // Purchase
-      // final result = await Qonversion.getSharedInstance().purchase(proProduct);
+      // Purchase using v11 API
+      final result = await Qonversion.getSharedInstance().purchaseProduct(proProduct);
 
       // Check if purchase was successful
-      // final isActive = result.entitlements['pro']?.isActive ?? false;
+      final isActive = result['pro']?.isActive ?? false;
 
-      // if (isActive) {
-      //   print('[SubscriptionService] ✅ Purchase successful!');
-      //   // Sync with backend
-      //   await _syncWithBackend();
-      // } else {
-      //   print('[SubscriptionService] ⚠️  Purchase completed but entitlement not active');
-      // }
+      if (isActive) {
+        print('[SubscriptionService] Purchase successful!');
+        await _syncWithBackend();
+      } else {
+        print('[SubscriptionService] Purchase completed but entitlement not active');
+      }
 
-      return false; // Temporarily disabled
+      return isActive;
     } catch (e) {
-      print('[SubscriptionService] ❌ Purchase failed: $e');
+      print('[SubscriptionService] Purchase failed: $e');
       return false;
     }
   }
@@ -161,31 +157,26 @@ class SubscriptionService {
 
       // If Qonversion isn't configured, return false
       if (_qonversionUserId == null) {
-        print('[SubscriptionService] ⚠️  Cannot restore - Qonversion not initialized');
+        print('[SubscriptionService] Cannot restore - Qonversion not initialized');
         return false;
       }
 
-      // TEMPORARILY DISABLED - Qonversion API changes
-      // TODO: Re-enable when ready to configure Qonversion
-      print('[SubscriptionService] Restore temporarily disabled (Qonversion not configured)');
-
       // Restore purchases from App Store/Google Play
-      // final entitlements = await Qonversion.getSharedInstance().restore();
+      final entitlements = await Qonversion.getSharedInstance().restore();
 
       // Check if Pro entitlement is active
-      // final isActive = entitlements['pro']?.isActive ?? false;
+      final isActive = entitlements['pro']?.isActive ?? false;
 
-      // if (isActive) {
-      //   print('[SubscriptionService] ✅ Subscription restored!');
-      //   // Sync with backend
-      //   await _syncWithBackend();
-      // } else {
-      //   print('[SubscriptionService] ⚠️  No active subscription found');
-      // }
+      if (isActive) {
+        print('[SubscriptionService] Subscription restored!');
+        await _syncWithBackend();
+      } else {
+        print('[SubscriptionService] No active subscription found');
+      }
 
-      return false; // Temporarily disabled
+      return isActive;
     } catch (e) {
-      print('[SubscriptionService] ❌ Restore failed: $e');
+      print('[SubscriptionService] Restore failed: $e');
       return false;
     }
   }

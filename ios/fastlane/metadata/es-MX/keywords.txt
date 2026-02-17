@@ -1,0 +1,1 @@
+personal,eventos,turnos,asistencia,equipo,gestión,catering,horarios,trabajo,agencia

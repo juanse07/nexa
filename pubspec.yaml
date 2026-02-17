@@ -88,7 +88,7 @@ dependencies:
   record: 5.0.0
 
   # Subscription Management
-  # qonversion_flutter: ^6.1.0  # TEMPORARILY DISABLED - Re-enable when ready
+  qonversion_flutter: ^11.0.0
 
   # Logging
   logger: ^2.5.0

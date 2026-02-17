@@ -1,0 +1,9 @@
+Welcome to FlowShift Manager 1.0!
+
+- Post and manage events with detailed shift requirements
+- AI assistant to help you find and manage staff
+- Real-time attendance tracking
+- Team messaging and conversations
+- Staff performance dashboard
+- Client and service catalog
+- Google and Apple Sign-In
