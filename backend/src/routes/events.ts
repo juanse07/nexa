@@ -226,7 +226,7 @@ type EventGroup = {
 };
 
 // Helper to enrich events with tariff data per role
-async function enrichEventsWithTariffs(events: any[]): Promise<any[]> {
+export async function enrichEventsWithTariffs(events: any[]): Promise<any[]> {
   const grouped = new Map<string, EventGroup>();
 
   for (const event of events) {

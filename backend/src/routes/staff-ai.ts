@@ -18,6 +18,7 @@ import { ChatMessageModel } from '../models/chatMessage';
 import { ManagerModel } from '../models/manager';
 import { emitToManager } from '../socket/server';
 import { computeRoleStats } from '../utils/eventCapacity';
+import { enrichEventsWithTariffs } from './events';
 
 const router = Router();
 
@@ -809,7 +810,7 @@ const STAFF_AI_TOOLS = [
       properties: {
         date_range: {
           type: ['string', 'null'],
-          description: 'Optional: "this_week", "last_week", "this_month", "last_month", "last_3_months", "last_6_months", or ISO date'
+          description: 'Time period: "this_week", "last_week", "this_month", "last_month", "last_3_months", "last_6_months", or custom range "YYYY-MM-DD:YYYY-MM-DD" (e.g. "2025-11-01:2025-11-30" for November 2025)'
         }
       }
     }
@@ -839,8 +840,7 @@ const STAFF_AI_TOOLS = [
       properties: {
         period: {
           type: 'string',
-          enum: ['current_month', 'last_month', 'last_3_months', 'last_6_months', 'last_year'],
-          description: 'Time period. Default: current_month. Use last_year for annual/12-month review.'
+          description: 'Time period: "current_month", "last_month", "last_3_months", "last_6_months", "last_year", or custom range "YYYY-MM-DD:YYYY-MM-DD" (e.g. "2025-11-01:2025-11-30"). Default: current_month.'
         }
       }
     }
@@ -1170,17 +1170,46 @@ async function executeGetEarningsSummary(
         const start = new Date(now.getFullYear(), now.getMonth() - 6, 1);
         start.setHours(0, 0, 0, 0);
         dateFilter = { date: { $gte: start, $lte: now } };
+      } else if (dateRange.includes(':')) {
+        // Custom range: "YYYY-MM-DD:YYYY-MM-DD"
+        const parts = dateRange.split(':');
+        const startDate = new Date(parts[0] || dateRange);
+        startDate.setHours(0, 0, 0, 0);
+        const endDate = new Date(parts[1] || parts[0] || dateRange);
+        endDate.setHours(23, 59, 59, 999);
+        dateFilter = { date: { $gte: startDate, $lte: endDate } };
+      } else {
+        // Assume ISO date (YYYY-MM-DD) - match the entire day
+        const specificDate = new Date(dateRange);
+        if (!isNaN(specificDate.getTime())) {
+          const startOfDay = new Date(specificDate);
+          startOfDay.setHours(0, 0, 0, 0);
+          const endOfDay = new Date(specificDate);
+          endOfDay.setHours(23, 59, 59, 999);
+          dateFilter = { date: { $gte: startOfDay, $lte: endOfDay } };
+        } else {
+          console.warn(`[executeGetEarningsSummary] Unrecognized date range: ${dateRange}`);
+          return {
+            success: false,
+            message: `Unrecognized date range "${dateRange}". Use: "this_week", "last_week", "this_month", "last_month", "last_3_months", "last_6_months", or custom "YYYY-MM-DD:YYYY-MM-DD" (e.g. "2025-11-01:2025-11-30").`
+          };
+        }
       }
     }
 
+    console.log(`[executeGetEarningsSummary] Date filter for '${dateRange}':`, JSON.stringify(dateFilter));
+
     // Use same criteria as context endpoint: all non-cancelled events
-    const events = await EventModel.find({
+    const rawEvents = await EventModel.find({
       'accepted_staff.userKey': userKey,
       status: { $ne: 'cancelled' },
       ...dateFilter
     })
-    .select('date start_time end_time accepted_staff roles pay_rate_info')
+    .select('date start_time end_time accepted_staff roles pay_rate_info managerId client_name')
     .lean();
+
+    // Enrich events with tariff rates (same as Flutter earnings page)
+    const events = await enrichEventsWithTariffs(rawEvents);
 
     let totalEarnings = 0;
     let totalHoursWorked = 0;
@@ -1190,22 +1219,36 @@ async function executeGetEarningsSummary(
       const userInEvent = event.accepted_staff?.find((staff: any) =>
         staff.userKey === userKey
       );
+      if (!userInEvent) return;
 
-      if (userInEvent && event.start_time && event.end_time) {
+      // Hours: prefer approved attendance hours (matches Flutter earnings page)
+      let hours = 0;
+      const attendance = userInEvent.attendance || [];
+      for (const session of attendance) {
+        if (session.approvedHours != null && session.status === 'approved') {
+          hours += session.approvedHours;
+        }
+      }
+
+      // Fallback: scheduled shift duration if no approved attendance
+      if (hours === 0 && event.start_time && event.end_time) {
         const start = new Date(`1970-01-01T${event.start_time}`);
         const end = new Date(`1970-01-01T${event.end_time}`);
-        let hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+        hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
         if (hours < 0) hours += 24; // Handle overnight shifts
-
-        totalHoursWorked += hours;
-
-        // Try to find pay rate: first from user's role in roles array, then from event-level pay_rate_info
-        const userRole = userInEvent.role || userInEvent.position;
-        const roleInfo = event.roles?.find((r: any) => r.role_name === userRole || r.role === userRole);
-        const wage = parsePayRate(roleInfo?.pay_rate_info) || parsePayRate(event.pay_rate_info);
-        totalEarnings += wage * hours;
-        eventCount++;
       }
+
+      if (hours === 0) return;
+
+      totalHoursWorked += hours;
+
+      // Pay rate: prefer tariff rate (from catalog), fallback to pay_rate_info string
+      const userRole = userInEvent.role || userInEvent.position;
+      const roleInfo = event.roles?.find((r: any) => r.role_name === userRole || r.role === userRole);
+      const tariffRate = roleInfo?.tariff?.rate;
+      const wage = tariffRate || parsePayRate(roleInfo?.pay_rate_info) || parsePayRate(event.pay_rate_info);
+      totalEarnings += wage * hours;
+      eventCount++;
     });
 
     // Cost optimization: Compressed response format
@@ -1583,10 +1626,23 @@ async function executeGetPerformance(
         periodLabel = 'Last 12 months';
         break;
       }
-      default: { // current_month
-        start = new Date(now.getFullYear(), now.getMonth(), 1);
-        end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-        periodLabel = now.toLocaleString('default', { month: 'long', year: 'numeric' });
+      default: {
+        if (period.includes(':')) {
+          // Custom range: "YYYY-MM-DD:YYYY-MM-DD"
+          const parts = period.split(':');
+          start = new Date(parts[0] || period);
+          start.setHours(0, 0, 0, 0);
+          end = new Date(parts[1] || parts[0] || period);
+          end.setHours(23, 59, 59, 999);
+          const startStr = start.toLocaleDateString('default', { month: 'short', day: 'numeric', year: 'numeric' });
+          const endStr = end.toLocaleDateString('default', { month: 'short', day: 'numeric', year: 'numeric' });
+          periodLabel = `${startStr} – ${endStr}`;
+        } else {
+          // current_month fallback
+          start = new Date(now.getFullYear(), now.getMonth(), 1);
+          end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+          periodLabel = now.toLocaleString('default', { month: 'long', year: 'numeric' });
+        }
         break;
       }
     }
@@ -1594,11 +1650,14 @@ async function executeGetPerformance(
 
     console.log(`[executeGetPerformance] Date range: ${start.toISOString()} to ${end.toISOString()}`);
 
-    const events = await EventModel.find({
+    const rawEvents = await EventModel.find({
       'accepted_staff.userKey': userKey,
       status: { $ne: 'cancelled' },
       date: { $gte: start, $lte: end }
     }).lean();
+
+    // Enrich with tariff rates (same as Flutter earnings page)
+    const events = await enrichEventsWithTariffs(rawEvents);
 
     console.log(`[executeGetPerformance] Found ${events.length} events`);
 
@@ -1617,19 +1676,30 @@ async function executeGetPerformance(
         const eventDate = new Date((event as any).date);
         const monthKey = `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, '0')}`;
 
+        // Hours: prefer approved attendance hours (matches Flutter earnings page)
         let hours = 0;
-        if ((event as any).start_time && (event as any).end_time) {
+        const attendance = userInShift.attendance || [];
+        for (const session of attendance) {
+          if (session.approvedHours != null && session.status === 'approved') {
+            hours += session.approvedHours;
+          }
+        }
+
+        // Fallback: scheduled shift duration if no approved attendance
+        if (hours === 0 && (event as any).start_time && (event as any).end_time) {
           const s = new Date(`1970-01-01T${(event as any).start_time}`);
           const e = new Date(`1970-01-01T${(event as any).end_time}`);
           hours = (e.getTime() - s.getTime()) / (1000 * 60 * 60);
           if (hours < 0) hours += 24;
-        } else {
-          hours = 6;
         }
 
+        if (hours === 0) continue;
+
+        // Pay rate: prefer tariff rate (from catalog), fallback to pay_rate_info string
         const roles = (event as any).roles || [];
         const roleInfo = roles.find((r: any) => r.role_name === position || r.role === position);
-        const wage = parsePayRate(roleInfo?.pay_rate_info) || parsePayRate((event as any).pay_rate_info);
+        const tariffRate = roleInfo?.tariff?.rate;
+        const wage = tariffRate || parsePayRate(roleInfo?.pay_rate_info) || parsePayRate((event as any).pay_rate_info);
         const earnings = wage * hours;
 
         if (!positionStats[position]) positionStats[position] = { count: 0, hours: 0, earnings: 0 };
@@ -1856,12 +1926,15 @@ async function executeGetShiftDetails(
   try {
     console.log(`[executeGetShiftDetails] Getting details for event ${eventId}`);
 
-    const event = await EventModel.findById(eventId)
+    const event = await EventModel.findOne({
+      _id: eventId,
+      'accepted_staff.userKey': userKey
+    })
       .select('shift_name event_name client_name date start_time end_time venue_name venue_address city state notes roles pay_rate_info uniform accepted_staff status')
       .lean();
 
     if (!event) {
-      return { success: false, message: 'Event not found' };
+      return { success: false, message: 'Event not found or you are not assigned to it' };
     }
 
     const e = event as any;
