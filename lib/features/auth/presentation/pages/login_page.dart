@@ -20,8 +20,12 @@ class _LoginPageState extends State<LoginPage> {
   bool _loadingGoogle = false;
   bool _loadingApple = false;
   bool _loadingPhone = false;
+  bool _loadingEmail = false;
   String? _error;
   bool _appleScriptReady = AppleWebAuth.isSupported;
+
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
 
   @override
   void initState() {
@@ -75,6 +79,42 @@ class _LoginPageState extends State<LoginPage> {
     setState(() {
       _loadingApple = false;
       if (!ok) _error = err ?? 'Apple sign-in failed';
+    });
+    if (ok && mounted) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const ManagerOnboardingGate()),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleEmail() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    if (email.isEmpty || password.isEmpty) {
+      setState(() => _error = 'Please enter email and password');
+      return;
+    }
+    setState(() {
+      _loadingEmail = true;
+      _error = null;
+    });
+    String? err;
+    final ok = await AuthService.signInWithEmail(
+      email: email,
+      password: password,
+      onError: (m) => err = m,
+    );
+    if (!mounted) return;
+    setState(() {
+      _loadingEmail = false;
+      if (!ok) _error = err ?? 'Email sign-in failed';
     });
     if (ok && mounted) {
       Navigator.of(context).pushReplacement(
@@ -291,6 +331,93 @@ class _LoginPageState extends State<LoginPage> {
                               backgroundColor: Colors.white,
                               foregroundColor: AppColors.primaryPurple,
                               outlined: true,
+                            ),
+
+                            const SizedBox(height: 16),
+                            // Email divider
+                            Row(
+                              children: [
+                                Expanded(child: Divider(color: AppColors.border)),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                                  child: Text(
+                                    'or',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: AppColors.textMuted,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                                Expanded(child: Divider(color: AppColors.border)),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Email field
+                            TextField(
+                              controller: _emailController,
+                              keyboardType: TextInputType.emailAddress,
+                              autocorrect: false,
+                              textInputAction: TextInputAction.next,
+                              decoration: InputDecoration(
+                                prefixIcon: Icon(Icons.email_outlined, color: AppColors.textMuted),
+                                hintText: 'Email',
+                                filled: true,
+                                fillColor: Colors.grey.shade50,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: BorderSide(color: AppColors.border),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: BorderSide(color: AppColors.border),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: BorderSide(color: AppColors.secondaryPurple, width: 1.5),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+
+                            // Password field
+                            TextField(
+                              controller: _passwordController,
+                              obscureText: true,
+                              textInputAction: TextInputAction.done,
+                              onSubmitted: (_) => _handleEmail(),
+                              decoration: InputDecoration(
+                                prefixIcon: Icon(Icons.lock_outlined, color: AppColors.textMuted),
+                                hintText: 'Password',
+                                filled: true,
+                                fillColor: Colors.grey.shade50,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: BorderSide(color: AppColors.border),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: BorderSide(color: AppColors.border),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: BorderSide(color: AppColors.secondaryPurple, width: 1.5),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Email sign-in button
+                            _buildSignInButton(
+                              onPressed: _loadingEmail ? null : _handleEmail,
+                              loading: _loadingEmail,
+                              icon: Icons.login_rounded,
+                              label: 'Sign In',
+                              backgroundColor: AppColors.secondaryPurple,
+                              foregroundColor: Colors.white,
                             ),
                           ],
                         ),

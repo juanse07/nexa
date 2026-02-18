@@ -1,3 +1,9 @@
-FlowShift Manager uses Google Sign-In and Apple Sign-In for authentication. To test the app, please use your own Google or Apple account to sign in. The app will create a new manager account for you automatically.
+Demo account for App Store review:
 
-No demo credentials are needed — simply sign in and you will have access to all features including posting events, managing staff, and using the AI assistant.
+Email: demo@flowshift.work
+Password: FlowShift2024!
+
+Sign in using the email and password fields at the bottom of the login screen.
+The demo account includes sample data: a team of 10 staff members,
+completed events with attendance records, upcoming published events,
+and chat conversations.

@@ -27,6 +27,7 @@ import { TeamModel } from '../models/team';
 import { emitToManager, emitToTeams, emitToUser } from '../socket/server';
 import { notificationService } from '../services/notificationService';
 import { computeRoleStats } from '../utils/eventCapacity';
+import { shareEventPublic, shareEventPrivate, sendDirectInvitation } from '../services/eventShareService';
 
 const router = Router();
 
@@ -966,16 +967,39 @@ const AI_TOOLS = [
   },
   {
     name: 'publish_event',
-    description: 'Publish a draft event to all staff teams. Sends push notifications. Use after create_event when user confirms they want to publish. Requires event_id from create_event result.',
+    description: 'Makes a draft event visible to staff. Can be public (open shifts to all teams) or private (only visible to specific people). Use after create_event when user confirms.',
     parameters: {
       type: 'object',
       properties: {
         event_id: {
           type: 'string',
           description: 'The event ID returned by create_event'
+        },
+        visibility: {
+          type: 'string',
+          enum: ['public', 'private'],
+          description: "public = visible to all teams (default). private = only target_staff can see it."
+        },
+        target_staff: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Names of specific staff to share with. Required if visibility is private. Use get_team_members first to find names.'
         }
       },
       required: ['event_id']
+    }
+  },
+  {
+    name: 'invite_staff_to_event',
+    description: 'Invites one specific staff member to a single role within an event. Sends a direct chat message they can accept or decline. Use when manager says "invite Jane as bartender".',
+    parameters: {
+      type: 'object',
+      properties: {
+        event_id: { type: 'string', description: 'The event ID' },
+        staff_name: { type: 'string', description: 'Name of the staff member to invite' },
+        role_name: { type: 'string', description: 'The specific role they are being invited for' }
+      },
+      required: ['event_id', 'staff_name', 'role_name']
     }
   },
   {
@@ -2719,140 +2743,127 @@ ${topStaff ? `Most Flagged: ${topStaff}` : ''}`;
       }
 
       case 'publish_event': {
-        const { event_id } = functionArgs;
+        const { event_id, visibility, target_staff } = functionArgs;
 
         if (!event_id || !mongoose.Types.ObjectId.isValid(event_id)) {
           return '❌ Invalid event_id. Please provide the event ID from create_event.';
         }
 
-        const event = await EventModel.findOne({
-          _id: new mongoose.Types.ObjectId(event_id),
+        // Get manager info for the service calls
+        const mgrInfo = await ManagerModel.findById(managerId).select('first_name last_name name email').lean();
+        const mgrName = (mgrInfo as any)?.first_name && (mgrInfo as any)?.last_name
+          ? `${(mgrInfo as any).first_name} ${(mgrInfo as any).last_name}`
+          : (mgrInfo as any)?.name || 'Manager';
+        const mgrEmail = (mgrInfo as any)?.email || '';
+
+        // Determine effective share type
+        const isPrivate = visibility === 'private' || (target_staff && target_staff.length > 0);
+
+        if (isPrivate && target_staff && target_staff.length > 0) {
+          // Resolve staff names to userKeys (fuzzy match)
+          const resolvedUserKeys: string[] = [];
+          const notFoundNames: string[] = [];
+
+          for (const staffName of target_staff) {
+            const nameRegex = new RegExp(staffName.split(/\s+/).join('.*'), 'i');
+            const members = await TeamMemberModel.find({
+              managerId,
+              status: 'active',
+              $or: [{ name: nameRegex }, { email: new RegExp(staffName, 'i') }],
+            }).lean();
+
+            if (members.length === 1 && members[0]?.provider && members[0]?.subject) {
+              resolvedUserKeys.push(`${members[0]!.provider}:${members[0]!.subject}`);
+            } else if (members.length > 1) {
+              const names = members.map((m: any) => m.name || m.email).join(', ');
+              return `❌ Multiple matches for "${staffName}": ${names}. Please be more specific.`;
+            } else {
+              notFoundNames.push(staffName);
+            }
+          }
+
+          if (resolvedUserKeys.length === 0) {
+            return `❌ No staff found matching: ${notFoundNames.join(', ')}. Use get_team_members to see available staff.`;
+          }
+
+          const result = await shareEventPrivate({
+            managerId,
+            eventId: event_id,
+            targetUserKeys: resolvedUserKeys,
+            managerName: mgrName,
+            managerEmail: mgrEmail,
+          });
+
+          if (!result.success) return `❌ ${result.error}`;
+
+          let response = `✅ Shared privately with ${result.notifiedCount} staff member(s).`;
+          if (notFoundNames.length > 0) {
+            response += `\n⚠️ Could not find: ${notFoundNames.join(', ')}`;
+          }
+          return response;
+        }
+
+        // Default: public publish to all teams
+        const result = await shareEventPublic({
           managerId,
+          eventId: event_id,
+          targetTeamIds: null,
+          managerName: mgrName,
+          managerEmail: mgrEmail,
         });
 
-        if (!event) {
-          return '❌ Event not found or not owned by you.';
+        if (!result.success) return `❌ ${result.error}`;
+        return `✅ Published! ${result.notifiedCount} staff notified across ${result.teamCount} team(s).`;
+      }
+
+      case 'invite_staff_to_event': {
+        const { event_id, staff_name, role_name } = functionArgs;
+
+        if (!event_id || !mongoose.Types.ObjectId.isValid(event_id)) {
+          return '❌ Invalid event_id.';
         }
-        if (event.status !== 'draft') {
-          return `❌ Cannot publish — event status is '${event.status}'. Only draft events can be published.`;
+        if (!staff_name || !role_name) {
+          return '❌ Both staff_name and role_name are required.';
         }
 
-        // Get ALL manager's teams and their active members
-        const teams = await TeamModel.find({ managerId }).lean();
-        if (teams.length === 0) {
-          return '❌ You have no teams set up. Create a team and add staff before publishing.';
-        }
-
-        const teamIds = teams.map(t => String(t._id));
-        const teamMembers = await TeamMemberModel.find({
-          teamId: { $in: teamIds.map(id => new mongoose.Types.ObjectId(id)) },
+        // Resolve staff name to userKey (fuzzy match)
+        const nameRegex = new RegExp(staff_name.split(/\s+/).join('.*'), 'i');
+        const members = await TeamMemberModel.find({
+          managerId,
           status: 'active',
+          $or: [{ name: nameRegex }, { email: new RegExp(staff_name, 'i') }],
         }).lean();
 
-        const targetUserKeys: string[] = [];
-        for (const member of teamMembers) {
-          if (member.provider && member.subject) {
-            const userKey = `${member.provider}:${member.subject}`;
-            if (!targetUserKeys.includes(userKey)) {
-              targetUserKeys.push(userKey);
-            }
-          }
+        if (members.length === 0) {
+          return `❌ No team member found matching "${staff_name}". Use get_team_members to see available staff.`;
+        }
+        if (members.length > 1) {
+          const names = members.map((m: any) => m.name || m.email || 'Unknown').join(', ');
+          return `Found ${members.length} matches: ${names}. Please be more specific.`;
         }
 
-        // Update event to published
-        event.status = 'published';
-        (event as any).publishedAt = new Date();
-        event.audience_team_ids = teamIds.map(id => new mongoose.Types.ObjectId(id)) as any;
-        event.audience_user_keys = targetUserKeys as any;
-        (event as any).visibilityType = 'private';
-        await event.save();
+        const member = members[0] as any;
+        const inviteeUserKey = `${member.provider}:${member.subject}`;
+        const memberName = member.name || member.email || 'Team Member';
 
-        const eventObj = event.toObject();
-        const pubPayload = {
-          ...eventObj,
-          id: String(eventObj._id),
-          managerId: String(eventObj.managerId),
-          audience_user_keys: targetUserKeys,
-          audience_team_ids: teamIds,
-          role_stats: computeRoleStats((eventObj.roles as any[]) || [], (eventObj.accepted_staff as any[]) || []),
-        };
+        // Get manager info
+        const mgr = await ManagerModel.findById(managerId).select('first_name last_name name picture').lean();
+        const invMgrName = (mgr as any)?.first_name && (mgr as any)?.last_name
+          ? `${(mgr as any).first_name} ${(mgr as any).last_name}`
+          : (mgr as any)?.name || 'Manager';
+        const invMgrPicture = (mgr as any)?.picture || null;
 
-        // Emit socket events
-        emitToManager(String(managerId), 'event:published', pubPayload);
-        emitToTeams(teamIds, 'event:created', pubPayload);
-        for (const key of targetUserKeys) {
-          emitToUser(key, 'event:created', pubPayload);
-        }
+        const result = await sendDirectInvitation({
+          managerId,
+          eventId: event_id,
+          inviteeUserKey,
+          roleName: role_name,
+          managerName: invMgrName,
+          managerPicture: invMgrPicture,
+        });
 
-        // Send push notifications — one per role per staff member
-        const roles = (eventObj.roles as any[]) || [];
-        const eventDate = eventObj.date;
-        const startTime = (eventObj as any).start_time;
-        const endTime = (eventObj as any).end_time;
-
-        let formattedDate = '';
-        if (eventDate) {
-          const d = new Date(eventDate as any);
-          formattedDate = `${d.getDate()} ${d.toLocaleDateString('en-US', { month: 'short' })}`;
-        }
-        let timePart = '';
-        if (startTime && endTime) {
-          timePart = `${startTime} - ${endTime}`;
-        }
-
-        const teamIdToName = new Map(teams.map((t: any) => [String(t._id), t.name]));
-        let notifiedCount = 0;
-
-        for (const userKey of targetUserKeys) {
-          try {
-            const [provider, subject] = userKey.split(':');
-            if (!provider || !subject) continue;
-
-            const user = await UserModel.findOne({ provider, subject }).lean();
-            if (!user) continue;
-
-            const terminology = (user as any).eventTerminology || 'shift';
-
-            // Find which team this user belongs to
-            let teamName = 'Your team';
-            const userTeamMembership = await TeamMemberModel.findOne({
-              provider,
-              subject,
-              teamId: { $in: teamIds.map(id => new mongoose.Types.ObjectId(id)) },
-              status: 'active',
-            }).lean();
-            if (userTeamMembership) {
-              teamName = teamIdToName.get(String(userTeamMembership.teamId)) || 'Your team';
-            }
-
-            for (const role of roles) {
-              const roleName = role.role || role.role_name;
-              if (!roleName) continue;
-
-              const capitalizedTerm = terminology.charAt(0).toUpperCase() + terminology.slice(1);
-              const notificationTitle = `🔵 New Open ${capitalizedTerm}`;
-              let notificationBody = `${teamName} posted a new ${terminology} as ${roleName}`;
-              if (formattedDate && timePart) {
-                notificationBody += ` • ${formattedDate}, ${timePart}`;
-              } else if (formattedDate) {
-                notificationBody += ` • ${formattedDate}`;
-              }
-
-              await notificationService.sendToUser(
-                String(user._id),
-                notificationTitle,
-                notificationBody,
-                { type: 'event', eventId: String(eventObj._id), role: roleName },
-                'user'
-              );
-            }
-            notifiedCount++;
-          } catch (err) {
-            console.error(`[publish_event AI] Notification failed for ${userKey}:`, err);
-          }
-        }
-
-        return `✅ Published! ${notifiedCount} staff notified across ${teams.length} team(s).`;
+        if (!result.success) return `❌ ${result.error}`;
+        return `✅ Invitation sent to ${memberName} for the ${result.roleName} role.`;
       }
 
       case 'publish_events_bulk': {
@@ -3492,6 +3503,17 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
 - Once confirmed: use create_event tool (creates as DRAFT)
 - After creating: ALWAYS ask "Would you like me to publish this to your staff right away?"
 - If user says yes: use publish_event tool with the event_id from create_event result
+
+📤 SHARING EVENTS WITH STAFF:
+After you create an event, it is a DRAFT. You must share it to make it visible. You have three ways:
+1. **Public (Open Shifts)**: To make an event visible to ALL your teams, use publish_event with visibility: 'public' (this is the default). Ask: "Should I publish this as an open shift for all your teams?"
+2. **Private (Select Group)**: To share with only specific people, use publish_event with visibility: 'private' and provide their names in target_staff. Ask: "Should I share this privately with specific people? If so, who?"
+3. **Direct Invitation (1-on-1)**: To invite one person to a specific role, use invite_staff_to_event. This sends a direct chat message they can accept or decline. Use when the manager says "Invite Jane to the bartender role."
+
+Default behavior:
+- If manager says "publish" / "yes" / "send to everyone" → use publish_event (defaults to public)
+- If manager says "share with Maria and Juan only" → use publish_event with visibility: 'private' + target_staff
+- If manager says "invite Jane as bartender" → use invite_staff_to_event
 
 📦 BULK CREATION:
 - For recurring patterns ("every Saturday in March", "3 shifts next week"): use create_events_bulk

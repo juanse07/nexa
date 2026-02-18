@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 import '../../cities/data/models/city.dart';
 import '../data/services/onboarding_service.dart';
+import 'widgets/animated_checkmark.dart';
+import 'widgets/glassmorphism_card.dart';
 import 'widgets/multi_city_picker.dart';
-import 'package:nexa/shared/presentation/theme/app_colors.dart';
+import 'widgets/onboarding_background.dart';
+import 'widgets/step_progress_indicator.dart';
 
-/// Manager onboarding screen with city selection and venue discovery
+/// Manager onboarding screen with city selection and venue discovery.
+///
+/// Premium redesign: navy gradient background with floating orbs,
+/// glassmorphism cards, staggered entrance animations, custom loading
+/// rings, and animated checkmark on success.
 class ManagerOnboardingScreen extends StatefulWidget {
   final VoidCallback? onComplete;
 
@@ -18,29 +26,160 @@ class ManagerOnboardingScreen extends StatefulWidget {
   State<ManagerOnboardingScreen> createState() => _ManagerOnboardingScreenState();
 }
 
-class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
+class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen>
+    with TickerProviderStateMixin {
   int _currentStep = 0;
   List<City> _selectedCities = [];
   String? _errorMessage;
 
-  // Legacy fields (keep for potential backward compatibility)
-  String? _selectedCity;
-  bool _isDetectingLocation = false;
-  bool _isDiscoveringVenues = false;
-  int? _venueCount;
-
   final TextEditingController _cityController = TextEditingController();
+
+  // Staggered entrance animations
+  late final AnimationController _entranceController;
+  late final Animation<double> _logoFade;
+  late final Animation<double> _titleFade;
+  late final Animation<Offset> _titleSlide;
+  late final Animation<double> _subtitleFade;
+  late final Animation<double> _ctaFade;
+  late final Animation<Offset> _ctaSlide;
+
+  // Step transition
+  late final AnimationController _transitionController;
+  late final Animation<double> _fadeOut;
+  late final Animation<double> _fadeIn;
+  late final Animation<Offset> _slideOut;
+  late final Animation<Offset> _slideIn;
+
+  int _displayedStep = 0; // What's currently visible during transitions
+
+  @override
+  void initState() {
+    super.initState();
+    _setupEntranceAnimations();
+    _setupTransitionAnimations();
+    _entranceController.forward();
+  }
+
+  void _setupEntranceAnimations() {
+    _entranceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+
+    _logoFade = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(
+        parent: _entranceController,
+        curve: const Interval(0.0, 0.4, curve: Curves.easeOut),
+      ),
+    );
+
+    _titleFade = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(
+        parent: _entranceController,
+        curve: const Interval(0.2, 0.6, curve: Curves.easeOut),
+      ),
+    );
+    _titleSlide = Tween<Offset>(
+      begin: const Offset(0, 0.3),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _entranceController,
+        curve: const Interval(0.2, 0.6, curve: Curves.easeOut),
+      ),
+    );
+
+    _subtitleFade = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(
+        parent: _entranceController,
+        curve: const Interval(0.35, 0.7, curve: Curves.easeOut),
+      ),
+    );
+
+    _ctaFade = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(
+        parent: _entranceController,
+        curve: const Interval(0.5, 0.85, curve: Curves.easeOut),
+      ),
+    );
+    _ctaSlide = Tween<Offset>(
+      begin: const Offset(0, 0.5),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _entranceController,
+        curve: const Interval(0.5, 0.85, curve: Curves.easeOut),
+      ),
+    );
+  }
+
+  void _setupTransitionAnimations() {
+    _transitionController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+
+    _fadeOut = Tween<double>(begin: 1, end: 0).animate(
+      CurvedAnimation(
+        parent: _transitionController,
+        curve: const Interval(0.0, 0.4, curve: Curves.easeIn),
+      ),
+    );
+    _slideOut = Tween<Offset>(
+      begin: Offset.zero,
+      end: const Offset(-0.3, 0),
+    ).animate(
+      CurvedAnimation(
+        parent: _transitionController,
+        curve: const Interval(0.0, 0.4, curve: Curves.easeIn),
+      ),
+    );
+
+    _fadeIn = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(
+        parent: _transitionController,
+        curve: const Interval(0.5, 1.0, curve: Curves.easeOut),
+      ),
+    );
+    _slideIn = Tween<Offset>(
+      begin: const Offset(0.3, 0),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _transitionController,
+        curve: const Interval(0.5, 1.0, curve: Curves.easeOut),
+      ),
+    );
+
+    _transitionController.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        setState(() {
+          _displayedStep = _currentStep;
+        });
+        _transitionController.reset();
+      }
+    });
+  }
 
   @override
   void dispose() {
     _cityController.dispose();
+    _entranceController.dispose();
+    _transitionController.dispose();
     super.dispose();
+  }
+
+  void _goToStep(int step) {
+    if (_transitionController.isAnimating) return;
+    setState(() {
+      _currentStep = step;
+    });
+    _transitionController.forward();
   }
 
   /// Auto-detect user's city from device location
   Future<void> _detectLocation() async {
     setState(() {
-      _isDetectingLocation = true;
       _errorMessage = null;
     });
 
@@ -49,19 +188,15 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
 
       if (city != null) {
         setState(() {
-          _selectedCity = city;
           _cityController.text = city;
-          _isDetectingLocation = false;
         });
       } else {
         setState(() {
-          _isDetectingLocation = false;
           _errorMessage = 'Could not detect your location. Please enter your city manually.';
         });
       }
     } catch (e) {
       setState(() {
-        _isDetectingLocation = false;
         _errorMessage = 'Location detection failed. Please enter your city manually.';
       });
     }
@@ -72,7 +207,7 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
     if (widget.onComplete != null) {
       widget.onComplete!();
     } else {
-      Navigator.of(context).pop(true); // Return true to indicate completion (skipped)
+      Navigator.of(context).pop(true);
     }
   }
 
@@ -86,32 +221,26 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
     }
 
     setState(() {
-      _isDiscoveringVenues = true;
-      _currentStep = 2; // Move to loading screen
       _errorMessage = null;
     });
+    _goToStep(2);
 
     try {
       final result = await OnboardingService.completeOnboardingWithCities(_selectedCities);
 
       if (result.success) {
-        setState(() {
-          _currentStep = 3; // Move to success screen
-          _isDiscoveringVenues = false;
-        });
+        _goToStep(3);
       } else {
         setState(() {
-          _isDiscoveringVenues = false;
           _errorMessage = result.message;
-          _currentStep = 1; // Go back to city selection
         });
+        _goToStep(1);
       }
     } catch (e) {
       setState(() {
-        _isDiscoveringVenues = false;
         _errorMessage = 'An error occurred. Please try again.';
-        _currentStep = 1;
       });
+      _goToStep(1);
     }
   }
 
@@ -120,159 +249,287 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
     if (widget.onComplete != null) {
       widget.onComplete!();
     } else {
-      Navigator.of(context).pop(true); // Return true to indicate completion
+      Navigator.of(context).pop(true);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 400),
-          child: _buildStepContent(),
+      body: OnboardingBackground(
+        child: SafeArea(
+          child: _buildAnimatedContent(),
         ),
       ),
     );
   }
 
-  Widget _buildStepContent() {
-    switch (_currentStep) {
-      case 0:
-        return _buildWelcomeStep();
-      case 1:
-        return _buildCitySelectionStep();
-      case 2:
-        return _buildLoadingStep();
-      case 3:
-        return _buildSuccessStep();
-      default:
-        return _buildWelcomeStep();
+  Widget _buildAnimatedContent() {
+    // During transition, show the outgoing step fading out or incoming step fading in
+    if (_transitionController.isAnimating) {
+      return AnimatedBuilder(
+        animation: _transitionController,
+        builder: (context, _) {
+          if (_transitionController.value < 0.5) {
+            // Fading out old step
+            return FadeTransition(
+              opacity: _fadeOut,
+              child: SlideTransition(
+                position: _slideOut,
+                child: _buildStepContent(_displayedStep),
+              ),
+            );
+          } else {
+            // Fading in new step
+            return FadeTransition(
+              opacity: _fadeIn,
+              child: SlideTransition(
+                position: _slideIn,
+                child: _buildStepContent(_currentStep),
+              ),
+            );
+          }
+        },
+      );
     }
+
+    return _buildStepContent(_displayedStep);
   }
 
-  /// Step 0: Welcome message
-  Widget _buildWelcomeStep() {
-    return Padding(
-      key: const ValueKey('welcome'),
-      padding: const EdgeInsets.all(24.0),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: AppColors.secondaryPurple.withValues(alpha: 0.08),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.event_note_rounded,
-              size: 80,
-              color: AppColors.secondaryPurple,
-            ),
+  Widget _buildStepContent(int step) {
+    return Stack(
+      children: [
+        switch (step) {
+          0 => _buildWelcomeStep(),
+          1 => _buildCitySelectionStep(),
+          2 => _buildLoadingStep(),
+          3 => _buildSuccessStep(),
+          _ => _buildWelcomeStep(),
+        },
+        // Step dots at the bottom
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 24,
+          child: StepProgressIndicator(
+            currentStep: step,
+            totalSteps: 4,
+            variant: StepIndicatorVariant.dot,
           ),
-          const SizedBox(height: 32),
-          Text(
-            'Welcome to FlowShift!',
-            style: TextStyle(
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
-              color: AppColors.primaryPurple,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Let\'s personalize your experience by finding popular event venues in your area.',
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 48),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: () {
-                setState(() {
-                  _currentStep = 1;
-                });
-                _detectLocation(); // Auto-start location detection
-              },
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: AppColors.primaryPurple,
-              ),
-              child: const Text(
-                'Get Started',
-                style: TextStyle(fontSize: 16),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextButton(
-            onPressed: _skipOnboarding,
-            child: const Text('Skip for now'),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  /// Step 1: City selection
+  /// Step 0: Welcome — logo, staggered text, glassmorphism CTA
+  Widget _buildWelcomeStep() {
+    return AnimatedBuilder(
+      animation: _entranceController,
+      builder: (context, _) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 28),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Logo
+              FadeTransition(
+                opacity: _logoFade,
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: 0.1),
+                  ),
+                  child: Image.asset(
+                    'assets/logo_icon_square_transparent.png',
+                    height: 80,
+                    width: 80,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 32),
+
+              // Title
+              FadeTransition(
+                opacity: _titleFade,
+                child: SlideTransition(
+                  position: _titleSlide,
+                  child: const Text(
+                    'Welcome to FlowShift!',
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      letterSpacing: -0.5,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Subtitle
+              FadeTransition(
+                opacity: _subtitleFade,
+                child: Text(
+                  'Let\'s personalize your experience by finding popular event venues in your area.',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.white.withValues(alpha: 0.7),
+                    height: 1.5,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 48),
+
+              // CTA area with glassmorphism
+              FadeTransition(
+                opacity: _ctaFade,
+                child: SlideTransition(
+                  position: _ctaSlide,
+                  child: GlassmorphismCard(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      children: [
+                        SizedBox(
+                          width: double.infinity,
+                          height: 54,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              _goToStep(1);
+                              _detectLocation();
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primaryIndigo,
+                              foregroundColor: AppColors.primaryPurple,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            child: const Text(
+                              'Get Started',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextButton(
+                          onPressed: _skipOnboarding,
+                          child: Text(
+                            'Skip for now',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.6),
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 60), // room for step dots
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Step 1: City selection — glassmorphism card wrapping city picker
   Widget _buildCitySelectionStep() {
     return SingleChildScrollView(
-      key: const ValueKey('city-selection'),
-      padding: const EdgeInsets.all(24.0),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 40),
-          const Text(
-            'Where are you located?',
+          Text(
+            'Where are you\nlocated?',
             style: TextStyle(
               fontSize: 28,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+              height: 1.2,
             ),
           ),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             'Add one or more cities where you operate. You can discover venues for each city later.',
             style: TextStyle(
               fontSize: 14,
-              color: Colors.grey,
+              color: Colors.white.withValues(alpha: 0.7),
+              height: 1.5,
             ),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
 
-          // Multi-city picker widget
-          MultiCityPicker(
-            initialCities: _selectedCities,
-            onCitiesChanged: (cities) {
-              setState(() {
-                _selectedCities = cities;
-                _errorMessage = null;
-              });
-            },
+          // City picker inside glassmorphism card
+          GlassmorphismCard(
+            padding: const EdgeInsets.all(16),
+            child: Theme(
+              data: Theme.of(context).copyWith(
+                // Make text fields readable on dark background
+                inputDecorationTheme: InputDecorationTheme(
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: 0.15),
+                  hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+                  labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: AppColors.primaryIndigo, width: 1.5),
+                  ),
+                ),
+                textTheme: Theme.of(context).textTheme.apply(
+                  bodyColor: Colors.white,
+                  displayColor: Colors.white,
+                ),
+                iconTheme: IconThemeData(color: Colors.white.withValues(alpha: 0.7)),
+                chipTheme: ChipThemeData(
+                  backgroundColor: AppColors.primaryIndigo.withValues(alpha: 0.2),
+                  labelStyle: const TextStyle(color: Colors.white),
+                  deleteIconColor: Colors.white.withValues(alpha: 0.7),
+                  side: BorderSide(color: AppColors.primaryIndigo.withValues(alpha: 0.4)),
+                ),
+              ),
+              child: MultiCityPicker(
+                initialCities: _selectedCities,
+                onCitiesChanged: (cities) {
+                  setState(() {
+                    _selectedCities = cities;
+                    _errorMessage = null;
+                  });
+                },
+              ),
+            ),
           ),
 
           if (_errorMessage != null) ...[
             const SizedBox(height: 16),
-            Container(
+            GlassmorphismCard(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
+              accentColor: AppColors.error,
               child: Row(
                 children: [
-                  const Icon(Icons.error_outline, color: Colors.red),
+                  const Icon(Icons.error_outline, color: AppColors.error, size: 20),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       _errorMessage!,
-                      style: const TextStyle(color: Colors.red),
+                      style: const TextStyle(color: AppColors.error, fontSize: 13),
                     ),
                   ),
                 ],
@@ -280,22 +537,27 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
             ),
           ],
 
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
 
           // Continue button
           SizedBox(
             width: double.infinity,
-            child: FilledButton(
-              onPressed: _selectedCities.isNotEmpty
-                  ? _completeOnboarding
-                  : null,
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: AppColors.primaryPurple,
+            height: 54,
+            child: ElevatedButton(
+              onPressed: _selectedCities.isNotEmpty ? _completeOnboarding : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryIndigo,
+                foregroundColor: AppColors.primaryPurple,
+                disabledBackgroundColor: Colors.white.withValues(alpha: 0.1),
+                disabledForegroundColor: Colors.white.withValues(alpha: 0.3),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
               child: const Text(
                 'Continue',
-                style: TextStyle(fontSize: 16),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
               ),
             ),
           ),
@@ -303,58 +565,54 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
           Center(
             child: TextButton(
               onPressed: _skipOnboarding,
-              child: const Text('Skip for now'),
+              child: Text(
+                'Skip for now',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.6),
+                  fontSize: 14,
+                ),
+              ),
             ),
           ),
+          const SizedBox(height: 80), // room for step dots + bottom safe area
         ],
       ),
     );
   }
 
-  /// Step 2: Setting up cities
+  /// Step 2: Loading — pulsing concentric rings + animated city names
   Widget _buildLoadingStep() {
     final cityCount = _selectedCities.length;
-    final cityNames = _selectedCities.map((c) => c.displayName).join(', ');
+    final cityNames = _selectedCities.map((c) => c.displayName).toList();
 
     return Center(
-      key: const ValueKey('loading'),
       child: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(
-              strokeWidth: 3,
-              valueColor: AlwaysStoppedAnimation<Color>(AppColors.secondaryPurple),
-            ),
-            const SizedBox(height: 32),
+            _PulsingRings(color: AppColors.primaryIndigo),
+            const SizedBox(height: 40),
             Text(
               cityCount == 1
                   ? 'Setting up your city...'
                   : 'Setting up your $cityCount cities...',
               style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
               ),
               textAlign: TextAlign.center,
             ),
-            if (cityCount <= 3) ...[
-              const SizedBox(height: 12),
-              Text(
-                cityNames,
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
             const SizedBox(height: 16),
-            const Text(
+            // Animated city names appearing one by one
+            if (cityCount <= 5) _AnimatedCityNames(names: cityNames),
+            const SizedBox(height: 12),
+            Text(
               'This will only take a moment...',
               style: TextStyle(
                 fontSize: 14,
-                color: Colors.grey,
+                color: Colors.white.withValues(alpha: 0.5),
               ),
             ),
           ],
@@ -363,32 +621,26 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
     );
   }
 
-  /// Step 3: Success
+  /// Step 3: Success — animated checkmark with gold particles
   Widget _buildSuccessStep() {
     return Padding(
-      key: const ValueKey('success'),
-      padding: const EdgeInsets.all(24.0),
+      padding: const EdgeInsets.all(28.0),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.check_circle,
-              size: 80,
-              color: Colors.green,
-            ),
+          AnimatedCheckmark(
+            size: 120,
+            color: AppColors.primaryIndigo,
+            particleColor: AppColors.primaryIndigo,
+            showParticles: true,
           ),
           const SizedBox(height: 32),
           const Text(
             'All Set!',
             style: TextStyle(
               fontSize: 32,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
             ),
             textAlign: TextAlign.center,
           ),
@@ -397,38 +649,200 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen> {
             _selectedCities.length == 1
                 ? 'Your city has been configured successfully!'
                 : 'Your ${_selectedCities.length} cities have been configured successfully!',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 16,
-              color: Colors.grey,
+              color: Colors.white.withValues(alpha: 0.7),
+              height: 1.5,
             ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
-          const Text(
-            'You can now discover venues for each city from Settings > Manage Cities.',
+          Text(
+            'You can discover venues for each city from Settings > Manage Cities.',
             style: TextStyle(
               fontSize: 14,
-              color: Colors.grey,
+              color: Colors.white.withValues(alpha: 0.5),
             ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 48),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: _finishOnboarding,
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: AppColors.primaryPurple,
-              ),
-              child: const Text(
-                'Start Using FlowShift',
-                style: TextStyle(fontSize: 16),
+          GlassmorphismCard(
+            padding: const EdgeInsets.all(20),
+            child: SizedBox(
+              width: double.infinity,
+              height: 54,
+              child: ElevatedButton(
+                onPressed: _finishOnboarding,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryIndigo,
+                  foregroundColor: AppColors.primaryPurple,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: const Text(
+                  'Start Using FlowShift',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
               ),
             ),
           ),
+          const SizedBox(height: 60),
         ],
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Pulsing concentric rings loading indicator
+// ---------------------------------------------------------------------------
+
+class _PulsingRings extends StatefulWidget {
+  final Color color;
+
+  const _PulsingRings({required this.color});
+
+  @override
+  State<_PulsingRings> createState() => _PulsingRingsState();
+}
+
+class _PulsingRingsState extends State<_PulsingRings>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 120,
+      height: 120,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          return CustomPaint(
+            painter: _PulsingRingsPainter(
+              progress: _controller.value,
+              color: widget.color,
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _PulsingRingsPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+
+  _PulsingRingsPainter({required this.progress, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+
+    // 3 concentric rings with staggered phases
+    for (int i = 0; i < 3; i++) {
+      final phase = (progress + i * 0.33) % 1.0;
+      final radius = 15.0 + phase * 40.0;
+      final opacity = (1.0 - phase).clamp(0.0, 0.5);
+
+      final paint = Paint()
+        ..color = color.withValues(alpha: opacity)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5;
+
+      canvas.drawCircle(center, radius, paint);
+    }
+
+    // Center dot
+    canvas.drawCircle(
+      center,
+      6,
+      Paint()..color = color.withValues(alpha: 0.8),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_PulsingRingsPainter old) => old.progress != progress;
+}
+
+// ---------------------------------------------------------------------------
+// Animated city names that fade in one by one
+// ---------------------------------------------------------------------------
+
+class _AnimatedCityNames extends StatefulWidget {
+  final List<String> names;
+
+  const _AnimatedCityNames({required this.names});
+
+  @override
+  State<_AnimatedCityNames> createState() => _AnimatedCityNamesState();
+}
+
+class _AnimatedCityNamesState extends State<_AnimatedCityNames>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: 600 * widget.names.length),
+    )..forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        return Column(
+          children: List.generate(widget.names.length, (i) {
+            final start = i / widget.names.length;
+            final end = (i + 1) / widget.names.length;
+            final opacity = Interval(start, end, curve: Curves.easeOut)
+                .transform(_controller.value);
+            return Opacity(
+              opacity: opacity,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Text(
+                  widget.names[i],
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: AppColors.primaryIndigo.withValues(alpha: 0.9),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            );
+          }),
+        );
+      },
     );
   }
 }

@@ -178,6 +178,7 @@ class _TeamsManagementPageState extends State<TeamsManagementPage> {
         builder: (_) => TeamDetailPage(
           teamId: (team['id'] ?? '').toString(),
           teamName: (team['name'] ?? '').toString(),
+          isOwner: team['isOwner'] as bool? ?? true,
         ),
       ),
     );
@@ -254,6 +255,7 @@ class _TeamsManagementPageState extends State<TeamsManagementPage> {
         final description = (team['description'] ?? '').toString();
         final memberCount = team['memberCount'] ?? 0;
         final pendingInvites = team['pendingInvites'] ?? 0;
+        final isOwner = team['isOwner'] as bool? ?? true;
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
           elevation: 1,
@@ -265,24 +267,50 @@ class _TeamsManagementPageState extends State<TeamsManagementPage> {
                 Row(
                   children: [
                     Expanded(
-                      child: Text(
-                        name.isEmpty ? 'Untitled team' : name,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      child: Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              name.isEmpty ? 'Untitled team' : name,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (!isOwner) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF6366F1).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text(
+                                'Co-Manager',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Color(0xFF6366F1),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
-                    IconButton(
-                      onPressed: () {
-                        final teamId = (team['id'] ?? '').toString();
-                        if (teamId.isEmpty) return;
-                        _deleteTeam(teamId);
-                      },
-                      icon: const Icon(Icons.delete_outline),
-                      color: Colors.redAccent,
-                      tooltip: 'Delete team',
-                    ),
+                    if (isOwner)
+                      IconButton(
+                        onPressed: () {
+                          final teamId = (team['id'] ?? '').toString();
+                          if (teamId.isEmpty) return;
+                          _deleteTeam(teamId);
+                        },
+                        icon: const Icon(Icons.delete_outline),
+                        color: Colors.redAccent,
+                        tooltip: 'Delete team',
+                      ),
                   ],
                 ),
                 if (description.isNotEmpty) ...[

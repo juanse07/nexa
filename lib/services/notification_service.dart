@@ -97,6 +97,10 @@ class NotificationService {
     OneSignal.Notifications.addForegroundWillDisplayListener((event) {
       print('Notification received in foreground: ${event.notification.title}');
 
+      // Prevent OneSignal from auto-displaying the notification natively,
+      // since we show it ourselves via flutter_local_notifications below.
+      event.preventDefault();
+
       // Show local notification when app is in foreground
       _showLocalNotification(
         event.notification.title ?? 'New Notification',

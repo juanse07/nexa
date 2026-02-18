@@ -7,6 +7,7 @@ import 'chat_screen.dart';
 import '../../extraction/presentation/ai_chat_screen.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
 import 'package:nexa/shared/widgets/initials_avatar.dart';
+import 'package:nexa/shared/widgets/tappable_app_title.dart';
 import 'package:nexa/shared/widgets/web_content_wrapper.dart';
 
 class ConversationsScreen extends StatefulWidget {
@@ -93,9 +94,9 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
             appBar: AppBar(
               backgroundColor: Colors.white,
               elevation: 0,
-              title: const Text(
+              title: TappableAppTitle.text(
                 'Chats',
-                style: TextStyle(
+                style: const TextStyle(
                   color: AppColors.charcoal,
                   fontSize: 24,
                   fontWeight: FontWeight.w700,
@@ -235,25 +236,34 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
               onTap: () => _openAIChat(),
             ),
             const Divider(height: 1),
-            const SizedBox(height: 100),
-            Center(
+            const SizedBox(height: 40),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
-                  Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey[300]),
-                  const SizedBox(height: 16),
+                  Image.asset(
+                    'assets/chat_placeholder.png',
+                    height: 260,
+                    fit: BoxFit.contain,
+                  ),
+                  const SizedBox(height: 24),
                   Text(
                     'No conversations yet',
                     style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.grey[600],
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.charcoal,
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Start chatting to see your messages here',
-                    style: TextStyle(color: Colors.grey[500]),
+                    'Start chatting with your team to see your messages here',
+                    style: TextStyle(
+                      color: Colors.grey[500],
+                      fontSize: 14,
+                      height: 1.4,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
                 ],
               ),
@@ -382,14 +392,38 @@ class _ConversationTile extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: <Widget>[
                       Expanded(
-                        child: Text(
-                          conversation.displayName,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight:
-                                hasUnread ? FontWeight.w700 : FontWeight.w600,
-                          ),
-                          overflow: TextOverflow.ellipsis,
+                        child: Row(
+                          children: <Widget>[
+                            Flexible(
+                              child: Text(
+                                conversation.displayName,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight:
+                                      hasUnread ? FontWeight.w700 : FontWeight.w600,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (conversation.isManagerPeer) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF6366F1).withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Text(
+                                  'Manager',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Color(0xFF6366F1),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                       if (conversation.lastMessageAt != null)

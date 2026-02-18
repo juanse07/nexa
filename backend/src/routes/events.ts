@@ -22,6 +22,16 @@ import {
   DEFAULT_GEOFENCE_RADIUS_METERS,
 } from '../utils/geolocation';
 import { FlaggedAttendanceModel, FlagType, FlagSeverity } from '../models/flaggedAttendance';
+import {
+  sanitizeTeamIds,
+  timeToMinutes,
+  sendEventNotifications,
+} from '../utils/eventHelpers';
+import {
+  shareEventPublic,
+  shareEventPrivate,
+  sendDirectInvitation,
+} from '../services/eventShareService';
 
 const router = Router();
 
@@ -325,41 +335,7 @@ async function enrichEventsWithTariffs(events: any[]): Promise<any[]> {
   return results;
 }
 
-async function sanitizeTeamIds(
-  managerId: mongoose.Types.ObjectId,
-  input: unknown
-): Promise<mongoose.Types.ObjectId[]> {
-  if (!Array.isArray(input)) {
-    return [];
-  }
-  const uniqueStrings = Array.from(
-    new Set(
-      input
-        .map((value) => {
-          if (value == null) return '';
-          return value.toString().trim();
-        })
-        .filter((value) => value.length > 0)
-    )
-  );
-
-  const objectIds = uniqueStrings
-    .filter((value) => mongoose.Types.ObjectId.isValid(value))
-    .map((value) => new mongoose.Types.ObjectId(value));
-
-  if (objectIds.length === 0) {
-    return [];
-  }
-
-  const teams = await TeamModel.find({
-    _id: { $in: objectIds },
-    managerId,
-  })
-    .select('_id')
-    .lean();
-
-  return teams.map((team) => team._id as mongoose.Types.ObjectId);
-}
+// sanitizeTeamIds, timeToMinutes, and sendEventNotifications imported from ../utils/eventHelpers
 
 router.post('/events', requireAuth, async (req, res) => {
   try {
@@ -749,9 +725,25 @@ router.post('/events/:id/publish', requireAuth, async (req, res) => {
     event.audience_team_ids = teamIds;
     event.audience_group_ids = groupIds;
 
-    // Set visibility type (defaults to 'private' if not specified)
+    // Set visibility type — infer from audience shape when not explicitly provided
     if (visibilityType) {
+      // Caller explicitly specified (Flutter sends 'public')
       event.visibilityType = visibilityType;
+    } else {
+      // Auto-infer from audience shape
+      const hasTeams = teamIds.length > 0;
+      const hasDirectUsers = !!(audience_user_keys && audience_user_keys.length > 0);
+      const hasInvitedStaff = !!((event as any).invited_staff && (event as any).invited_staff.length > 0);
+
+      if (hasTeams && (hasDirectUsers || hasInvitedStaff)) {
+        event.visibilityType = 'private_public';
+      } else if (hasTeams) {
+        event.visibilityType = 'public';
+      } else if (hasDirectUsers) {
+        event.visibilityType = 'private';
+      } else {
+        event.visibilityType = 'public'; // Default: publishing = making visible
+      }
     }
 
     await event.save();
@@ -782,111 +774,168 @@ router.post('/events/:id/publish', requireAuth, async (req, res) => {
     }
 
     // Send push notifications to ALL assigned staff members (including team members)
-    // Use targetUserKeys which includes both audience_user_keys AND team members
-    console.log('[EVENT PUBLISH DEBUG] About to send notifications, targetUserKeys length:', targetUserKeys.length);
-    console.log('[EVENT PUBLISH DEBUG] targetUserKeys array:', targetUserKeys);
-
     if (targetUserKeys.length > 0) {
-      console.log(`[EVENT NOTIF] Event ${eventId} published, notifying ${targetUserKeys.length} staff members (teams + selected users)`);
-
-      // Get event details
-      const eventDate = (eventObj as any).date;
-      const startTime = (eventObj as any).start_time;
-      const endTime = (eventObj as any).end_time;
-      const roles = (eventObj as any).roles || [];
-
-      // Format date as "8 Jan"
-      let formattedDate = '';
-      if (eventDate) {
-        const d = new Date(eventDate);
-        const day = d.getDate();
-        const month = d.toLocaleDateString('en-US', { month: 'short' });
-        formattedDate = `${day} ${month}`;
-      }
-
-      // Format time part
-      let timePart = '';
-      if (startTime && endTime) {
-        timePart = `${startTime} - ${endTime}`;
-      }
-
-      // Get team names for lookup (to show which team posted the event)
       const teamIdStrings = (eventObj.audience_team_ids || []).map(String);
       const teamsForNotification = await TeamModel.find({
         _id: { $in: teamIdStrings.map((id: string) => new mongoose.Types.ObjectId(id)) }
       }).lean();
       const teamIdToName = new Map(teamsForNotification.map((t: any) => [String(t._id), t.name]));
 
-      // Send ONE notification PER ROLE to each user
-      for (const userKey of targetUserKeys) {
-        try {
-          const [provider, subject] = userKey.split(':');
-          if (!provider || !subject) continue;
-
-          const user = await UserModel.findOne({ provider, subject }).lean();
-          if (!user) {
-            console.log(`[EVENT NOTIF] User not found for key: ${userKey}`);
-            continue;
-          }
-
-          // Get user's preferred terminology (default: 'shift')
-          const terminology = (user as any).eventTerminology || 'shift';
-
-          // Find which team this user belongs to (from the event's audience teams)
-          let teamName = 'Your team';
-          const userTeamMembership = await TeamMemberModel.findOne({
-            provider,
-            subject,
-            teamId: { $in: teamIdStrings.map((id: string) => new mongoose.Types.ObjectId(id)) },
-            status: 'active'
-          }).lean();
-
-          if (userTeamMembership) {
-            teamName = teamIdToName.get(String(userTeamMembership.teamId)) || 'Your team';
-          }
-
-          // Send one notification per role
-          for (const role of roles) {
-            const roleName = role.role || role.role_name;
-            if (!roleName) continue;
-
-            // Build notification title and body
-            // Title: "🔵 New Open Shift" (or Job/Event based on user preference)
-            const capitalizedTerm = terminology.charAt(0).toUpperCase() + terminology.slice(1);
-            const notificationTitle = `🔵 New Open ${capitalizedTerm}`;
-
-            // Body: "Tie Events posted a new shift as Bartender • 8 Jan, 4:00 PM - 9:00 PM"
-            let notificationBody = `${teamName} posted a new ${terminology} as ${roleName}`;
-            if (formattedDate && timePart) {
-              notificationBody += ` • ${formattedDate}, ${timePart}`;
-            } else if (formattedDate) {
-              notificationBody += ` • ${formattedDate}`;
-            }
-
-            await notificationService.sendToUser(
-              String(user._id),
-              notificationTitle,
-              notificationBody,
-              {
-                type: 'event',
-                eventId: String(eventObj._id),
-                role: roleName,
-              },
-              'user'
-            );
-          }
-        } catch (err) {
-          console.error(`[EVENT NOTIF] Failed to send notification to ${userKey}:`, err);
-        }
-      }
-    } else {
-      console.log('[EVENT PUBLISH DEBUG] ⚠️ No targetUserKeys found - skipping notifications');
+      await sendEventNotifications({
+        targetUserKeys,
+        event: eventObj,
+        teamIdToName,
+        notificationType: 'new_open',
+        managerId: String(managerId),
+      });
     }
 
     return res.json(responsePayload);
   } catch (err) {
     console.error('[publish event] failed', err);
     return res.status(500).json({ message: 'Failed to publish event' });
+  }
+});
+
+// Unified share endpoint — dispatches to the appropriate service function
+const shareEventSchema = z.object({
+  shareType: z.enum(['public', 'private', 'direct_invitation']),
+  targetTeamIds: z.array(z.string()).nullish(),
+  targetStaff: z.array(z.string()).nullish(),
+  invitee: z.object({
+    staffName: z.string(),
+    roleName: z.string(),
+  }).nullish(),
+  sendChatMessage: z.boolean().default(false),
+});
+
+router.post('/events/:id/share', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const eventId = req.params.id;
+
+    if (!eventId || !mongoose.Types.ObjectId.isValid(eventId)) {
+      return res.status(400).json({ message: 'Invalid event ID' });
+    }
+
+    const parsed = shareEventSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Validation failed', details: parsed.error.format() });
+    }
+
+    const { shareType, targetTeamIds, targetStaff, invitee } = parsed.data;
+    const managerName = manager.first_name && manager.last_name
+      ? `${manager.first_name} ${manager.last_name}`
+      : manager.name || 'Manager';
+
+    switch (shareType) {
+      case 'public': {
+        const result = await shareEventPublic({
+          managerId,
+          eventId,
+          targetTeamIds: targetTeamIds || null,
+          managerName,
+          managerEmail: manager.email || '',
+        });
+        if (!result.success) {
+          return res.status(400).json({ message: result.error });
+        }
+        return res.json({
+          message: `Published to ${result.teamCount} team(s). ${result.notifiedCount} staff notified.`,
+          ...result,
+        });
+      }
+
+      case 'private': {
+        if (!targetStaff || targetStaff.length === 0) {
+          return res.status(400).json({ message: 'targetStaff is required for private share.' });
+        }
+
+        // Resolve staff names to userKeys using fuzzy match
+        const resolvedUserKeys: string[] = [];
+        const notFound: string[] = [];
+
+        for (const name of targetStaff) {
+          const nameRegex = new RegExp(name.split(/\s+/).join('.*'), 'i');
+          const member = await TeamMemberModel.findOne({
+            managerId,
+            status: 'active',
+            $or: [{ name: nameRegex }, { email: new RegExp(name, 'i') }],
+          }).lean();
+
+          if (member && member.provider && member.subject) {
+            resolvedUserKeys.push(`${member.provider}:${member.subject}`);
+          } else {
+            notFound.push(name);
+          }
+        }
+
+        if (resolvedUserKeys.length === 0) {
+          return res.status(400).json({ message: `No matching staff found for: ${notFound.join(', ')}` });
+        }
+
+        const result = await shareEventPrivate({
+          managerId,
+          eventId,
+          targetUserKeys: resolvedUserKeys,
+          managerName,
+          managerEmail: manager.email || '',
+        });
+
+        if (!result.success) {
+          return res.status(400).json({ message: result.error });
+        }
+
+        return res.json({
+          message: `Shared privately with ${result.notifiedCount} staff member(s).`,
+          notFound: notFound.length > 0 ? notFound : undefined,
+          ...result,
+        });
+      }
+
+      case 'direct_invitation': {
+        if (!invitee) {
+          return res.status(400).json({ message: 'invitee is required for direct_invitation.' });
+        }
+
+        // Resolve invitee name to userKey
+        const nameRegex = new RegExp(invitee.staffName.split(/\s+/).join('.*'), 'i');
+        const member = await TeamMemberModel.findOne({
+          managerId,
+          status: 'active',
+          $or: [{ name: nameRegex }, { email: new RegExp(invitee.staffName, 'i') }],
+        }).lean();
+
+        if (!member || !member.provider || !member.subject) {
+          return res.status(404).json({ message: `Staff member "${invitee.staffName}" not found.` });
+        }
+
+        const inviteeUserKey = `${member.provider}:${member.subject}`;
+        const mgrPicture = (manager as any).picture || null;
+
+        const result = await sendDirectInvitation({
+          managerId,
+          eventId,
+          inviteeUserKey,
+          roleName: invitee.roleName,
+          managerName,
+          managerPicture: mgrPicture,
+        });
+
+        if (!result.success) {
+          return res.status(400).json({ message: result.error });
+        }
+
+        return res.json({
+          message: `Invitation sent to ${(member as any).name || invitee.staffName} for the ${result.roleName} role.`,
+          ...result,
+        });
+      }
+    }
+  } catch (err) {
+    console.error('[share event] failed', err);
+    return res.status(500).json({ message: 'Failed to share event' });
   }
 });
 
@@ -954,96 +1003,24 @@ router.post('/events/:id/unpublish', requireAuth, async (req, res) => {
     // Emit socket events to notify manager
     emitToManager(String(managerId), 'event:unpublished', responsePayload);
 
-    // Send notifications to removed staff members
+    // Send cancellation notifications to removed staff members
     if (targetUserKeys.length > 0) {
-      const eventDate = (eventObj as any).date;
-      const startTime = (eventObj as any).start_time;
-      const endTime = (eventObj as any).end_time;
-      const roles = (eventObj as any).roles || [];
-
-      // Format date as "8 Jan"
-      let formattedDate = '';
-      if (eventDate) {
-        const d = new Date(eventDate);
-        const day = d.getDate();
-        const month = d.toLocaleDateString('en-US', { month: 'short' });
-        formattedDate = `${day} ${month}`;
-      }
-
-      // Format time part
-      let timePart = '';
-      if (startTime && endTime) {
-        timePart = `${startTime} - ${endTime}`;
-      }
-
-      // Get team names for lookup
       const teamsForNotification = await TeamModel.find({
         _id: { $in: originalTeamIds.map((id: string) => new mongoose.Types.ObjectId(id)) }
       }).lean();
       const teamIdToName = new Map(teamsForNotification.map((t: any) => [String(t._id), t.name]));
 
+      await sendEventNotifications({
+        targetUserKeys,
+        event: eventObj,
+        teamIdToName,
+        notificationType: 'cancelled',
+        managerId: String(managerId),
+      });
+
+      // Emit cancel socket to each user
       for (const userKey of targetUserKeys) {
-        try {
-          const [provider, subject] = userKey.split(':');
-          if (!provider || !subject) continue;
-
-          const user = await UserModel.findOne({ provider, subject }).lean();
-          if (!user) {
-            console.log(`[EVENT UNPUBLISH] User not found for key: ${userKey}`);
-            continue;
-          }
-
-          // Get user's preferred terminology (default: 'shift')
-          const terminology = (user as any).eventTerminology || 'shift';
-          const capitalizedTerm = terminology.charAt(0).toUpperCase() + terminology.slice(1);
-
-          // Find which team this user belongs to
-          let teamName = 'Your team';
-          const userTeamMembership = await TeamMemberModel.findOne({
-            provider,
-            subject,
-            teamId: { $in: originalTeamIds.map((id: string) => new mongoose.Types.ObjectId(id)) },
-            status: 'active'
-          }).lean();
-
-          if (userTeamMembership) {
-            teamName = teamIdToName.get(String(userTeamMembership.teamId)) || 'Your team';
-          }
-
-          // Send one notification per role
-          for (const role of roles) {
-            const roleName = role.role || role.role_name;
-            if (!roleName) continue;
-
-            // Title: "⚪ Shift Canceled"
-            const notificationTitle = `⚪ ${capitalizedTerm} Canceled`;
-
-            // Body: "Bartender at Tie Events • 8 Jan, 4:00 PM - 9:00 PM"
-            let notificationBody = `${roleName} at ${teamName}`;
-            if (formattedDate && timePart) {
-              notificationBody += ` • ${formattedDate}, ${timePart}`;
-            } else if (formattedDate) {
-              notificationBody += ` • ${formattedDate}`;
-            }
-
-            await notificationService.sendToUser(
-              String(user._id),
-              notificationTitle,
-              notificationBody,
-              {
-                type: 'event',
-                eventId: String(eventObj._id),
-                role: roleName,
-              },
-              'user'
-            );
-          }
-
-          // Emit socket event to user
-          emitToUser(userKey, 'event:canceled', responsePayload);
-        } catch (err) {
-          console.error(`[EVENT UNPUBLISH] Failed to send notification to ${userKey}:`, err);
-        }
+        emitToUser(userKey, 'event:canceled', responsePayload);
       }
 
       console.log(`[EVENT UNPUBLISH] Event ${eventId} unpublished, notified ${targetUserKeys.length} staff members`);
@@ -1146,91 +1123,20 @@ router.patch('/events/:id/visibility', requireAuth, async (req, res) => {
 
         // Send push notifications - one per role
         if (targetUserKeys.length > 0) {
-          const eventDate = (eventObj as any).date;
-          const startTime = (eventObj as any).start_time;
-          const endTime = (eventObj as any).end_time;
-          const roles = (eventObj as any).roles || [];
-
-          // Format date as "8 Jan"
-          let formattedDate = '';
-          if (eventDate) {
-            const d = new Date(eventDate);
-            const day = d.getDate();
-            const month = d.toLocaleDateString('en-US', { month: 'short' });
-            formattedDate = `${day} ${month}`;
-          }
-
-          // Format time part
-          let timePart = '';
-          if (startTime && endTime) {
-            timePart = `${startTime} - ${endTime}`;
-          }
-
-          // Get team names for lookup
           const teamsForNotification = await TeamModel.find({
             _id: { $in: audienceTeams.map((id: string) => new mongoose.Types.ObjectId(id)) }
           }).lean();
           const teamIdToName = new Map(teamsForNotification.map((t: any) => [String(t._id), t.name]));
 
-          for (const userKey of targetUserKeys) {
-            try {
-              const [provider, subject] = userKey.split(':');
-              if (!provider || !subject) continue;
+          const notifiedCount = await sendEventNotifications({
+            targetUserKeys,
+            event: eventObj,
+            teamIdToName,
+            notificationType: 'now_open',
+            managerId: String(managerId),
+          });
 
-              const user = await UserModel.findOne({ provider, subject }).lean();
-              if (!user) continue;
-
-              // Get user's preferred terminology (default: 'shift')
-              const terminology = (user as any).eventTerminology || 'shift';
-              const capitalizedTerm = terminology.charAt(0).toUpperCase() + terminology.slice(1);
-
-              // Find which team this user belongs to
-              let teamName = 'Your team';
-              const userTeamMembership = await TeamMemberModel.findOne({
-                provider,
-                subject,
-                teamId: { $in: audienceTeams.map((id: string) => new mongoose.Types.ObjectId(id)) },
-                status: 'active'
-              }).lean();
-
-              if (userTeamMembership) {
-                teamName = teamIdToName.get(String(userTeamMembership.teamId)) || 'Your team';
-              }
-
-              // Send one notification per role
-              for (const role of roles) {
-                const roleName = role.role || role.role_name;
-                if (!roleName) continue;
-
-                // Title: "🟢 Shift Now Open"
-                const notificationTitle = `🟢 ${capitalizedTerm} Now Open`;
-
-                // Body: "Tie Events posted a new shift as Bartender • 8 Jan, 4:00 PM - 9:00 PM"
-                let notificationBody = `${teamName} posted a new ${terminology} as ${roleName}`;
-                if (formattedDate && timePart) {
-                  notificationBody += ` • ${formattedDate}, ${timePart}`;
-                } else if (formattedDate) {
-                  notificationBody += ` • ${formattedDate}`;
-                }
-
-                await notificationService.sendToUser(
-                  String(user._id),
-                  notificationTitle,
-                  notificationBody,
-                  {
-                    type: 'event',
-                    eventId: String(eventObj._id),
-                    role: roleName,
-                  },
-                  'user'
-                );
-              }
-            } catch (err) {
-              console.error(`[EVENT VISIBILITY] Failed to send notification to ${userKey}:`, err);
-            }
-          }
-
-          console.log(`[EVENT VISIBILITY] Event ${eventId} visibility changed to ${visibilityType}, notified ${targetUserKeys.length} team members`);
+          console.log(`[EVENT VISIBILITY] Event ${eventId} visibility changed to ${visibilityType}, notified ${notifiedCount} team members`);
         }
       }
     }
@@ -1242,16 +1148,7 @@ router.patch('/events/:id/visibility', requireAuth, async (req, res) => {
   }
 });
 
-// Helper function to convert "HH:mm" time string to minutes since midnight
-function timeToMinutes(timeStr: string | undefined): number {
-  if (!timeStr) return 0;
-  const parts = timeStr.split(':');
-  if (parts.length !== 2 || !parts[0] || !parts[1]) return 0;
-  const hours = parseInt(parts[0], 10);
-  const minutes = parseInt(parts[1], 10);
-  if (isNaN(hours) || isNaN(minutes)) return 0;
-  return hours * 60 + minutes;
-}
+// timeToMinutes imported from ../utils/eventHelpers
 
 // Update roles for an event with capacity validation
 const updateRolesSchema = z.object({

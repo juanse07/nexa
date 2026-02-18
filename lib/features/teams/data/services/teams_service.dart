@@ -388,6 +388,69 @@ class TeamsService {
     }
   }
 
+  // ─── Co-Manager endpoints ──────────────────────────────────
+
+  /// Fetch co-managers for a team
+  Future<List<Map<String, dynamic>>> fetchCoManagers(String teamId) async {
+    try {
+      final response = await _apiClient.get('/teams/$teamId/co-managers');
+      if (_isSuccess(response.statusCode)) {
+        final dynamic data = response.data;
+        if (data is Map<String, dynamic>) {
+          final dynamic coManagers = data['coManagers'];
+          if (coManagers is List) {
+            return coManagers.whereType<Map<String, dynamic>>().toList(
+              growable: false,
+            );
+          }
+        }
+        return const <Map<String, dynamic>>[];
+      }
+      throw Exception('Failed to fetch co-managers (${response.statusCode})');
+    } on DioException catch (e) {
+      throw Exception('Failed to fetch co-managers: ${e.message}');
+    }
+  }
+
+  /// Add a co-manager by email (owner only)
+  Future<Map<String, dynamic>> addCoManager({
+    required String teamId,
+    required String email,
+  }) async {
+    try {
+      final response = await _apiClient.post(
+        '/teams/$teamId/co-managers',
+        data: {'email': email},
+      );
+      if (_isSuccess(response.statusCode)) {
+        return Map<String, dynamic>.from(response.data as Map);
+      }
+      throw Exception('Failed to add co-manager (${response.statusCode})');
+    } on DioException catch (e) {
+      final msg = (e.response?.data is Map)
+          ? (e.response!.data as Map)['message'] ?? e.message
+          : e.message;
+      throw Exception(msg);
+    }
+  }
+
+  /// Remove a co-manager (owner only)
+  Future<void> removeCoManager({
+    required String teamId,
+    required String coManagerId,
+  }) async {
+    try {
+      final response = await _apiClient.delete(
+        '/teams/$teamId/co-managers/$coManagerId',
+      );
+      if (!_isSuccess(response.statusCode)) {
+        throw Exception('Failed to remove co-manager (${response.statusCode})');
+      }
+    } on DioException catch (e) {
+      throw Exception('Failed to remove co-manager: ${e.message}');
+    }
+  }
+
   bool _isSuccess(int? statusCode) {
     if (statusCode == null) return false;
     return statusCode >= 200 && statusCode < 300;

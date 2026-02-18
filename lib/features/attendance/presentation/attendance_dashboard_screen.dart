@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:nexa/shared/widgets/tappable_app_title.dart';
 import 'package:nexa/shared/widgets/web_content_wrapper.dart';
 import '../../statistics/data/models/statistics_models.dart';
 import '../../statistics/data/services/statistics_service.dart';
@@ -432,9 +433,9 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
                 ),
                 collapseMode: CollapseMode.parallax,
               ),
-              title: const Text(
+              title: TappableAppTitle.text(
                 'Attendance',
-                style: TextStyle(
+                style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
                   fontSize: 18,

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { OAuth2Client } from 'google-auth-library';
 import * as jose from 'jose';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import { ENV } from '../config/env';
 import { firebaseAuth } from '../config/firebase';
 import { UserModel } from '../models/user';
@@ -9,7 +10,7 @@ import { ManagerModel } from '../models/manager';
 import { requireAuth, AuthenticatedUser } from '../middleware/requireAuth';
 
 type VerifiedProfile = {
-  provider: 'google' | 'apple' | 'phone';
+  provider: 'google' | 'apple' | 'phone' | 'email';
   subject: string;
   email?: string | undefined;
   name?: string | undefined;
@@ -80,13 +81,20 @@ async function upsertUser(profile: VerifiedProfile) {
     }
   }
 
+  // Check if user already exists with a custom picture (different from OAuth)
+  const existing = await UserModel.findOne(filter).select('picture').lean();
+
+  // Determine if picture should go in $set (user exists but has no custom picture)
+  const setPicture = !existing?.picture && profile.picture;
+
   const update = {
     $set: {
       // Always update these OAuth fields on every login
       email: profile.email,
       name: profile.name,
-      picture: profile.picture,
       updatedAt: new Date(),
+      // Only overwrite picture if user has no custom one yet
+      ...(setPicture ? { picture: profile.picture } : {}),
     },
     $setOnInsert: {
       // Only set these on user creation - preserve custom fields on subsequent logins
@@ -96,6 +104,8 @@ async function upsertUser(profile: VerifiedProfile) {
       // Pre-populate first and last name from OAuth if available (only on creation)
       ...(firstName && { first_name: firstName }),
       ...(lastName && { last_name: lastName }),
+      // Set OAuth picture only on first creation, but NOT if already in $set (MongoDB conflict)
+      ...(!setPicture && profile.picture ? { picture: profile.picture } : {}),
     },
   } as const;
   await UserModel.updateOne(filter, update, { upsert: true });
@@ -103,16 +113,27 @@ async function upsertUser(profile: VerifiedProfile) {
 
 async function ensureManagerDocument(profile: VerifiedProfile) {
   const filter = { provider: profile.provider, subject: profile.subject } as const;
+  // Check if manager already exists with a custom picture
+  const existing = await ManagerModel.findOne(filter).select('picture').lean();
+
+  // Determine if picture should go in $set (manager exists but has no custom picture)
+  const setPicture = !existing?.picture && profile.picture;
+
   const update = {
     $set: {
       provider: profile.provider,
       subject: profile.subject,
       email: profile.email,
       name: profile.name,
-      picture: profile.picture,
       updatedAt: new Date(),
+      // Only overwrite picture if manager has no custom one yet
+      ...(setPicture ? { picture: profile.picture } : {}),
     },
-    $setOnInsert: { createdAt: new Date() },
+    $setOnInsert: {
+      createdAt: new Date(),
+      // Set OAuth picture only on first creation, but NOT if already in $set (MongoDB conflict)
+      ...(!setPicture && profile.picture ? { picture: profile.picture } : {}),
+    },
   } as const;
   await ManagerModel.updateOne(filter, update, { upsert: true });
 }
@@ -332,6 +353,86 @@ router.post('/manager/apple', async (req, res) => {
     // eslint-disable-next-line no-console
     console.warn('[auth] Manager Apple verification failed:', err);
     res.status(401).json({ message: 'Apple auth failed' });
+  }
+});
+
+// ============================================================================
+// EMAIL/PASSWORD AUTHENTICATION ENDPOINTS (demo accounts)
+// ============================================================================
+
+// Staff email login
+router.post('/email', async (req, res) => {
+  try {
+    if (!JWT_SECRET) return res.status(500).json({ message: 'Server missing JWT secret' });
+
+    const email = (req.body?.email ?? '').trim().toLowerCase();
+    const password = (req.body?.password ?? '') as string;
+
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
+
+    const user = await UserModel.findOne({ provider: 'email', subject: email });
+    if (!user || !user.passwordHash) {
+      return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) {
+      return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    const profile: VerifiedProfile = {
+      provider: 'email',
+      subject: user.subject,
+      email: user.email,
+      name: user.name,
+      picture: user.picture,
+    };
+
+    const token = issueAppJwt(profile);
+    res.json({ token, user: profile });
+  } catch (err) {
+    console.warn('[auth] Email login failed:', err);
+    res.status(500).json({ message: 'Email auth failed' });
+  }
+});
+
+// Manager email login
+router.post('/manager/email', async (req, res) => {
+  try {
+    if (!JWT_SECRET) return res.status(500).json({ message: 'Server missing JWT secret' });
+
+    const email = (req.body?.email ?? '').trim().toLowerCase();
+    const password = (req.body?.password ?? '') as string;
+
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
+
+    const manager = await ManagerModel.findOne({ provider: 'email', subject: email });
+    if (!manager || !manager.passwordHash) {
+      return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    const valid = await bcrypt.compare(password, manager.passwordHash);
+    if (!valid) {
+      return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    const profile: VerifiedProfile = {
+      provider: 'email',
+      subject: manager.subject,
+      email: manager.email,
+      name: manager.name,
+      picture: manager.picture,
+    };
+
+    const token = issueAppJwt(profile, String(manager._id));
+    res.json({ token, user: profile });
+  } catch (err) {
+    console.warn('[auth] Manager email login failed:', err);
+    res.status(500).json({ message: 'Email auth failed' });
   }
 });
 

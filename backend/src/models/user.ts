@@ -1,7 +1,7 @@
 import mongoose, { Document, Model, Schema } from 'mongoose';
 
 export interface UserDocument extends Document {
-  provider: 'google' | 'apple' | 'phone';
+  provider: 'google' | 'apple' | 'phone' | 'email';
   subject: string;
   email?: string;
   name?: string; // original OAuth full name
@@ -12,6 +12,7 @@ export interface UserDocument extends Document {
   picture?: string; // optional override picture
   originalPicture?: string; // pre-caricature picture (for revert)
   app_id?: string; // optional 9-digit app id
+  passwordHash?: string; // for email/password auth (demo accounts)
 
   // Caricature history (last 10 creations)
   caricatureHistory?: Array<{
@@ -27,7 +28,7 @@ export interface UserDocument extends Document {
 
   // Linked authentication methods (for account linking)
   linked_providers?: Array<{
-    provider: 'google' | 'apple' | 'phone';
+    provider: 'google' | 'apple' | 'phone' | 'email';
     subject: string;
     linked_at: Date;
   }>;
@@ -90,7 +91,7 @@ export interface UserDocument extends Document {
 
 const UserSchema = new Schema<UserDocument>(
   {
-    provider: { type: String, required: true, enum: ['google', 'apple', 'phone'] },
+    provider: { type: String, required: true, enum: ['google', 'apple', 'phone', 'email'] },
     subject: { type: String, required: true },
     email: { type: String, trim: true },
     name: { type: String, trim: true },
@@ -101,6 +102,7 @@ const UserSchema = new Schema<UserDocument>(
     picture: { type: String, trim: true },
     originalPicture: { type: String, trim: true }, // pre-caricature picture
     app_id: { type: String, trim: true },
+    passwordHash: { type: String },
 
     // Caricature history (last 10 creations)
     caricatureHistory: [{
@@ -116,7 +118,7 @@ const UserSchema = new Schema<UserDocument>(
 
     // Linked authentication methods
     linked_providers: [{
-      provider: { type: String, required: true, enum: ['google', 'apple', 'phone'] },
+      provider: { type: String, required: true, enum: ['google', 'apple', 'phone', 'email'] },
       subject: { type: String, required: true },
       linked_at: { type: Date, default: Date.now },
     }],

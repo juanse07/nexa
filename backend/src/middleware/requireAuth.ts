@@ -5,6 +5,7 @@ import { ENV } from '../config/env';
 export interface AuthenticatedUser {
   provider: string;
   sub: string;
+  userKey: string;
   email?: string;
   name?: string;
   picture?: string;
@@ -38,6 +39,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
     (req as any).user = {
       provider: decoded.provider,
       sub: decoded.sub,
+      userKey: `${decoded.provider}:${decoded.sub}`,
       email: decoded.email,
       name: decoded.name,
       picture: decoded.picture,

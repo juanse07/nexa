@@ -15,10 +15,12 @@ class TeamDetailPage extends StatefulWidget {
     super.key,
     required this.teamId,
     required this.teamName,
+    this.isOwner = true,
   });
 
   final String teamId;
   final String teamName;
+  final bool isOwner;
 
   @override
   State<TeamDetailPage> createState() => _TeamDetailPageState();
@@ -35,6 +37,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
   List<Map<String, dynamic>> _invites = const [];
   List<Map<String, dynamic>> _inviteLinks = const [];
   List<Map<String, dynamic>> _applicants = const [];
+  List<Map<String, dynamic>> _coManagers = const [];
   bool _addingMember = false;
   String? _processingApplicantId;
 
@@ -55,18 +58,25 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
         _teamsService.fetchInvites(widget.teamId),
         _teamsService.fetchInviteLinks(widget.teamId),
       ]);
-      // Fetch applicants separately — endpoint may not be deployed yet
+      // Fetch applicants and co-managers separately — endpoints may not be deployed yet
       List<Map<String, dynamic>> applicants = const [];
+      List<Map<String, dynamic>> coManagers = const [];
       try {
         applicants = await _teamsService.fetchApplicants(widget.teamId);
       } catch (_) {
         // Silently ignore — applicants endpoint may not exist yet
+      }
+      try {
+        coManagers = await _teamsService.fetchCoManagers(widget.teamId);
+      } catch (_) {
+        // Silently ignore — co-managers endpoint may not exist yet
       }
       setState(() {
         _members = results[0];
         _invites = results[1];
         _inviteLinks = results[2];
         _applicants = applicants;
+        _coManagers = coManagers;
         _loading = false;
       });
     } catch (e) {
@@ -457,6 +467,116 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
       );
     } finally {
       if (mounted) setState(() => _processingApplicantId = null);
+    }
+  }
+
+  Future<void> _addCoManager() async {
+    final emailCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    final added = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Add Co-Manager'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Enter the email of a manager to add them as a co-manager. They must already have a FlowShift Manager account.',
+                style: TextStyle(fontSize: 13, color: Colors.grey),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: emailCtrl,
+                decoration: const InputDecoration(labelText: 'Manager email'),
+                keyboardType: TextInputType.emailAddress,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Enter an email';
+                  }
+                  if (!value.contains('@')) {
+                    return 'Enter a valid email';
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (!(formKey.currentState?.validate() ?? false)) return;
+              try {
+                await _teamsService.addCoManager(
+                  teamId: widget.teamId,
+                  email: emailCtrl.text.trim(),
+                );
+                if (!ctx.mounted) return;
+                Navigator.of(ctx).pop(true);
+              } catch (e) {
+                if (!ctx.mounted) return;
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  SnackBar(content: Text('$e')),
+                );
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+
+    if (added == true) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Co-manager added')),
+      );
+      await _loadData();
+    }
+  }
+
+  Future<void> _removeCoManager(String coManagerId, String coManagerName) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove Co-Manager'),
+        content: Text('Remove $coManagerName as co-manager?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Remove', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await _teamsService.removeCoManager(
+        teamId: widget.teamId,
+        coManagerId: coManagerId,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Co-manager removed')),
+      );
+      await _loadData();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
     }
   }
 
@@ -901,6 +1021,56 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
                     ),
                   ],
                 ),
+              ),
+            );
+          }),
+        // ─── Co-Managers Section ───
+        const SizedBox(height: 24),
+        Row(
+          children: [
+            const Text(
+              'Co-Managers',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            const Spacer(),
+            if (widget.isOwner)
+              TextButton.icon(
+                onPressed: _addCoManager,
+                icon: const Icon(Icons.person_add, size: 18),
+                label: const Text('Add'),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_coManagers.isEmpty)
+          Text(
+            'No co-managers yet.',
+            style: TextStyle(color: Colors.grey.shade600),
+          )
+        else
+          ..._coManagers.map((coManager) {
+            final cmName = (coManager['name'] ?? '').toString();
+            final cmEmail = (coManager['email'] ?? '').toString();
+            final cmId = (coManager['id'] ?? '').toString();
+            return Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: const Color(0xFF6366F1).withOpacity(0.1),
+                  child: const Icon(Icons.admin_panel_settings, color: Color(0xFF6366F1)),
+                ),
+                title: Text(cmName.isEmpty ? 'Manager' : cmName),
+                subtitle: cmEmail.isNotEmpty ? Text(cmEmail) : null,
+                trailing: widget.isOwner
+                    ? IconButton(
+                        onPressed: cmId.isEmpty
+                            ? null
+                            : () => _removeCoManager(cmId, cmName),
+                        icon: const Icon(Icons.remove_circle_outline),
+                        color: Colors.redAccent,
+                        tooltip: 'Remove co-manager',
+                      )
+                    : null,
               ),
             );
           }),

@@ -13,6 +13,7 @@ class Conversation {
     this.lastMessageAt,
     this.lastMessagePreview,
     this.unreadCount = 0,
+    this.role,
   });
 
   factory Conversation.fromJson(Map<String, dynamic> json) {
@@ -32,6 +33,7 @@ class Conversation {
       lastMessagePreview: json['lastMessagePreview'] as String?,
       unreadCount: json['unreadCount'] as int? ?? 0,
       updatedAt: DateTime.parse(json['updatedAt'] as String),
+      role: json['role'] as String?,
     );
   }
 
@@ -48,6 +50,9 @@ class Conversation {
   final String? lastMessagePreview;
   final int unreadCount;
   final DateTime updatedAt;
+  final String? role;
+
+  bool get isManagerPeer => role == 'Manager';
 
   String get displayName => managerName ?? userName ?? 'Unknown';
   String? get displayPicture => managerPicture ?? userPicture;
@@ -68,6 +73,7 @@ class Conversation {
       'lastMessagePreview': lastMessagePreview,
       'unreadCount': unreadCount,
       'updatedAt': updatedAt.toIso8601String(),
+      'role': role,
     };
   }
 }

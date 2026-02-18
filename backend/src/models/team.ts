@@ -2,6 +2,7 @@ import mongoose, { Document, Model, Schema } from 'mongoose';
 
 export interface TeamDocument extends Document {
   managerId: mongoose.Types.ObjectId;
+  coManagerIds: mongoose.Types.ObjectId[];
   name: string;
   normalizedName: string;
   description?: string;
@@ -17,6 +18,7 @@ function normalizeName(value: string): string {
 const TeamSchema = new Schema<TeamDocument>(
   {
     managerId: { type: Schema.Types.ObjectId, ref: 'Manager', required: true, index: true },
+    coManagerIds: [{ type: Schema.Types.ObjectId, ref: 'Manager', index: true }],
     name: { type: String, required: true, trim: true },
     normalizedName: { type: String, required: true, trim: true },
     description: { type: String, trim: true },

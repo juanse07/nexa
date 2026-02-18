@@ -14,6 +14,7 @@ import { TeamApplicantModel } from '../models/teamApplicant';
 import { TeamMessageModel } from '../models/teamMessage';
 import { EventModel } from '../models/event';
 import { UserModel } from '../models/user';
+import { ManagerModel } from '../models/manager';
 import { AvailabilityModel } from '../models/availability';
 import { generateUniqueShortCode, isValidShortCodeFormat } from '../utils/inviteCodeGenerator';
 import { inviteCreateLimiter } from '../middleware/rateLimiter';
@@ -84,7 +85,21 @@ const createInviteLinkSchema = z.object({
   password: z.string().min(4).max(50).optional(),
 });
 
+const addCoManagerSchema = z.object({
+  email: z.string().email(),
+});
+
 const defaultInviteExpiryDays = 14;
+
+/**
+ * Find a team where the given manager is either the owner or a co-manager.
+ */
+async function findTeamWithAccess(teamId: mongoose.Types.ObjectId, managerId: mongoose.Types.ObjectId) {
+  return TeamModel.findOne({
+    _id: teamId,
+    $or: [{ managerId }, { coManagerIds: managerId }],
+  });
+}
 
 function generateInviteToken(): string {
   return crypto.randomBytes(32).toString('hex');
@@ -94,12 +109,18 @@ function buildUserKey(provider: string, subject: string): string {
   return `${provider}:${subject}`;
 }
 
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 router.get('/teams', requireAuth, async (req, res) => {
   try {
     const manager = await resolveManagerForRequest(req as any);
     const managerId = manager._id as mongoose.Types.ObjectId;
 
-    const teams = await TeamModel.find({ managerId: managerId })
+    const teams = await TeamModel.find({
+      $or: [{ managerId }, { coManagerIds: managerId }],
+    })
       .sort({ createdAt: -1 })
       .lean();
 
@@ -133,6 +154,7 @@ router.get('/teams', requireAuth, async (req, res) => {
       updatedAt: team.updatedAt,
       memberCount: countMap.get(String(team._id)) ?? 0,
       pendingInvites: inviteMap.get(String(team._id)) ?? 0,
+      isOwner: String(team.managerId) === String(managerId),
     }));
 
     return res.json({ teams: payload });
@@ -299,11 +321,16 @@ router.get('/teams/my/members', requireAuth, async (req, res) => {
     const cursor = (req.query.cursor ?? '').toString();
     const limit = Math.min(parseInt((req.query.limit ?? '20').toString(), 10) || 20, 100);
 
-    // Build aggregation pipeline
+    // Find team IDs where manager is owner or co-manager
+    const myTeams = await TeamModel.find({
+      $or: [{ managerId }, { coManagerIds: managerId }],
+    }).distinct('_id');
+
+    // Build aggregation pipeline — match members from all accessible teams
     const pipeline: any[] = [
       {
         $match: {
-          managerId: managerId,
+          teamId: { $in: myTeams },
           status: 'active', // Only active members for job assignment
         },
       },
@@ -314,11 +341,12 @@ router.get('/teams/my/members', requireAuth, async (req, res) => {
 
     // Add search filter if provided
     if (q) {
+      const safeQ = escapeRegex(q);
       pipeline.push({
         $match: {
           $or: [
-            { name: { $regex: q, $options: 'i' } },
-            { email: { $regex: q, $options: 'i' } },
+            { name: { $regex: safeQ, $options: 'i' } },
+            { email: { $regex: safeQ, $options: 'i' } },
           ],
         },
       });
@@ -433,13 +461,18 @@ router.get('/teams/:teamId/members', requireAuth, async (req, res) => {
     const queryParsed = teamMembersQuerySchema.safeParse(req.query ?? {});
     const includeUserProfile = queryParsed.success ? queryParsed.data.includeUserProfile : false;
 
+    // Verify manager has access (owner or co-manager)
+    const team = await findTeamWithAccess(teamObjectId, managerId);
+    if (!team) {
+      return res.status(404).json({ message: 'Team not found' });
+    }
+
     if (includeUserProfile) {
       // Use aggregation pipeline to join with User collection
       const membersWithProfiles = await TeamMemberModel.aggregate([
         {
           $match: {
             teamId: teamObjectId,
-            managerId: managerId,
             status: { $ne: 'left' },
           },
         },
@@ -516,7 +549,6 @@ router.get('/teams/:teamId/members', requireAuth, async (req, res) => {
       // Original behavior - just return team member data
       const members = await TeamMemberModel.find({
         teamId: teamObjectId,
-        managerId,
         status: { $ne: 'left' },
       })
         .sort({ createdAt: -1 })
@@ -565,10 +597,7 @@ router.post('/teams/:teamId/members', requireAuth, async (req, res) => {
       return res.status(400).json({ message: 'Validation failed', details: parsed.error.format() });
     }
 
-    const team = await TeamModel.findOne({
-      _id: teamObjectId,
-      managerId: managerObjectId,
-    }).lean();
+    const team = await findTeamWithAccess(teamObjectId, managerObjectId);
     if (!team) {
       return res.status(404).json({ message: 'Team not found' });
     }
@@ -711,11 +740,16 @@ router.delete('/teams/:teamId/members/:memberId', requireAuth, async (req, res) 
     const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
     const memberObjectId = new mongoose.Types.ObjectId(memberIdParam);
 
+    // Verify manager has access (owner or co-manager)
+    const team = await findTeamWithAccess(teamObjectId, managerId);
+    if (!team) {
+      return res.status(404).json({ message: 'Team not found' });
+    }
+
     const result = await TeamMemberModel.findOneAndUpdate(
       {
         _id: memberObjectId,
         teamId: teamObjectId,
-        managerId,
       },
       { $set: { status: 'left', updatedAt: new Date() } },
       { new: true }
@@ -727,7 +761,7 @@ router.delete('/teams/:teamId/members/:memberId', requireAuth, async (req, res) 
 
     await TeamMessageModel.create({
       teamId: result.teamId,
-      managerId,
+      managerId: team.managerId,
       messageType: 'text',
       body: `${result.name ?? buildUserKey(result.provider, result.subject)} left the team`,
     });
@@ -767,10 +801,15 @@ router.get('/teams/:teamId/messages', requireAuth, async (req, res) => {
     }
     const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
 
+    // Verify manager has access (owner or co-manager)
+    const team = await findTeamWithAccess(teamObjectId, managerId);
+    if (!team) {
+      return res.status(404).json({ message: 'Team not found' });
+    }
+
     const { limit, before } = paginationParams.data;
     const match: Record<string, unknown> = {
       teamId: teamObjectId,
-      managerId,
     };
 
     if (before) {
@@ -809,10 +848,7 @@ router.post('/teams/:teamId/invites', requireAuth, async (req, res) => {
     }
     const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
 
-    const team = await TeamModel.findOne({
-      _id: teamObjectId,
-      managerId,
-    }).lean();
+    const team = await findTeamWithAccess(teamObjectId, managerId);
     if (!team) {
       return res.status(404).json({ message: 'Team not found' });
     }
@@ -900,9 +936,14 @@ router.get('/teams/:teamId/invites', requireAuth, async (req, res) => {
     }
     const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
 
+    // Verify manager has access (owner or co-manager)
+    const team = await findTeamWithAccess(teamObjectId, managerId);
+    if (!team) {
+      return res.status(404).json({ message: 'Team not found' });
+    }
+
     const invites = await TeamInviteModel.find({
       teamId: teamObjectId,
-      managerId,
     })
       .sort({ createdAt: -1 })
       .limit(200)
@@ -978,12 +1019,8 @@ router.post('/teams/:teamId/invites/create-link', inviteCreateLimiter, requireAu
     }
     const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
 
-    // Verify team exists and belongs to manager
-    const team = await TeamModel.findOne({
-      _id: teamObjectId,
-      managerId,
-    }).lean();
-
+    // Verify team exists and manager has access
+    const team = await findTeamWithAccess(teamObjectId, managerId);
     if (!team) {
       return res.status(404).json({ message: 'Team not found' });
     }
@@ -1089,12 +1126,8 @@ router.get('/teams/:teamId/invites/links', requireAuth, async (req, res) => {
     }
     const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
 
-    // Verify team belongs to manager
-    const team = await TeamModel.findOne({
-      _id: teamObjectId,
-      managerId,
-    }).lean();
-
+    // Verify team belongs to manager or co-manager
+    const team = await findTeamWithAccess(teamObjectId, managerId);
     if (!team) {
       return res.status(404).json({ message: 'Team not found' });
     }
@@ -1102,7 +1135,6 @@ router.get('/teams/:teamId/invites/links', requireAuth, async (req, res) => {
     // Get all link-type and public-type invites for this team
     const invites = await TeamInviteModel.find({
       teamId: teamObjectId,
-      managerId,
       inviteType: { $in: ['link', 'public'] },
     })
       .sort({ createdAt: -1 })
@@ -1435,9 +1467,14 @@ router.get('/teams/members/availability', requireAuth, async (req, res) => {
     const manager = await resolveManagerForRequest(req as any);
     const managerId = manager._id as mongoose.Types.ObjectId;
 
-    // Get all active team members for this manager
+    // Find team IDs where manager is owner or co-manager
+    const myTeamIds = await TeamModel.find({
+      $or: [{ managerId }, { coManagerIds: managerId }],
+    }).distinct('_id');
+
+    // Get all active team members for accessible teams
     const teamMembers = await TeamMemberModel.find({
-      managerId: managerId,
+      teamId: { $in: myTeamIds },
       status: 'active',
     }).lean();
 
@@ -1498,8 +1535,8 @@ router.post('/teams/:teamId/invites/create-public-link', inviteCreateLimiter, re
     }
     const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
 
-    // Verify team exists and belongs to manager
-    const team = await TeamModel.findOne({ _id: teamObjectId, managerId }).lean();
+    // Verify team exists and manager has access
+    const team = await findTeamWithAccess(teamObjectId, managerId);
     if (!team) {
       return res.status(404).json({ message: 'Team not found' });
     }
@@ -1572,8 +1609,8 @@ router.get('/teams/:teamId/applicants', requireAuth, async (req, res) => {
     }
     const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
 
-    // Verify team belongs to manager
-    const team = await TeamModel.findOne({ _id: teamObjectId, managerId }).lean();
+    // Verify team belongs to manager or co-manager
+    const team = await findTeamWithAccess(teamObjectId, managerId);
     if (!team) {
       return res.status(404).json({ message: 'Team not found' });
     }
@@ -1635,8 +1672,8 @@ router.post('/teams/:teamId/applicants/:applicantId/approve', requireAuth, async
       return res.status(404).json({ message: 'Applicant not found or already reviewed' });
     }
 
-    // Verify team belongs to manager
-    const team = await TeamModel.findOne({ _id: teamObjectId, managerId }).lean();
+    // Verify team belongs to manager or co-manager
+    const team = await findTeamWithAccess(teamObjectId, managerId);
     if (!team) {
       return res.status(404).json({ message: 'Team not found' });
     }
@@ -1723,8 +1760,8 @@ router.post('/teams/:teamId/applicants/:applicantId/deny', requireAuth, async (r
       return res.status(404).json({ message: 'Applicant not found or already reviewed' });
     }
 
-    // Verify team belongs to manager
-    const team = await TeamModel.findOne({ _id: teamObjectId, managerId }).lean();
+    // Verify team belongs to manager or co-manager
+    const team = await findTeamWithAccess(teamObjectId, managerId);
     if (!team) {
       return res.status(404).json({ message: 'Team not found' });
     }
@@ -1746,6 +1783,159 @@ router.post('/teams/:teamId/applicants/:applicantId/deny', requireAuth, async (r
   } catch (err) {
     console.error('[teams] POST /teams/:teamId/applicants/:applicantId/deny failed', err);
     return res.status(500).json({ message: 'Failed to deny applicant' });
+  }
+});
+
+// ─── Co-Manager endpoints ──────────────────────────────────
+
+/**
+ * GET /teams/:teamId/co-managers
+ * List co-managers for a team (owner or co-manager can view)
+ */
+router.get('/teams/:teamId/co-managers', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const teamIdParam = req.params.teamId ?? '';
+    if (!mongoose.Types.ObjectId.isValid(teamIdParam)) {
+      return res.status(400).json({ message: 'Invalid team id' });
+    }
+    const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
+
+    const team = await findTeamWithAccess(teamObjectId, managerId);
+    if (!team) {
+      return res.status(404).json({ message: 'Team not found' });
+    }
+
+    const coManagerIds = team.coManagerIds ?? [];
+    if (coManagerIds.length === 0) {
+      return res.json({ coManagers: [] });
+    }
+
+    const coManagers = await ManagerModel.find({ _id: { $in: coManagerIds } }).lean();
+    const payload = coManagers.map((m) => ({
+      id: String(m._id),
+      name: m.name || [m.first_name, m.last_name].filter(Boolean).join(' ') || 'Manager',
+      email: m.email,
+      picture: m.picture,
+    }));
+
+    return res.json({ coManagers: payload });
+  } catch (err) {
+    console.error('[teams] GET /teams/:teamId/co-managers failed', err);
+    return res.status(500).json({ message: 'Failed to fetch co-managers' });
+  }
+});
+
+/**
+ * POST /teams/:teamId/co-managers
+ * Add a co-manager by email (owner only)
+ */
+router.post('/teams/:teamId/co-managers', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const teamIdParam = req.params.teamId ?? '';
+    if (!mongoose.Types.ObjectId.isValid(teamIdParam)) {
+      return res.status(400).json({ message: 'Invalid team id' });
+    }
+    const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
+
+    const parsed = addCoManagerSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Validation failed', details: parsed.error.format() });
+    }
+
+    // Owner-only check
+    const team = await TeamModel.findOne({ _id: teamObjectId, managerId });
+    if (!team) {
+      return res.status(404).json({ message: 'Team not found or you are not the owner' });
+    }
+
+    // Lookup target manager by email
+    const targetManager = await ManagerModel.findOne({ email: parsed.data.email }).lean();
+    if (!targetManager) {
+      return res.status(404).json({ message: 'No manager found with that email' });
+    }
+
+    const targetId = targetManager._id as mongoose.Types.ObjectId;
+
+    // Prevent adding self
+    if (String(targetId) === String(managerId)) {
+      return res.status(400).json({ message: 'Cannot add yourself as a co-manager' });
+    }
+
+    // Check if already a co-manager
+    const existing = (team.coManagerIds ?? []).map(String);
+    if (existing.includes(String(targetId))) {
+      return res.status(409).json({ message: 'Already a co-manager of this team' });
+    }
+
+    await TeamModel.updateOne(
+      { _id: teamObjectId },
+      { $addToSet: { coManagerIds: targetId } }
+    );
+
+    const payload = {
+      teamId: String(teamObjectId),
+      teamName: team.name,
+      coManager: {
+        id: String(targetId),
+        name: targetManager.name || [targetManager.first_name, targetManager.last_name].filter(Boolean).join(' ') || 'Manager',
+        email: targetManager.email,
+        picture: targetManager.picture,
+      },
+    };
+
+    emitToManager(String(managerId), 'team:coManagerAdded', payload);
+    emitToManager(String(targetId), 'team:coManagerAdded', payload);
+
+    return res.status(201).json(payload);
+  } catch (err) {
+    console.error('[teams] POST /teams/:teamId/co-managers failed', err);
+    return res.status(500).json({ message: 'Failed to add co-manager' });
+  }
+});
+
+/**
+ * DELETE /teams/:teamId/co-managers/:coManagerId
+ * Remove a co-manager (owner only)
+ */
+router.delete('/teams/:teamId/co-managers/:coManagerId', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const teamIdParam = req.params.teamId ?? '';
+    const coManagerIdParam = req.params.coManagerId ?? '';
+    if (!mongoose.Types.ObjectId.isValid(teamIdParam) || !mongoose.Types.ObjectId.isValid(coManagerIdParam)) {
+      return res.status(400).json({ message: 'Invalid identifiers' });
+    }
+    const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
+    const coManagerObjectId = new mongoose.Types.ObjectId(coManagerIdParam);
+
+    // Owner-only check
+    const team = await TeamModel.findOne({ _id: teamObjectId, managerId });
+    if (!team) {
+      return res.status(404).json({ message: 'Team not found or you are not the owner' });
+    }
+
+    await TeamModel.updateOne(
+      { _id: teamObjectId },
+      { $pull: { coManagerIds: coManagerObjectId } }
+    );
+
+    const payload = {
+      teamId: String(teamObjectId),
+      coManagerId: String(coManagerObjectId),
+    };
+
+    emitToManager(String(managerId), 'team:coManagerRemoved', payload);
+    emitToManager(String(coManagerObjectId), 'team:coManagerRemoved', payload);
+
+    return res.json({ message: 'Co-manager removed' });
+  } catch (err) {
+    console.error('[teams] DELETE /teams/:teamId/co-managers/:coManagerId failed', err);
+    return res.status(500).json({ message: 'Failed to remove co-manager' });
   }
 });
 

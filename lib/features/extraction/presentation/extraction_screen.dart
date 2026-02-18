@@ -70,6 +70,7 @@ import 'ai_chat_screen.dart';
 import '../../../core/widgets/section_navigation_dropdown.dart';
 import '../../../core/widgets/web_tab_navigation.dart';
 import '../../main/presentation/main_screen.dart';
+import 'package:nexa/shared/widgets/tappable_app_title.dart';
 import 'package:nexa/shared/widgets/web_content_wrapper.dart';
 
 enum _SortMode { dateAsc, dateDesc, lastCreated }
@@ -2313,20 +2314,22 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                         children: [
                                           const SizedBox(width: 16),
                                           Expanded(
-                                            child: Text(
-                                              _getAppBarTitle(),
-                                              style: const TextStyle(
-                                                color: ExColors.yellow,
-                                                fontSize: 24,
-                                                fontWeight: FontWeight.w800,
-                                                letterSpacing: 0.5,
-                                                shadows: [
-                                                  Shadow(
-                                                    color: Colors.black26,
-                                                    offset: Offset(0, 2),
-                                                    blurRadius: 4,
-                                                  ),
-                                                ],
+                                            child: TappableAppTitle(
+                                              child: Text(
+                                                _getAppBarTitle(),
+                                                style: const TextStyle(
+                                                  color: ExColors.yellow,
+                                                  fontSize: 24,
+                                                  fontWeight: FontWeight.w800,
+                                                  letterSpacing: 0.5,
+                                                  shadows: [
+                                                    Shadow(
+                                                      color: Colors.black26,
+                                                      offset: Offset(0, 2),
+                                                      blurRadius: 4,
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
                                             ),
                                           ),
@@ -2900,29 +2903,31 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           children: [
             // Title section
             Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _getAppBarTitle(),
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: ExColors.textPrimary,
-                      letterSpacing: -0.5,
+              child: TappableAppTitle(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _getAppBarTitle(),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: ExColors.textPrimary,
+                        letterSpacing: -0.5,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    _getAppBarSubtitle(),
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey.shade600,
-                      letterSpacing: 0.2,
+                    const SizedBox(height: 2),
+                    Text(
+                      _getAppBarSubtitle(),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade600,
+                        letterSpacing: 0.2,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             // Actions

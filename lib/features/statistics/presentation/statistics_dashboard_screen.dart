@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:nexa/shared/widgets/tappable_app_title.dart';
 import '../../../shared/widgets/web_content_wrapper.dart';
 import '../data/models/statistics_models.dart';
 import '../data/services/statistics_service.dart';
@@ -212,7 +213,10 @@ class _StatisticsDashboardScreenState extends State<StatisticsDashboardScreen> {
         Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        title: const Text('Stats'),
+        title: TappableAppTitle.text(
+          'Stats',
+          style: const TextStyle(color: Colors.white),
+        ),
         backgroundColor: const Color(0xFF212C4A),
         foregroundColor: Colors.white,
         elevation: 0,

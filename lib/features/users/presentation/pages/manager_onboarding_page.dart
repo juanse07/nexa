@@ -17,6 +17,7 @@ import 'package:nexa/core/network/socket_manager.dart';
 import 'package:nexa/services/notification_service.dart';
 import 'package:nexa/features/subscription/data/services/subscription_service.dart';
 import 'package:nexa/features/onboarding/presentation/venue_onboarding_gate.dart';
+import 'package:nexa/features/onboarding/presentation/widgets/step_progress_indicator.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 class ManagerOnboardingGate extends StatefulWidget {
@@ -26,7 +27,8 @@ class ManagerOnboardingGate extends StatefulWidget {
   State<ManagerOnboardingGate> createState() => _ManagerOnboardingGateState();
 }
 
-class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
+class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
+    with TickerProviderStateMixin {
   late final ManagerService _managerService;
   final TeamsService _teamsService = TeamsService();
   final ClientsService _clientsService = ClientsService();
@@ -51,6 +53,11 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
   String? _selectedClientId;
   String? _selectedRoleId;
 
+  // Staggered entrance animation
+  late final AnimationController _entranceController;
+  final List<Animation<double>> _cardFades = [];
+  final List<Animation<Offset>> _cardSlides = [];
+
   @override
   void initState() {
     super.initState();
@@ -58,7 +65,39 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
     final storage = GetIt.I<FlutterSecureStorage>();
     _managerService = ManagerService(api, storage);
     _subscriptionService = GetIt.I<SubscriptionService>();
+    _setupEntranceAnimations();
     _refresh();
+  }
+
+  void _setupEntranceAnimations() {
+    // 6 items: intro + 5 steps, 200ms stagger each
+    _entranceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    );
+
+    for (int i = 0; i < 6; i++) {
+      final start = (i * 0.12).clamp(0.0, 0.7);
+      final end = (start + 0.3).clamp(0.0, 1.0);
+
+      _cardFades.add(
+        Tween<double>(begin: 0, end: 1).animate(
+          CurvedAnimation(
+            parent: _entranceController,
+            curve: Interval(start, end, curve: Curves.easeOut),
+          ),
+        ),
+      );
+
+      _cardSlides.add(
+        Tween<Offset>(begin: const Offset(0, 0.15), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _entranceController,
+            curve: Interval(start, end, curve: Curves.easeOut),
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -68,6 +107,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
     _clientNameCtrl.dispose();
     _roleNameCtrl.dispose();
     _tariffRateCtrl.dispose();
+    _entranceController.dispose();
     super.dispose();
   }
 
@@ -86,18 +126,18 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
       print('[ONBOARDING GATE] Initializing notifications...');
       try {
         await NotificationService().initialize();
-        print('[ONBOARDING GATE] ✅ Notifications initialized successfully');
+        print('[ONBOARDING GATE] Notifications initialized successfully');
       } catch (e) {
-        print('[ONBOARDING GATE] ❌ Failed to initialize notifications: $e');
+        print('[ONBOARDING GATE] Failed to initialize notifications: $e');
       }
 
       // Initialize subscription service (Qonversion)
       print('[ONBOARDING GATE] Initializing subscription...');
       try {
         await _subscriptionService.initialize();
-        print('[ONBOARDING GATE] ✅ Subscription initialized successfully');
+        print('[ONBOARDING GATE] Subscription initialized successfully');
       } catch (e) {
-        print('[ONBOARDING GATE] ❌ Failed to initialize subscription: $e');
+        print('[ONBOARDING GATE] Failed to initialize subscription: $e');
       }
 
       final teams = await _teamsService.fetchTeams();
@@ -117,6 +157,11 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
         _error = null;
         _syncSelections(snapshot);
       });
+
+      // Trigger entrance animation after data loads
+      if (!_entranceController.isCompleted) {
+        _entranceController.forward();
+      }
     } catch (e) {
       setState(() {
         _error = e.toString();
@@ -327,64 +372,62 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
     );
   }
 
+  // ─── Determine step state for accent colors ─────────────────────
+  _StepState _stepState(int stepIndex, _OnboardingSnapshot snapshot) {
+    final states = [
+      snapshot.hasProfile,
+      snapshot.hasTeam,
+      snapshot.hasClient,
+      snapshot.hasRole,
+      snapshot.hasTariff,
+    ];
+
+    if (states[stepIndex]) return _StepState.completed;
+
+    // Find the first incomplete step
+    for (int i = 0; i < states.length; i++) {
+      if (!states[i]) {
+        return i == stepIndex ? _StepState.active : _StepState.locked;
+      }
+    }
+    return _StepState.locked;
+  }
+
+  Color _accentForState(_StepState state) {
+    switch (state) {
+      case _StepState.completed:
+        return AppColors.success;
+      case _StepState.active:
+        return AppColors.primaryIndigo;
+      case _StepState.locked:
+        return AppColors.borderMedium;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-
-    if (_error != null) {
       return Scaffold(
-        appBar: AppBar(
-          title: const Text('Getting Started'),
-          actions: [
-            IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
-          ],
-        ),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.error_outline,
-                  size: 48,
-                  color: Colors.redAccent,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  _error!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.redAccent),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    ElevatedButton(
-                      onPressed: _refresh,
-                      child: const Text('Retry'),
-                    ),
-                    const SizedBox(width: 16),
-                    OutlinedButton(
-                      onPressed: () {
-                        // Skip error and navigate to main screen anyway
-                        Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(
-                            builder: (_) => const MainScreen(),
-                          ),
-                        );
-                      },
-                      child: const Text('Skip'),
-                    ),
-                  ],
-                ),
-              ],
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [AppColors.primaryPurple, Color(0xFF1A252F)],
+              stops: [0.0, 0.4],
+            ),
+          ),
+          child: const Center(
+            child: CircularProgressIndicator(
+              color: AppColors.primaryIndigo,
             ),
           ),
         ),
       );
+    }
+
+    if (_error != null) {
+      return _buildErrorScreen();
     }
 
     final snapshot = _snapshot;
@@ -398,133 +441,380 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Let’s get you set up'),
-        actions: [
-          TextButton(
-            onPressed: _signOut,
-            child: const Text(
-              'Sign out',
-              style: TextStyle(color: Colors.white),
-            ),
+      body: Column(
+        children: [
+          _buildGradientHeader(snapshot),
+          Expanded(
+            child: kIsWeb
+                ? _buildStepsList(snapshot)
+                : RefreshIndicator(
+                    onRefresh: () => _refresh(showSpinner: false),
+                    child: _buildStepsList(snapshot),
+                  ),
           ),
         ],
       ),
-      body: kIsWeb
-          ? ListView(
-              padding: const EdgeInsets.all(20),
-              children: [
-                const SizedBox(height: 12),
-                _buildIntroCard(snapshot),
-                const SizedBox(height: 20),
-                _buildProfileStep(snapshot),
-                const SizedBox(height: 16),
-                _buildTeamStep(snapshot),
-                const SizedBox(height: 16),
-                _buildClientStep(snapshot),
-                const SizedBox(height: 16),
-                _buildRoleStep(snapshot),
-                const SizedBox(height: 16),
-                _buildTariffStep(snapshot),
-                const SizedBox(height: 32),
-                if (snapshot.missingSteps.isNotEmpty)
-                  Text(
-                    'Complete all steps above to access the full dashboard.',
-                    style: TextStyle(color: Colors.grey.shade600),
-                  ),
-              ],
-            )
-          : RefreshIndicator(
-              onRefresh: () => _refresh(showSpinner: false),
-              child: ListView(
-                padding: const EdgeInsets.all(20),
-                children: [
-                  const SizedBox(height: 12),
-                  _buildIntroCard(snapshot),
-                  const SizedBox(height: 20),
-                  _buildProfileStep(snapshot),
-                  const SizedBox(height: 16),
-                  _buildTeamStep(snapshot),
-                  const SizedBox(height: 16),
-                  _buildClientStep(snapshot),
-                  const SizedBox(height: 16),
-                  _buildRoleStep(snapshot),
-                  const SizedBox(height: 16),
-                  _buildTariffStep(snapshot),
-                  const SizedBox(height: 32),
-                  if (snapshot.missingSteps.isNotEmpty)
-                    Text(
-                      'Complete all steps above to access the full dashboard.',
-                      style: TextStyle(color: Colors.grey.shade600),
-                    ),
-                ],
-              ),
-            ),
     );
   }
 
-  Widget _buildIntroCard(_OnboardingSnapshot snapshot) {
-    final missing = snapshot.missingSteps;
-    return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Finish these steps to activate your FlowShift workspace:',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _buildStatusChip(
-                  label: 'Profile',
-                  completed: snapshot.hasProfile,
-                ),
-                _buildStatusChip(
-                  label: 'Team',
-                  completed: snapshot.hasTeam,
-                ),
-                _buildStatusChip(
-                  label: 'Client',
-                  completed: snapshot.hasClient,
-                ),
-                _buildStatusChip(label: 'Role', completed: snapshot.hasRole),
-                _buildStatusChip(
-                  label: 'Tariff',
-                  completed: snapshot.hasTariff,
-                ),
-              ],
-            ),
-            if (missing.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Text(
-                'Next up: ${missing.join(', ')}',
-                style: const TextStyle(fontWeight: FontWeight.w500),
+  Widget _buildErrorScreen() {
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [AppColors.primaryPurple, Color(0xFF1A252F)],
+            stops: [0.0, 0.4],
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.error.withValues(alpha: 0.15),
+                    ),
+                    child: const Icon(
+                      Icons.error_outline,
+                      size: 48,
+                      color: AppColors.error,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    _error!,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.8),
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      ElevatedButton(
+                        onPressed: _refresh,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primaryIndigo,
+                          foregroundColor: AppColors.primaryPurple,
+                        ),
+                        child: const Text('Retry'),
+                      ),
+                      const SizedBox(width: 16),
+                      OutlinedButton(
+                        onPressed: () {
+                          Navigator.of(context).pushReplacement(
+                            MaterialPageRoute(
+                              builder: (_) => const MainScreen(),
+                            ),
+                          );
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+                        ),
+                        child: const Text('Skip'),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
-          ],
+            ),
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildStatusChip({required String label, required bool completed}) {
-    return Chip(
-      avatar: Icon(
-        completed ? Icons.check_circle : Icons.radio_button_unchecked,
-        color: completed ? AppColors.success : Colors.grey,
-        size: 18,
+  /// Premium gradient header with logo, title, progress ring, and sign-out
+  Widget _buildGradientHeader(_OnboardingSnapshot snapshot) {
+    final completedCount = snapshot.completedCount;
+    const totalSteps = 5;
+
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            AppColors.primaryPurple,
+            Color(0xFF1A252F),
+          ],
+        ),
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(24),
+          bottomRight: Radius.circular(24),
+        ),
       ),
-      label: Text(label),
-      backgroundColor: completed
-          ? const Color(0xFFE8F5E9)
-          : AppColors.formFillGrey,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          child: Column(
+            children: [
+              // Top row: logo + sign-out
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withValues(alpha: 0.1),
+                    ),
+                    child: Image.asset(
+                      'assets/logo_icon_square_transparent.png',
+                      height: 32,
+                      width: 32,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'FlowShift',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: _signOut,
+                    icon: Icon(
+                      Icons.logout_rounded,
+                      size: 16,
+                      color: Colors.white.withValues(alpha: 0.6),
+                    ),
+                    label: Text(
+                      'Sign out',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.6),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // Title + circular progress
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Let\'s get you set up',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '$completedCount of $totalSteps steps complete',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.white.withValues(alpha: 0.6),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Circular progress ring
+                  SizedBox(
+                    width: 56,
+                    height: 56,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        SizedBox(
+                          width: 56,
+                          height: 56,
+                          child: CircularProgressIndicator(
+                            value: completedCount / totalSteps,
+                            strokeWidth: 4,
+                            backgroundColor: Colors.white.withValues(alpha: 0.15),
+                            valueColor: const AlwaysStoppedAnimation<Color>(
+                              AppColors.primaryIndigo,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          '$completedCount/$totalSteps',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Progress bar
+              StepProgressIndicator(
+                currentStep: completedCount > 0 ? completedCount - 1 : -1,
+                totalSteps: totalSteps,
+                variant: StepIndicatorVariant.bar,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStepsList(_OnboardingSnapshot snapshot) {
+    return AnimatedBuilder(
+      animation: _entranceController,
+      builder: (context, _) {
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+          children: [
+            // Intro card
+            _animatedCard(0, _buildIntroCard(snapshot)),
+            const SizedBox(height: 16),
+            _animatedCard(1, _buildProfileStep(snapshot)),
+            const SizedBox(height: 12),
+            _animatedCard(2, _buildTeamStep(snapshot)),
+            const SizedBox(height: 12),
+            _animatedCard(3, _buildClientStep(snapshot)),
+            const SizedBox(height: 12),
+            _animatedCard(4, _buildRoleStep(snapshot)),
+            const SizedBox(height: 12),
+            _animatedCard(5, _buildTariffStep(snapshot)),
+            const SizedBox(height: 24),
+            if (snapshot.missingSteps.isNotEmpty)
+              Text(
+                'Complete all steps above to access the full dashboard.',
+                style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+                textAlign: TextAlign.center,
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _animatedCard(int index, Widget child) {
+    if (index >= _cardFades.length) return child;
+    return FadeTransition(
+      opacity: _cardFades[index],
+      child: SlideTransition(
+        position: _cardSlides[index],
+        child: child,
+      ),
+    );
+  }
+
+  Widget _buildIntroCard(_OnboardingSnapshot snapshot) {
+    final missing = snapshot.missingSteps;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceLight,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Finish these steps to activate your FlowShift workspace:',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textDark,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildStatusChip(label: 'Profile', completed: snapshot.hasProfile),
+              _buildStatusChip(label: 'Team', completed: snapshot.hasTeam),
+              _buildStatusChip(label: 'Client', completed: snapshot.hasClient),
+              _buildStatusChip(label: 'Role', completed: snapshot.hasRole),
+              _buildStatusChip(label: 'Tariff', completed: snapshot.hasTariff),
+            ],
+          ),
+          if (missing.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Icon(Icons.arrow_forward_rounded, size: 16, color: AppColors.primaryIndigo),
+                const SizedBox(width: 6),
+                Text(
+                  'Next up: ${missing.first}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primaryPurple,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusChip({required String label, required bool completed}) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: completed
+            ? AppColors.success.withValues(alpha: 0.1)
+            : AppColors.formFillGrey,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: completed
+              ? AppColors.success.withValues(alpha: 0.3)
+              : AppColors.border,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            child: Icon(
+              completed ? Icons.check_circle : Icons.radio_button_unchecked,
+              key: ValueKey(completed),
+              color: completed ? AppColors.success : AppColors.textMuted,
+              size: 16,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: completed ? AppColors.success : AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -562,6 +852,8 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
         : button;
 
     return _buildStepCard(
+      stepIndex: 0,
+      snapshot: snapshot,
       title: '1. Update your profile',
       completed: completed,
       subtitle: subtitle.isEmpty ? 'Profile details updated.' : subtitle,
@@ -572,6 +864,8 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
   Widget _buildTeamStep(_OnboardingSnapshot snapshot) {
     final completed = snapshot.hasTeam;
     return _buildStepCard(
+      stepIndex: 1,
+      snapshot: snapshot,
       title: '2. Create your team/company',
       completed: completed,
       subtitle: completed
@@ -626,6 +920,8 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
   Widget _buildClientStep(_OnboardingSnapshot snapshot) {
     final completed = snapshot.hasClient;
     return _buildStepCard(
+      stepIndex: 2,
+      snapshot: snapshot,
       title: '3. Create your first client',
       completed: completed,
       subtitle: completed
@@ -667,11 +963,13 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
   Widget _buildRoleStep(_OnboardingSnapshot snapshot) {
     final completed = snapshot.hasRole;
     return _buildStepCard(
+      stepIndex: 3,
+      snapshot: snapshot,
       title: '4. Add at least one role',
       completed: completed,
       subtitle: completed
           ? 'Roles configured: ${snapshot.roles.length}'
-          : 'Roles help match staff to the right job (waiter, chef, bartender…).',
+          : 'Roles help match staff to the right job (waiter, chef, bartender...).',
       action: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -711,6 +1009,8 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
     final clients = snapshot.clients;
     final roles = snapshot.roles;
     return _buildStepCard(
+      stepIndex: 4,
+      snapshot: snapshot,
       title: '5. Set your first tariff',
       completed: completed,
       subtitle: completed
@@ -802,40 +1102,106 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
   }
 
   Widget _buildStepCard({
+    required int stepIndex,
+    required _OnboardingSnapshot snapshot,
     required String title,
     required bool completed,
     required String subtitle,
     required Widget action,
   }) {
-    return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    final state = _stepState(stepIndex, snapshot);
+    final accentColor = _accentForState(state);
+    final isActive = state == _StepState.active;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 400),
+      decoration: BoxDecoration(
+        color: isActive
+            ? Colors.white
+            : AppColors.surfaceWhite,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isActive ? accentColor.withValues(alpha: 0.3) : AppColors.border,
+        ),
+        boxShadow: isActive
+            ? [
+                BoxShadow(
+                  color: accentColor.withValues(alpha: 0.08),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : null,
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+            // Left accent border
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 400),
+              width: 4,
+              decoration: BoxDecoration(
+                color: accentColor,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  bottomLeft: Radius.circular(16),
                 ),
-                Icon(
-                  completed ? Icons.check_circle : Icons.radio_button_unchecked,
-                  color: completed ? AppColors.success : Colors.grey,
-                ),
-              ],
+              ),
             ),
-            const SizedBox(height: 8),
-            Text(subtitle, style: TextStyle(color: Colors.grey.shade700)),
-            const SizedBox(height: 16),
-            action,
+            // Card content
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: state == _StepState.locked
+                                  ? AppColors.textMuted
+                                  : AppColors.textDark,
+                            ),
+                          ),
+                        ),
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 300),
+                          transitionBuilder: (child, anim) {
+                            return ScaleTransition(scale: anim, child: child);
+                          },
+                          child: Icon(
+                            completed
+                                ? Icons.check_circle
+                                : Icons.radio_button_unchecked,
+                            key: ValueKey(completed),
+                            color: completed ? AppColors.success : AppColors.textMuted,
+                            size: 22,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: state == _StepState.locked
+                            ? AppColors.textMuted
+                            : AppColors.textTertiary,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    action,
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -861,6 +1227,8 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate> {
     return 'Untitled';
   }
 }
+
+enum _StepState { completed, active, locked }
 
 class _OnboardingSnapshot {
   const _OnboardingSnapshot({
@@ -892,6 +1260,16 @@ class _OnboardingSnapshot {
   bool get hasTariff => tariffs.isNotEmpty;
 
   bool get isComplete => hasProfile && hasTeam && hasClient && hasRole && hasTariff;
+
+  int get completedCount {
+    int count = 0;
+    if (hasProfile) count++;
+    if (hasTeam) count++;
+    if (hasClient) count++;
+    if (hasRole) count++;
+    if (hasTariff) count++;
+    return count;
+  }
 
   List<String> get missingSteps {
     final missing = <String>[];

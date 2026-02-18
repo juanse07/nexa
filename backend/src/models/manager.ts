@@ -1,7 +1,7 @@
 import mongoose, { Document, Model, Schema } from 'mongoose';
 
 export interface ManagerDocument extends Document {
-  provider: 'google' | 'apple' | 'phone';
+  provider: 'google' | 'apple' | 'phone' | 'email';
   subject: string;
   email?: string;
   name?: string; // original OAuth full name
@@ -11,10 +11,11 @@ export interface ManagerDocument extends Document {
   picture?: string; // optional override picture
   originalPicture?: string; // pre-caricature picture (for revert)
   app_id?: string; // optional 9-digit app id
+  passwordHash?: string; // for email/password auth (demo accounts)
 
   // Linked authentication methods (for account linking)
   linked_providers?: Array<{
-    provider: 'google' | 'apple' | 'phone';
+    provider: 'google' | 'apple' | 'phone' | 'email';
     subject: string;
     linked_at: Date;
   }>;
@@ -97,7 +98,7 @@ export interface ManagerDocument extends Document {
 
 const ManagerSchema = new Schema<ManagerDocument>(
   {
-    provider: { type: String, required: true, enum: ['google', 'apple', 'phone'] },
+    provider: { type: String, required: true, enum: ['google', 'apple', 'phone', 'email'] },
     subject: { type: String, required: true },
     email: { type: String, trim: true },
     name: { type: String, trim: true },
@@ -107,10 +108,11 @@ const ManagerSchema = new Schema<ManagerDocument>(
     picture: { type: String, trim: true },
     originalPicture: { type: String, trim: true }, // pre-caricature picture
     app_id: { type: String, trim: true },
+    passwordHash: { type: String },
 
     // Linked authentication methods
     linked_providers: [{
-      provider: { type: String, required: true, enum: ['google', 'apple', 'phone'] },
+      provider: { type: String, required: true, enum: ['google', 'apple', 'phone', 'email'] },
       subject: { type: String, required: true },
       linked_at: { type: Date, default: Date.now },
     }],

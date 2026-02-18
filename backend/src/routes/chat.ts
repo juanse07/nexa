@@ -5,6 +5,7 @@ import { ChatMessageModel } from '../models/chatMessage';
 import { ManagerModel } from '../models/manager';
 import { UserModel } from '../models/user';
 import { TeamMemberModel } from '../models/teamMember';
+import { TeamModel } from '../models/team';
 import { emitToManager, emitToUser } from '../socket/server';
 import { notificationService } from '../services/notificationService';
 import mongoose from 'mongoose';
@@ -26,9 +27,14 @@ router.get('/conversations', requireAuth, async (req, res) => {
       // Manager: get all conversations with users who are active team members
       const managerObjectId = new mongoose.Types.ObjectId(managerId);
 
-      // Get active team members for this manager
+      // Find team IDs where manager is owner or co-manager
+      const myTeamIds = await TeamModel.find({
+        $or: [{ managerId: managerObjectId }, { coManagerIds: managerObjectId }],
+      }).distinct('_id');
+
+      // Get active team members for accessible teams
       const teamMembers = await TeamMemberModel.find({
-        managerId: managerObjectId,
+        teamId: { $in: myTeamIds },
         status: 'active'
       }, { provider: 1, subject: 1 }).lean();
 
@@ -44,12 +50,12 @@ router.get('/conversations', requireAuth, async (req, res) => {
         .lean();
 
       // Populate user info
-      const userKeys = conversations.map(c => c.userKey);
+      const staffUserKeys = conversations.map(c => c.userKey);
       const users = await UserModel.find({
         $expr: {
           $in: [
             { $concat: ['$provider', ':', '$subject'] },
-            userKeys
+            staffUserKeys
           ]
         }
       }).lean();
@@ -58,7 +64,7 @@ router.get('/conversations', requireAuth, async (req, res) => {
         users.map(u => [`${u.provider}:${u.subject}`, u])
       );
 
-      const result = conversations.map(conv => {
+      const staffConvResult = conversations.map(conv => {
         const user = userMap.get(conv.userKey);
         let displayName = 'User';
 
@@ -87,7 +93,128 @@ router.get('/conversations', requireAuth, async (req, res) => {
         };
       });
 
-      return res.json({ conversations: result });
+      // --- Peer manager conversations (only with managers who share a team) ---
+      const myManagerKey = `manager:${managerId}`;
+
+      // Build the set of manager IDs who currently share a team with me
+      const peerManagerIdSet = new Set<string>();
+      const myTeams = await TeamModel.find({
+        $or: [{ managerId: managerObjectId }, { coManagerIds: managerObjectId }],
+      }).lean();
+      for (const team of myTeams) {
+        const ownerId = String(team.managerId);
+        if (ownerId !== managerId) peerManagerIdSet.add(ownerId);
+        for (const coMgrId of (team.coManagerIds ?? [])) {
+          const coIdStr = String(coMgrId);
+          if (coIdStr !== managerId) peerManagerIdSet.add(coIdStr);
+        }
+      }
+
+      // Build the set of valid peer manager userKeys (e.g. "manager:abc123")
+      const validPeerUserKeys = Array.from(peerManagerIdSet).map(id => `manager:${id}`);
+      const validPeerManagerObjectIds = Array.from(peerManagerIdSet).map(id => new mongoose.Types.ObjectId(id));
+
+      // Conversations where I am the managerId and userKey is a valid shared-team peer
+      const peerConvsAsOwner = validPeerUserKeys.length > 0
+        ? await ConversationModel.find({
+            managerId: managerObjectId,
+            userKey: { $in: validPeerUserKeys },
+          }).lean()
+        : [];
+
+      // Conversations where a valid peer is managerId and I am the userKey
+      const peerConvsAsTarget = validPeerManagerObjectIds.length > 0
+        ? await ConversationModel.find({
+            managerId: { $in: validPeerManagerObjectIds },
+            userKey: myManagerKey,
+          }).lean()
+        : [];
+
+      // Collect all peer manager IDs to populate names
+      const peerManagerIds = new Set<string>();
+      for (const conv of peerConvsAsOwner) {
+        const peerId = conv.userKey.replace('manager:', '');
+        peerManagerIds.add(peerId);
+      }
+      for (const conv of peerConvsAsTarget) {
+        peerManagerIds.add(conv.managerId.toString());
+      }
+
+      const peerManagerDocs = peerManagerIds.size > 0
+        ? await ManagerModel.find({
+            _id: { $in: Array.from(peerManagerIds).map(id => new mongoose.Types.ObjectId(id)) },
+          }).lean()
+        : [];
+      const peerManagerMap = new Map(peerManagerDocs.map(m => [m._id.toString(), m]));
+
+      const peerConvResult: any[] = [];
+      const seenConvIds = new Set<string>();
+
+      for (const conv of peerConvsAsOwner) {
+        const convId = conv._id.toString();
+        if (seenConvIds.has(convId)) continue;
+        seenConvIds.add(convId);
+
+        const peerId = conv.userKey.replace('manager:', '');
+        const peer = peerManagerMap.get(peerId);
+        let displayName = 'Manager';
+        if (peer?.first_name || peer?.last_name) {
+          displayName = [peer.first_name, peer.last_name].filter(Boolean).join(' ').trim();
+        } else if (peer?.name) {
+          displayName = peer.name;
+        }
+
+        peerConvResult.push({
+          id: convId,
+          userKey: conv.userKey,
+          userName: displayName,
+          userPicture: peer?.picture,
+          userEmail: peer?.email,
+          lastMessageAt: conv.lastMessageAt,
+          lastMessagePreview: conv.lastMessagePreview,
+          unreadCount: conv.unreadCountManager,
+          updatedAt: conv.updatedAt,
+          role: 'Manager',
+        });
+      }
+
+      for (const conv of peerConvsAsTarget) {
+        const convId = conv._id.toString();
+        if (seenConvIds.has(convId)) continue;
+        seenConvIds.add(convId);
+
+        const peerId = conv.managerId.toString();
+        const peer = peerManagerMap.get(peerId);
+        let displayName = 'Manager';
+        if (peer?.first_name || peer?.last_name) {
+          displayName = [peer.first_name, peer.last_name].filter(Boolean).join(' ').trim();
+        } else if (peer?.name) {
+          displayName = peer.name;
+        }
+
+        peerConvResult.push({
+          id: convId,
+          userKey: `manager:${peerId}`,
+          userName: displayName,
+          userPicture: peer?.picture,
+          userEmail: peer?.email,
+          lastMessageAt: conv.lastMessageAt,
+          lastMessagePreview: conv.lastMessagePreview,
+          unreadCount: conv.unreadCountUser, // I'm on the userKey side
+          updatedAt: conv.updatedAt,
+          role: 'Manager',
+        });
+      }
+
+      // Merge and sort by lastMessageAt
+      const allConversations = [...staffConvResult, ...peerConvResult];
+      allConversations.sort((a, b) => {
+        const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+        const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+        return bTime - aTime;
+      });
+
+      return res.json({ conversations: allConversations });
     } else {
       // User: get conversation with their manager(s)
       conversations = await ConversationModel.find({ userKey })
@@ -160,7 +287,7 @@ router.get('/conversations/:conversationId/messages', requireAuth, async (req, r
     const { conversationId } = req.params;
     const { managerId, provider, sub } = (req as AuthenticatedRequest).authUser;
     const userKey = `${provider}:${sub}`;
-    const limit = parseInt(req.query.limit as string) || 50;
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
     const before = req.query.before as string; // ISO date string for pagination
 
     if (!mongoose.Types.ObjectId.isValid(conversationId as string)) {
@@ -174,11 +301,29 @@ router.get('/conversations/:conversationId/messages', requireAuth, async (req, r
     }
 
     const hasAccess = managerId
-      ? conversation.managerId.toString() === managerId
+      ? (conversation.managerId.toString() === managerId ||
+         conversation.userKey === `manager:${managerId}`)
       : conversation.userKey === userKey;
 
     if (!hasAccess) {
       return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // For manager-to-manager conversations, revalidate shared-team membership
+    if (managerId && conversation.userKey.startsWith('manager:')) {
+      const myId = new mongoose.Types.ObjectId(managerId);
+      const peerId = conversation.managerId.toString() === managerId
+        ? new mongoose.Types.ObjectId(conversation.userKey.replace('manager:', ''))
+        : conversation.managerId;
+      const stillShared = await TeamModel.findOne({
+        $and: [
+          { $or: [{ managerId: myId }, { coManagerIds: myId }] },
+          { $or: [{ managerId: peerId }, { coManagerIds: peerId }] },
+        ],
+      }).lean();
+      if (!stillShared) {
+        return res.status(403).json({ error: 'You no longer share a team with this manager' });
+      }
     }
 
     // Build query
@@ -251,55 +396,113 @@ router.post('/conversations/:targetId/messages', requireAuth, async (req, res) =
     let senderType: 'manager' | 'user';
 
     if (senderManagerId) {
-      // Manager sending to user
       senderType = 'manager';
       targetUserKey = targetId as string;
 
-      console.log('[CHAT DEBUG] Manager sending to user. targetUserKey:', targetUserKey);
+      console.log('[CHAT DEBUG] Manager sending message. targetUserKey:', targetUserKey);
 
-      // Verify user exists
-      const parts = targetUserKey.split(':');
-      if (parts.length !== 2) {
-        console.log('[CHAT ERROR] Invalid userKey format:', targetUserKey);
-        return res.status(400).json({ error: 'Invalid user key format. Expected format: provider:subject' });
+      if (targetUserKey.startsWith('manager:')) {
+        // ─── Manager-to-Manager messaging ───
+        const targetMgrIdStr = targetUserKey.replace('manager:', '');
+        if (!mongoose.Types.ObjectId.isValid(targetMgrIdStr)) {
+          return res.status(400).json({ error: 'Invalid manager target ID' });
+        }
+        const targetMgrId = new mongoose.Types.ObjectId(targetMgrIdStr);
+
+        // Prevent self-messaging
+        if (targetMgrIdStr === senderManagerId.toString()) {
+          return res.status(400).json({ error: 'Cannot send messages to yourself' });
+        }
+
+        // Verify target manager exists
+        const targetMgr = await ManagerModel.findById(targetMgrId);
+        if (!targetMgr) {
+          return res.status(404).json({ error: 'Target manager not found' });
+        }
+
+        // SECURITY: Verify shared team (both must be owner or co-manager of the same team)
+        const sharedTeam = await TeamModel.findOne({
+          $and: [
+            { $or: [{ managerId: senderManagerId }, { coManagerIds: senderManagerId }] },
+            { $or: [{ managerId: targetMgrId }, { coManagerIds: targetMgrId }] },
+          ],
+        }).lean();
+
+        if (!sharedTeam) {
+          return res.status(403).json({ error: 'Cannot message managers who do not share a team with you' });
+        }
+
+        // Canonical direction: lower ObjectId is always managerId to prevent duplicates
+        const senderStr = senderManagerId.toString();
+        const targetStr = targetMgrId.toString();
+        const canonicalManagerId = senderStr < targetStr ? senderManagerId : targetMgrId;
+        const canonicalUserKey = senderStr < targetStr ? `manager:${targetStr}` : `manager:${senderStr}`;
+
+        // Atomic findOneAndUpdate with upsert prevents race conditions
+        conversation = await ConversationModel.findOneAndUpdate(
+          { managerId: canonicalManagerId, userKey: canonicalUserKey },
+          {
+            $setOnInsert: {
+              managerId: canonicalManagerId,
+              userKey: canonicalUserKey,
+            },
+          },
+          { upsert: true, new: true }
+        );
+
+        targetManagerId = canonicalManagerId;
+      } else {
+        // ─── Manager-to-Staff messaging (existing logic) ───
+        console.log('[CHAT DEBUG] Manager sending to user. targetUserKey:', targetUserKey);
+
+        // Verify user exists
+        const parts = targetUserKey.split(':');
+        if (parts.length !== 2) {
+          console.log('[CHAT ERROR] Invalid userKey format:', targetUserKey);
+          return res.status(400).json({ error: 'Invalid user key format. Expected format: provider:subject' });
+        }
+        const [targetProvider, targetSubject] = parts;
+        const user = await UserModel.findOne({ provider: targetProvider, subject: targetSubject });
+        if (!user) {
+          console.log('[CHAT ERROR] User not found:', targetProvider, targetSubject);
+          return res.status(404).json({ error: 'User not found' });
+        }
+        console.log('[CHAT DEBUG] User found:', user._id);
+
+        // SECURITY: Check if user is an active member of manager's teams
+        const myTeamIds = await TeamModel.find({
+          $or: [{ managerId: senderManagerId }, { coManagerIds: senderManagerId }],
+        }).distinct('_id');
+
+        const isTeamMember = await TeamMemberModel.findOne({
+          teamId: { $in: myTeamIds },
+          provider: targetProvider,
+          subject: targetSubject,
+          status: 'active'
+        }).lean();
+
+        if (!isTeamMember) {
+          console.log('[CHAT SECURITY] Manager attempted to message user who is not a team member');
+          return res.status(403).json({
+            error: 'Cannot message users who are not members of your teams'
+          });
+        }
+        console.log('[CHAT DEBUG] User is active team member - proceeding');
+
+        // Find or create conversation
+        conversation = await ConversationModel.findOneAndUpdate(
+          { managerId: senderManagerId, userKey: targetUserKey },
+          {
+            $setOnInsert: {
+              managerId: senderManagerId,
+              userKey: targetUserKey,
+            }
+          },
+          { upsert: true, new: true }
+        );
+
+        targetManagerId = senderManagerId;
       }
-      const [provider, subject] = parts;
-      const user = await UserModel.findOne({ provider, subject });
-      if (!user) {
-        console.log('[CHAT ERROR] User not found:', provider, subject);
-        return res.status(404).json({ error: 'User not found' });
-      }
-      console.log('[CHAT DEBUG] User found:', user._id);
-
-      // SECURITY: Check if user is an active member of manager's teams
-      const isTeamMember = await TeamMemberModel.findOne({
-        managerId: senderManagerId,
-        provider: provider,
-        subject: subject,
-        status: 'active'
-      }).lean();
-
-      if (!isTeamMember) {
-        console.log('[CHAT SECURITY] Manager attempted to message user who is not a team member');
-        return res.status(403).json({
-          error: 'Cannot message users who are not members of your teams'
-        });
-      }
-      console.log('[CHAT DEBUG] User is active team member - proceeding');
-
-      // Find or create conversation
-      conversation = await ConversationModel.findOneAndUpdate(
-        { managerId: senderManagerId, userKey: targetUserKey },
-        {
-          $setOnInsert: {
-            managerId: senderManagerId,
-            userKey: targetUserKey,
-          }
-        },
-        { upsert: true, new: true }
-      );
-
-      targetManagerId = senderManagerId;
     } else {
       // User sending to manager
       senderType = 'user';
@@ -339,19 +542,25 @@ router.post('/conversations/:targetId/messages', requireAuth, async (req, res) =
       targetUserKey = userKey;
     }
 
+    // Determine if sender is on the managerId or userKey side of the conversation
+    const isManagerToManager = senderManagerId && targetUserKey!.startsWith('manager:');
+    const senderIsOnManagerSide = senderManagerId
+      ? conversation.managerId.toString() === senderManagerId.toString()
+      : false;
+
     // Create message
     const chatMessage = await ChatMessageModel.create({
       conversationId: conversation._id,
-      managerId: targetManagerId,
-      userKey: targetUserKey!,
+      managerId: conversation.managerId,
+      userKey: conversation.userKey,
       senderType,
       senderName: name,
       senderPicture: picture,
       message: message.trim(),
       messageType: messageType || 'text',
       metadata: metadata || null,
-      readByManager: senderType === 'manager',
-      readByUser: senderType === 'user',
+      readByManager: senderIsOnManagerSide,
+      readByUser: !senderIsOnManagerSide && senderType !== 'user' ? true : senderType === 'user',
     });
 
     // If this is an event invitation, update the event's invited_staff array
@@ -418,11 +627,11 @@ router.post('/conversations/:targetId/messages', requireAuth, async (req, res) =
       }
     }
 
-    // Update conversation
+    // Update conversation — increment the OTHER side's unread count
     await ConversationModel.findByIdAndUpdate(conversation._id, {
       lastMessageAt: chatMessage.createdAt,
       lastMessagePreview: message.trim().substring(0, 200),
-      $inc: senderType === 'manager'
+      $inc: senderIsOnManagerSide
         ? { unreadCountUser: 1 }
         : { unreadCountManager: 1 }
     });
@@ -442,7 +651,31 @@ router.post('/conversations/:targetId/messages', requireAuth, async (req, res) =
     };
 
     // Emit to recipient via Socket.IO
-    if (senderType === 'manager') {
+    if (isManagerToManager) {
+      // Manager-to-manager: emit to the target manager via their manager room
+      const targetMgrIdStr = targetUserKey!.replace('manager:', '');
+      emitToManager(targetMgrIdStr, 'chat:message', messagePayload);
+
+      // Push notification to target manager
+      const senderMgr = await ManagerModel.findById(senderManagerId);
+      const senderDisplayName = senderMgr?.first_name && senderMgr?.last_name
+        ? `${senderMgr.first_name} ${senderMgr.last_name}`
+        : senderMgr?.name || 'Manager';
+
+      await notificationService.sendToUser(
+        targetMgrIdStr,
+        senderDisplayName,
+        message.length > 100 ? message.substring(0, 100) + '...' : message,
+        {
+          type: 'chat',
+          conversationId: (conversation._id as any).toString(),
+          messageId: (chatMessage._id as any).toString(),
+          senderName: senderDisplayName,
+          managerId: managerId,
+        },
+        'manager'
+      );
+    } else if (senderType === 'manager') {
       emitToUser(targetUserKey!, 'chat:message', messagePayload);
 
       // Send push notification to user
@@ -601,16 +834,38 @@ router.patch('/conversations/:conversationId/read', requireAuth, async (req, res
       return res.status(404).json({ error: 'Conversation not found' });
     }
 
-    const hasAccess = managerId
+    const isOnManagerSide = managerId
       ? conversation.managerId.toString() === managerId
+      : false;
+    const isOnUserSide = managerId
+      ? conversation.userKey === `manager:${managerId}`
       : conversation.userKey === userKey;
+
+    const hasAccess = isOnManagerSide || isOnUserSide;
 
     if (!hasAccess) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    // Update messages
-    if (managerId) {
+    // For manager-to-manager conversations, revalidate shared-team membership
+    if (managerId && conversation.userKey.startsWith('manager:')) {
+      const myId = new mongoose.Types.ObjectId(managerId);
+      const peerId = conversation.managerId.toString() === managerId
+        ? new mongoose.Types.ObjectId(conversation.userKey.replace('manager:', ''))
+        : conversation.managerId;
+      const stillShared = await TeamModel.findOne({
+        $and: [
+          { $or: [{ managerId: myId }, { coManagerIds: myId }] },
+          { $or: [{ managerId: peerId }, { coManagerIds: peerId }] },
+        ],
+      }).lean();
+      if (!stillShared) {
+        return res.status(403).json({ error: 'You no longer share a team with this manager' });
+      }
+    }
+
+    // Update messages — mark on the correct side
+    if (isOnManagerSide) {
       await ChatMessageModel.updateMany(
         { conversationId: conversation._id, readByManager: false },
         { $set: { readByManager: true } }
@@ -655,9 +910,14 @@ router.get('/contacts', requireAuth, async (req, res) => {
     const searchQuery = (req.query.q as string) || '';
     const managerObjectId = new mongoose.Types.ObjectId(managerId);
 
-    // Get active team members for this manager
+    // Find team IDs where manager is owner or co-manager
+    const contactTeamIds = await TeamModel.find({
+      $or: [{ managerId: managerObjectId }, { coManagerIds: managerObjectId }],
+    }).distinct('_id');
+
+    // Get active team members for accessible teams
     const teamMembers = await TeamMemberModel.find({
-      managerId: managerObjectId,
+      teamId: { $in: contactTeamIds },
       status: 'active'
     }, { provider: 1, subject: 1, email: 1, name: 1 }).lean();
 
@@ -786,22 +1046,28 @@ router.get('/managers', requireAuth, async (req, res) => {
     const userKey = `${provider}:${sub}`;
 
     // Find teams the user is a member of
-    const { TeamMemberModel } = await import('../models/teamMember');
     const memberships = await TeamMemberModel.find({
       provider,
       subject: sub,
       status: 'active'
     }).distinct('teamId');
 
-    // Find managers of those teams
-    const { TeamModel } = await import('../models/team');
+    // Find managers of those teams (owners + co-managers)
     const teams = await TeamModel.find({
       _id: { $in: memberships }
-    }).distinct('managerId');
+    }).lean();
+
+    const managerIdSet = new Set<string>();
+    for (const team of teams) {
+      managerIdSet.add(String(team.managerId));
+      for (const coMgrId of (team.coManagerIds ?? [])) {
+        managerIdSet.add(String(coMgrId));
+      }
+    }
 
     // Get manager details
     const managers = await ManagerModel.find({
-      _id: { $in: teams }
+      _id: { $in: Array.from(managerIdSet).map(id => new mongoose.Types.ObjectId(id)) }
     }).lean();
 
     const result = managers.map(m => ({
@@ -833,19 +1099,36 @@ router.get('/peer-managers', requireAuth, async (req, res) => {
 
     const managerObjectId = new mongoose.Types.ObjectId(managerId);
 
-    // Find teams this manager owns
-    const { TeamModel } = await import('../models/team');
-    const myTeams = await TeamModel.find({ managerId: managerObjectId }).lean();
-    const myTeamIds = myTeams.map(t => t._id);
+    // Find teams where this manager is owner or co-manager
+    const myTeams = await TeamModel.find({
+      $or: [{ managerId: managerObjectId }, { coManagerIds: managerObjectId }],
+    }).lean();
 
-    if (myTeamIds.length === 0) {
+    if (myTeams.length === 0) {
       return res.json({ managers: [] });
     }
 
-    // Find other managers who also have teams with shared team members
-    // For now, just return all managers except self (can refine later)
+    // Collect all other manager IDs from those teams (owners + co-managers, excluding self)
+    const peerManagerIdSet = new Set<string>();
+    for (const team of myTeams) {
+      const ownerId = String(team.managerId);
+      if (ownerId !== managerId) {
+        peerManagerIdSet.add(ownerId);
+      }
+      for (const coMgrId of (team.coManagerIds ?? [])) {
+        const coIdStr = String(coMgrId);
+        if (coIdStr !== managerId) {
+          peerManagerIdSet.add(coIdStr);
+        }
+      }
+    }
+
+    if (peerManagerIdSet.size === 0) {
+      return res.json({ managers: [] });
+    }
+
     const peerManagers = await ManagerModel.find({
-      _id: { $ne: managerObjectId }
+      _id: { $in: Array.from(peerManagerIdSet).map(id => new mongoose.Types.ObjectId(id)) },
     }).lean();
 
     const result = peerManagers.map(m => ({
@@ -864,47 +1147,15 @@ router.get('/peer-managers', requireAuth, async (req, res) => {
 });
 
 /**
- * GET /chat/debug/check-conversations
- * Debug endpoint to check for conversations with missing managerIds
- */
-router.get('/debug/check-conversations', requireAuth, async (req, res) => {
-  try {
-    const conversations = await ConversationModel.find({}).lean();
-    const issues: any[] = [];
-
-    for (const conv of conversations) {
-      if (!conv.managerId) {
-        issues.push({
-          conversationId: conv._id.toString(),
-          userKey: conv.userKey,
-          issue: 'Missing managerId'
-        });
-      }
-    }
-
-    return res.json({
-      total: conversations.length,
-      issues: issues.length,
-      problemConversations: issues,
-    });
-  } catch (error) {
-    console.error('Error checking conversations:', error);
-    return res.status(500).json({ error: 'Failed to check conversations' });
-  }
-});
-
-/**
  * POST /chat/invitations/:messageId/respond
  * Staff member accepts or declines an event invitation
  */
 router.post('/invitations/:messageId/respond', requireAuth, async (req, res) => {
   try {
     const { messageId } = req.params;
-    const { accept, eventId, roleId } = req.body;
+    const { accept } = req.body;
     const { managerId, provider, sub, name } = (req as AuthenticatedRequest).authUser;
     const userKey = `${provider}:${sub}`;
-
-    console.log('[INVITATION] Respond - messageId:', messageId, 'accept:', accept, 'eventId:', eventId, 'roleId:', roleId);
 
     // Validate input
     if (!messageId || !mongoose.Types.ObjectId.isValid(messageId)) {
@@ -913,10 +1164,6 @@ router.post('/invitations/:messageId/respond', requireAuth, async (req, res) => 
 
     if (typeof accept !== 'boolean') {
       return res.status(400).json({ error: 'accept must be a boolean' });
-    }
-
-    if (!eventId || !roleId) {
-      return res.status(400).json({ error: 'eventId and roleId are required' });
     }
 
     // Only users can respond to invitations (not managers)
@@ -948,6 +1195,15 @@ router.post('/invitations/:messageId/respond', requireAuth, async (req, res) => 
         currentStatus: message.metadata.status
       });
     }
+
+    // SECURITY: Use trusted eventId/roleId from message metadata, NOT from req.body
+    const eventId = message.metadata?.eventId;
+    const roleId = message.metadata?.roleId;
+    if (!eventId || !roleId) {
+      return res.status(400).json({ error: 'Invitation metadata is missing eventId or roleId' });
+    }
+
+    console.log('[INVITATION] Respond - messageId:', messageId, 'accept:', accept, 'eventId:', eventId, 'roleId:', roleId);
 
     // If accepting, update the event roster
     let updatedEvent = null;
@@ -1419,9 +1675,16 @@ router.post('/invitations/send-bulk', requireAuth, async (req, res) => {
           continue;
         }
 
-        // Check if user is active team member
+        // Check if user is active team member (across owned + co-managed teams)
+        const bulkTeamIds = await TeamModel.find({
+          $or: [
+            { managerId: new mongoose.Types.ObjectId(managerId) },
+            { coManagerIds: new mongoose.Types.ObjectId(managerId) },
+          ],
+        }).distinct('_id');
+
         const isTeamMember = await TeamMemberModel.findOne({
-          managerId: new mongoose.Types.ObjectId(managerId),
+          teamId: { $in: bulkTeamIds },
           provider: userProvider,
           subject: userSubject,
           status: 'active',

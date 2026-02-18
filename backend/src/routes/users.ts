@@ -25,8 +25,8 @@ const updateSchema = z.object({
   phoneNumber: z
     .string()
     .regex(
-      /^(\d{3}-\d{3}-\d{4}|\d{10})$/,
-      'Phone number must be in US format: XXX-XXX-XXXX or XXXXXXXXXX'
+      /^(\+?1?[-.\s]?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})$/,
+      'Phone number must be in US format: e.g. +15551234567, 555-123-4567, or 5551234567'
     )
     .optional(),
   appId: z
