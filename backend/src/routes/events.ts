@@ -1654,6 +1654,8 @@ router.get('/events/currently-clocked-in', requireAuth, async (req, res) => {
         if (activeSession) {
           const clockInTime = new Date(activeSession.clockInAt);
           const elapsed = Date.now() - clockInTime.getTime();
+          const MAX_SESSION_MS = 16 * 60 * 60 * 1000; // 16 hours
+          const isStale = elapsed > MAX_SESSION_MS;
 
           clockedInStaff.push({
             userKey: staff.userKey,
@@ -1668,6 +1670,7 @@ router.get('/events/currently-clocked-in', requireAuth, async (req, res) => {
             elapsedMs: elapsed,
             elapsedFormatted: formatElapsedTime(elapsed),
             clockInLocation: activeSession.clockInLocation,
+            stale: isStale,
           });
         }
       }
@@ -1678,8 +1681,11 @@ router.get('/events/currently-clocked-in', requireAuth, async (req, res) => {
       (a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime()
     );
 
+    const staleCount = clockedInStaff.filter((s) => s.stale).length;
+
     return res.json({
       count: clockedInStaff.length,
+      staleCount,
       staff: clockedInStaff,
     });
   } catch (err) {
@@ -1718,8 +1724,27 @@ router.get('/events/attendance-analytics', requireAuth, async (req, res) => {
       }
     ).lean();
 
+    // Separate query for currentlyWorking: use 48-hour window (matches currently-clocked-in endpoint)
+    const cutoff48h = new Date();
+    cutoff48h.setHours(cutoff48h.getHours() - 48);
+    const recentEvents = await EventModel.find(
+      { managerId: manager._id, date: { $gte: cutoff48h } },
+      { 'accepted_staff.userKey': 1, 'accepted_staff.attendance': 1, 'accepted_staff.response': 1 }
+    ).lean();
+
     let currentlyWorking = 0;
+    for (const ev of recentEvents) {
+      for (const s of (ev.accepted_staff || []) as any[]) {
+        if (s.response !== 'accepted' && s.response !== 'accept') continue;
+        for (const a of (s.attendance || []) as any[]) {
+          if (a.clockInAt && !a.clockOutAt) currentlyWorking++;
+        }
+      }
+    }
+
     let totalHoursPeriod = 0;
+    let todayTotalHours = 0;
+    const todayDateKey = new Date().toISOString().split('T')[0] as string;
     const dailyHours: { [date: string]: number } = {};
 
     // Initialize daily hours for all days in range
@@ -1747,11 +1772,6 @@ router.get('/events/attendance-analytics', requireAuth, async (req, res) => {
             const clockInDate = clockIn.toISOString().split('T')[0] as string;
             const clockOut = record.clockOutAt ? new Date(record.clockOutAt) : null;
 
-            // Count currently working (clocked in, not clocked out)
-            if (!clockOut) {
-              currentlyWorking++;
-            }
-
             // Calculate hours worked
             const endTime = clockOut || new Date();
             const hoursWorked = (endTime.getTime() - clockIn.getTime()) / (1000 * 60 * 60);
@@ -1762,6 +1782,9 @@ router.get('/events/attendance-analytics', requireAuth, async (req, res) => {
             }
 
             totalHoursPeriod += hoursWorked;
+            if (clockInDate === todayDateKey) {
+              todayTotalHours += hoursWorked;
+            }
           }
         } else if (eventDate) {
           // No attendance records — fall back to scheduled event hours
@@ -1776,6 +1799,9 @@ router.get('/events/attendance-analytics', requireAuth, async (req, res) => {
               dailyHours[eventDate]! += hours;
             }
             totalHoursPeriod += hours;
+            if (eventDate === todayDateKey) {
+              todayTotalHours += hours;
+            }
           }
         }
       }
@@ -1798,7 +1824,8 @@ router.get('/events/attendance-analytics', requireAuth, async (req, res) => {
 
     return res.json({
       currentlyWorking,
-      todayTotalHours: Math.round(totalHoursPeriod * 10) / 10,
+      todayTotalHours: Math.round(todayTotalHours * 10) / 10,
+      periodTotalHours: Math.round(totalHoursPeriod * 10) / 10,
       pendingFlags: pendingFlagsCount,
       weeklyHours,
       dateRange: {
@@ -2744,19 +2771,9 @@ router.post('/events/:id/clock-in', requireAuth, async (req, res) => {
     }
 
     const accepted = (event.accepted_staff || []) as any[];
-    const idx = accepted.findIndex((m: any) => (m?.userKey || '') === userKey);
-    if (idx === -1) {
+    const staffEntry = accepted.find((m: any) => (m?.userKey || '') === userKey);
+    if (!staffEntry) {
       return res.status(403).json({ message: 'You are not accepted for this event' });
-    }
-
-    const attendance = (accepted[idx].attendance || []) as any[];
-    const last = attendance.length > 0 ? attendance[attendance.length - 1] : undefined;
-    if (last && !last.clockOutAt) {
-      return res.status(409).json({
-        message: 'Already clocked in',
-        status: 'clocked_in',
-        clockInAt: last.clockInAt
-      });
     }
 
     const clockInTime = new Date();
@@ -2772,23 +2789,48 @@ router.post('/events/:id/clock-in', requireAuth, async (req, res) => {
       };
     }
 
-    const newAttendance = [...attendance, newAttendanceRecord];
+    // Atomic clock-in: $push only if no active session (no record without clockOutAt)
     const result = await EventModel.updateOne(
-      { _id: new mongoose.Types.ObjectId(eventId), 'accepted_staff.userKey': userKey },
-      { $set: { 'accepted_staff.$.attendance': newAttendance, updatedAt: new Date() } }
+      {
+        _id: new mongoose.Types.ObjectId(eventId),
+        'accepted_staff': {
+          $elemMatch: {
+            userKey,
+            $or: [
+              { attendance: { $exists: false } },
+              { attendance: { $size: 0 } },
+              { attendance: { $not: { $elemMatch: { clockOutAt: { $exists: false } } } } },
+            ],
+          },
+        },
+      },
+      {
+        $push: { 'accepted_staff.$.attendance': newAttendanceRecord },
+        $set: { updatedAt: new Date() },
+      }
     );
+
     if (result.matchedCount === 0) {
-      return res.status(404).json({ message: 'Event not found' });
+      // Disambiguate: user is in accepted_staff (checked above), so must be already clocked in
+      const activeSession = ((staffEntry.attendance || []) as any[]).find(
+        (a: any) => a.clockInAt && !a.clockOutAt
+      );
+      return res.status(409).json({
+        message: 'Already clocked in',
+        status: 'clocked_in',
+        clockInAt: activeSession?.clockInAt,
+      });
     }
 
     // Gamification points (future feature - disabled for now)
     const gamification: any = null;
 
+    const existingAttendance = (staffEntry.attendance || []) as any[];
     return res.status(200).json({
       message: 'Clocked in',
       status: 'clocked_in',
       clockInAt: clockInTime,
-      attendance: newAttendance,
+      attendance: [...existingAttendance, newAttendanceRecord],
       // Include geofence status for client feedback
       geofenceValidated: !!(event.venue_latitude && event.venue_longitude && latitude && longitude),
       // Include gamification data if points were awarded
@@ -2831,28 +2873,34 @@ router.post('/events/:id/clock-out', requireAuth, async (req, res) => {
     const event = await EventModel.findById(eventId).lean();
     if (!event) return res.status(404).json({ message: 'Event not found' });
     const accepted = (event.accepted_staff || []) as any[];
-    const idx = accepted.findIndex((m: any) => (m?.userKey || '') === userKey);
-    if (idx === -1) {
+    const staffEntry = accepted.find((m: any) => (m?.userKey || '') === userKey);
+    if (!staffEntry) {
       return res.status(403).json({ message: 'You are not accepted for this event' });
     }
 
-    const attendance = (accepted[idx].attendance || []) as any[];
-    const last = attendance.length > 0 ? attendance[attendance.length - 1] : undefined;
-    if (!last || last.clockOutAt) {
+    const attendance = (staffEntry.attendance || []) as any[];
+    const activeSession = attendance.find((a: any) => a.clockInAt && !a.clockOutAt);
+    if (!activeSession) {
       return res.status(409).json({ message: 'Not clocked in' });
     }
 
     const clockOutTime = new Date();
 
-    // Build updated attendance record with location
-    const updatedLast: any = {
-      ...last,
-      clockOutAt: clockOutTime,
+    // Calculate estimated hours worked from the active session's clockInAt
+    const clockInTime = new Date(activeSession.clockInAt);
+    const hoursWorked = (clockOutTime.getTime() - clockInTime.getTime()) / (1000 * 60 * 60);
+    const estimatedHours = Math.round(hoursWorked * 100) / 100;
+
+    // Build the atomic $set fields for the matching session
+    const updateFields: any = {
+      'accepted_staff.$[staff].attendance.$[session].clockOutAt': clockOutTime,
+      'accepted_staff.$[staff].attendance.$[session].estimatedHours': estimatedHours,
+      'updatedAt': new Date(),
     };
 
     // Add clock-out location if provided
     if (latitude !== undefined && longitude !== undefined && isValidCoordinate(latitude, longitude)) {
-      updatedLast.clockOutLocation = {
+      updateFields['accepted_staff.$[staff].attendance.$[session].clockOutLocation'] = {
         latitude,
         longitude,
         accuracy: accuracy ?? undefined,
@@ -2861,33 +2909,59 @@ router.post('/events/:id/clock-out', requireAuth, async (req, res) => {
 
     // Mark as auto clock-out if specified
     if (autoClockOut) {
+      updateFields['accepted_staff.$[staff].attendance.$[session].autoClockOut'] = true;
+      updateFields['accepted_staff.$[staff].attendance.$[session].autoClockOutReason'] =
+        autoClockOutReason ?? 'shift_end_buffer';
+    }
+
+    // Atomic clock-out: only update sessions without clockOutAt
+    const result = await EventModel.updateOne(
+      { _id: new mongoose.Types.ObjectId(eventId), 'accepted_staff.userKey': userKey },
+      { $set: updateFields },
+      {
+        arrayFilters: [
+          { 'staff.userKey': userKey },
+          { 'session.clockOutAt': { $exists: false } },
+        ],
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+    if (result.modifiedCount === 0) {
+      // Document matched but no session was updated — already clocked out (race condition)
+      return res.status(409).json({ message: 'Not clocked in' });
+    }
+
+    // Build the updated record for pattern checking and response
+    const updatedLast: any = {
+      ...activeSession,
+      clockOutAt: clockOutTime,
+      estimatedHours,
+    };
+    if (latitude !== undefined && longitude !== undefined && isValidCoordinate(latitude, longitude)) {
+      updatedLast.clockOutLocation = { latitude, longitude, accuracy: accuracy ?? undefined };
+    }
+    if (autoClockOut) {
       updatedLast.autoClockOut = true;
       updatedLast.autoClockOutReason = autoClockOutReason ?? 'shift_end_buffer';
     }
 
-    // Calculate estimated hours worked
-    const clockInTime = new Date(last.clockInAt);
-    const hoursWorked = (clockOutTime.getTime() - clockInTime.getTime()) / (1000 * 60 * 60);
-    updatedLast.estimatedHours = Math.round(hoursWorked * 100) / 100;
-
-    const newAttendance = attendance.slice(0, -1).concat(updatedLast);
-    const result = await EventModel.updateOne(
-      { _id: new mongoose.Types.ObjectId(eventId), 'accepted_staff.userKey': userKey },
-      { $set: { 'accepted_staff.$.attendance': newAttendance, updatedAt: new Date() } }
-    );
-    if (result.matchedCount === 0) {
-      return res.status(404).json({ message: 'Event not found' });
-    }
-
     // Check for unusual patterns asynchronously (don't block the response)
-    checkUnusualPatterns(event, userKey, updatedLast, accepted[idx]).catch((err) => {
+    checkUnusualPatterns(event, userKey, updatedLast, staffEntry).catch((err) => {
       console.error('[clock-out] pattern check failed:', err);
     });
 
+    // Build updated attendance for the response
+    const updatedAttendance = attendance.map((a: any) =>
+      a.clockInAt && !a.clockOutAt ? updatedLast : a
+    );
+
     return res.status(200).json({
       message: autoClockOut ? 'Auto clocked out' : 'Clocked out',
-      attendance: newAttendance,
-      hoursWorked: updatedLast.estimatedHours,
+      attendance: updatedAttendance,
+      hoursWorked: estimatedHours,
       autoClockOut: autoClockOut ?? false,
     });
   } catch (err) {
@@ -2962,6 +3036,18 @@ router.post('/events/:id/bulk-clock-in', requireAuth, async (req, res) => {
       }
 
       const staff = acceptedStaff[staffIdx];
+
+      // Check response status before allowing clock-in
+      if (staff.response !== 'accepted' && staff.response !== 'accept') {
+        results.push({
+          userKey,
+          status: 'not_accepted',
+          message: 'Staff has not accepted this event',
+          staffName: staff.name || `${staff.first_name || ''} ${staff.last_name || ''}`.trim(),
+        });
+        continue;
+      }
+
       const attendance = (staff.attendance || []) as any[];
       const lastAttendance = attendance.length > 0 ? attendance[attendance.length - 1] : null;
 
@@ -2988,21 +3074,37 @@ router.post('/events/:id/bulk-clock-in', requireAuth, async (req, res) => {
         overrideNote: note || 'Bulk clock-in by manager',
       };
 
-      const newAttendance = [...attendance, newAttendanceRecord];
-
-      // Update staff's attendance
-      await EventModel.updateOne(
+      // Atomic $push: only if no active session (prevents race with concurrent bulk clock-ins)
+      const updateResult = await EventModel.updateOne(
         {
           _id: new mongoose.Types.ObjectId(eventId),
-          'accepted_staff.userKey': userKey,
+          'accepted_staff': {
+            $elemMatch: {
+              userKey,
+              $or: [
+                { attendance: { $exists: false } },
+                { attendance: { $size: 0 } },
+                { attendance: { $not: { $elemMatch: { clockOutAt: { $exists: false } } } } },
+              ],
+            },
+          },
         },
         {
-          $set: {
-            'accepted_staff.$.attendance': newAttendance,
-            updatedAt: new Date(),
-          },
+          $push: { 'accepted_staff.$.attendance': newAttendanceRecord },
+          $set: { updatedAt: new Date() },
         }
       );
+
+      if (updateResult.matchedCount === 0) {
+        // Race condition: someone else clocked them in between our read and this write
+        results.push({
+          userKey,
+          status: 'already_clocked_in',
+          message: 'Already clocked in',
+          staffName: staff.name || `${staff.first_name || ''} ${staff.last_name || ''}`.trim(),
+        });
+        continue;
+      }
 
       results.push({
         userKey,
