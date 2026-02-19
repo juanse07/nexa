@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../services/terminology_provider.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 // ===== HOME DASHBOARD COMMENTED OUT - SAVED FOR FUTURE USE =====
 // import '../../home/presentation/home_screen.dart';
 // ===== END HOME DASHBOARD IMPORT =====
 import '../../extraction/presentation/extraction_screen.dart';
+import '../../events/presentation/manager_calendar_screen.dart';
 import '../../chat/presentation/conversations_screen.dart';
 import '../../attendance/presentation/attendance_dashboard_screen.dart';
 import '../../statistics/presentation/statistics_dashboard_screen.dart';
@@ -56,14 +58,15 @@ class _MainScreenState extends State<MainScreen>
     const ExtractionScreen(
       initialScreenIndex: 1,
       hideNavigationRail: true,
-    ), // Jobs/Events tab (now index 0)
-    const ConversationsScreen(), // Chat screen (now index 1)
+    ), // Events tab (index 0)
+    const ManagerCalendarScreen(), // Schedule/Calendar tab (index 1)
+    const ConversationsScreen(), // Chat screen (index 2)
     const ExtractionScreen(
       initialScreenIndex: 4,
       hideNavigationRail: true,
-    ), // Catalog screen (now index 2)
-    const AttendanceDashboardScreen(), // Attendance tab (index 3)
-    const StatisticsDashboardScreen(), // Statistics tab (index 4)
+    ), // Catalog screen (index 3)
+    const AttendanceDashboardScreen(), // Attendance tab (index 4)
+    const StatisticsDashboardScreen(), // Statistics tab (index 5)
   ];
 
   @override
@@ -107,8 +110,8 @@ class _MainScreenState extends State<MainScreen>
     if (notification.metrics.axis != Axis.vertical) return;
 
     // Check if we have enough content to warrant hiding navigation
-    // For Jobs/Events tab (index 2), check if there's scrollable content
-    if (_selectedIndex == 2) {
+    // For Catalog tab (index 3), check if there's scrollable content
+    if (_selectedIndex == 3) {
       // Check if there's enough content to scroll
       final maxScroll = notification.metrics.maxScrollExtent;
       if (maxScroll < 300) { // Less than 300px of scrollable content (~5 cards)
@@ -200,6 +203,7 @@ class _MainScreenState extends State<MainScreen>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final bool isDesktop = MediaQuery.of(context).size.width >= 1200;
 
     if (isDesktop) {
@@ -254,6 +258,7 @@ class _MainScreenState extends State<MainScreen>
   }
 
   Widget _buildBottomNavigationBar() {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.formFillSlate, // Light grey background
@@ -272,11 +277,12 @@ class _MainScreenState extends State<MainScreen>
               // _buildNavButton(0, Icons.home_rounded, 'Home'),
               // _buildNavButton(1, Icons.add_circle_outline, 'Create'),
               // ===== END REMOVED BUTTONS =====
-              _buildNavButton(0, Icons.view_module, context.watch<TerminologyProvider>().plural), // Was index 2, now 0
-              _buildNavButton(1, Icons.chat_bubble_outline, 'Chat'), // Was index 3, now 1
-              _buildNavButton(2, Icons.inventory_2, 'Catalog'), // Was index 4, now 2
-              _buildNavButton(3, Icons.fact_check_outlined, 'Attendance'), // Attendance tab (index 3)
-              _buildNavButton(4, Icons.bar_chart, 'Stats'), // Statistics tab (index 4)
+              _buildNavButton(0, Icons.view_module, context.watch<TerminologyProvider>().plural), // Events (index 0)
+              _buildNavButton(1, Icons.calendar_month_rounded, 'Schedule'), // Calendar (index 1)
+              _buildNavButton(2, Icons.chat_bubble_outline, l10n.navChat), // Chat (index 2)
+              _buildNavButton(3, Icons.inventory_2, l10n.navCatalog), // Catalog (index 3)
+              _buildNavButton(4, Icons.fact_check_outlined, l10n.navAttendance), // Attendance (index 4)
+              _buildNavButton(5, Icons.bar_chart, l10n.navStats), // Statistics (index 5)
             ],
           ),
         ),
@@ -337,6 +343,7 @@ class _MainScreenState extends State<MainScreen>
   }
 
   Widget _buildNavigationRail() {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       width: 240,
       decoration: BoxDecoration(
@@ -402,13 +409,14 @@ class _MainScreenState extends State<MainScreen>
           // _buildRailItem(0, Icons.home_rounded, 'Home'),
           // _buildRailItem(1, Icons.add_circle_outline, 'Create'),
           // ===== END REMOVED BUTTONS =====
-          _buildRailItem(0, Icons.view_module, context.watch<TerminologyProvider>().plural), // Was index 2, now 0
-          _buildRailItem(1, Icons.chat_bubble_outline, 'Chat'), // Was index 3, now 1
-          _buildRailItem(2, Icons.inventory_2, 'Catalog'), // Was index 4, now 2
-          _buildRailItem(3, Icons.fact_check_outlined, 'Attendance'), // Attendance tab (index 3)
+          _buildRailItem(0, Icons.view_module, context.watch<TerminologyProvider>().plural), // Events (index 0)
+          _buildRailItem(1, Icons.calendar_month_rounded, 'Schedule'), // Calendar (index 1)
+          _buildRailItem(2, Icons.chat_bubble_outline, l10n.navChat), // Chat (index 2)
+          _buildRailItem(3, Icons.inventory_2, l10n.navCatalog), // Catalog (index 3)
+          _buildRailItem(4, Icons.fact_check_outlined, l10n.navAttendance), // Attendance (index 4)
           const Spacer(),
           // Settings at bottom
-          _buildRailItem(-1, Icons.settings, 'Settings'),
+          _buildRailItem(-1, Icons.settings, l10n.settings),
           const SizedBox(height: 24),
         ],
       ),

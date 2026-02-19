@@ -109,6 +109,7 @@ dependencies:
   # Charts & Premium UI
   fl_chart: ^0.66.0
   flutter_slidable: ^3.0.1
+  table_calendar: ^3.0.9
 
   # Deep Linking
   app_links: ^6.0.0
