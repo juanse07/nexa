@@ -623,257 +623,462 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
   Widget build(BuildContext context) {
     final data = widget.draft;
     final client = (data['client_name'] ?? '').toString();
-    final name = (data['event_name'] ?? data['venue_name'] ?? 'Untitled')
-        .toString();
+    final name = (data['event_name'] ?? data['venue_name'] ?? 'Untitled').toString();
     final date = (data['date'] ?? '').toString();
+
     return Scaffold(
-      appBar: AppBar(title: Text(AppLocalizations.of(context)!.postJob)),
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        title: Text(AppLocalizations.of(context)!.postJob),
+        backgroundColor: AppColors.navySpaceCadet,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
       body: Column(
         children: [
           Expanded(
             child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                Text(
-                  client.isNotEmpty ? client : 'Client',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Event info card ──────────────────────────────
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.06),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 4,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryIndigo,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                client.isNotEmpty ? client : 'Client',
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.navySpaceCadet,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                [name, date].where((s) => s.isNotEmpty).join(' • '),
+                                style: TextStyle(
+                                  color: Colors.grey.shade500,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  [
-                    name,
-                    date,
-                  ].where((s) => s.toString().isNotEmpty).join(' • '),
-                  style: const TextStyle(color: Colors.grey),
-                ),
-                const SizedBox(height: 12),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Visible to entire team'),
-                  value: _visibleToEntireTeam,
-                  onChanged: (v) {
-                    setState(() {
-                      _visibleToEntireTeam = v;
-                      // Auto-select first team if enabling and no team selected
-                      if (_visibleToEntireTeam &&
-                          _selectedVisibilityTeamId == null &&
-                          _teams.isNotEmpty) {
-                        _selectedVisibilityTeamId =
-                            (_teams.first['id'] ?? '').toString();
-                      }
-                    });
-                  },
-                ),
-                if (_visibleToEntireTeam) ...[
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    value: _selectedVisibilityTeamId,
-                    decoration: const InputDecoration(
-                      labelText: 'Select team',
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 12,
+                  const SizedBox(height: 12),
+
+                  // ── Visibility toggle card ───────────────────────
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _visibleToEntireTeam
+                            ? AppColors.navySpaceCadet.withValues(alpha: 0.25)
+                            : Colors.transparent,
                       ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
-                    hint: const Text('Select team'),
-                    items: _teams.map((team) {
-                      final teamId = (team['id'] ?? '').toString();
-                      final name = (team['name'] ?? 'Untitled team').toString();
-                      return DropdownMenuItem(
-                        value: teamId,
-                        child: Text(name),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      setState(() => _selectedVisibilityTeamId = value);
-                    },
-                  ),
-                ],
-                const SizedBox(height: 16),
-                // No explicit visibility selector - determined by button pressed
-                if (!_visibleToEntireTeam) ...[
-                  _buildTeamSelector(),
-                  _buildGroupSelector(),
-                  _buildFavoritesSection(),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Team Members',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _searchCtrl,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.search),
-                      hintText: 'Search team members',
+                    child: SwitchListTile(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 4,
+                      ),
+                      secondary: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: _visibleToEntireTeam
+                              ? AppColors.navySpaceCadet
+                              : AppColors.navySpaceCadet.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          Icons.groups_rounded,
+                          size: 18,
+                          color: _visibleToEntireTeam
+                              ? Colors.white
+                              : AppColors.navySpaceCadet,
+                        ),
+                      ),
+                      title: const Text(
+                        'Visible to entire team',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          color: AppColors.navySpaceCadet,
+                        ),
+                      ),
+                      subtitle: Text(
+                        'Broadcast this shift to all team members',
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                      ),
+                      value: _visibleToEntireTeam,
+                      activeColor: AppColors.navySpaceCadet,
+                      onChanged: (v) {
+                        setState(() {
+                          _visibleToEntireTeam = v;
+                          if (_visibleToEntireTeam &&
+                              _selectedVisibilityTeamId == null &&
+                              _teams.isNotEmpty) {
+                            _selectedVisibilityTeamId =
+                                (_teams.first['id'] ?? '').toString();
+                          }
+                        });
+                      },
                     ),
-                    onChanged: (_) => _loadUsers(reset: true),
-                    onSubmitted: (_) => _loadUsers(reset: true),
                   ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    height: 220,
-                    child: _users.isEmpty && !_loadingUsers
-                        ? Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
+
+                  if (_visibleToEntireTeam) ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: _selectedVisibilityTeamId,
+                      decoration: InputDecoration(
+                        labelText: 'Select team',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: AppColors.border),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                        filled: true,
+                        fillColor: Colors.white,
+                      ),
+                      hint: const Text('Select team'),
+                      items: _teams.map((team) {
+                        final teamId = (team['id'] ?? '').toString();
+                        final name = (team['name'] ?? 'Untitled team').toString();
+                        return DropdownMenuItem(value: teamId, child: Text(name));
+                      }).toList(),
+                      onChanged: (value) =>
+                          setState(() => _selectedVisibilityTeamId = value),
+                    ),
+                  ],
+
+                  if (!_visibleToEntireTeam) ...[
+                    const SizedBox(height: 16),
+                    _buildTeamSelector(),
+                    _buildGroupSelector(),
+                    _buildFavoritesSection(),
+                    const SizedBox(height: 16),
+
+                    // ── Team Members ─────────────────────────────
+                    Row(
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: AppColors.navySpaceCadet.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.person_search_rounded,
+                            size: 16,
+                            color: AppColors.navySpaceCadet,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        const Text(
+                          'Team Members',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
+                            color: AppColors.navySpaceCadet,
+                          ),
+                        ),
+                        if (_selectedKeys.isNotEmpty) ...[
+                          const Spacer(),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.navySpaceCadet,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              '${_selectedKeys.length} selected',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _searchCtrl,
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.search, size: 20),
+                        hintText: 'Search team members',
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: AppColors.border),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                      ),
+                      onChanged: (_) => _loadUsers(reset: true),
+                      onSubmitted: (_) => _loadUsers(reset: true),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 220,
+                      child: _users.isEmpty && !_loadingUsers
+                          ? Center(
                               child: Text(
                                 _searchCtrl.text.trim().isEmpty
                                     ? 'No team members yet.\nAdd members to your teams first.'
-                                    : 'No team members found matching "${_searchCtrl.text.trim()}"',
+                                    : 'No results for "${_searchCtrl.text.trim()}"',
                                 textAlign: TextAlign.center,
-                                style: TextStyle(color: Colors.grey.shade600),
+                                style: TextStyle(color: Colors.grey.shade500),
+                              ),
+                            )
+                          : Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: AppColors.border),
+                              ),
+                              child: NotificationListener<ScrollNotification>(
+                                onNotification: (n) {
+                                  if (n.metrics.pixels >=
+                                          n.metrics.maxScrollExtent - 100 &&
+                                      _cursor != null &&
+                                      _cursor != 'null' &&
+                                      !_loadingUsers) {
+                                    _loadUsers();
+                                  }
+                                  return false;
+                                },
+                                child: ListView.builder(
+                                  itemCount:
+                                      _users.length + (_loadingUsers ? 1 : 0),
+                                  itemBuilder: (ctx, idx) {
+                                    if (idx >= _users.length) {
+                                      return const Center(
+                                        child: Padding(
+                                          padding: EdgeInsets.all(12),
+                                          child: CircularProgressIndicator(),
+                                        ),
+                                      );
+                                    }
+                                    final u = _users[idx];
+                                    final key =
+                                        '${u['provider']}:${u['subject']}';
+                                    final selected =
+                                        _selectedKeys.contains(key);
+                                    return CheckboxListTile(
+                                      value: selected,
+                                      activeColor: AppColors.navySpaceCadet,
+                                      dense: true,
+                                      onChanged: (_) {
+                                        setState(() {
+                                          if (selected) {
+                                            _selectedKeys.remove(key);
+                                          } else {
+                                            _selectedKeys.add(key);
+                                          }
+                                        });
+                                      },
+                                      title: Text(
+                                        (u['name'] ?? u['email'] ?? key)
+                                            .toString(),
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      subtitle: Text(
+                                        (u['email'] ?? '').toString(),
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                    );
+                                  },
+                                ),
                               ),
                             ),
-                          )
-                        : NotificationListener<ScrollNotification>(
-                            onNotification: (n) {
-                              if (n.metrics.pixels >=
-                                      n.metrics.maxScrollExtent - 100 &&
-                                  _cursor != null &&
-                                  _cursor != 'null' &&
-                                  !_loadingUsers) {
-                                _loadUsers();
-                              }
-                              return false;
-                            },
-                            child: ListView.builder(
-                              itemCount: _users.length + (_loadingUsers ? 1 : 0),
-                              itemBuilder: (ctx, idx) {
-                                if (idx >= _users.length) {
-                                  return const Center(
-                                    child: Padding(
-                                      padding: EdgeInsets.all(12),
-                                      child: CircularProgressIndicator(),
-                                    ),
-                                  );
-                                }
-                                final u = _users[idx];
-                                final key = '${u['provider']}:${u['subject']}';
-                                final selected = _selectedKeys.contains(key);
-                                return CheckboxListTile(
-                                  value: selected,
-                                  onChanged: (_) {
-                                    setState(() {
-                                      if (selected) {
-                                        _selectedKeys.remove(key);
-                                      } else {
-                                        _selectedKeys.add(key);
-                                      }
-                                    });
-                                  },
-                                  title: Text(
-                                    (u['name'] ?? u['email'] ?? key).toString(),
-                                  ),
-                                  subtitle: Text((u['email'] ?? '').toString()),
-                                );
-                              },
+                    ),
+                    if (_selectedKeys.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: _selectedKeys.map((k) {
+                          final info = _keyToUser[k] ?? const {};
+                          final display = [
+                            (info['name'] ?? '').toString(),
+                            (info['email'] ?? '').toString(),
+                          ].where((s) => s.isNotEmpty).join(' — ');
+                          return Chip(
+                            label: Text(
+                              display.isNotEmpty ? display : k,
+                              style: const TextStyle(fontSize: 12),
                             ),
-                          ),
-                  ),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: _selectedKeys.map((k) {
-                      final info = _keyToUser[k] ?? const {};
-                      final display = [
-                        (info['name'] ?? '').toString(),
-                        (info['email'] ?? '').toString(),
-                      ].where((s) => s.isNotEmpty).join(' — ');
-                      return Chip(
-                        label: Text(display.isNotEmpty ? display : k),
-                      );
-                    }).toList(),
-                  ),
-                ],
+                            backgroundColor:
+                                AppColors.navySpaceCadet.withValues(alpha: 0.08),
+                            side: BorderSide.none,
+                            deleteIcon: const Icon(Icons.close, size: 14),
+                            onDeleted: () =>
+                                setState(() => _selectedKeys.remove(k)),
+                          );
+                        }).toList(),
+                      ),
+                    ],
                   ],
-                ),
+                ],
               ),
             ),
           ),
-          // Pinned action buttons at bottom
+
+          // ── Pinned action buttons ──────────────────────────────
           Container(
             decoration: BoxDecoration(
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.1),
-                  blurRadius: 8,
-                  offset: const Offset(0, -2),
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 12,
+                  offset: const Offset(0, -3),
                 ),
               ],
             ),
             child: SafeArea(
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Send Direct Invitations button (keeps event private/draft)
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
                         onPressed: _publishing ? null : _sendDirectInvitations,
-                        icon: const Icon(Icons.mail_outline),
+                        icon: const Icon(Icons.mail_outline_rounded, size: 18),
                         label: const Text(
-                          'Send Direct Invitations (Private)',
+                          'Send Direct Invitations',
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 14,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
                         style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          side: const BorderSide(color: AppColors.techBlue, width: 2),
-                          foregroundColor: AppColors.techBlue,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          side: const BorderSide(
+                            color: AppColors.navySpaceCadet,
+                            width: 1.5,
+                          ),
+                          foregroundColor: AppColors.navySpaceCadet,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Event stays private - only invited people can see it',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Event stays private — only invited people can see it',
+                      style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 16),
-                    // Publish to Team button (makes event public)
+                    const SizedBox(height: 10),
                     SizedBox(
                       width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _publishing ? null : _publish,
-                        icon: const Icon(Icons.campaign),
-                        label: Text(
-                          _publishing ? 'Publishing...' : 'Publish to Team/Public',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [
+                              Color(0xFF212C4A),
+                              Color(0xFF1E3A8A),
+                            ],
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
                           ),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          backgroundColor: AppColors.techBlue,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                        child: ElevatedButton.icon(
+                          onPressed: _publishing ? null : _publish,
+                          icon: const Icon(Icons.campaign_rounded, size: 18),
+                          label: Text(
+                            _publishing
+                                ? 'Publishing...'
+                                : 'Publish to Team / Public',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                          elevation: 0,
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 0,
+                          ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Event becomes visible to selected teams/members',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Event becomes visible to selected teams / members',
+                      style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -893,31 +1098,59 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
       children: [
         Row(
           children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: AppColors.navySpaceCadet.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.group_outlined,
+                size: 16,
+                color: AppColors.navySpaceCadet,
+              ),
+            ),
+            const SizedBox(width: 10),
             const Text(
-              'Target teams',
-              style: TextStyle(fontWeight: FontWeight.w600),
+              'Target Teams',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+                color: AppColors.navySpaceCadet,
+              ),
             ),
             const Spacer(),
-            TextButton.icon(
-              onPressed: _openTeamsManagement,
-              icon: const Icon(Icons.groups_outlined),
-              label: const Text('Manage teams'),
+            GestureDetector(
+              onTap: _openTeamsManagement,
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.people_alt_rounded,
+                    size: 14,
+                    color: AppColors.primaryIndigo,
+                  ),
+                  const SizedBox(width: 4),
+                  const Text(
+                    'Manage',
+                    style: TextStyle(
+                      color: AppColors.primaryIndigo,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         if (_loadingTeams)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
-            child: LinearProgressIndicator(minHeight: 2),
-          )
+          const LinearProgressIndicator(minHeight: 2)
         else if (!hasTeams)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              'Create a team to target groups of workers.',
-              style: TextStyle(color: Colors.grey.shade600),
-            ),
+          Text(
+            'Create a team to target groups of workers.',
+            style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
           )
         else
           Wrap(
@@ -929,6 +1162,18 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
               final isSelected = _selectedTeamIds.contains(teamId);
               return FilterChip(
                 selected: isSelected,
+                selectedColor: AppColors.navySpaceCadet,
+                checkmarkColor: Colors.white,
+                backgroundColor: Colors.white,
+                side: BorderSide(
+                  color: isSelected ? AppColors.navySpaceCadet : AppColors.border,
+                  width: 1.5,
+                ),
+                labelStyle: TextStyle(
+                  color: isSelected ? Colors.white : AppColors.navySpaceCadet,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
                 label: Text(name.isEmpty ? 'Untitled team' : name),
                 onSelected: (selected) {
                   setState(() {
@@ -953,22 +1198,35 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Row(
+        Row(
           children: [
-            Icon(Icons.group_work, size: 18, color: Colors.deepPurple),
-            SizedBox(width: 8),
-            Text(
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: const Color(0xFF7A3AFB).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.group_work_rounded,
+                size: 16,
+                color: Color(0xFF7A3AFB),
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Text(
               'Staff Groups',
-              style: TextStyle(fontWeight: FontWeight.w600),
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+                color: AppColors.navySpaceCadet,
+              ),
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         if (_loadingGroups)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
-            child: LinearProgressIndicator(minHeight: 2),
-          )
+          const LinearProgressIndicator(minHeight: 2)
         else
           Wrap(
             spacing: 8,
@@ -980,6 +1238,20 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
               final isSelected = _selectedGroupIds.contains(groupId);
               return FilterChip(
                 selected: isSelected,
+                selectedColor: const Color(0xFF7A3AFB),
+                checkmarkColor: Colors.white,
+                backgroundColor: Colors.white,
+                side: BorderSide(
+                  color: isSelected
+                      ? const Color(0xFF7A3AFB)
+                      : AppColors.border,
+                  width: 1.5,
+                ),
+                labelStyle: TextStyle(
+                  color: isSelected ? Colors.white : AppColors.navySpaceCadet,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
                 label: Text('${name.isEmpty ? 'Untitled' : name} ($memberCount)'),
                 onSelected: (selected) {
                   setState(() {
@@ -1018,66 +1290,78 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
       children: [
         Row(
           children: [
-            const Icon(Icons.star, color: Colors.amber, size: 20),
-            const SizedBox(width: 8),
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: Colors.amber.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.star_rounded,
+                size: 16,
+                color: Colors.amber,
+              ),
+            ),
+            const SizedBox(width: 10),
             const Text(
               'Favorites',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+                color: AppColors.navySpaceCadet,
+              ),
             ),
             const Spacer(),
             if (favorites.isNotEmpty)
-              TextButton(
-                onPressed: allFavoritesSelected
+              GestureDetector(
+                onTap: allFavoritesSelected
                     ? _deselectAllFavorites
                     : _selectAllFavorites,
                 child: Text(
-                  allFavoritesSelected ? 'Deselect All' : 'Select All',
+                  allFavoritesSelected ? 'Deselect all' : 'Select all',
+                  style: const TextStyle(
+                    color: AppColors.primaryIndigo,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
           ],
         ),
-        const SizedBox(height: 8),
-        // Role filter dropdown
-        if (_availableRoleFilters.isNotEmpty)
-          DropdownButtonFormField<String>(
-            value: _selectedRoleFilter,
-            decoration: InputDecoration(
-              labelText: 'Filter by role',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
+        if (_availableRoleFilters.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Icon(
+                Icons.filter_list_rounded,
+                size: 14,
+                color: AppColors.navySpaceCadet,
               ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 8,
+              const SizedBox(width: 6),
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _roleFilterChip(null, 'All roles'),
+                      ..._availableRoleFilters.map(
+                        (role) => _roleFilterChip(role, role),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              prefixIcon: const Icon(Icons.filter_list),
-            ),
-            items: [
-              const DropdownMenuItem<String>(
-                value: null,
-                child: Text('All roles'),
-              ),
-              ..._availableRoleFilters.map((role) {
-                return DropdownMenuItem<String>(
-                  value: role,
-                  child: Text(role),
-                );
-              }).toList(),
             ],
-            onChanged: (value) {
-              setState(() => _selectedRoleFilter = value);
-            },
           ),
-        const SizedBox(height: 12),
+        ],
+        const SizedBox(height: 10),
         if (favorites.isEmpty)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              _selectedRoleFilter != null
-                  ? 'No favorites found for $_selectedRoleFilter'
-                  : 'No favorites yet. Favorite users from chat to see them here.',
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-            ),
+          Text(
+            _selectedRoleFilter != null
+                ? 'No favorites for $_selectedRoleFilter'
+                : 'No favorites yet. Star users from chat to see them here.',
+            style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
           )
         else
           Wrap(
@@ -1089,14 +1373,25 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
               final isSelected = _selectedKeys.contains(key);
               return FilterChip(
                 selected: isSelected,
-                label: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.star, size: 14, color: Colors.amber),
-                    const SizedBox(width: 4),
-                    Text(name),
-                  ],
+                selectedColor: Colors.amber.shade700,
+                checkmarkColor: Colors.white,
+                backgroundColor: Colors.white,
+                side: BorderSide(
+                  color: isSelected ? Colors.amber.shade700 : AppColors.border,
+                  width: 1.5,
                 ),
+                avatar: Icon(
+                  Icons.star_rounded,
+                  size: 14,
+                  color: isSelected ? Colors.white : Colors.amber,
+                ),
+                label: Text(name),
+                labelStyle: TextStyle(
+                  color: isSelected ? Colors.white : AppColors.navySpaceCadet,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+                showCheckmark: false,
                 onSelected: (selected) {
                   setState(() {
                     if (selected) {
@@ -1109,7 +1404,33 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
               );
             }).toList(),
           ),
+        const SizedBox(height: 16),
       ],
+    );
+  }
+
+  Widget _roleFilterChip(String? value, String label) {
+    final isSelected = _selectedRoleFilter == value;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedRoleFilter = value),
+      child: Container(
+        margin: const EdgeInsets.only(right: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.navySpaceCadet
+              : AppColors.navySpaceCadet.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : AppColors.navySpaceCadet,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
     );
   }
 

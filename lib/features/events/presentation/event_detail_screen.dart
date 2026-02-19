@@ -12,6 +12,7 @@ import '../../brand/data/providers/brand_provider.dart';
 import '../../extraction/services/event_service.dart';
 import '../../extraction/presentation/pending_publish_screen.dart';
 import '../../extraction/presentation/pending_edit_screen.dart';
+import '../../extraction/presentation/ai_chat_screen.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
 import '../../attendance/presentation/bulk_clock_in_screen.dart';
 import '../../attendance/services/attendance_service.dart';
@@ -45,7 +46,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final String title = (event['client_name'] ?? 'Client').toString();
+    final String title = (event['client_name'] ?? AppLocalizations.of(context)!.client).toString();
     final String subtitle = (event['shift_name'] ?? event['venue_name'] ?? AppLocalizations.of(context)!.untitledJob).toString();
 
     String dateStr = '';
@@ -84,38 +85,94 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         : AppColors.textMuted;
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         title: Text(title),
-        backgroundColor: AppColors.techBlue,
+        backgroundColor: AppColors.navySpaceCadet,
         foregroundColor: Colors.white,
         actions: [
-          // Only show edit for upcoming events
           if (isUpcoming)
             IconButton(
-              icon: const Icon(Icons.edit),
+              icon: const Icon(Icons.edit_rounded),
               onPressed: () => _showEditDialog(),
             ),
         ],
       ),
+      floatingActionButton: GestureDetector(
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => AIChatScreen(
+                startNewConversation: true,
+                eventData: event,
+              ),
+            ),
+          );
+        },
+        child: Container(
+          height: 44,
+          padding: const EdgeInsets.only(left: 4, right: 14),
+          decoration: BoxDecoration(
+            color: AppColors.navySpaceCadet.withValues(alpha: 0.92),
+            borderRadius: BorderRadius.circular(22),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.navySpaceCadet.withValues(alpha: 0.45),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ClipOval(
+                child: Image.asset(
+                  'assets/ai_assistant_logo.png',
+                  width: 36,
+                  height: 36,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.only(left: 8),
+                child: Text(
+                  'Ask AI',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.only(left: 16, top: 16, right: 16, bottom: 80),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Event Header
+            // ── Hero header card ─────────────────────────────────
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
+                gradient: const LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [
-                    AppColors.techBlue.withOpacity(0.08),
-                    AppColors.yellow.withOpacity(0.05),
-                  ],
+                  colors: [Color(0xFF212C4A), Color(0xFF1E3A8A)],
                 ),
                 borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF212C4A).withValues(alpha: 0.3),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -123,100 +180,193 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   Text(
                     title,
                     style: const TextStyle(
-                      fontSize: 24,
+                      fontSize: 20,
                       fontWeight: FontWeight.w700,
-                      color: AppColors.textDark,
+                      color: Colors.white,
                     ),
                   ),
                   if (subtitle.isNotEmpty) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 4),
                     Text(
                       subtitle,
                       style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.grey.shade600,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w400,
+                        color: Colors.white.withValues(alpha: 0.65),
                       ),
                     ),
                   ],
-                  const SizedBox(height: 12),
-                  // Status and Visibility Badges Row
+                  const SizedBox(height: 14),
                   Wrap(
                     spacing: 8,
-                    runSpacing: 8,
+                    runSpacing: 6,
                     children: [
-                      // Status Badge (Upcoming/Past)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: statusColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: statusColor.withOpacity(0.2),
-                            width: 1,
-                          ),
-                        ),
-                        child: Text(
-                          isUpcoming ? 'Upcoming' : 'Past',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: statusColor,
-                          ),
-                        ),
+                      _buildPill(
+                        isUpcoming
+                            ? AppLocalizations.of(context)!.upcoming
+                            : AppLocalizations.of(context)!.past,
+                        isUpcoming ? AppColors.success : AppColors.textMuted,
                       ),
-                      // Visibility Badge (for published events or drafts sent to staff)
                       if (event['status'] == 'published' ||
-                          (event['status'] == 'draft' && (event['accepted_staff'] as List?)?.isNotEmpty == true))
+                          (event['status'] == 'draft' &&
+                              (event['accepted_staff'] as List?)?.isNotEmpty ==
+                                  true))
                         _buildVisibilityBadge(),
                     ],
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
 
             // Action Buttons for Draft Events (Publish & Edit)
-            if (event['status'] == 'draft' && (event['accepted_staff'] as List?)?.isEmpty != false) ...[
+            if (event['status'] == 'draft' &&
+                (event['accepted_staff'] as List?)?.isEmpty != false) ...[
               _buildDraftActionButtons(),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
             ],
 
             // Action Buttons for Published Events (or drafts sent to staff)
             if (event['status'] == 'published' ||
-                (event['status'] == 'draft' && (event['accepted_staff'] as List?)?.isNotEmpty == true)) ...[
+                (event['status'] == 'draft' &&
+                    (event['accepted_staff'] as List?)?.isNotEmpty == true)) ...[
               _buildActionButtons(),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
             ],
 
-            // Event Details
-            if (dateStr.isNotEmpty) _buildInfoRow(Icons.calendar_today, AppLocalizations.of(context)!.date, dateStr),
-            if (location.isNotEmpty) _buildInfoRow(Icons.place, AppLocalizations.of(context)!.location, location),
-            if (headcount != null) _buildInfoRow(Icons.people, AppLocalizations.of(context)!.headcount, headcount.toString()),
-            if (event['venue_name'] != null) _buildInfoRow(Icons.location_city, AppLocalizations.of(context)!.locationName, event['venue_name'].toString()),
-            if (event['venue_address'] != null) _buildInfoRow(Icons.pin_drop, AppLocalizations.of(context)!.address, event['venue_address'].toString()),
-            if (event['start_time'] != null) _buildInfoRow(Icons.schedule, AppLocalizations.of(context)!.startTime, event['start_time'].toString()),
-            if (event['end_time'] != null) _buildInfoRow(Icons.schedule, AppLocalizations.of(context)!.endTime, event['end_time'].toString()),
-
-            // Roles Section
-            if (roles.isNotEmpty) ...[
-              const SizedBox(height: 24),
-              Text(
-                AppLocalizations.of(context)!.rolesNeeded,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textDark,
+            // ── Event Details card ────────────────────────────────
+            Builder(builder: (context) {
+              final l10n = AppLocalizations.of(context)!;
+              final rows = <Map<String, dynamic>>[];
+              if (dateStr.isNotEmpty)
+                rows.add({'icon': Icons.calendar_today_rounded, 'label': l10n.date, 'value': dateStr});
+              if (location.isNotEmpty)
+                rows.add({'icon': Icons.place_rounded, 'label': l10n.location, 'value': location});
+              if (headcount != null)
+                rows.add({'icon': Icons.people_rounded, 'label': l10n.headcount, 'value': headcount.toString()});
+              if (event['venue_name'] != null)
+                rows.add({'icon': Icons.location_city_rounded, 'label': l10n.locationName, 'value': event['venue_name'].toString()});
+              if (event['venue_address'] != null)
+                rows.add({'icon': Icons.pin_drop_rounded, 'label': l10n.address, 'value': event['venue_address'].toString()});
+              if (event['start_time'] != null)
+                rows.add({'icon': Icons.schedule_rounded, 'label': l10n.startTime, 'value': event['start_time'].toString()});
+              if (event['end_time'] != null)
+                rows.add({'icon': Icons.access_time_filled_rounded, 'label': l10n.endTime, 'value': event['end_time'].toString()});
+              if (rows.isEmpty) return const SizedBox.shrink();
+              return Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
+                child: Column(
+                  children: rows.asMap().entries.map((entry) {
+                    final idx = entry.key;
+                    final row = entry.value;
+                    final icon = row['icon'] as IconData;
+                    final label = row['label'] as String;
+                    final value = row['value'] as String;
+                    return Column(
+                      children: [
+                        if (idx > 0)
+                          const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 13,
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 34,
+                                height: 34,
+                                decoration: BoxDecoration(
+                                  color: AppColors.navySpaceCadet
+                                      .withValues(alpha: 0.07),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  icon,
+                                  size: 16,
+                                  color: AppColors.navySpaceCadet,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      label,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.grey.shade500,
+                                        letterSpacing: 0.3,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      value,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.navySpaceCadet,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              );
+            }),
+
+            // ── Roles Section ─────────────────────────────────────
+            if (roles.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: AppColors.warning.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.work_rounded,
+                      size: 16,
+                      color: AppColors.warning,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    AppLocalizations.of(context)!.rolesNeeded,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.navySpaceCadet,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               ...roles.map((role) {
                 if (role is! Map<String, dynamic>) return const SizedBox.shrink();
                 final roleMap = role;
-                final String rName = (roleMap['role'] ?? 'Unknown').toString();
+                final String rName = (roleMap['role'] ?? AppLocalizations.of(context)!.unknown).toString();
                 final int rCount = int.tryParse((roleMap['count'] ?? '').toString()) ??
                     (roleMap['count'] is int ? (roleMap['count'] as int) : 0);
 
@@ -252,7 +402,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                           children: [
                             Text(
                               rCount > 0
-                                  ? '$rName ($acceptedForRole/$rCount, $vacanciesLeft left)'
+                                  ? AppLocalizations.of(context)!.roleVacancies(rName, acceptedForRole, rCount, vacanciesLeft)
                                   : rName,
                               style: const TextStyle(
                                 fontSize: 14,
@@ -261,7 +411,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                             ),
                             if (roleMap['call_time'] != null)
                               Text(
-                                'Call time: ${roleMap['call_time']}',
+                                AppLocalizations.of(context)!.callTime(roleMap['call_time'].toString()),
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: Colors.grey.shade600,
@@ -283,7 +433,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      'Accepted Staff (${acceptedStaff.length})',
+                      AppLocalizations.of(context)!.acceptedStaffCount(acceptedStaff.length),
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
@@ -304,26 +454,26 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         color: AppColors.techBlue,
                         size: 22,
                       ),
-                      tooltip: 'Working Hours Sheet',
+                      tooltip: AppLocalizations.of(context)!.workingHoursSheetTooltip,
                       onSelected: _generateWorkingHoursSheet,
                       itemBuilder: (ctx) => [
-                        const PopupMenuItem(
+                        PopupMenuItem(
                           value: 'pdf',
                           child: Row(
                             children: [
-                              Icon(Icons.picture_as_pdf, size: 18, color: Colors.red),
-                              SizedBox(width: 8),
-                              Text('Hours Sheet (PDF)'),
+                              const Icon(Icons.picture_as_pdf, size: 18, color: Colors.red),
+                              const SizedBox(width: 8),
+                              Text(AppLocalizations.of(context)!.hoursSheetPdf),
                             ],
                           ),
                         ),
-                        const PopupMenuItem(
+                        PopupMenuItem(
                           value: 'docx',
                           child: Row(
                             children: [
-                              Icon(Icons.description, size: 18, color: Colors.blue),
-                              SizedBox(width: 8),
-                              Text('Hours Sheet (Word)'),
+                              const Icon(Icons.description, size: 18, color: Colors.blue),
+                              const SizedBox(width: 8),
+                              Text(AppLocalizations.of(context)!.hoursSheetWord),
                             ],
                           ),
                         ),
@@ -347,7 +497,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                           m['email'] ??
                           m['subject'] ??
                           m['userKey'] ??
-                          'Member')
+                          AppLocalizations.of(context)!.member)
                       .toString();
                   status = m['response']?.toString();
                   final r = (m['role'] ?? '').toString();
@@ -415,7 +565,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                             if (appId != null && appId.isNotEmpty) ...[
                               const SizedBox(height: 1),
                               Text(
-                                'ID: $appId',
+                                AppLocalizations.of(context)!.idLabel(appId!),
                                 style: TextStyle(
                                   fontSize: 10,
                                   color: Colors.grey.shade500,
@@ -502,9 +652,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             // Notes Section
             if (event['notes'] != null && event['notes'].toString().isNotEmpty) ...[
               const SizedBox(height: 24),
-              const Text(
-                'Notes',
-                style: TextStyle(
+              Text(
+                AppLocalizations.of(context)!.notes,
+                style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
                   color: AppColors.textDark,
@@ -562,19 +712,19 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Remove Staff Member'),
-        content: const Text('Are you sure you want to remove this staff member from the event?'),
+        title: Text(AppLocalizations.of(context)!.removeStaffMember),
+        content: Text(AppLocalizations.of(context)!.removeStaffConfirmation),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+            child: Text(AppLocalizations.of(context)!.cancel),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.errorDark,
             ),
-            child: const Text('Remove'),
+            child: Text(AppLocalizations.of(context)!.remove),
           ),
         ],
       ),
@@ -595,7 +745,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Staff member removed successfully')),
+        SnackBar(content: Text(AppLocalizations.of(context)!.staffRemovedSuccess)),
       );
 
       // Notify parent to refresh
@@ -604,9 +754,28 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       setState(() => _isRemoving = false);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to remove staff member: $e')),
+        SnackBar(content: Text('${AppLocalizations.of(context)!.failedToRemoveStaff}: $e')),
       );
     }
+  }
+
+  Widget _buildPill(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
+    );
   }
 
   Widget _buildInfoRow(IconData icon, String label, String value) {
@@ -649,11 +818,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   Widget _buildVisibilityBadge() {
     final privacyStatus = _getPrivacyStatus();
     final privacyColor = _getPrivacyColor(privacyStatus);
+    final l10n = AppLocalizations.of(context)!;
     final privacyLabel = privacyStatus == 'private'
-        ? 'Private'
+        ? l10n.privateLabel
         : privacyStatus == 'public'
-            ? 'Public'
-            : 'Private+Public';
+            ? l10n.publicLabel
+            : l10n.privatePlusPublic;
     final privacyIcon = privacyStatus == 'private'
         ? Icons.lock_outline
         : privacyStatus == 'public'
@@ -661,24 +831,21 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             : Icons.group;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: privacyColor.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: privacyColor.withOpacity(0.2),
-          width: 1,
-        ),
+        color: privacyColor.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: privacyColor.withValues(alpha: 0.35)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(privacyIcon, size: 14, color: privacyColor),
-          const SizedBox(width: 6),
+          Icon(privacyIcon, size: 12, color: privacyColor),
+          const SizedBox(width: 5),
           Text(
             privacyLabel,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 11,
               fontWeight: FontWeight.w600,
               color: privacyColor,
             ),
@@ -692,32 +859,52 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Publish Button
-        ElevatedButton.icon(
-          onPressed: _navigateToPublish,
-          icon: const Icon(Icons.send, size: 20),
-          label: const Text('Publish'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.success,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
+        // Publish — gradient fill
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF212C4A), Color(0xFF1E3A8A)],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: ElevatedButton.icon(
+            onPressed: _navigateToPublish,
+            icon: const Icon(Icons.send_rounded, size: 18),
+            label: Text(AppLocalizations.of(context)!.publish),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.transparent,
+              shadowColor: Colors.transparent,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 0,
+              textStyle: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ),
-        const SizedBox(height: 12),
-        // Edit Button
+        const SizedBox(height: 10),
+        // Edit — navy outline
         OutlinedButton.icon(
           onPressed: _navigateToEdit,
-          icon: const Icon(Icons.edit, size: 20),
-          label: const Text('Edit Details'),
+          icon: const Icon(Icons.edit_rounded, size: 18),
+          label: Text(AppLocalizations.of(context)!.editDetails),
           style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.techBlue,
-            side: const BorderSide(color: AppColors.techBlue, width: 2),
-            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+            foregroundColor: AppColors.navySpaceCadet,
+            side: const BorderSide(color: AppColors.navySpaceCadet, width: 1.5),
+            padding: const EdgeInsets.symmetric(vertical: 14),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            textStyle: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
@@ -791,16 +978,16 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             ),
           ),
           child: SwitchListTile(
-            title: const Text(
-              'Keep Open After Event',
-              style: TextStyle(
+            title: Text(
+              AppLocalizations.of(context)!.keepOpenAfterEvent,
+              style: const TextStyle(
                 fontWeight: FontWeight.w600,
                 fontSize: 14,
               ),
             ),
-            subtitle: const Text(
-              'Prevent automatic completion when event date passes',
-              style: TextStyle(fontSize: 12),
+            subtitle: Text(
+              AppLocalizations.of(context)!.preventAutoCompletion,
+              style: const TextStyle(fontSize: 12),
             ),
             value: keepOpen,
             onChanged: _isUpdatingKeepOpen ? null : _toggleKeepOpen,
@@ -813,7 +1000,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         ElevatedButton.icon(
           onPressed: _isRemoving ? null : _moveToDrafts,
           icon: const Icon(Icons.undo, size: 18),
-          label: const Text('Move to Drafts'),
+          label: Text(AppLocalizations.of(context)!.moveToDrafts),
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.warning,
             foregroundColor: Colors.white,
@@ -829,7 +1016,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           ElevatedButton.icon(
             onPressed: () => _openBulkClockIn(),
             icon: const Icon(Icons.login, size: 18),
-            label: const Text('Clock In Staff'),
+            label: Text(AppLocalizations.of(context)!.clockInStaff),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.success,
               foregroundColor: Colors.white,
@@ -846,7 +1033,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           OutlinedButton.icon(
             onPressed: _isRemoving ? null : _makePublic,
             icon: const Icon(Icons.groups, size: 20),
-            label: const Text('Open to All Staff'),
+            label: Text(AppLocalizations.of(context)!.openToAllStaff),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.info,
               side: const BorderSide(color: AppColors.info, width: 2),
@@ -885,19 +1072,19 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Clock In'),
-        content: Text('Clock in $staffName for this event?'),
+        title: Text(AppLocalizations.of(context)!.clockIn),
+        content: Text(AppLocalizations.of(context)!.clockInConfirmation(staffName)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+            child: Text(AppLocalizations.of(context)!.cancel),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.success,
             ),
-            child: const Text('Clock In'),
+            child: Text(AppLocalizations.of(context)!.clockIn),
           ),
         ],
       ),
@@ -912,7 +1099,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     if (eventId.isEmpty) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Clocking in $staffName...')),
+      SnackBar(content: Text(AppLocalizations.of(context)!.clockingInStaff(staffName))),
     );
 
     final result = await AttendanceService.bulkClockIn(
@@ -925,7 +1112,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
     if (result == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Clock-in failed. Please try again.')),
+        SnackBar(content: Text(AppLocalizations.of(context)!.clockInFailed)),
       );
       return;
     }
@@ -936,18 +1123,18 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       final status = first['status'] as String?;
       if (status == 'already_clocked_in') {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$staffName is already clocked in')),
+          SnackBar(content: Text(AppLocalizations.of(context)!.alreadyClockedInName(staffName))),
         );
       } else if (status == 'success') {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('$staffName clocked in successfully'),
+            content: Text(AppLocalizations.of(context)!.clockedInSuccess(staffName)),
             backgroundColor: AppColors.success,
           ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(first['message']?.toString() ?? 'Clock-in failed')),
+          SnackBar(content: Text(first['message']?.toString() ?? AppLocalizations.of(context)!.clockInFailed)),
         );
       }
     }
@@ -1032,29 +1219,23 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Move to Drafts'),
+        title: Text(AppLocalizations.of(context)!.moveToDrafts),
         content: Text(
           hasAcceptedStaff
-              ? 'Move "$clientName" back to drafts?\n\n'
-                  'This will:\n'
-                  '• Remove all ${acceptedStaff.length} accepted staff members\n'
-                  '• Send them a notification\n'
-                  '• Hide the job from staff view\n\n'
-                  'You can republish it later.'
-              : 'Move "$clientName" back to drafts?\n\n'
-                  'This will hide the job from staff view. You can republish it later.',
+              ? '${AppLocalizations.of(context)!.moveToDraftsConfirmation(clientName)}\n\n${AppLocalizations.of(context)!.moveToDraftsWithStaff(acceptedStaff.length)}'
+              : '${AppLocalizations.of(context)!.moveToDraftsConfirmation(clientName)}\n\n${AppLocalizations.of(context)!.moveToDraftsNoStaff}',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(AppLocalizations.of(context)!.cancel),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.warning,
             ),
-            child: const Text('Move to Drafts'),
+            child: Text(AppLocalizations.of(context)!.moveToDrafts),
           ),
         ],
       ),
@@ -1075,7 +1256,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('$clientName moved to drafts!'),
+          content: Text(AppLocalizations.of(context)!.eventMovedToDrafts(clientName)),
           backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
         ),
@@ -1089,7 +1270,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to move to drafts: ${e.toString()}'),
+          content: Text('${AppLocalizations.of(context)!.failedToMoveToDrafts}: ${e.toString()}'),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
         ),
@@ -1121,8 +1302,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         SnackBar(
           content: Text(
             newValue
-                ? 'Event will stay open after completion'
-                : 'Event will auto-complete when past',
+                ? AppLocalizations.of(context)!.eventStaysOpen
+                : AppLocalizations.of(context)!.eventAutoCompletes,
           ),
           backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
@@ -1136,7 +1317,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to update: ${e.toString()}'),
+          content: Text('${AppLocalizations.of(context)!.failedToUpdate}: ${e.toString()}'),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
         ),
@@ -1190,16 +1371,16 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           }
         }
       } else {
-        final errMsg = jsonDecode(response.body)['message'] ?? 'Unknown error';
+        final errMsg = jsonDecode(response.body)['message'] ?? AppLocalizations.of(context)!.unknownError;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to generate: $errMsg')),
+          SnackBar(content: Text('${AppLocalizations.of(context)!.failedToGenerate}: $errMsg')),
         );
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isGeneratingSheet = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to generate sheet: $e')),
+          SnackBar(content: Text('${AppLocalizations.of(context)!.failedToGenerateSheet}: $e')),
         );
       }
     }
@@ -1213,15 +1394,14 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Open to All Staff'),
+        title: Text(AppLocalizations.of(context)!.openToAllStaff),
         content: Text(
-          'Make "$clientName" visible to all staff members?\n\n'
-          'This will change the job from private (invited only) to public, allowing all team members to see and accept it.',
+          AppLocalizations.of(context)!.openToAllStaffConfirmation(clientName),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(AppLocalizations.of(context)!.cancel),
           ),
           OutlinedButton(
             onPressed: () => Navigator.of(context).pop(true),
@@ -1229,7 +1409,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               foregroundColor: AppColors.info,
               side: const BorderSide(color: AppColors.info, width: 2),
             ),
-            child: const Text('Open to All'),
+            child: Text(AppLocalizations.of(context)!.openToAll),
           ),
         ],
       ),
@@ -1253,7 +1433,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('$clientName is now open to all staff!'),
+          content: Text(AppLocalizations.of(context)!.eventNowOpenToAll(clientName)),
           backgroundColor: AppColors.info,
           behavior: SnackBarBehavior.floating,
         ),
@@ -1273,7 +1453,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to make public: ${e.toString()}'),
+          content: Text('${AppLocalizations.of(context)!.failedToMakePublic}: ${e.toString()}'),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
         ),
