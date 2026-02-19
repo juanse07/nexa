@@ -5,6 +5,9 @@ import 'package:nexa/features/extraction/services/event_service.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
 import 'package:table_calendar/table_calendar.dart';
 
+// Three view modes for the schedule screen
+enum _ViewMode { month, twoWeeks, agenda }
+
 class ManagerCalendarScreen extends StatefulWidget {
   const ManagerCalendarScreen({super.key});
 
@@ -17,18 +20,27 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
 
   DateTime _focusedDay = DateTime.now();
   DateTime _selectedDay = DateTime.now();
-  CalendarFormat _calendarFormat = CalendarFormat.month;
+  _ViewMode _viewMode = _ViewMode.month;
 
   List<Map<String, dynamic>> _allEvents = [];
   Map<DateTime, List<Map<String, dynamic>>> _eventsByDay = {};
   bool _isLoading = true;
   String? _error;
 
+  // Scroll controller used to jump to today in agenda mode
+  final ScrollController _agendaScrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
     _eventService = EventService();
     _loadEvents();
+  }
+
+  @override
+  void dispose() {
+    _agendaScrollController.dispose();
+    super.dispose();
   }
 
   // ─── Data loading ────────────────────────────────────────────────────────
@@ -76,19 +88,25 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
     return _eventsByDay[key] ?? [];
   }
 
+  // Returns sorted date keys for the agenda view (all dates with events)
+  List<DateTime> get _sortedDays {
+    final keys = _eventsByDay.keys.toList()..sort();
+    return keys;
+  }
+
   // ─── Helpers ─────────────────────────────────────────────────────────────
 
   Color _statusColor(String status) {
     switch (status.toLowerCase()) {
       case 'available':
-        return AppColors.primaryIndigo; // gold
+        return AppColors.primaryIndigo;
       case 'full':
-        return AppColors.success; // green
+        return AppColors.success;
       case 'completed':
-        return AppColors.slateGray; // grey
+        return AppColors.slateGray;
       case 'pending':
       case 'draft':
-        return AppColors.navySpaceCadet; // navy
+        return AppColors.navySpaceCadet;
       default:
         return AppColors.secondaryPurple;
     }
@@ -113,7 +131,6 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
 
   String _formatTime(String? rawTime) {
     if (rawTime == null || rawTime.isEmpty) return '--:--';
-    // Handles "HH:MM" or "HH:MM:SS" or ISO strings
     try {
       final parts = rawTime.split(':');
       if (parts.length >= 2) {
@@ -127,28 +144,28 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
     return rawTime;
   }
 
-  String _formatSelectedDay(DateTime day) {
+  String _formatDayLabel(DateTime day) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final tomorrow = today.add(const Duration(days: 1));
-    final selected = DateTime(day.year, day.month, day.day);
+    final d = DateTime(day.year, day.month, day.day);
 
-    if (selected == today) return 'Today';
-    if (selected == tomorrow) return 'Tomorrow';
+    if (d == today) return 'Today';
+    if (d == tomorrow) return 'Tomorrow';
 
     const months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
     const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    final wd = weekdays[day.weekday - 1];
-    return '$wd, ${months[day.month - 1]} ${day.day}';
+    return '${weekdays[day.weekday - 1]}, ${months[day.month - 1]} ${day.day}';
   }
 
   String _staffingLabel(Map<String, dynamic> event) {
-    final roles = (event['roles'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    final accepted = (event['accepted_staff'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-
+    final roles =
+        (event['roles'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final accepted =
+        (event['accepted_staff'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     int needed = 0;
     for (final r in roles) {
       needed += (r['quantity'] as num? ?? 1).toInt();
@@ -159,208 +176,214 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
 
   // ─── Build ────────────────────────────────────────────────────────────────
 
+  // Shared gradient — used by header AND calendar background
+  static const _bgGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [AppColors.navySpaceCadet, AppColors.oceanBlue],
+  );
+
   @override
   Widget build(BuildContext context) {
+    final isAgenda = _viewMode == _ViewMode.agenda;
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       body: Column(
         children: [
-          _buildHeader(),
-          _buildCalendar(),
-          _buildDayDivider(),
-          Expanded(child: _buildAgenda()),
+          // Header + calendar share one continuous gradient surface
+          _buildHeaderAndCalendar(),
+          if (!isAgenda) _buildDayDivider(),
+          Expanded(
+            child: isAgenda ? _buildFullAgendaView() : _buildDayAgenda(),
+          ),
         ],
       ),
     );
   }
 
-  // ── Header (navy gradient AppBar) ────────────────────────────────────────
+  // ── Combined header + calendar in one gradient container ─────────────────
 
-  Widget _buildHeader() {
+  Widget _buildHeaderAndCalendar() {
+    final isAgenda = _viewMode == _ViewMode.agenda;
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.navySpaceCadet, AppColors.oceanBlue],
-        ),
-      ),
+      decoration: const BoxDecoration(gradient: _bgGradient),
       child: SafeArea(
         bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 8, 12),
-          child: Row(
-            children: [
-              const SizedBox(width: 4),
-              const Icon(Icons.calendar_month_rounded,
-                  color: AppColors.primaryIndigo, size: 22),
-              const SizedBox(width: 10),
-              const Text(
-                'Schedule',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.3,
+        child: Column(
+          children: [
+            // ── AppBar row ──────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+              child: Row(
+                children: [
+                  const SizedBox(width: 4),
+                  const Icon(Icons.calendar_month_rounded,
+                      color: AppColors.primaryIndigo, size: 22),
+                  const SizedBox(width: 10),
+                  const Text(
+                    'Schedule',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                  const Spacer(),
+                  _ViewModeToggle(
+                    mode: _viewMode,
+                    onChanged: (m) {
+                      HapticFeedback.selectionClick();
+                      setState(() => _viewMode = m);
+                    },
+                  ),
+                  IconButton(
+                    icon: _isLoading
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white70,
+                            ),
+                          )
+                        : const Icon(Icons.refresh_rounded,
+                            color: Colors.white70, size: 20),
+                    onPressed: _isLoading ? null : _loadEvents,
+                  ),
+                ],
+              ),
+            ),
+            // ── TableCalendar (hidden in agenda mode) ──────────────────
+            if (!isAgenda)
+              Padding(
+                // Small bottom padding so calendar blends into the white body
+                padding: const EdgeInsets.only(bottom: 6),
+                child: TableCalendar<Map<String, dynamic>>(
+                  firstDay: DateTime.utc(2020, 1, 1),
+                  lastDay: DateTime.utc(2030, 12, 31),
+                  focusedDay: _focusedDay,
+                  calendarFormat: _viewMode == _ViewMode.month
+                      ? CalendarFormat.month
+                      : CalendarFormat.twoWeeks,
+                  selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+                  eventLoader: _eventsForDay,
+                  startingDayOfWeek: StartingDayOfWeek.monday,
+                  onDaySelected: (selected, focused) {
+                    HapticFeedback.selectionClick();
+                    setState(() {
+                      _selectedDay = selected;
+                      _focusedDay = focused;
+                    });
+                  },
+                  onFormatChanged: (_) {},
+                  onPageChanged: (focused) {
+                    setState(() => _focusedDay = focused);
+                  },
+                  daysOfWeekHeight: 28,
+                  rowHeight: 44,
+                  headerStyle: HeaderStyle(
+                    formatButtonVisible: false,
+                    titleCentered: true,
+                    leftChevronIcon: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.chevron_left_rounded,
+                          color: Colors.white, size: 18),
+                    ),
+                    rightChevronIcon: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.chevron_right_rounded,
+                          color: Colors.white, size: 18),
+                    ),
+                    titleTextStyle: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                    headerPadding: const EdgeInsets.symmetric(
+                        vertical: 8, horizontal: 8),
+                    decoration: const BoxDecoration(),
+                  ),
+                  daysOfWeekStyle: DaysOfWeekStyle(
+                    dowTextFormatter: (date, locale) {
+                      const labels = [
+                        'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'
+                      ];
+                      return labels[date.weekday - 1];
+                    },
+                    weekdayStyle: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.6),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                    weekendStyle: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.45),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  calendarStyle: CalendarStyle(
+                    outsideDaysVisible: false,
+                    defaultTextStyle: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500),
+                    weekendTextStyle: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.7),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500),
+                    todayDecoration: const BoxDecoration(
+                      color: AppColors.primaryIndigo,
+                      shape: BoxShape.circle,
+                    ),
+                    todayTextStyle: const TextStyle(
+                        color: AppColors.navySpaceCadet,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700),
+                    selectedDecoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.95),
+                      shape: BoxShape.circle,
+                    ),
+                    selectedTextStyle: const TextStyle(
+                        color: AppColors.navySpaceCadet,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700),
+                    outsideTextStyle: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        fontSize: 13),
+                    markerDecoration: const BoxDecoration(
+                      color: AppColors.primaryIndigo,
+                      shape: BoxShape.circle,
+                    ),
+                    markersMaxCount: 3,
+                    markerSize: 5,
+                    markerMargin: const EdgeInsets.symmetric(
+                        horizontal: 0.6, vertical: 1),
+                    cellMargin: const EdgeInsets.all(4),
+                  ),
                 ),
               ),
-              const Spacer(),
-              // Format toggle: month / 2-week
-              _FormatToggle(
-                format: _calendarFormat,
-                onToggle: (f) => setState(() => _calendarFormat = f),
-              ),
-              const SizedBox(width: 4),
-              // Refresh
-              IconButton(
-                icon: _isLoading
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white70,
-                        ),
-                      )
-                    : const Icon(Icons.refresh_rounded,
-                        color: Colors.white70, size: 20),
-                onPressed: _isLoading ? null : _loadEvents,
-              ),
-            ],
-          ),
+          ],
         ),
       ),
     );
   }
 
-  // ── TableCalendar ─────────────────────────────────────────────────────────
-
-  Widget _buildCalendar() {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [AppColors.oceanBlue, Color(0xFF1E3A8A)],
-        ),
-      ),
-      child: TableCalendar<Map<String, dynamic>>(
-        firstDay: DateTime.utc(2020, 1, 1),
-        lastDay: DateTime.utc(2030, 12, 31),
-        focusedDay: _focusedDay,
-        calendarFormat: _calendarFormat,
-        selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-        eventLoader: _eventsForDay,
-        startingDayOfWeek: StartingDayOfWeek.monday,
-        onDaySelected: (selected, focused) {
-          HapticFeedback.selectionClick();
-          setState(() {
-            _selectedDay = selected;
-            _focusedDay = focused;
-          });
-        },
-        onFormatChanged: (format) {
-          setState(() => _calendarFormat = format);
-        },
-        onPageChanged: (focused) {
-          setState(() => _focusedDay = focused);
-        },
-        daysOfWeekHeight: 28,
-        rowHeight: 44,
-        // ── Style ────────────────────────────────────────────────────────
-        headerStyle: HeaderStyle(
-          formatButtonVisible: false,
-          titleCentered: true,
-          leftChevronIcon: Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.chevron_left_rounded,
-                color: Colors.white, size: 18),
-          ),
-          rightChevronIcon: Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.chevron_right_rounded,
-                color: Colors.white, size: 18),
-          ),
-          titleTextStyle: const TextStyle(
-            color: Colors.white,
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.5,
-          ),
-          headerPadding:
-              const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-          decoration: const BoxDecoration(),
-        ),
-        daysOfWeekStyle: DaysOfWeekStyle(
-          dowTextFormatter: (date, locale) {
-            const labels = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
-            return labels[date.weekday - 1];
-          },
-          weekdayStyle: TextStyle(
-            color: Colors.white.withValues(alpha: 0.6),
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.5,
-          ),
-          weekendStyle: TextStyle(
-            color: Colors.white.withValues(alpha: 0.45),
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.5,
-          ),
-        ),
-        calendarStyle: CalendarStyle(
-          outsideDaysVisible: false,
-          defaultTextStyle: const TextStyle(
-              color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
-          weekendTextStyle: TextStyle(
-              color: Colors.white.withValues(alpha: 0.7),
-              fontSize: 13,
-              fontWeight: FontWeight.w500),
-          todayDecoration: BoxDecoration(
-            color: AppColors.primaryIndigo,
-            shape: BoxShape.circle,
-          ),
-          todayTextStyle: const TextStyle(
-              color: AppColors.navySpaceCadet,
-              fontSize: 13,
-              fontWeight: FontWeight.w700),
-          selectedDecoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.95),
-            shape: BoxShape.circle,
-          ),
-          selectedTextStyle: const TextStyle(
-              color: AppColors.navySpaceCadet,
-              fontSize: 13,
-              fontWeight: FontWeight.w700),
-          outsideTextStyle: TextStyle(
-              color: Colors.white.withValues(alpha: 0.2), fontSize: 13),
-          markerDecoration: const BoxDecoration(
-            color: AppColors.primaryIndigo,
-            shape: BoxShape.circle,
-          ),
-          markersMaxCount: 3,
-          markerSize: 5,
-          markerMargin:
-              const EdgeInsets.symmetric(horizontal: 0.6, vertical: 1),
-          cellMargin: const EdgeInsets.all(4),
-        ),
-      ),
-    );
-  }
-
-  // ── Day divider ───────────────────────────────────────────────────────────
+  // ── Day divider (shown in month/2-week modes) ─────────────────────────────
 
   Widget _buildDayDivider() {
-    final dayLabel = _formatSelectedDay(_selectedDay);
+    final dayLabel = _formatDayLabel(_selectedDay);
     final count = _eventsForDay(_selectedDay).length;
 
     return Container(
@@ -400,47 +423,23 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
     );
   }
 
-  // ── Agenda list ───────────────────────────────────────────────────────────
+  // ── Single-day agenda (month / 2-week modes) ──────────────────────────────
 
-  Widget _buildAgenda() {
+  Widget _buildDayAgenda() {
     if (_isLoading && _allEvents.isEmpty) {
       return const Center(
         child: CircularProgressIndicator(
-          color: AppColors.navySpaceCadet,
-          strokeWidth: 2,
-        ),
+            color: AppColors.navySpaceCadet, strokeWidth: 2),
       );
     }
 
     if (_error != null && _allEvents.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.wifi_off_rounded,
-                size: 40, color: Colors.grey.shade400),
-            const SizedBox(height: 12),
-            Text('Could not load events',
-                style: TextStyle(
-                    color: Colors.grey.shade600, fontWeight: FontWeight.w500)),
-            const SizedBox(height: 8),
-            TextButton.icon(
-              onPressed: _loadEvents,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Retry'),
-            ),
-          ],
-        ),
-      );
+      return _buildErrorState();
     }
 
     final dayEvents = _eventsForDay(_selectedDay);
+    if (dayEvents.isEmpty) return _buildEmptyDay();
 
-    if (dayEvents.isEmpty) {
-      return _buildEmptyDay();
-    }
-
-    // Sort by start_time
     final sorted = [...dayEvents]..sort((a, b) {
         final ta = a['start_time']?.toString() ?? '';
         final tb = b['start_time']?.toString() ?? '';
@@ -448,16 +447,181 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
       });
 
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
       itemCount: sorted.length,
-      itemBuilder: (context, i) => _buildAgendaItem(sorted[i], i),
+      itemBuilder: (ctx, i) => _buildAgendaItem(sorted[i]),
     );
   }
+
+  // ── Full agenda view (agenda mode) ────────────────────────────────────────
+
+  Widget _buildFullAgendaView() {
+    if (_isLoading && _allEvents.isEmpty) {
+      return const Center(
+        child: CircularProgressIndicator(
+            color: AppColors.navySpaceCadet, strokeWidth: 2),
+      );
+    }
+
+    if (_error != null && _allEvents.isEmpty) {
+      return _buildErrorState();
+    }
+
+    final days = _sortedDays;
+
+    if (days.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.calendar_today_outlined,
+                size: 48,
+                color: AppColors.navySpaceCadet.withValues(alpha: 0.2)),
+            const SizedBox(height: 16),
+            Text(
+              'No events found',
+              style: TextStyle(
+                color: AppColors.navySpaceCadet.withValues(alpha: 0.45),
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Build one flat item list: [date_header, event, event, date_header, event …]
+    final items = <_AgendaItem>[];
+    for (final day in days) {
+      items.add(_AgendaItem.header(day));
+      final eventsOnDay = [...(_eventsByDay[day] ?? [])]
+        ..sort((a, b) {
+          final ta = a['start_time']?.toString() ?? '';
+          final tb = b['start_time']?.toString() ?? '';
+          return ta.compareTo(tb);
+        });
+      for (final e in eventsOnDay) {
+        items.add(_AgendaItem.event(day, e));
+      }
+    }
+
+    return ListView.builder(
+      controller: _agendaScrollController,
+      padding: const EdgeInsets.only(bottom: 80),
+      itemCount: items.length,
+      itemBuilder: (ctx, i) {
+        final item = items[i];
+        if (item.isHeader) return _buildAgendaDateHeader(item.day);
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: _buildAgendaItem(item.event!),
+        );
+      },
+    );
+  }
+
+  Widget _buildAgendaDateHeader(DateTime day) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final d = DateTime(day.year, day.month, day.day);
+    final isToday = d == today;
+    final isPast = d.isBefore(today);
+
+    return Container(
+      margin: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+      child: Row(
+        children: [
+          // Day-of-month circle
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: isToday
+                  ? AppColors.primaryIndigo
+                  : isPast
+                      ? AppColors.navySpaceCadet.withValues(alpha: 0.08)
+                      : AppColors.navySpaceCadet.withValues(alpha: 0.06),
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                '${day.day}',
+                style: TextStyle(
+                  color: isToday
+                      ? AppColors.navySpaceCadet
+                      : isPast
+                          ? AppColors.navySpaceCadet.withValues(alpha: 0.4)
+                          : AppColors.navySpaceCadet,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isToday
+                    ? 'Today'
+                    : _weekdayName(day.weekday),
+                style: TextStyle(
+                  color: isToday
+                      ? AppColors.primaryIndigo
+                      : isPast
+                          ? AppColors.navySpaceCadet.withValues(alpha: 0.4)
+                          : AppColors.navySpaceCadet,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.2,
+                ),
+              ),
+              Text(
+                _monthDayYear(day),
+                style: TextStyle(
+                  color: isPast
+                      ? Colors.grey.shade400
+                      : Colors.grey.shade500,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Container(
+              height: 1,
+              color: AppColors.border,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _weekdayName(int weekday) {
+    const names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    return names[weekday - 1];
+  }
+
+  String _monthDayYear(DateTime d) {
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
+    ];
+    return '${months[d.month - 1]} ${d.day}, ${d.year}';
+  }
+
+  // ── Empty / error states ──────────────────────────────────────────────────
 
   Widget _buildEmptyDay() {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final selected = DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day);
+    final selected =
+        DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day);
     final isPast = selected.isBefore(today);
 
     return Center(
@@ -471,7 +635,9 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
               shape: BoxShape.circle,
             ),
             child: Icon(
-              isPast ? Icons.event_available_rounded : Icons.free_breakfast_outlined,
+              isPast
+                  ? Icons.event_available_rounded
+                  : Icons.free_breakfast_outlined,
               size: 36,
               color: AppColors.navySpaceCadet.withValues(alpha: 0.35),
             ),
@@ -488,19 +654,37 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
           const SizedBox(height: 4),
           Text(
             isPast ? 'Nothing was scheduled' : 'Nothing scheduled yet',
-            style: TextStyle(
-              color: Colors.grey.shade400,
-              fontSize: 12,
-            ),
+            style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
           ),
         ],
       ),
     );
   }
 
-  // ── Individual agenda item ─────────────────────────────────────────────
+  Widget _buildErrorState() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.wifi_off_rounded, size: 40, color: Colors.grey.shade400),
+          const SizedBox(height: 12),
+          Text('Could not load events',
+              style: TextStyle(
+                  color: Colors.grey.shade600, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: _loadEvents,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
+  }
 
-  Widget _buildAgendaItem(Map<String, dynamic> event, int index) {
+  // ── Shared event card (used by both day and full-agenda views) ────────────
+
+  Widget _buildAgendaItem(Map<String, dynamic> event) {
     final status = (event['status'] ?? 'draft').toString();
     final statusColor = _statusColor(status);
     final statusLabel = _statusLabel(status);
@@ -517,7 +701,7 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
       onTap: () {
         HapticFeedback.lightImpact();
         Navigator.of(context).push(
-          MaterialPageRoute(
+          MaterialPageRoute<void>(
             builder: (_) => EventDetailScreen(event: event),
           ),
         );
@@ -527,7 +711,7 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Time column ─────────────────────────────────────
+            // ── Time column ───────────────────────────────────────
             SizedBox(
               width: 58,
               child: Column(
@@ -555,13 +739,13 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
               ),
             ),
             const SizedBox(width: 10),
-            // ── Status line ─────────────────────────────────────
+            // ── Colored status bar ────────────────────────────────
             Column(
               children: [
                 const SizedBox(height: 14),
                 Container(
                   width: 3,
-                  height: 50,
+                  height: 52,
                   decoration: BoxDecoration(
                     color: statusColor,
                     borderRadius: BorderRadius.circular(2),
@@ -570,7 +754,7 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
               ],
             ),
             const SizedBox(width: 10),
-            // ── Event card ───────────────────────────────────────
+            // ── Event card ────────────────────────────────────────
             Expanded(
               child: Container(
                 padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -612,16 +796,13 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
                       Row(
                         children: [
                           Icon(Icons.location_on_outlined,
-                              size: 11,
-                              color: Colors.grey.shade500),
+                              size: 11, color: Colors.grey.shade500),
                           const SizedBox(width: 3),
                           Expanded(
                             child: Text(
                               venue,
                               style: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontSize: 11,
-                              ),
+                                  color: Colors.grey.shade600, fontSize: 11),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -633,8 +814,7 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
                     Row(
                       children: [
                         Icon(Icons.people_outline_rounded,
-                            size: 11,
-                            color: statusColor),
+                            size: 11, color: statusColor),
                         const SizedBox(width: 3),
                         Text(
                           staffing,
@@ -660,7 +840,21 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
   }
 }
 
-// ─── Sub-widgets ─────────────────────────────────────────────────────────────
+// ─── Flat item model for the full agenda ListView ─────────────────────────────
+
+class _AgendaItem {
+  final bool isHeader;
+  final DateTime day;
+  final Map<String, dynamic>? event;
+
+  const _AgendaItem.header(this.day)
+      : isHeader = true,
+        event = null;
+
+  const _AgendaItem.event(this.day, this.event) : isHeader = false;
+}
+
+// ─── Sub-widgets ──────────────────────────────────────────────────────────────
 
 class _StatusPill extends StatelessWidget {
   final String label;
@@ -689,43 +883,66 @@ class _StatusPill extends StatelessWidget {
   }
 }
 
-class _FormatToggle extends StatelessWidget {
-  final CalendarFormat format;
-  final ValueChanged<CalendarFormat> onToggle;
+// Three-pill segmented toggle for view mode
+class _ViewModeToggle extends StatelessWidget {
+  final _ViewMode mode;
+  final ValueChanged<_ViewMode> onChanged;
 
-  const _FormatToggle({required this.format, required this.onToggle});
+  const _ViewModeToggle({required this.mode, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
-    final isMonth = format == CalendarFormat.month;
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+            color: Colors.white.withValues(alpha: 0.18), width: 0.8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _pill('Month', _ViewMode.month, Icons.calendar_view_month_rounded),
+          _pill('2 Wks', _ViewMode.twoWeeks, Icons.calendar_view_week_rounded),
+          _pill('Agenda', _ViewMode.agenda, Icons.view_agenda_rounded),
+        ],
+      ),
+    );
+  }
+
+  Widget _pill(String label, _ViewMode target, IconData icon) {
+    final active = mode == target;
     return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        onToggle(isMonth ? CalendarFormat.twoWeeks : CalendarFormat.month);
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      onTap: () => onChanged(target),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.14),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-              color: Colors.white.withValues(alpha: 0.2), width: 0.8),
+          color: active
+              ? Colors.white.withValues(alpha: 0.95)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(7),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              isMonth ? Icons.calendar_view_month_rounded : Icons.calendar_view_week_rounded,
-              color: Colors.white,
-              size: 14,
+              icon,
+              size: 12,
+              color: active
+                  ? AppColors.navySpaceCadet
+                  : Colors.white.withValues(alpha: 0.7),
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 3),
             Text(
-              isMonth ? 'Month' : '2 Wks',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
+              label,
+              style: TextStyle(
+                color: active
+                    ? AppColors.navySpaceCadet
+                    : Colors.white.withValues(alpha: 0.7),
+                fontSize: 10,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
               ),
             ),
           ],
