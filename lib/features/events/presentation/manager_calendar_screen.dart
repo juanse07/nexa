@@ -30,6 +30,9 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
   // Scroll controller used to jump to today in agenda mode
   final ScrollController _agendaScrollController = ScrollController();
 
+  // Whether to show past events in the agenda (collapsed by default)
+  bool _showPastEvents = false;
+
   @override
   void initState() {
     super.initState();
@@ -88,10 +91,26 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
     return _eventsByDay[key] ?? [];
   }
 
-  // Returns sorted date keys for the agenda view (all dates with events)
-  List<DateTime> get _sortedDays {
-    final keys = _eventsByDay.keys.toList()..sort();
-    return keys;
+  // Upcoming days (today or future), ascending
+  List<DateTime> get _upcomingDays {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return (_eventsByDay.keys.toList()
+          ..sort())
+        .where((d) => !d.isBefore(today))
+        .toList();
+  }
+
+  // Past days (before today), descending — most recent past first
+  List<DateTime> get _pastDays {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return (_eventsByDay.keys.toList()
+          ..sort())
+        .where((d) => d.isBefore(today))
+        .toList()
+        .reversed
+        .toList();
   }
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -467,42 +486,46 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
       return _buildErrorState();
     }
 
-    final days = _sortedDays;
+    final upcoming = _upcomingDays;
+    final past = _pastDays;
 
-    if (days.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.calendar_today_outlined,
-                size: 48,
-                color: AppColors.navySpaceCadet.withValues(alpha: 0.2)),
-            const SizedBox(height: 16),
-            Text(
-              'No events found',
-              style: TextStyle(
-                color: AppColors.navySpaceCadet.withValues(alpha: 0.45),
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      );
+    // Build flat item list: upcoming events first, then past (if expanded)
+    final items = <_AgendaItem>[];
+
+    // ── Upcoming ──────────────────────────────────────────────────────────
+    if (upcoming.isEmpty) {
+      items.add(const _AgendaItem.noUpcoming());
+    } else {
+      for (final day in upcoming) {
+        items.add(_AgendaItem.header(day));
+        final eventsOnDay = [...(_eventsByDay[day] ?? [])]
+          ..sort((a, b) {
+            final ta = a['start_time']?.toString() ?? '';
+            final tb = b['start_time']?.toString() ?? '';
+            return ta.compareTo(tb);
+          });
+        for (final e in eventsOnDay) {
+          items.add(_AgendaItem.event(day, e));
+        }
+      }
     }
 
-    // Build one flat item list: [date_header, event, event, date_header, event …]
-    final items = <_AgendaItem>[];
-    for (final day in days) {
-      items.add(_AgendaItem.header(day));
-      final eventsOnDay = [...(_eventsByDay[day] ?? [])]
-        ..sort((a, b) {
-          final ta = a['start_time']?.toString() ?? '';
-          final tb = b['start_time']?.toString() ?? '';
-          return ta.compareTo(tb);
-        });
-      for (final e in eventsOnDay) {
-        items.add(_AgendaItem.event(day, e));
+    // ── Past section toggle ───────────────────────────────────────────────
+    if (past.isNotEmpty) {
+      items.add(_AgendaItem.pastToggle(past.length));
+      if (_showPastEvents) {
+        for (final day in past) {
+          items.add(_AgendaItem.header(day));
+          final eventsOnDay = [...(_eventsByDay[day] ?? [])]
+            ..sort((a, b) {
+              final ta = a['start_time']?.toString() ?? '';
+              final tb = b['start_time']?.toString() ?? '';
+              return ta.compareTo(tb);
+            });
+          for (final e in eventsOnDay) {
+            items.add(_AgendaItem.event(day, e));
+          }
+        }
       }
     }
 
@@ -512,12 +535,82 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
       itemCount: items.length,
       itemBuilder: (ctx, i) {
         final item = items[i];
-        if (item.isHeader) return _buildAgendaDateHeader(item.day);
+        if (item.isHeader) return _buildAgendaDateHeader(item.day!);
+        if (item.isNoUpcoming) return _buildNoUpcomingTile();
+        if (item.isPastToggle) return _buildPastToggle(item.pastCount!);
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: _buildAgendaItem(item.event!),
         );
       },
+    );
+  }
+
+  Widget _buildNoUpcomingTile() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+      child: Column(
+        children: [
+          Icon(Icons.event_available_rounded,
+              size: 44,
+              color: AppColors.navySpaceCadet.withValues(alpha: 0.18)),
+          const SizedBox(height: 12),
+          Text(
+            'No upcoming events',
+            style: TextStyle(
+              color: AppColors.navySpaceCadet.withValues(alpha: 0.45),
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Your schedule is clear going forward',
+            style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPastToggle(int count) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() => _showPastEvents = !_showPastEvents);
+      },
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.navySpaceCadet.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+              color: AppColors.navySpaceCadet.withValues(alpha: 0.1)),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              _showPastEvents
+                  ? Icons.expand_less_rounded
+                  : Icons.expand_more_rounded,
+              size: 18,
+              color: AppColors.navySpaceCadet.withValues(alpha: 0.5),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              _showPastEvents
+                  ? 'Hide past events'
+                  : 'Show $count past ${count == 1 ? 'day' : 'days'} with events',
+              style: TextStyle(
+                color: AppColors.navySpaceCadet.withValues(alpha: 0.6),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -842,16 +935,39 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
 
 // ─── Flat item model for the full agenda ListView ─────────────────────────────
 
-class _AgendaItem {
-  final bool isHeader;
-  final DateTime day;
-  final Map<String, dynamic>? event;
+enum _AgendaItemType { header, event, noUpcoming, pastToggle }
 
-  const _AgendaItem.header(this.day)
-      : isHeader = true,
+class _AgendaItem {
+  final _AgendaItemType type;
+  final DateTime? day;
+  final Map<String, dynamic>? event;
+  final int? pastCount;
+
+  const _AgendaItem.header(DateTime d)
+      : type = _AgendaItemType.header,
+        day = d,
+        event = null,
+        pastCount = null;
+
+  const _AgendaItem.event(DateTime d, this.event)
+      : type = _AgendaItemType.event,
+        day = d,
+        pastCount = null;
+
+  const _AgendaItem.noUpcoming()
+      : type = _AgendaItemType.noUpcoming,
+        day = null,
+        event = null,
+        pastCount = null;
+
+  const _AgendaItem.pastToggle(this.pastCount)
+      : type = _AgendaItemType.pastToggle,
+        day = null,
         event = null;
 
-  const _AgendaItem.event(this.day, this.event) : isHeader = false;
+  bool get isHeader => type == _AgendaItemType.header;
+  bool get isNoUpcoming => type == _AgendaItemType.noUpcoming;
+  bool get isPastToggle => type == _AgendaItemType.pastToggle;
 }
 
 // ─── Sub-widgets ──────────────────────────────────────────────────────────────
