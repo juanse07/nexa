@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import 'package:nexa/shared/widgets/tappable_app_title.dart';
 import '../../../shared/widgets/web_content_wrapper.dart';
 import '../data/models/statistics_models.dart';
@@ -90,7 +91,7 @@ class _StatisticsDashboardScreenState extends State<StatisticsDashboardScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load statistics: $e')),
+          SnackBar(content: Text('${AppLocalizations.of(context)!.failedToLoadStatistics}: $e')),
         );
       }
     }
@@ -185,7 +186,7 @@ class _StatisticsDashboardScreenState extends State<StatisticsDashboardScreen> {
                           ? Padding(
                               padding: const EdgeInsets.only(left: 8),
                               child: Text(
-                                _isAnalyzing ? 'Analyzing...' : 'AI Analysis',
+                                _isAnalyzing ? AppLocalizations.of(context)!.analyzing : AppLocalizations.of(context)!.aiAnalysis,
                                 overflow: TextOverflow.clip,
                                 maxLines: 1,
                                 style: const TextStyle(
@@ -214,7 +215,7 @@ class _StatisticsDashboardScreenState extends State<StatisticsDashboardScreen> {
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
         title: TappableAppTitle.text(
-          'Stats',
+          AppLocalizations.of(context)!.stats,
           style: const TextStyle(color: Colors.white),
         ),
         backgroundColor: const Color(0xFF212C4A),

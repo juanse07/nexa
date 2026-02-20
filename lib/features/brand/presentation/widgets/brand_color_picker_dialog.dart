@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 
 /// A simple brand color picker dialog with hex input and preset swatches.
 class BrandColorPickerDialog extends StatefulWidget {
@@ -92,6 +93,7 @@ class _BrandColorPickerDialogState extends State<BrandColorPickerDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final slotLabel = widget.slot[0].toUpperCase() + widget.slot.substring(1);
 
     return AlertDialog(
@@ -118,11 +120,11 @@ class _BrandColorPickerDialogState extends State<BrandColorPickerDialog> {
             TextField(
               controller: _hexController,
               onChanged: _onHexChanged,
-              decoration: const InputDecoration(
-                labelText: 'Hex Color',
+              decoration: InputDecoration(
+                labelText: l10n.hexColor,
                 hintText: '#1e293b',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.color_lens_outlined),
+                border: const OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.color_lens_outlined),
               ),
               maxLength: 7,
             ),
@@ -130,7 +132,7 @@ class _BrandColorPickerDialogState extends State<BrandColorPickerDialog> {
 
             // Preset swatches
             Text(
-              'Presets',
+              l10n.presets,
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -171,8 +173,8 @@ class _BrandColorPickerDialogState extends State<BrandColorPickerDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-        FilledButton(onPressed: _confirm, child: const Text('Apply')),
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(l10n.cancel)),
+        FilledButton(onPressed: _confirm, child: Text(l10n.apply)),
       ],
     );
   }

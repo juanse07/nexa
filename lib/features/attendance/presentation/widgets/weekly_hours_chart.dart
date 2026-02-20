@@ -1,5 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import '../../models/attendance_dashboard_models.dart';
 
 /// Bar chart showing weekly hours breakdown
@@ -20,12 +21,14 @@ class WeeklyHoursChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
     if (isLoading) {
       return _buildLoadingState();
     }
 
     if (data.isEmpty) {
-      return _buildEmptyState();
+      return _buildEmptyState(l10n);
     }
 
     final maxHours = data.map((e) => e.hours).reduce((a, b) => a > b ? a : b);
@@ -52,9 +55,9 @@ class WeeklyHoursChart extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Weekly Hours',
-                style: TextStyle(
+              Text(
+                l10n.weeklyHours,
+                style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                 ),
@@ -271,7 +274,7 @@ class WeeklyHoursChart extends StatelessWidget {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(AppLocalizations l10n) {
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(24),
@@ -295,7 +298,7 @@ class WeeklyHoursChart extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            'No data for this period',
+            l10n.noDataForPeriod,
             style: TextStyle(
               color: Colors.grey[600],
               fontSize: 14,

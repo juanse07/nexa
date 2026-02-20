@@ -246,15 +246,15 @@ class _EventEditScreenState extends State<EventEditScreen> {
       final shouldClose = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Success'),
-          content: const Text('Event has been updated successfully!'),
+          title: Text(AppLocalizations.of(context)!.successTitle),
+          content: Text(AppLocalizations.of(context)!.eventUpdatedSuccessfully),
           actions: [
             ElevatedButton(
               onPressed: () => Navigator.of(ctx).pop(true),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.success,
               ),
-              child: const Text('OK'),
+              child: Text(AppLocalizations.of(context)!.ok),
             ),
           ],
         ),
@@ -268,7 +268,7 @@ class _EventEditScreenState extends State<EventEditScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to update event: $e'),
+          content: Text('${AppLocalizations.of(context)!.failedToUpdateEvent}: $e'),
           duration: const Duration(seconds: 5),
         ),
       );
@@ -281,7 +281,7 @@ class _EventEditScreenState extends State<EventEditScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Edit Event'),
+        title: Text(AppLocalizations.of(context)!.editEventTitle),
         backgroundColor: AppColors.techBlue,
         foregroundColor: Colors.white,
         actions: [
@@ -298,9 +298,9 @@ class _EventEditScreenState extends State<EventEditScreen> {
                         color: Colors.white,
                       ),
                     )
-                  : const Text(
-                      'Save',
-                      style: TextStyle(
+                  : Text(
+                      AppLocalizations.of(context)!.save,
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -320,7 +320,7 @@ class _EventEditScreenState extends State<EventEditScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Event Information
-              _buildSectionTitle('Event Information', Icons.event),
+              _buildSectionTitle(AppLocalizations.of(context)!.eventInformation, Icons.event),
               const SizedBox(height: 16),
               _buildTextField(
                 controller: _eventNameController,
@@ -349,7 +349,7 @@ class _EventEditScreenState extends State<EventEditScreen> {
               const SizedBox(height: 32),
 
               // Venue Information
-              _buildSectionTitle('Venue Information', Icons.location_on),
+              _buildSectionTitle(AppLocalizations.of(context)!.venueInformation, Icons.location_on),
               const SizedBox(height: 16),
               _buildTextField(
                 controller: _venueNameController,
@@ -392,7 +392,7 @@ class _EventEditScreenState extends State<EventEditScreen> {
               const SizedBox(height: 32),
 
               // Contact Information
-              _buildSectionTitle('Contact Information', Icons.contact_phone),
+              _buildSectionTitle(AppLocalizations.of(context)!.contactInformation, Icons.contact_phone),
               const SizedBox(height: 16),
               _buildTextField(
                 controller: _contactNameController,
@@ -436,7 +436,7 @@ class _EventEditScreenState extends State<EventEditScreen> {
               const SizedBox(height: 32),
 
               // Roles Section
-              _buildSectionTitle('Staff Roles Required', Icons.work),
+              _buildSectionTitle(AppLocalizations.of(context)!.staffRolesRequired, Icons.work),
               const SizedBox(height: 16),
               ..._roleCountControllers.entries.map((entry) {
                 return Padding(
@@ -469,16 +469,15 @@ class _EventEditScreenState extends State<EventEditScreen> {
                           color: Colors.white,
                         ),
                       )
-                    : const Text(
-                        'Save Changes',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    : Text(
+                        AppLocalizations.of(context)!.saveChanges,
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                       ),
               ),
             ],
             ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -570,7 +569,7 @@ class _EventEditScreenState extends State<EventEditScreen> {
       },
       child: InputDecorator(
         decoration: InputDecoration(
-          labelText: 'Date',
+          labelText: AppLocalizations.of(context)!.dateLabel,
           prefixIcon: const Icon(Icons.calendar_today, color: AppColors.techBlue),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
@@ -583,7 +582,7 @@ class _EventEditScreenState extends State<EventEditScreen> {
         child: Text(
           _selectedDate != null
               ? '${_selectedDate!.month}/${_selectedDate!.day}/${_selectedDate!.year}'
-              : 'Select date',
+              : AppLocalizations.of(context)!.selectDateHint,
           style: TextStyle(
             color: _selectedDate != null ? Colors.black : Colors.grey.shade600,
           ),
@@ -595,7 +594,7 @@ class _EventEditScreenState extends State<EventEditScreen> {
   Widget _buildTimePicker({required bool isStart}) {
     final controller = isStart ? _startTimeController : _endTimeController;
     final time = isStart ? _selectedStartTime : _selectedEndTime;
-    final label = isStart ? 'Start Time' : 'End Time';
+    final label = isStart ? AppLocalizations.of(context)!.startTime : AppLocalizations.of(context)!.endTime;
 
     return InkWell(
       onTap: () async {
@@ -640,7 +639,7 @@ class _EventEditScreenState extends State<EventEditScreen> {
           ),
         ),
         child: Text(
-          time != null ? time.format(context) : 'Select time',
+          time != null ? time.format(context) : AppLocalizations.of(context)!.selectTimeHint,
           style: TextStyle(
             color: time != null ? Colors.black : Colors.grey.shade600,
           ),

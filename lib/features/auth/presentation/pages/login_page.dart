@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform;
 
 import 'package:nexa/core/config/environment.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import 'package:nexa/core/utils/responsive_layout.dart';
 import 'package:nexa/features/auth/data/services/auth_service.dart';
 import 'package:nexa/features/auth/data/services/apple_web_auth.dart';
@@ -42,9 +43,11 @@ class _LoginPageState extends State<LoginPage> {
     });
     String? err;
     final ok = await AuthService.signInWithGoogle(onError: (m) => err = m);
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
     setState(() {
       _loadingGoogle = false;
-      if (!ok) _error = err ?? 'Google sign-in failed';
+      if (!ok) _error = err ?? l10n.googleSignInFailed;
     });
     if (ok && mounted) {
       Navigator.of(context).pushReplacement(
@@ -76,9 +79,11 @@ class _LoginPageState extends State<LoginPage> {
     });
     String? err;
     final ok = await AuthService.signInWithApple(onError: (message) => err = message);
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
     setState(() {
       _loadingApple = false;
-      if (!ok) _error = err ?? 'Apple sign-in failed';
+      if (!ok) _error = err ?? l10n.appleSignInFailed;
     });
     if (ok && mounted) {
       Navigator.of(context).pushReplacement(
@@ -98,7 +103,8 @@ class _LoginPageState extends State<LoginPage> {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
     if (email.isEmpty || password.isEmpty) {
-      setState(() => _error = 'Please enter email and password');
+      final l10n = AppLocalizations.of(context)!;
+      setState(() => _error = l10n.pleaseEnterEmailAndPassword);
       return;
     }
     setState(() {
@@ -112,9 +118,10 @@ class _LoginPageState extends State<LoginPage> {
       onError: (m) => err = m,
     );
     if (!mounted) return;
+    final l10nEmail = AppLocalizations.of(context)!;
     setState(() {
       _loadingEmail = false;
-      if (!ok) _error = err ?? 'Email sign-in failed';
+      if (!ok) _error = err ?? l10nEmail.emailSignInFailed;
     });
     if (ok && mounted) {
       Navigator.of(context).pushReplacement(
@@ -154,6 +161,7 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final size = MediaQuery.of(context).size;
     final env = Environment.instance;
     final bool appleWebAvailable = kIsWeb &&
@@ -217,7 +225,7 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Manager',
+                        l10n.appRoleManager,
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w400,
@@ -244,7 +252,7 @@ class _LoginPageState extends State<LoginPage> {
                         child: Column(
                           children: [
                             Text(
-                              'Sign in to continue',
+                              l10n.signInToContinue,
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w600,
@@ -283,7 +291,7 @@ class _LoginPageState extends State<LoginPage> {
                               onPressed: _loadingGoogle ? null : _handleGoogle,
                               loading: _loadingGoogle,
                               icon: Icons.g_mobiledata_rounded,
-                              label: 'Continue with Google',
+                              label: l10n.continueWithGoogle,
                               backgroundColor: AppColors.secondaryPurple,
                               foregroundColor: Colors.white,
                               iconSize: 28,
@@ -295,7 +303,7 @@ class _LoginPageState extends State<LoginPage> {
                                 onPressed: _loadingApple ? null : _handleApple,
                                 loading: _loadingApple,
                                 icon: Icons.apple_rounded,
-                                label: 'Continue with Apple',
+                                label: l10n.continueWithApple,
                                 backgroundColor: AppColors.primaryPurple,
                                 foregroundColor: Colors.white,
                               ),
@@ -309,7 +317,7 @@ class _LoginPageState extends State<LoginPage> {
                                 Padding(
                                   padding: const EdgeInsets.symmetric(horizontal: 14),
                                   child: Text(
-                                    'or',
+                                    l10n.or,
                                     style: TextStyle(
                                       fontSize: 13,
                                       color: AppColors.textMuted,
@@ -327,7 +335,7 @@ class _LoginPageState extends State<LoginPage> {
                               onPressed: _handlePhone,
                               loading: false,
                               icon: Icons.phone_iphone_rounded,
-                              label: 'Continue with Phone',
+                              label: l10n.continueWithPhone,
                               backgroundColor: Colors.white,
                               foregroundColor: AppColors.primaryPurple,
                               outlined: true,
@@ -341,7 +349,7 @@ class _LoginPageState extends State<LoginPage> {
                                 Padding(
                                   padding: const EdgeInsets.symmetric(horizontal: 14),
                                   child: Text(
-                                    'or',
+                                    l10n.or,
                                     style: TextStyle(
                                       fontSize: 13,
                                       color: AppColors.textMuted,
@@ -362,7 +370,7 @@ class _LoginPageState extends State<LoginPage> {
                               textInputAction: TextInputAction.next,
                               decoration: InputDecoration(
                                 prefixIcon: Icon(Icons.email_outlined, color: AppColors.textMuted),
-                                hintText: 'Email',
+                                hintText: l10n.email,
                                 filled: true,
                                 fillColor: Colors.grey.shade50,
                                 border: OutlineInputBorder(
@@ -390,7 +398,7 @@ class _LoginPageState extends State<LoginPage> {
                               onSubmitted: (_) => _handleEmail(),
                               decoration: InputDecoration(
                                 prefixIcon: Icon(Icons.lock_outlined, color: AppColors.textMuted),
-                                hintText: 'Password',
+                                hintText: l10n.password,
                                 filled: true,
                                 fillColor: Colors.grey.shade50,
                                 border: OutlineInputBorder(
@@ -415,7 +423,7 @@ class _LoginPageState extends State<LoginPage> {
                               onPressed: _loadingEmail ? null : _handleEmail,
                               loading: _loadingEmail,
                               icon: Icons.login_rounded,
-                              label: 'Sign In',
+                              label: l10n.signIn,
                               backgroundColor: AppColors.secondaryPurple,
                               foregroundColor: Colors.white,
                             ),
@@ -427,7 +435,7 @@ class _LoginPageState extends State<LoginPage> {
 
                       // Footer
                       Text(
-                        'By continuing, you agree to our\nTerms of Service and Privacy Policy',
+                        l10n.termsAndPrivacyDisclaimer,
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.white.withValues(alpha: 0.4),

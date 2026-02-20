@@ -431,7 +431,7 @@ const AI_TOOLS = [
   },
   {
     name: 'search_shifts',
-    description: 'Find shifts by various criteria from the database. Use this when users ask about specific shifts, dates, or want to see shift lists.',
+    description: 'Find shifts by various criteria from the database. Returns details including pay, contact info, setup time, and staffing. Use when users ask about specific shifts, dates, or want to see shift lists.',
     parameters: {
       type: 'object',
       properties: {
@@ -679,7 +679,7 @@ const AI_TOOLS = [
   },
   {
     name: 'get_staff_stats',
-    description: 'Get detailed statistics for a specific staff member. Use when manager asks "show me Maria\'s stats", "how many hours has John worked?", etc.',
+    description: 'Get detailed statistics for a specific staff member with monthly breakdown. Use when manager asks "show me Maria\'s stats", "how many hours has John worked?", "how did she do in February vs March?", etc.',
     parameters: {
       type: 'object',
       properties: {
@@ -1059,7 +1059,7 @@ const AI_TOOLS = [
   },
   {
     name: 'get_events_summary',
-    description: 'Get summary of recent and upcoming events. Use this when user asks about events, schedule, or wants to see what\'s happening. Returns events from the past 30 days and future 60 days.',
+    description: 'Get summary of recent and upcoming events with pay rates and staffing info. Use when user asks about events, schedule, "what\'s happening", or "what are we paying". Returns events from the past 30 days and future 60 days.',
     parameters: {
       type: 'object',
       properties: {
@@ -1465,9 +1465,16 @@ async function executeFunctionCall(
           return 'No shifts found matching the criteria';
         }
 
-        const results = events.map(e =>
-          `[ID: ${e._id}] ${e.event_name || e.shift_name || 'Unnamed'} - Client: ${e.client_name}, Date: ${e.date}, Venue: ${e.venue_name || 'TBD'}, Status: ${e.status || 'pending'}`
-        ).join('\n');
+        const results = events.map(e => {
+          const staffCount = e.accepted_staff?.length || 0;
+          const totalNeeded = e.roles?.reduce((sum: number, r: any) => sum + (r.count || r.quantity || 0), 0) || 0;
+          const payInfo = e.roles?.map((r: any) => `${r.role || r.role_name}: ${r.pay_rate_info || 'no rate'}`).join(', ');
+          let line = `[ID: ${e._id}] ${e.event_name || e.shift_name || 'Unnamed'} - Client: ${e.client_name}, Date: ${e.date}, Time: ${e.start_time || '?'}-${e.end_time || '?'}, Venue: ${e.venue_name || 'TBD'}, Status: ${e.status || 'pending'}, Staff: ${staffCount}/${totalNeeded}`;
+          if (payInfo) line += `, Pay: ${payInfo}`;
+          if (e.contact_name) line += `, Contact: ${e.contact_name}${e.contact_phone ? ` (${e.contact_phone})` : ''}`;
+          if (e.setup_time) line += `, Setup: ${e.setup_time}`;
+          return line;
+        }).join('\n');
 
         return `Found ${events.length} shift(s):\n${results}`;
       }
@@ -1993,13 +2000,35 @@ async function executeFunctionCall(
         const { staff_name, days = 30 } = functionArgs;
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
+        startDate.setHours(0, 0, 0, 0);
 
-        // Find events where this staff worked
-        const events = await EventModel.find({
+        // Resolve staff member's userKey for exact matching (same as staff-side)
+        const teamMember = await TeamMemberModel.findOne({
           managerId,
-          date: { $gte: startDate },
-          'accepted_staff.name': new RegExp(staff_name, 'i')
+          $or: [
+            { name: new RegExp(staff_name, 'i') },
+            { email: new RegExp(staff_name, 'i') }
+          ]
         }).lean();
+
+        const staffUserKey = teamMember ? `${teamMember.provider}:${teamMember.subject}` : null;
+
+        // Query by userKey (exact) if available, fallback to name regex
+        // Upper-bound to end of today — future events aren't "worked" yet (matches staff-side)
+        const endDate = new Date();
+        endDate.setHours(23, 59, 59, 999);
+        const staffFilter: any = {
+          managerId,
+          date: { $gte: startDate, $lte: endDate },
+          status: { $ne: 'cancelled' }
+        };
+        if (staffUserKey) {
+          staffFilter['accepted_staff.userKey'] = staffUserKey;
+        } else {
+          staffFilter['accepted_staff.name'] = new RegExp(staff_name, 'i');
+        }
+
+        const events = await EventModel.find(staffFilter).lean();
 
         if (events.length === 0) {
           return `No events found for staff member "${staff_name}" in the last ${days} days.`;
@@ -2010,19 +2039,43 @@ async function executeFunctionCall(
         let eventCount = 0;
         const rolesWorked = new Set<string>();
         const clientsWorked = new Set<string>();
+        const monthlyStats: Record<string, { events: number; hours: number }> = {};
 
         for (const event of events) {
-          const staffEntry = event.accepted_staff?.find(s =>
-            s.name?.toLowerCase().includes(staff_name.toLowerCase())
-          );
-          if (staffEntry) {
+          const staffEntry = staffUserKey
+            ? event.accepted_staff?.find(s => s.userKey === staffUserKey)
+            : event.accepted_staff?.find(s => s.name?.toLowerCase().includes(staff_name.toLowerCase()));
+
+          if (staffEntry && (staffEntry.response === 'accepted' || staffEntry.response === 'accept')) {
+            // Hours: prefer approved attendance (matches staff-side/Flutter earnings)
+            let hours = 0;
+            for (const session of staffEntry.attendance || []) {
+              if (session.approvedHours != null && session.status === 'approved') {
+                hours += session.approvedHours;
+              }
+            }
+
+            // Fallback: scheduled shift duration if no approved attendance
+            if (hours === 0 && event.start_time && event.end_time) {
+              const s = new Date(`1970-01-01T${event.start_time}`);
+              const e = new Date(`1970-01-01T${event.end_time}`);
+              hours = (e.getTime() - s.getTime()) / (1000 * 60 * 60);
+              if (hours < 0) hours += 24;
+            }
+
+            // Skip events with zero hours (matches staff-side behavior)
+            if (hours === 0) continue;
+
             eventCount++;
             if (staffEntry.role) rolesWorked.add(staffEntry.role);
             if (event.client_name) clientsWorked.add(event.client_name);
 
-            for (const attendance of staffEntry.attendance || []) {
-              totalHours += attendance.approvedHours || attendance.estimatedHours || 0;
-            }
+            const monthKey = event.date ? new Date(event.date).toISOString().slice(0, 7) : 'unknown';
+            if (!monthlyStats[monthKey]) monthlyStats[monthKey] = { events: 0, hours: 0 };
+            monthlyStats[monthKey].events++;
+
+            totalHours += hours;
+            monthlyStats[monthKey].hours += hours;
           }
         }
 
@@ -2030,17 +2083,9 @@ async function executeFunctionCall(
 
         // Try to find gamification data
         let gamificationInfo = '';
-        const teamMember = await TeamMemberModel.findOne({
-          managerId,
-          $or: [
-            { name: new RegExp(staff_name, 'i') },
-            { email: new RegExp(staff_name, 'i') }
-          ]
-        }).lean();
-
         if (teamMember) {
           const user = await UserModel.findOne({
-            userKey: `${teamMember.provider}:${teamMember.subject}`
+            userKey: staffUserKey
           }).lean();
 
           if ((user as any)?.gamification) {
@@ -2051,12 +2096,18 @@ async function executeFunctionCall(
           }
         }
 
+        const byMonth = Object.entries(monthlyStats)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([month, s]) => `  ${month}: ${s.events} events, ${s.hours.toFixed(1)} hrs`)
+          .join('\n');
+
         return `📊 Stats for ${staff_name} (last ${days} days):
 📋 Events Worked: ${eventCount}
 ⏱️ Total Hours: ${totalHours.toFixed(1)}
 📈 Avg Hours/Event: ${avgHoursPerEvent}
 👔 Roles: ${Array.from(rolesWorked).join(', ') || 'N/A'}
-🏢 Clients: ${Array.from(clientsWorked).join(', ') || 'N/A'}${gamificationInfo}`;
+🏢 Clients: ${Array.from(clientsWorked).join(', ') || 'N/A'}${gamificationInfo}
+📅 By Month:\n${byMonth}`;
       }
 
       case 'get_staff_leaderboard': {
@@ -2938,7 +2989,7 @@ ${topStaff ? `Most Flagged: ${topStaff}` : ''}`;
         filter.date = { $gte: pastDate, $lte: futureDate };
 
         const events = await EventModel.find(filter)
-          .select('event_name client_name date venue_name city start_time end_time')
+          .select('event_name client_name date venue_name city start_time end_time roles pay_rate_info status accepted_staff contact_name setup_time')
           .sort({ date: 1 })
           .limit(50)
           .lean();
@@ -2950,7 +3001,14 @@ ${topStaff ? `Most Flagged: ${topStaff}` : ''}`;
         const results = events.map((e: any) => {
           const dateStr = e.date ? new Date(e.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No date';
           const timeStr = e.start_time ? `${e.start_time} - ${e.end_time || '?'}` : '';
-          return `${dateStr}: ${e.event_name || 'Unnamed'} (${e.client_name || 'No client'}) at ${e.venue_name || 'TBD'}${timeStr ? `, ${timeStr}` : ''}`;
+          const staffCount = e.accepted_staff?.length || 0;
+          const totalNeeded = e.roles?.reduce((sum: number, r: any) => sum + (r.count || r.quantity || 0), 0) || 0;
+          const payInfo = e.roles?.map((r: any) => `${r.role || r.role_name}: ${r.pay_rate_info || 'no rate'}`).join(', ');
+          let line = `${dateStr}: ${e.event_name || 'Unnamed'} (${e.client_name || 'No client'}) at ${e.venue_name || 'TBD'}${timeStr ? `, ${timeStr}` : ''}, Status: ${e.status || 'draft'}, Staff: ${staffCount}/${totalNeeded}`;
+          if (payInfo) line += `, Pay: ${payInfo}`;
+          if (e.contact_name) line += `, Contact: ${e.contact_name}`;
+          if (e.setup_time) line += `, Setup: ${e.setup_time}`;
+          return line;
         }).join('\n');
 
         return `Found ${events.length} event(s):\n${results}`;
@@ -3528,6 +3586,14 @@ Default behavior:
   - ALWAYS confirm before sending bulk: "This will message X team members. Send it?"
   - Only call after explicit confirmation
 - Messages are delivered as real chat messages with push notifications
+
+🔧 ENRICHED TOOL DATA — AVOID REDUNDANT CALLS:
+- search_shifts returns pay rates, contact info, setup time, and staffing counts per event.
+  → When user asks "who's the contact?" or "what's the pay?" after a search, the data is already there. Do NOT call the tool again.
+- get_staff_stats returns a monthly breakdown (byMonth) with events and hours per month.
+  → When user asks "how did she do in February vs March?", use the PREVIOUS get_staff_stats result. Do NOT call the tool again.
+- get_events_summary returns pay rates, staffing counts, contact info, and setup time per event.
+  → When user asks "what are we paying?" or "how many staff are assigned?" after viewing events, the data is already there.
 
 🚫 DO NOT output EVENT_COMPLETE, EVENT_UPDATE, or other markers. Use the create_event / update_event tools instead.
 `;

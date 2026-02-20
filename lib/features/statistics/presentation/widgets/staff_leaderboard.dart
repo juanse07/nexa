@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import '../../data/models/statistics_models.dart';
 
 /// Staff leaderboard showing top performers
@@ -14,6 +15,7 @@ class StaffLeaderboard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     if (topPerformers.isEmpty) {
       return Container(
         margin: const EdgeInsets.all(16),
@@ -34,7 +36,7 @@ class StaffLeaderboard extends StatelessWidget {
             Icon(Icons.emoji_events, size: 48, color: Colors.grey.shade300),
             const SizedBox(height: 12),
             Text(
-              'No data for this period',
+              l10n.noDataForPeriod,
               style: TextStyle(
                 color: Colors.grey.shade600,
                 fontSize: 15,
@@ -79,20 +81,20 @@ class StaffLeaderboard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                const Column(
+                Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Top Performers',
-                      style: TextStyle(
+                      l10n.topPerformers,
+                      style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                         color: Colors.black87,
                       ),
                     ),
                     Text(
-                      'Based on shifts completed',
-                      style: TextStyle(
+                      l10n.basedOnShiftsCompleted,
+                      style: const TextStyle(
                         fontSize: 12,
                         color: Colors.grey,
                       ),
@@ -136,6 +138,7 @@ class _LeaderboardItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
@@ -177,7 +180,7 @@ class _LeaderboardItem extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${performer.shiftsCompleted} shifts • ${performer.hoursWorked.toStringAsFixed(0)}h',
+                  l10n.shiftsAndHours(performer.shiftsCompleted, performer.hoursWorked.toStringAsFixed(0)),
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.grey.shade600,

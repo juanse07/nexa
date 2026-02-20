@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:nexa/features/cities/data/models/city.dart';
 import 'package:nexa/features/onboarding/presentation/widgets/enhanced_city_picker.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 
 /// Multi-city picker that allows selecting multiple cities with tourist flags
 class MultiCityPicker extends StatefulWidget {
@@ -38,8 +39,8 @@ class _MultiCityPickerState extends State<MultiCityPicker> {
       if (_selectedCities.any((c) => c.name.toLowerCase() == cityString.toLowerCase())) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('This city is already in your list'),
+            SnackBar(
+              content: Text(AppLocalizations.of(context)!.cityAlreadyInList),
               backgroundColor: Colors.orange,
             ),
           );
@@ -84,6 +85,7 @@ class _MultiCityPickerState extends State<MultiCityPicker> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -109,7 +111,7 @@ class _MultiCityPickerState extends State<MultiCityPicker> {
         OutlinedButton.icon(
           onPressed: _addCity,
           icon: const Icon(Icons.add_location_alt),
-          label: Text(_selectedCities.isEmpty ? 'Add Your First City' : 'Add Another City'),
+          label: Text(_selectedCities.isEmpty ? l10n.addYourFirstCity : l10n.addAnotherCity),
           style: OutlinedButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
           ),
@@ -133,6 +135,7 @@ class _CityChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -188,7 +191,7 @@ class _CityChip extends StatelessWidget {
                   ),
                   const SizedBox(width: 3),
                   Text(
-                    city.isTourist ? 'Tourist' : 'Metro',
+                    city.isTourist ? l10n.tourist : l10n.metro,
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w600,

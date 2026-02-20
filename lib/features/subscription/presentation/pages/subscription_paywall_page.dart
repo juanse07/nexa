@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 
 import '../../data/services/subscription_service.dart';
 
@@ -27,17 +28,17 @@ class _SubscriptionPaywallPageState extends State<SubscriptionPaywallPage> {
 
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🎉 Welcome to FlowShift Pro! All business features unlocked.'),
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.proWelcomeMessage),
             backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
+            duration: const Duration(seconds: 3),
           ),
         );
         Navigator.pop(context, true); // Return true to indicate upgrade
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Purchase cancelled or failed. Please try again.'),
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.purchaseCancelledMessage),
             backgroundColor: Colors.orange,
           ),
         );
@@ -46,7 +47,7 @@ class _SubscriptionPaywallPageState extends State<SubscriptionPaywallPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: $e'),
+          content: Text('${AppLocalizations.of(context)!.errorPrefix}: $e'),
           backgroundColor: Colors.red,
         ),
       );
@@ -67,17 +68,17 @@ class _SubscriptionPaywallPageState extends State<SubscriptionPaywallPage> {
 
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Subscription restored successfully!'),
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.subscriptionRestoredSuccess),
             backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
+            duration: const Duration(seconds: 3),
           ),
         );
         Navigator.pop(context, true);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No active subscription found to restore.'),
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.noActiveSubscription),
             backgroundColor: Colors.orange,
           ),
         );
@@ -86,7 +87,7 @@ class _SubscriptionPaywallPageState extends State<SubscriptionPaywallPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Restore error: $e'),
+          content: Text('${AppLocalizations.of(context)!.restoreError}: $e'),
           backgroundColor: Colors.red,
         ),
       );
@@ -101,11 +102,12 @@ class _SubscriptionPaywallPageState extends State<SubscriptionPaywallPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
       appBar: AppBar(
-        title: const Text('Upgrade to Pro'),
+        title: Text(l10n.upgradeToProTitle),
         backgroundColor: theme.colorScheme.primary,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -147,9 +149,9 @@ class _SubscriptionPaywallPageState extends State<SubscriptionPaywallPage> {
               const SizedBox(height: 24),
 
               // Title
-              const Text(
-                'FlowShift Pro',
-                style: TextStyle(
+              Text(
+                l10n.flowShiftPro,
+                style: const TextStyle(
                   fontSize: 36,
                   fontWeight: FontWeight.bold,
                 ),
@@ -159,7 +161,7 @@ class _SubscriptionPaywallPageState extends State<SubscriptionPaywallPage> {
 
               // Subtitle
               Text(
-                'Scale Your Business',
+                l10n.scaleYourBusiness,
                 style: TextStyle(
                   fontSize: 18,
                   color: isDark ? Colors.grey[400] : Colors.grey[600],
@@ -170,37 +172,37 @@ class _SubscriptionPaywallPageState extends State<SubscriptionPaywallPage> {
 
               // Business Features List
               _buildFeature(
-                'Unlimited team members',
+                l10n.unlimitedTeamMembers,
                 Icons.people,
-                'No limits on staff size',
+                l10n.noLimitsDescription,
                 theme,
                 isDark,
               ),
               _buildFeature(
-                'Unlimited events',
+                l10n.unlimitedEvents,
                 Icons.event,
-                'Create as many events as you need',
+                l10n.createAsManyEvents,
                 theme,
                 isDark,
               ),
               _buildFeature(
-                'Advanced analytics',
+                l10n.advancedAnalytics,
                 Icons.analytics,
-                'Insights & reports for your business',
+                l10n.insightsReports,
                 theme,
                 isDark,
               ),
               _buildFeature(
-                'Priority support',
+                l10n.prioritySupport,
                 Icons.support_agent,
-                'Get help when you need it',
+                l10n.getHelpWhenNeeded,
                 theme,
                 isDark,
               ),
               _buildFeature(
-                'All future Pro features',
+                l10n.allFutureProFeatures,
                 Icons.auto_awesome,
-                'Early access to new capabilities',
+                l10n.earlyAccessDescription,
                 theme,
                 isDark,
               ),
@@ -245,13 +247,13 @@ class _SubscriptionPaywallPageState extends State<SubscriptionPaywallPage> {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    const Text(
-                      'per month',
-                      style: TextStyle(fontSize: 18),
+                    Text(
+                      l10n.perMonth,
+                      style: const TextStyle(fontSize: 18),
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'Cancel anytime • No commitments',
+                      l10n.cancelAnytimeNoCommitments,
                       style: TextStyle(
                         fontSize: 14,
                         color: isDark ? Colors.grey[400] : Colors.grey[600],
@@ -287,9 +289,9 @@ class _SubscriptionPaywallPageState extends State<SubscriptionPaywallPage> {
                             color: Colors.white,
                           ),
                         )
-                      : const Text(
-                          'Upgrade to Pro',
-                          style: TextStyle(
+                      : Text(
+                          l10n.upgradeToProTitle,
+                          style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
@@ -308,9 +310,9 @@ class _SubscriptionPaywallPageState extends State<SubscriptionPaywallPage> {
                         height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Text(
-                        'Restore Purchase',
-                        style: TextStyle(fontSize: 16),
+                    : Text(
+                        l10n.restorePurchase,
+                        style: const TextStyle(fontSize: 16),
                       ),
               ),
 
@@ -329,7 +331,7 @@ class _SubscriptionPaywallPageState extends State<SubscriptionPaywallPage> {
                 child: Column(
                   children: [
                     Text(
-                      'Free Tier Limits',
+                      l10n.freeTierLimits,
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
@@ -338,7 +340,7 @@ class _SubscriptionPaywallPageState extends State<SubscriptionPaywallPage> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '• 25 team members max\n• 10 events per month\n• No analytics access',
+                      l10n.freeTierLimitsDetails,
                       style: TextStyle(
                         fontSize: 13,
                         color: isDark ? Colors.grey[400] : Colors.grey[600],
@@ -354,7 +356,7 @@ class _SubscriptionPaywallPageState extends State<SubscriptionPaywallPage> {
 
               // Terms & Privacy
               Text(
-                'By subscribing, you agree to our Terms of Service and Privacy Policy. Subscription automatically renews unless cancelled at least 24 hours before the end of the current period.',
+                l10n.subscriptionTerms,
                 style: TextStyle(
                   fontSize: 12,
                   color: isDark ? Colors.grey[500] : Colors.grey[600],

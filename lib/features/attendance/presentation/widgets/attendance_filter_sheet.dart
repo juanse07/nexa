@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import '../../models/attendance_dashboard_models.dart';
 
 /// Bottom sheet for filtering attendance data
@@ -67,6 +68,7 @@ class _AttendanceFilterSheetState extends State<AttendanceFilterSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -92,9 +94,9 @@ class _AttendanceFilterSheetState extends State<AttendanceFilterSheet> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Filter Attendance',
-                  style: TextStyle(
+                Text(
+                  l10n.filterAttendance,
+                  style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),
@@ -104,7 +106,7 @@ class _AttendanceFilterSheetState extends State<AttendanceFilterSheet> {
                     widget.onClear();
                     Navigator.pop(context);
                   },
-                  child: const Text('Clear All'),
+                  child: Text(l10n.clearAll),
                 ),
               ],
             ),
@@ -120,21 +122,21 @@ class _AttendanceFilterSheetState extends State<AttendanceFilterSheet> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Date Range Section
-                  _buildSectionHeader('Date Range'),
+                  _buildSectionHeader(l10n.dateRange),
                   const SizedBox(height: 12),
                   _buildDatePresets(),
 
                   const SizedBox(height: 24),
 
                   // Event Filter Section
-                  _buildSectionHeader('Event'),
+                  _buildSectionHeader(l10n.event),
                   const SizedBox(height: 12),
                   _buildEventDropdown(),
 
                   const SizedBox(height: 24),
 
                   // Status Filter Section
-                  _buildSectionHeader('Status'),
+                  _buildSectionHeader(l10n.status),
                   const SizedBox(height: 12),
                   _buildStatusChips(),
                 ],
@@ -171,9 +173,9 @@ class _AttendanceFilterSheetState extends State<AttendanceFilterSheet> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text(
-                    'Apply Filters',
-                    style: TextStyle(
+                  child: Text(
+                    l10n.applyFilters,
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                     ),
@@ -199,12 +201,13 @@ class _AttendanceFilterSheetState extends State<AttendanceFilterSheet> {
   }
 
   Widget _buildDatePresets() {
+    final l10n = AppLocalizations.of(context)!;
     final presets = [
-      ('today', 'Today'),
-      ('yesterday', 'Yesterday'),
-      ('thisWeek', 'This Week'),
-      ('last7Days', 'Last 7 Days'),
-      ('custom', 'Custom'),
+      ('today', l10n.today),
+      ('yesterday', l10n.yesterday),
+      ('thisWeek', l10n.thisWeek),
+      ('last7Days', l10n.last7Days),
+      ('custom', l10n.custom),
     ];
 
     return Wrap(
@@ -288,6 +291,7 @@ class _AttendanceFilterSheetState extends State<AttendanceFilterSheet> {
   }
 
   Widget _buildEventDropdown() {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
@@ -298,17 +302,17 @@ class _AttendanceFilterSheetState extends State<AttendanceFilterSheet> {
         child: DropdownButton<String?>(
           value: _filters.eventId,
           isExpanded: true,
-          hint: const Text('All Events'),
+          hint: Text(l10n.allEvents),
           items: [
-            const DropdownMenuItem<String?>(
+            DropdownMenuItem<String?>(
               value: null,
-              child: Text('All Events'),
+              child: Text(l10n.allEvents),
             ),
             ...widget.availableEvents.map((event) {
               return DropdownMenuItem<String?>(
                 value: event['_id'] as String?,
                 child: Text(
-                  event['event_name'] as String? ?? 'Unknown Event',
+                  event['event_name'] as String? ?? l10n.unknownEvent,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -328,14 +332,30 @@ class _AttendanceFilterSheetState extends State<AttendanceFilterSheet> {
     );
   }
 
+  String _localizedStatusLabel(AppLocalizations l10n, AttendanceStatus status) {
+    switch (status) {
+      case AttendanceStatus.all:
+        return l10n.all;
+      case AttendanceStatus.working:
+        return l10n.working;
+      case AttendanceStatus.completed:
+        return l10n.completed;
+      case AttendanceStatus.flagged:
+        return l10n.flagged;
+      case AttendanceStatus.noShow:
+        return l10n.noShow;
+    }
+  }
+
   Widget _buildStatusChips() {
+    final l10n = AppLocalizations.of(context)!;
     return Wrap(
       spacing: 8,
       runSpacing: 8,
       children: AttendanceStatus.values.map((status) {
         final isSelected = _filters.status == status;
         return ChoiceChip(
-          label: Text(status.label),
+          label: Text(_localizedStatusLabel(l10n, status)),
           selected: isSelected,
           onSelected: (selected) {
             if (selected) {

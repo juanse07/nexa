@@ -109,7 +109,7 @@ class _UserEventsScreenState extends State<UserEventsScreen> {
               ),
               const SizedBox(height: 16),
               Text(
-                'Error loading events',
+                AppLocalizations.of(context)!.errorLoadingEvents,
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -132,7 +132,7 @@ class _UserEventsScreenState extends State<UserEventsScreen> {
               ElevatedButton.icon(
                 onPressed: _loadUserEvents,
                 icon: const Icon(Icons.refresh),
-                label: const Text('Retry'),
+                label: Text(AppLocalizations.of(context)!.retry),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.techBlue,
                   foregroundColor: Colors.white,
@@ -157,7 +157,7 @@ class _UserEventsScreenState extends State<UserEventsScreen> {
               ),
               const SizedBox(height: 16),
               Text(
-                'No events found',
+                AppLocalizations.of(context)!.noEventsFoundTitle,
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -166,7 +166,7 @@ class _UserEventsScreenState extends State<UserEventsScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'This user is not linked to any events yet',
+                AppLocalizations.of(context)!.notLinkedToEventsYet,
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey.shade600,
@@ -258,7 +258,7 @@ class _UserEventsScreenState extends State<UserEventsScreen> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Upcoming Events (${upcoming.length})',
+                  AppLocalizations.of(context)!.upcomingEventsCount(upcoming.length),
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
@@ -278,7 +278,7 @@ class _UserEventsScreenState extends State<UserEventsScreen> {
 
             String monthLabel;
             if (monthKey == 'unknown') {
-              monthLabel = 'Date Unknown';
+              monthLabel = AppLocalizations.of(context)!.dateUnknownLabel;
             } else {
               try {
                 final parts = monthKey.split('-');
@@ -327,7 +327,7 @@ class _UserEventsScreenState extends State<UserEventsScreen> {
   }
 
   Widget _buildEventCard(Map<String, dynamic> event, bool isUpcoming) {
-    final clientName = event['client_name']?.toString() ?? 'Client';
+    final clientName = event['client_name']?.toString() ?? AppLocalizations.of(context)!.client;
     final eventName = event['event_name']?.toString() ?? event['venue_name']?.toString() ?? AppLocalizations.of(context)!.untitledJob;
     final userRole = event['userRole']?.toString() ?? '';
     final dateStr = event['date']?.toString() ?? '';
@@ -401,7 +401,7 @@ class _UserEventsScreenState extends State<UserEventsScreen> {
                       ),
                     ),
                     child: Text(
-                      isUpcoming ? 'Upcoming' : 'Past',
+                      isUpcoming ? AppLocalizations.of(context)!.upcoming : AppLocalizations.of(context)!.past,
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
@@ -473,7 +473,7 @@ class _UserEventsScreenState extends State<UserEventsScreen> {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    formattedDate.isNotEmpty ? formattedDate : 'Date TBD',
+                    formattedDate.isNotEmpty ? formattedDate : AppLocalizations.of(context)!.dateTbd,
                     style: TextStyle(
                       fontSize: 13,
                       color: Colors.grey.shade600,

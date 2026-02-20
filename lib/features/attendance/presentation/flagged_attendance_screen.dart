@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import 'package:nexa/features/attendance/services/attendance_service.dart';
 
 /// Screen for managers to review flagged attendance entries
@@ -36,14 +37,16 @@ class _FlaggedAttendanceScreenState extends State<FlaggedAttendanceScreen> {
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
+        final l10n = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load flagged attendance: $e')),
+          SnackBar(content: Text('${l10n.failedToLoadFlaggedAttendance}: $e')),
         );
       }
     }
   }
 
   Future<void> _reviewFlag(String flagId, String status, {String? notes}) async {
+    final l10n = AppLocalizations.of(context)!;
     try {
       final success = await AttendanceService.reviewFlaggedAttendance(
         flagId: flagId,
@@ -54,15 +57,15 @@ class _FlaggedAttendanceScreenState extends State<FlaggedAttendanceScreen> {
       if (success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Flag ${status == 'approved' ? 'approved' : 'dismissed'}'),
+            content: Text(status == 'approved' ? l10n.approved : l10n.dismissed),
             backgroundColor: Colors.green,
           ),
         );
         await _loadFlaggedAttendance();
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to update flag'),
+          SnackBar(
+            content: Text(l10n.failedToUpdateFlag),
             backgroundColor: Colors.red,
           ),
         );
@@ -70,7 +73,7 @@ class _FlaggedAttendanceScreenState extends State<FlaggedAttendanceScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text('${l10n.somethingWentWrong}: $e')),
         );
       }
     }
@@ -82,8 +85,9 @@ class _FlaggedAttendanceScreenState extends State<FlaggedAttendanceScreen> {
     showDialog<void>(
       context: context,
       builder: (context) {
+        final l10n = AppLocalizations.of(context)!;
         return AlertDialog(
-          title: const Text('Review Flag'),
+          title: Text(l10n.reviewFlag),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -93,8 +97,8 @@ class _FlaggedAttendanceScreenState extends State<FlaggedAttendanceScreen> {
               TextField(
                 controller: notesController,
                 decoration: InputDecoration(
-                  labelText: 'Review Notes (optional)',
-                  hintText: 'Add any notes about this review...',
+                  labelText: l10n.reviewNotesOptional,
+                  hintText: l10n.addNotesAboutReview,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -106,7 +110,7 @@ class _FlaggedAttendanceScreenState extends State<FlaggedAttendanceScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
+              child: Text(l10n.cancel),
             ),
             TextButton(
               onPressed: () {
@@ -118,7 +122,7 @@ class _FlaggedAttendanceScreenState extends State<FlaggedAttendanceScreen> {
                 );
               },
               style: TextButton.styleFrom(foregroundColor: Colors.orange),
-              child: const Text('Dismiss'),
+              child: Text(l10n.dismiss),
             ),
             ElevatedButton(
               onPressed: () {
@@ -133,7 +137,7 @@ class _FlaggedAttendanceScreenState extends State<FlaggedAttendanceScreen> {
                 backgroundColor: Colors.green,
                 foregroundColor: Colors.white,
               ),
-              child: const Text('Approve'),
+              child: Text(l10n.approve),
             ),
           ],
         );
@@ -142,6 +146,7 @@ class _FlaggedAttendanceScreenState extends State<FlaggedAttendanceScreen> {
   }
 
   Widget _buildFlagDetails(Map<String, dynamic> flag) {
+    final l10n = AppLocalizations.of(context)!;
     final details = flag['details'] as Map<String, dynamic>?;
     final dateFormat = DateFormat('MMM d, h:mm a');
 
@@ -149,12 +154,12 @@ class _FlaggedAttendanceScreenState extends State<FlaggedAttendanceScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          flag['staffName'] as String? ?? 'Unknown Staff',
+          flag['staffName'] as String? ?? l10n.unknownStaff,
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
         const SizedBox(height: 4),
         Text(
-          flag['eventName'] as String? ?? 'Unknown Event',
+          flag['eventName'] as String? ?? l10n.unknownEvent,
           style: TextStyle(color: Colors.grey[600]),
         ),
         const SizedBox(height: 8),
@@ -169,19 +174,19 @@ class _FlaggedAttendanceScreenState extends State<FlaggedAttendanceScreen> {
             children: [
               if (details?['clockInAt'] != null)
                 Text(
-                  'Clock-In: ${dateFormat.format(DateTime.parse(details!['clockInAt'] as String))}',
+                  '${l10n.clockInTime}: ${dateFormat.format(DateTime.parse(details!['clockInAt'] as String))}',
                 ),
               if (details?['clockOutAt'] != null)
                 Text(
-                  'Clock-Out: ${dateFormat.format(DateTime.parse(details!['clockOutAt'] as String))}',
+                  '${l10n.clockOutTime}: ${dateFormat.format(DateTime.parse(details!['clockOutAt'] as String))}',
                 ),
               if (details?['actualDurationHours'] != null)
                 Text(
-                  'Duration: ${(details!['actualDurationHours'] as num).toStringAsFixed(1)} hours',
+                  '${l10n.durationLabel}: ${(details!['actualDurationHours'] as num).toStringAsFixed(1)} ${l10n.hours.toLowerCase()}',
                 ),
               if (details?['expectedDurationHours'] != null)
                 Text(
-                  'Expected: ${(details!['expectedDurationHours'] as num).toStringAsFixed(1)} hours',
+                  '${l10n.expectedDuration}: ${(details!['expectedDurationHours'] as num).toStringAsFixed(1)} ${l10n.hours.toLowerCase()}',
                   style: TextStyle(color: Colors.grey[600]),
                 ),
             ],
@@ -193,10 +198,11 @@ class _FlaggedAttendanceScreenState extends State<FlaggedAttendanceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        title: const Text('Flagged Attendance'),
+        title: Text(l10n.flaggedAttendance),
         backgroundColor: const Color(0xFF212C4A),
         foregroundColor: Colors.white,
         actions: [
@@ -214,13 +220,13 @@ class _FlaggedAttendanceScreenState extends State<FlaggedAttendanceScreen> {
             color: Colors.white,
             child: Row(
               children: [
-                _buildFilterChip('Pending', 'pending'),
+                _buildFilterChip(l10n.pending, 'pending'),
                 const SizedBox(width: 8),
-                _buildFilterChip('Approved', 'approved'),
+                _buildFilterChip(l10n.approved, 'approved'),
                 const SizedBox(width: 8),
-                _buildFilterChip('Dismissed', 'dismissed'),
+                _buildFilterChip(l10n.dismissed, 'dismissed'),
                 const SizedBox(width: 8),
-                _buildFilterChip('All', 'all'),
+                _buildFilterChip(l10n.all, 'all'),
               ],
             ),
           ),
@@ -256,6 +262,7 @@ class _FlaggedAttendanceScreenState extends State<FlaggedAttendanceScreen> {
   }
 
   Widget _buildEmptyState() {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -268,8 +275,8 @@ class _FlaggedAttendanceScreenState extends State<FlaggedAttendanceScreen> {
           const SizedBox(height: 16),
           Text(
             _filterStatus == 'pending'
-                ? 'No pending flags!'
-                : 'No flagged entries found',
+                ? l10n.noPendingFlags
+                : l10n.noFlaggedEntriesFound,
             style: TextStyle(
               fontSize: 18,
               color: Colors.grey[600],
@@ -278,8 +285,8 @@ class _FlaggedAttendanceScreenState extends State<FlaggedAttendanceScreen> {
           const SizedBox(height: 8),
           Text(
             _filterStatus == 'pending'
-                ? 'All attendance entries look normal'
-                : 'Try adjusting your filters',
+                ? l10n.allEntriesLookNormal
+                : l10n.tryAdjustingFilters,
             style: TextStyle(
               fontSize: 14,
               color: Colors.grey[500],
@@ -305,6 +312,7 @@ class _FlaggedAttendanceScreenState extends State<FlaggedAttendanceScreen> {
   }
 
   Widget _buildFlagCard(Map<String, dynamic> flag) {
+    final l10n = AppLocalizations.of(context)!;
     final severity = flag['severity'] as String? ?? 'medium';
     final flagType = flag['flagType'] as String? ?? 'unknown';
     final status = flag['status'] as String? ?? 'pending';
@@ -347,19 +355,19 @@ class _FlaggedAttendanceScreenState extends State<FlaggedAttendanceScreen> {
     String flagTypeLabel;
     switch (flagType) {
       case 'unusual_hours':
-        flagTypeLabel = 'Unusual Hours';
+        flagTypeLabel = l10n.unusualHours;
         break;
       case 'excessive_duration':
-        flagTypeLabel = 'Excessive Duration';
+        flagTypeLabel = l10n.excessiveDuration;
         break;
       case 'late_clock_out':
-        flagTypeLabel = 'Late Clock-Out';
+        flagTypeLabel = l10n.lateClockOut;
         break;
       case 'location_mismatch':
-        flagTypeLabel = 'Location Mismatch';
+        flagTypeLabel = l10n.locationMismatch;
         break;
       default:
-        flagTypeLabel = 'Unknown';
+        flagTypeLabel = l10n.unknown;
     }
 
     return Card(
@@ -419,13 +427,13 @@ class _FlaggedAttendanceScreenState extends State<FlaggedAttendanceScreen> {
 
               // Staff name and event
               Text(
-                flag['staffName'] as String? ?? 'Unknown Staff',
+                flag['staffName'] as String? ?? l10n.unknownStaff,
                 style:
                     const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
               const SizedBox(height: 4),
               Text(
-                flag['eventName'] as String? ?? 'Unknown Event',
+                flag['eventName'] as String? ?? l10n.unknownEvent,
                 style: TextStyle(color: Colors.grey[600]),
               ),
               const SizedBox(height: 8),
@@ -455,12 +463,12 @@ class _FlaggedAttendanceScreenState extends State<FlaggedAttendanceScreen> {
                     Icon(Icons.access_time, size: 16, color: Colors.grey[500]),
                     const SizedBox(width: 4),
                     Text(
-                      'Duration: ${(details['actualDurationHours'] as num?)?.toStringAsFixed(1) ?? '-'} hrs',
+                      '${l10n.durationLabel}: ${(details['actualDurationHours'] as num?)?.toStringAsFixed(1) ?? '-'} hrs',
                       style: TextStyle(color: Colors.grey[600], fontSize: 13),
                     ),
                     if (details['expectedDurationHours'] != null) ...[
                       Text(
-                        ' (expected ${(details['expectedDurationHours'] as num).toStringAsFixed(1)} hrs)',
+                        ' (${l10n.expectedDuration.toLowerCase()} ${(details['expectedDurationHours'] as num).toStringAsFixed(1)} hrs)',
                         style:
                             TextStyle(color: Colors.grey[500], fontSize: 12),
                       ),
@@ -522,7 +530,7 @@ class _FlaggedAttendanceScreenState extends State<FlaggedAttendanceScreen> {
                       child: OutlinedButton.icon(
                         onPressed: () => _reviewFlag(flag['_id'] as String, 'dismissed'),
                         icon: const Icon(Icons.close, size: 18),
-                        label: const Text('Dismiss'),
+                        label: Text(l10n.dismiss),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.orange,
                         ),
@@ -533,7 +541,7 @@ class _FlaggedAttendanceScreenState extends State<FlaggedAttendanceScreen> {
                       child: ElevatedButton.icon(
                         onPressed: () => _reviewFlag(flag['_id'] as String, 'approved'),
                         icon: const Icon(Icons.check, size: 18),
-                        label: const Text('Approve'),
+                        label: Text(l10n.approve),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.green,
                           foregroundColor: Colors.white,

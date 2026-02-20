@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../brand/data/providers/brand_provider.dart';
@@ -88,7 +89,7 @@ class _AIAnalysisSheetState extends State<AIAnalysisSheet> {
       if (mounted) {
         setState(() => _generating = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to generate: $e')),
+          SnackBar(content: Text('${AppLocalizations.of(context)!.failedToGenerate}: $e')),
         );
       }
     }
@@ -96,6 +97,7 @@ class _AIAnalysisSheetState extends State<AIAnalysisSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final height = MediaQuery.of(context).size.height * 0.75;
 
     return Container(
@@ -134,9 +136,9 @@ class _AIAnalysisSheetState extends State<AIAnalysisSheet> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'AI Analysis',
-                        style: TextStyle(
+                      Text(
+                        l10n.aiAnalysis,
+                        style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: Color(0xFF212C4A),
@@ -155,26 +157,26 @@ class _AIAnalysisSheetState extends State<AIAnalysisSheet> {
                 if (_analysis != null && !_generating)
                   PopupMenuButton<String>(
                     icon: const Icon(Icons.download_rounded, color: Color(0xFF212C4A)),
-                    tooltip: 'Download report',
+                    tooltip: l10n.downloadReport,
                     onSelected: _downloadDoc,
                     itemBuilder: (ctx) => [
-                      const PopupMenuItem(
+                      PopupMenuItem(
                         value: 'pdf',
                         child: Row(
                           children: [
-                            Icon(Icons.picture_as_pdf, size: 18, color: Colors.red),
-                            SizedBox(width: 8),
-                            Text('Download PDF'),
+                            const Icon(Icons.picture_as_pdf, size: 18, color: Colors.red),
+                            const SizedBox(width: 8),
+                            Text(l10n.downloadPdf),
                           ],
                         ),
                       ),
-                      const PopupMenuItem(
+                      PopupMenuItem(
                         value: 'docx',
                         child: Row(
                           children: [
-                            Icon(Icons.description, size: 18, color: Colors.blue),
-                            SizedBox(width: 8),
-                            Text('Download Word'),
+                            const Icon(Icons.description, size: 18, color: Colors.blue),
+                            const SizedBox(width: 8),
+                            Text(l10n.downloadWord),
                           ],
                         ),
                       ),
@@ -200,17 +202,17 @@ class _AIAnalysisSheetState extends State<AIAnalysisSheet> {
           // Content
           Expanded(
             child: _loading
-                ? const Center(
+                ? Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        CircularProgressIndicator(
+                        const CircularProgressIndicator(
                           color: Color(0xFF212C4A),
                         ),
-                        SizedBox(height: 16),
+                        const SizedBox(height: 16),
                         Text(
-                          'Analyzing your data...',
-                          style: TextStyle(
+                          l10n.analyzingYourData,
+                          style: const TextStyle(
                             color: Colors.grey,
                             fontSize: 14,
                           ),
@@ -242,7 +244,7 @@ class _AIAnalysisSheetState extends State<AIAnalysisSheet> {
                                   _fetchAnalysis();
                                 },
                                 icon: const Icon(Icons.refresh, size: 18),
-                                label: const Text('Retry'),
+                                label: Text(l10n.retry),
                               ),
                             ],
                           ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 
 /// Period selector widget with preset periods and custom date range
 class PeriodSelector extends StatelessWidget {
@@ -15,6 +16,7 @@ class PeriodSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: SingleChildScrollView(
@@ -22,25 +24,25 @@ class PeriodSelector extends StatelessWidget {
         child: Row(
           children: [
             _PeriodChip(
-              label: 'Week',
+              label: l10n.week,
               isSelected: selectedPeriod == 'week',
               onTap: () => onPeriodChanged('week', null),
             ),
             const SizedBox(width: 8),
             _PeriodChip(
-              label: 'Month',
+              label: l10n.month,
               isSelected: selectedPeriod == 'month',
               onTap: () => onPeriodChanged('month', null),
             ),
             const SizedBox(width: 8),
             _PeriodChip(
-              label: 'Year',
+              label: l10n.year,
               isSelected: selectedPeriod == 'year',
               onTap: () => onPeriodChanged('year', null),
             ),
             const SizedBox(width: 8),
             _PeriodChip(
-              label: 'All Time',
+              label: l10n.allTime,
               isSelected: selectedPeriod == 'all',
               onTap: () => onPeriodChanged('all', null),
             ),
@@ -48,7 +50,7 @@ class PeriodSelector extends StatelessWidget {
             _PeriodChip(
               label: customDateRange != null
                   ? _formatDateRange(customDateRange!)
-                  : 'Custom',
+                  : l10n.custom,
               isSelected: selectedPeriod == 'custom',
               icon: Icons.date_range,
               onTap: () => _showDatePicker(context),

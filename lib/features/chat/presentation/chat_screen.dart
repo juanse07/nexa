@@ -190,12 +190,13 @@ class _ChatScreenState extends State<ChatScreen> {
         if (mounted) {
           final targetUserName = widget.targetName;
           final accepted = status == 'accepted';
+          final l10n = AppLocalizations.of(context)!;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
                 accepted
-                    ? '$targetUserName accepted the invitation!'
-                    : '$targetUserName declined the invitation',
+                    ? l10n.staffAcceptedInvitation(targetUserName)
+                    : l10n.staffDeclinedInvitation(targetUserName),
               ),
               backgroundColor: accepted ? Colors.green : Colors.grey.shade600,
               duration: const Duration(seconds: 3),
@@ -380,7 +381,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to send message: $e'),
+            content: Text('${AppLocalizations.of(context)!.failedToSendMessage}: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -511,7 +512,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to send invitation: $e'),
+            content: Text('${AppLocalizations.of(context)!.failedToSendInvitation}: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -662,9 +663,9 @@ class _ChatScreenState extends State<ChatScreen> {
                                     ],
                                   ),
                                 ),
-                                const Text(
-                                  'typing...',
-                                  style: TextStyle(
+                                Text(
+                                  AppLocalizations.of(context)!.typing,
+                                  style: const TextStyle(
                                     fontSize: 12,
                                     color: Colors.white,
                                     fontWeight: FontWeight.w500,
@@ -836,6 +837,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildMessageList() {
+    final l10n = AppLocalizations.of(context)!;
     // Show error state
     if (_error != null) {
       return Center(
@@ -844,11 +846,11 @@ class _ChatScreenState extends State<ChatScreen> {
           children: <Widget>[
             Icon(Icons.error_outline, size: 48, color: Colors.grey[400]),
             const SizedBox(height: 16),
-            const Text('Failed to load messages'),
+            Text(l10n.failedToLoadMessages),
             const SizedBox(height: 8),
             TextButton(
               onPressed: _loadMessages,
-              child: const Text('Retry'),
+              child: Text(l10n.retry),
             ),
           ],
         ),
@@ -864,12 +866,12 @@ class _ChatScreenState extends State<ChatScreen> {
             Icon(Icons.chat_outlined, size: 64, color: Colors.grey[300]),
             const SizedBox(height: 16),
             Text(
-              'No messages yet',
+              l10n.noMessagesYet,
               style: TextStyle(color: Colors.grey[600]),
             ),
             const SizedBox(height: 8),
             Text(
-              'Send a message to start the conversation',
+              l10n.sendMessageToStartConversation,
               style: TextStyle(color: Colors.grey[500], fontSize: 12),
             ),
           ],
@@ -970,6 +972,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildDateDivider(DateTime date) {
+    final l10n = AppLocalizations.of(context)!;
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final yesterday = today.subtract(const Duration(days: 1));
@@ -977,9 +980,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
     String label;
     if (messageDate == today) {
-      label = 'Today';
+      label = l10n.today;
     } else if (messageDate == yesterday) {
-      label = 'Yesterday';
+      label = l10n.yesterday;
     } else {
       label = DateFormat('MMM d, yyyy').format(date);
     }
@@ -1191,7 +1194,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     child: IconButton(
                       icon: const Icon(Icons.add, color: AppColors.techBlue, size: 24),
                       onPressed: _showSendInvitationDialog,
-                      tooltip: 'Send Event Invitation',
+                      tooltip: AppLocalizations.of(context)!.sendEventInvitationTooltip,
                     ),
                   ),
                   const SizedBox(width: 8),

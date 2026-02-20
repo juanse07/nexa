@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 
 class CreateInviteLinkDialog extends StatefulWidget {
   const CreateInviteLinkDialog({
@@ -74,13 +75,15 @@ class _CreateInviteLinkDialogState extends State<CreateInviteLinkDialog> {
 
   void _shareMessage() {
     if (_createdLink == null) return;
+    final l10n = AppLocalizations.of(context)!;
     final message = _createdLink!['shareableMessage'] as String?;
     if (message != null) {
-      Share.share(message, subject: 'Join my team on FlowShift');
+      Share.share(message, subject: l10n.joinTeamSubject);
     }
   }
 
   void _showQrCode(BuildContext context, String deepLink, String shortCode) {
+    final l10n = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
@@ -106,7 +109,7 @@ class _CreateInviteLinkDialogState extends State<CreateInviteLinkDialog> {
               ),
               const SizedBox(height: 12),
               Text(
-                'Code: $shortCode',
+                l10n.codePrefix(shortCode),
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -116,7 +119,7 @@ class _CreateInviteLinkDialogState extends State<CreateInviteLinkDialog> {
               const SizedBox(height: 16),
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Close'),
+                child: Text(l10n.close),
               ),
             ],
           ),
@@ -131,23 +134,24 @@ class _CreateInviteLinkDialogState extends State<CreateInviteLinkDialog> {
       return _buildSuccessView();
     }
 
+    final l10n = AppLocalizations.of(context)!;
     return AlertDialog(
-      title: const Text('Create Invite Link'),
+      title: Text(l10n.createInviteLinkTitle),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Create a shareable link that anyone can use to join your team.',
-              style: TextStyle(fontSize: 14, color: Colors.grey),
+            Text(
+              l10n.shareableLinkDescription,
+              style: const TextStyle(fontSize: 14, color: Colors.grey),
             ),
             const SizedBox(height: 16),
 
             // Expiration
-            const Text(
-              'Link expires in:',
-              style: TextStyle(fontWeight: FontWeight.bold),
+            Text(
+              l10n.linkExpiresIn,
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             DropdownButton<int>(
               value: _expiresInDays,
@@ -167,16 +171,16 @@ class _CreateInviteLinkDialogState extends State<CreateInviteLinkDialog> {
             const SizedBox(height: 16),
 
             // Max uses
-            const Text(
-              'Max uses (optional):',
-              style: TextStyle(fontWeight: FontWeight.bold),
+            Text(
+              l10n.maxUsesOptional,
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 4),
             TextField(
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                hintText: 'Leave empty for unlimited',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                hintText: l10n.leaveEmptyUnlimited,
+                border: const OutlineInputBorder(),
               ),
               onChanged: (value) {
                 setState(() {
@@ -192,26 +196,26 @@ class _CreateInviteLinkDialogState extends State<CreateInviteLinkDialog> {
               onChanged: (value) {
                 setState(() => _requireApproval = value ?? false);
               },
-              title: const Text('Require approval'),
-              subtitle: const Text('You must approve members after they join'),
+              title: Text(l10n.requireApprovalTitle),
+              subtitle: Text(l10n.requireApprovalSubtitle),
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
             ),
             const SizedBox(height: 8),
 
             // Password protection
-            const Text(
-              'Password (optional):',
-              style: TextStyle(fontWeight: FontWeight.bold),
+            Text(
+              l10n.passwordOptionalLabel,
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 4),
             TextField(
               controller: _passwordCtrl,
               obscureText: true,
-              decoration: const InputDecoration(
-                hintText: 'Leave empty for no password',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.lock_outline),
+              decoration: InputDecoration(
+                hintText: l10n.leaveEmptyNoPassword,
+                border: const OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.lock_outline),
               ),
             ),
 
@@ -229,7 +233,7 @@ class _CreateInviteLinkDialogState extends State<CreateInviteLinkDialog> {
       actions: [
         TextButton(
           onPressed: _loading ? null : () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(l10n.cancel),
         ),
         ElevatedButton(
           onPressed: _loading ? null : _createLink,
@@ -239,24 +243,25 @@ class _CreateInviteLinkDialogState extends State<CreateInviteLinkDialog> {
                   height: 16,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Text('Create Link'),
+              : Text(l10n.createLinkButton),
         ),
       ],
     );
   }
 
   Widget _buildSuccessView() {
+    final l10n = AppLocalizations.of(context)!;
     final shortCode = _createdLink!['shortCode'] as String;
     final deepLink = _createdLink!['deepLink'] as String;
     final shareableMessage = _createdLink!['shareableMessage'] as String;
     final expiresAt = _createdLink!['expiresAt'] as String?;
 
     return AlertDialog(
-      title: const Row(
+      title: Row(
         children: [
-          Icon(Icons.check_circle, color: Colors.green),
-          SizedBox(width: 8),
-          Text('Invite Link Created!'),
+          const Icon(Icons.check_circle, color: Colors.green),
+          const SizedBox(width: 8),
+          Text(l10n.inviteLinkCreatedTitle),
         ],
       ),
       content: SingleChildScrollView(
@@ -265,9 +270,9 @@ class _CreateInviteLinkDialogState extends State<CreateInviteLinkDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Short Code
-            const Text(
-              'Invite Code:',
-              style: TextStyle(fontWeight: FontWeight.bold),
+            Text(
+              l10n.inviteCodeLabel,
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             Container(
               padding: const EdgeInsets.all(12),
@@ -289,7 +294,7 @@ class _CreateInviteLinkDialogState extends State<CreateInviteLinkDialog> {
                   ),
                   IconButton(
                     icon: const Icon(Icons.copy),
-                    onPressed: () => _copyToClipboard(shortCode, 'Invite code'),
+                    onPressed: () => _copyToClipboard(shortCode, l10n.inviteCodeLabel),
                   ),
                 ],
               ),
@@ -298,14 +303,14 @@ class _CreateInviteLinkDialogState extends State<CreateInviteLinkDialog> {
             const SizedBox(height: 16),
 
             // Deep Link
-            const Text(
-              'Deep Link:',
-              style: TextStyle(fontWeight: FontWeight.bold),
+            Text(
+              l10n.deepLinkLabel,
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 4),
-            const Text(
-              'Share this link - it will open the app automatically',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
+            Text(
+              l10n.shareDeepLinkHint,
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
             ),
             Container(
               padding: const EdgeInsets.all(12),
@@ -326,7 +331,7 @@ class _CreateInviteLinkDialogState extends State<CreateInviteLinkDialog> {
                   ),
                   IconButton(
                     icon: const Icon(Icons.copy),
-                    onPressed: () => _copyToClipboard(deepLink, 'Deep link'),
+                    onPressed: () => _copyToClipboard(deepLink, l10n.deepLinkLabel),
                   ),
                 ],
               ),
@@ -337,7 +342,7 @@ class _CreateInviteLinkDialogState extends State<CreateInviteLinkDialog> {
             // Expiration
             if (expiresAt != null) ...[
               Text(
-                'Expires: ${_formatDate(expiresAt)}',
+                l10n.expiresDate(_formatDate(expiresAt)),
                 style: const TextStyle(fontSize: 12, color: Colors.grey),
               ),
               const SizedBox(height: 8),
@@ -349,7 +354,7 @@ class _CreateInviteLinkDialogState extends State<CreateInviteLinkDialog> {
               width: double.infinity,
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.share),
-                label: const Text('Share via WhatsApp, SMS, etc.'),
+                label: Text(l10n.shareViaApps),
                 onPressed: _shareMessage,
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 12),
@@ -361,7 +366,7 @@ class _CreateInviteLinkDialogState extends State<CreateInviteLinkDialog> {
               width: double.infinity,
               child: OutlinedButton.icon(
                 icon: const Icon(Icons.qr_code),
-                label: const Text('Show QR Code'),
+                label: Text(l10n.showQrCode),
                 onPressed: () => _showQrCode(context, deepLink, shortCode),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 12),
@@ -374,7 +379,7 @@ class _CreateInviteLinkDialogState extends State<CreateInviteLinkDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, true),
-          child: const Text('Done'),
+          child: Text(l10n.done),
         ),
       ],
     );

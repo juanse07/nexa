@@ -9,6 +9,7 @@ import 'package:nexa/features/teams/presentation/widgets/create_invite_link_dial
 import 'package:nexa/features/teams/presentation/widgets/applicant_list_tile.dart';
 import 'package:nexa/features/subscription/data/services/subscription_service.dart';
 import 'package:nexa/features/subscription/presentation/pages/subscription_paywall_page.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 
 class TeamDetailPage extends StatefulWidget {
   const TeamDetailPage({
@@ -88,6 +89,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
   }
 
   Future<void> _removeMember(String memberId) async {
+    final l10n = AppLocalizations.of(context)!;
     try {
       await _teamsService.removeMember(
         teamId: widget.teamId,
@@ -96,24 +98,25 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Member removed')));
+      ).showSnackBar(SnackBar(content: Text(l10n.memberRemovedSuccess)));
       await _loadData();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Failed to remove member: $e')));
+      ).showSnackBar(SnackBar(content: Text('${l10n.failedToRemoveMember}: $e')));
     }
   }
 
   Future<void> _sendInvite() async {
+    final l10n = AppLocalizations.of(context)!;
     final emailCtrl = TextEditingController();
     final messageCtrl = TextEditingController();
     final formKey = GlobalKey<FormState>();
     final sent = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Invite by email'),
+        title: Text(l10n.inviteByEmail),
         content: Form(
           key: formKey,
           child: Column(
@@ -121,14 +124,14 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
             children: [
               TextFormField(
                 controller: emailCtrl,
-                decoration: const InputDecoration(labelText: 'Email'),
+                decoration: InputDecoration(labelText: l10n.email),
                 keyboardType: TextInputType.emailAddress,
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return 'Enter an email';
+                    return l10n.enterEmailError;
                   }
                   if (!value.contains('@')) {
-                    return 'Enter a valid email';
+                    return l10n.enterValidEmailError;
                   }
                   return null;
                 },
@@ -136,8 +139,8 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: messageCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Message (optional)',
+                decoration: InputDecoration(
+                  labelText: l10n.messageOptional,
                 ),
                 minLines: 2,
                 maxLines: 4,
@@ -148,7 +151,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+            child: Text(l10n.cancel),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -170,11 +173,11 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
               } catch (e) {
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Failed to send invite: $e')),
+                  SnackBar(content: Text('${l10n.failedToSendInvite}: $e')),
                 );
               }
             },
-            child: const Text('Send invite'),
+            child: Text(l10n.sendInvite),
           ),
         ],
       ),
@@ -183,7 +186,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
     if (sent == true) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Invite sent to ${emailCtrl.text.trim()}')),
+        SnackBar(content: Text(l10n.inviteSentTo(emailCtrl.text.trim()))),
       );
       await _loadData();
     }
@@ -218,16 +221,17 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
   }
 
   Future<void> _revokeInviteLink(String inviteId) async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Revoke Invite Link'),
-        content: const Text('This will prevent anyone from using this link to join. Continue?'),
+        title: Text(l10n.revokeInviteLink),
+        content: Text(l10n.revokeInviteLinkConfirmation),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.cancel)),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Revoke', style: TextStyle(color: Colors.red)),
+            child: Text(l10n.revoke, style: const TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -239,20 +243,21 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
       await _teamsService.revokeInviteLink(widget.teamId, inviteId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Invite link revoked')),
+          SnackBar(content: Text(l10n.inviteLinkRevoked)),
         );
         await _loadData();
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text('${AppLocalizations.of(context)!.errorPrefix}: $e')),
         );
       }
     }
   }
 
   Future<void> _showUsageLog(String inviteId) async {
+    final l10n = AppLocalizations.of(context)!;
     try {
       final data = await _teamsService.fetchInviteUsage(widget.teamId, inviteId);
       final usageLog = (data['usageLog'] as List<dynamic>?) ?? [];
@@ -262,17 +267,17 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: Text('Usage Log (${usageLog.length})'),
+          title: Text('${l10n.usageLog} (${usageLog.length})'),
           content: SizedBox(
             width: double.maxFinite,
             child: usageLog.isEmpty
-                ? const Text('No usage recorded yet.')
+                ? Text(l10n.noUsageRecorded)
                 : ListView.builder(
                     shrinkWrap: true,
                     itemCount: usageLog.length,
                     itemBuilder: (_, i) {
                       final entry = usageLog[i] as Map<String, dynamic>;
-                      final name = entry['userName'] ?? entry['userKey'] ?? 'Unknown';
+                      final name = entry['userName'] ?? entry['userKey'] ?? l10n.unknown;
                       final joinedAt = entry['joinedAt']?.toString() ?? '';
                       return ListTile(
                         dense: true,
@@ -284,20 +289,21 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
                   ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.close)),
           ],
         ),
       );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading usage: $e')),
+          SnackBar(content: Text('${l10n.errorLoadingUsage}: $e')),
         );
       }
     }
   }
 
   Future<void> _createPublicLink() async {
+    final l10n = AppLocalizations.of(context)!;
     try {
       final result = await _teamsService.createPublicLink(widget.teamId);
       if (!mounted) return;
@@ -309,11 +315,11 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Row(
+          title: Row(
             children: [
-              Icon(Icons.public, color: Colors.blue),
-              SizedBox(width: 8),
-              Expanded(child: Text('Public Link Created!')),
+              const Icon(Icons.public, color: Colors.blue),
+              const SizedBox(width: 8),
+              Expanded(child: Text(l10n.publicLinkCreated)),
             ],
           ),
           content: SingleChildScrollView(
@@ -321,9 +327,9 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Share this link on social media to recruit new team members. All applicants will require your approval.',
-                  style: TextStyle(fontSize: 13, color: Colors.grey),
+                Text(
+                  l10n.publicLinkDescription,
+                  style: const TextStyle(fontSize: 13, color: Colors.grey),
                 ),
                 const SizedBox(height: 16),
                 Container(
@@ -346,7 +352,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
                         onPressed: () {
                           Clipboard.setData(ClipboardData(text: deepLink));
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Link copied!')),
+                            SnackBar(content: Text(l10n.linkCopied)),
                           );
                         },
                       ),
@@ -364,7 +370,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Code: $shortCode',
+                        '${l10n.codeLabel} $shortCode',
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -376,7 +382,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
                         onPressed: () {
                           Clipboard.setData(ClipboardData(text: shortCode));
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Code copied!')),
+                            SnackBar(content: Text(l10n.codeCopied)),
                           );
                         },
                       ),
@@ -388,9 +394,9 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     icon: const Icon(Icons.share),
-                    label: const Text('Share'),
+                    label: Text(l10n.share),
                     onPressed: () {
-                      Share.share(shareableMessage, subject: 'Join our team on FlowShift');
+                      Share.share(shareableMessage, subject: l10n.shareJoinTeam);
                     },
                   ),
                 ),
@@ -400,7 +406,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Done'),
+              child: Text(l10n.done),
             ),
           ],
         ),
@@ -410,24 +416,25 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
+        SnackBar(content: Text('${AppLocalizations.of(context)!.errorPrefix}: $e')),
       );
     }
   }
 
   Future<void> _approveApplicant(String applicantId) async {
+    final l10n = AppLocalizations.of(context)!;
     setState(() => _processingApplicantId = applicantId);
     try {
       await _teamsService.approveApplicant(widget.teamId, applicantId);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Applicant approved!')),
+        SnackBar(content: Text(l10n.applicantApproved)),
       );
       await _loadData();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
+        SnackBar(content: Text('${AppLocalizations.of(context)!.errorPrefix}: $e')),
       );
     } finally {
       if (mounted) setState(() => _processingApplicantId = null);
@@ -435,16 +442,17 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
   }
 
   Future<void> _denyApplicant(String applicantId) async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Deny Applicant'),
-        content: const Text('Are you sure you want to deny this applicant?'),
+        title: Text(l10n.denyApplicant),
+        content: Text(l10n.denyApplicantConfirmation),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.cancel)),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Deny', style: TextStyle(color: Colors.red)),
+            child: Text(l10n.deny, style: const TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -457,13 +465,13 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
       await _teamsService.denyApplicant(widget.teamId, applicantId);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Applicant denied')),
+        SnackBar(content: Text(l10n.applicantDenied)),
       );
       await _loadData();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
+        SnackBar(content: Text('${AppLocalizations.of(context)!.errorPrefix}: $e')),
       );
     } finally {
       if (mounted) setState(() => _processingApplicantId = null);
@@ -471,32 +479,33 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
   }
 
   Future<void> _addCoManager() async {
+    final l10n = AppLocalizations.of(context)!;
     final emailCtrl = TextEditingController();
     final formKey = GlobalKey<FormState>();
     final added = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Add Co-Manager'),
+        title: Text(l10n.addCoManager),
         content: Form(
           key: formKey,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                'Enter the email of a manager to add them as a co-manager. They must already have a FlowShift Manager account.',
-                style: TextStyle(fontSize: 13, color: Colors.grey),
+              Text(
+                l10n.addCoManagerInstructions,
+                style: const TextStyle(fontSize: 13, color: Colors.grey),
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: emailCtrl,
-                decoration: const InputDecoration(labelText: 'Manager email'),
+                decoration: InputDecoration(labelText: l10n.managerEmailLabel),
                 keyboardType: TextInputType.emailAddress,
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return 'Enter an email';
+                    return l10n.enterEmailError;
                   }
                   if (!value.contains('@')) {
-                    return 'Enter a valid email';
+                    return l10n.enterValidEmailError;
                   }
                   return null;
                 },
@@ -507,7 +516,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+            child: Text(l10n.cancel),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -526,7 +535,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
                 );
               }
             },
-            child: const Text('Add'),
+            child: Text(l10n.add),
           ),
         ],
       ),
@@ -535,26 +544,27 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
     if (added == true) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Co-manager added')),
+        SnackBar(content: Text(l10n.coManagerAdded)),
       );
       await _loadData();
     }
   }
 
   Future<void> _removeCoManager(String coManagerId, String coManagerName) async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Remove Co-Manager'),
-        content: Text('Remove $coManagerName as co-manager?'),
+        title: Text(l10n.removeCoManager),
+        content: Text(l10n.removeCoManagerConfirmation(coManagerName)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+            child: Text(l10n.cancel),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Remove', style: TextStyle(color: Colors.red)),
+            child: Text(l10n.remove, style: const TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -569,18 +579,19 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Co-manager removed')),
+        SnackBar(content: Text(l10n.coManagerRemoved)),
       );
       await _loadData();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
+        SnackBar(content: Text('${AppLocalizations.of(context)!.errorPrefix}: $e')),
       );
     }
   }
 
   Future<void> _openAddMemberSheet() async {
+    final l10n = AppLocalizations.of(context)!;
     if (_addingMember) return;
     final existingKeys = _members
         .map(
@@ -665,7 +676,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
                   children: [
                     AppBar(
                       automaticallyImplyLeading: false,
-                      title: const Text('Add team member'),
+                      title: Text(l10n.addTeamMember),
                       actions: [
                         IconButton(
                           onPressed: () => Navigator.of(ctx).pop(false),
@@ -679,7 +690,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
                         controller: searchCtrl,
                         textInputAction: TextInputAction.search,
                         decoration: InputDecoration(
-                          hintText: 'Search by name or email',
+                          hintText: l10n.searchByNameOrEmail,
                           prefixIcon: const Icon(Icons.search),
                           suffixIcon: currentQuery.isNotEmpty
                               ? IconButton(
@@ -717,7 +728,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
                         child: results.isEmpty && !loading
                             ? Center(
                                 child: Text(
-                                  'No users found. Try another search.',
+                                  l10n.noUsersFoundTryAnother,
                                   style: TextStyle(color: Colors.grey.shade600),
                                 ),
                               )
@@ -766,7 +777,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
                                         ? null
                                         : Text(subtitle),
                                     trailing: alreadyMember
-                                        ? const Chip(label: Text('Member'))
+                                        ? Chip(label: Text(l10n.memberChip))
                                         : ElevatedButton(
                                             onPressed: _addingMember
                                                 ? null
@@ -775,7 +786,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
                                                         user,
                                                         ctx,
                                                       ),
-                                            child: const Text('Add'),
+                                            child: Text(l10n.add),
                                           ),
                                   );
                                 },
@@ -806,6 +817,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
     Map<String, dynamic> user,
     BuildContext sheetContext,
   ) async {
+    final l10n = AppLocalizations.of(context)!;
     final provider = user['provider']?.toString().trim();
     final subject = user['subject']?.toString().trim();
     if (provider == null ||
@@ -813,8 +825,8 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
         subject == null ||
         subject.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('User is missing provider/subject information'),
+        SnackBar(
+          content: Text(l10n.userMissingProviderError),
         ),
       );
       return;
@@ -856,12 +868,12 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
           '$provider:$subject';
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Added $displayName to the team')));
+      ).showSnackBar(SnackBar(content: Text(l10n.addedToTeam(displayName))));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Failed to add member: $e')));
+        ).showSnackBar(SnackBar(content: Text('${l10n.failedToAddMember}: $e')));
       }
     } finally {
       if (mounted) {
@@ -871,6 +883,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
   }
 
   Future<void> _cancelInvite(String inviteId) async {
+    final l10n = AppLocalizations.of(context)!;
     try {
       await _teamsService.cancelInvite(
         teamId: widget.teamId,
@@ -879,18 +892,19 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Invite cancelled')));
+      ).showSnackBar(SnackBar(content: Text(l10n.inviteCancelled)));
       await _loadData();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Failed to cancel invite: $e')));
+      ).showSnackBar(SnackBar(content: Text('${l10n.failedToCancelInvite}: $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: Navigator.of(context).canPop(),
@@ -905,7 +919,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
           IconButton(
             onPressed: _sendInvite,
             icon: const Icon(Icons.mail_outline),
-            tooltip: 'Send invite',
+            tooltip: l10n.sendInvite,
           ),
         ],
       ),
@@ -914,6 +928,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
   }
 
   Widget _buildBody() {
+    final l10n = AppLocalizations.of(context)!;
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -925,16 +940,16 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Could not load team data',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                Text(
+                  l10n.failedToLoadTeamData,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 12),
                 Text(_error!),
                 const SizedBox(height: 12),
                 ElevatedButton(
                   onPressed: _loadData,
-                  child: const Text('Retry'),
+                  child: Text(l10n.retry),
                 ),
               ],
             ),
@@ -948,16 +963,16 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
       children: [
         Row(
           children: [
-            const Text(
-              'Members',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            Text(
+              l10n.membersSection,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
           ],
         ),
         const SizedBox(height: 8),
         if (_members.isEmpty)
           Text(
-            'No active members yet.',
+            l10n.noActiveMembersYet,
             style: TextStyle(color: Colors.grey.shade600),
           )
         else
@@ -1009,7 +1024,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
                         },
                         icon: const Icon(Icons.chat_bubble_outline),
                         color: Colors.blue,
-                        tooltip: 'Message',
+                        tooltip: l10n.message,
                       ),
                     IconButton(
                       onPressed: memberId.isEmpty
@@ -1017,7 +1032,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
                           : () => _removeMember(memberId),
                       icon: const Icon(Icons.remove_circle_outline),
                       color: Colors.redAccent,
-                      tooltip: 'Remove',
+                      tooltip: l10n.remove,
                     ),
                   ],
                 ),
@@ -1028,23 +1043,23 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
         const SizedBox(height: 24),
         Row(
           children: [
-            const Text(
-              'Co-Managers',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            Text(
+              l10n.coManagersSection,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
             const Spacer(),
             if (widget.isOwner)
               TextButton.icon(
                 onPressed: _addCoManager,
                 icon: const Icon(Icons.person_add, size: 18),
-                label: const Text('Add'),
+                label: Text(l10n.add),
               ),
           ],
         ),
         const SizedBox(height: 8),
         if (_coManagers.isEmpty)
           Text(
-            'No co-managers yet.',
+            l10n.noCoManagersYet,
             style: TextStyle(color: Colors.grey.shade600),
           )
         else
@@ -1068,16 +1083,16 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
                             : () => _removeCoManager(cmId, cmName),
                         icon: const Icon(Icons.remove_circle_outline),
                         color: Colors.redAccent,
-                        tooltip: 'Remove co-manager',
+                        tooltip: l10n.removeCoManagerTooltip,
                       )
                     : null,
               ),
             );
           }),
         const SizedBox(height: 24),
-        const Text(
-          'Invites',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+        Text(
+          l10n.invitesSection,
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 12),
         Row(
@@ -1086,7 +1101,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
               child: ElevatedButton.icon(
                 onPressed: _createInviteLink,
                 icon: const Icon(Icons.link, size: 18),
-                label: const Text('Invite Link'),
+                label: Text(l10n.inviteLinkButton),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
                 ),
@@ -1097,7 +1112,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
               child: ElevatedButton.icon(
                 onPressed: _createPublicLink,
                 icon: const Icon(Icons.public, size: 18),
-                label: const Text('Public Link'),
+                label: Text(l10n.publicLinkButton),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
                   backgroundColor: Colors.teal,
@@ -1109,7 +1124,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
             OutlinedButton.icon(
               onPressed: _sendInvite,
               icon: const Icon(Icons.mail_outline, size: 18),
-              label: const Text('Email'),
+              label: Text(l10n.email),
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
               ),
@@ -1118,7 +1133,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
         ),
         const SizedBox(height: 8),
         if (_invites.isEmpty)
-          Text('No invites yet.', style: TextStyle(color: Colors.grey.shade600))
+          Text(l10n.noInvitesYet, style: TextStyle(color: Colors.grey.shade600))
         else
           ..._invites.map((invite) {
             final status = (invite['status'] ?? '').toString();
@@ -1163,7 +1178,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
                             ? null
                             : () => _cancelInvite(inviteId),
                         icon: const Icon(Icons.close),
-                        tooltip: 'Cancel invite',
+                        tooltip: l10n.cancelInvite,
                       )
                     : null,
               ),
@@ -1174,9 +1189,9 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
           const SizedBox(height: 24),
           Row(
             children: [
-              const Text(
-                'Pending Applicants',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              Text(
+                l10n.pendingApplicants,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
               ),
               const SizedBox(width: 8),
               Container(
@@ -1210,9 +1225,9 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
         // Active Invite Links Section
         if (_inviteLinks.isNotEmpty) ...[
           const SizedBox(height: 24),
-          const Text(
-            'Active Invite Links',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          Text(
+            l10n.activeInviteLinks,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           ..._inviteLinks.map((link) {
@@ -1228,9 +1243,9 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
 
             String usageText;
             if (maxUses != null) {
-              usageText = 'Used: $usedCount / $maxUses';
+              usageText = l10n.usedCount(usedCount, maxUses);
             } else {
-              usageText = 'Used: $usedCount (unlimited)';
+              usageText = l10n.usedCountUnlimited(usedCount);
             }
 
             return Card(
@@ -1245,7 +1260,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
                 ),
                 title: Row(
                   children: [
-                    Text('Code: $shortCode'),
+                    Text(l10n.codePrefix(shortCode)),
                     if (isPublic) ...[
                       const SizedBox(width: 6),
                       Container(
@@ -1255,7 +1270,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          'PUBLIC',
+                          l10n.publicLabel,
                           style: TextStyle(fontSize: 10, color: Colors.teal.shade700, fontWeight: FontWeight.bold),
                         ),
                       ),
@@ -1291,13 +1306,13 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
                           }
                         },
                         itemBuilder: (_) => [
-                          const PopupMenuItem(
+                          PopupMenuItem(
                             value: 'revoke',
                             child: Row(
                               children: [
-                                Icon(Icons.cancel, color: Colors.red, size: 18),
-                                SizedBox(width: 8),
-                                Text('Revoke'),
+                                const Icon(Icons.cancel, color: Colors.red, size: 18),
+                                const SizedBox(width: 8),
+                                Text(l10n.revoke),
                               ],
                             ),
                           ),

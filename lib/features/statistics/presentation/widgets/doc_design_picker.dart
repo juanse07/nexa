@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 
 /// Visual picker for document design templates (Plain, Classic, Executive, Modern).
 class DocDesignPicker extends StatelessWidget {
@@ -22,6 +23,7 @@ class DocDesignPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Row(
       children: _designs.map((d) {
         final isSelected = selected == d.key;
@@ -105,7 +107,7 @@ class DocDesignPicker extends StatelessWidget {
                               ),
                               const SizedBox(width: 2),
                               Text(
-                                'PRO',
+                                l10n.pro,
                                 style: TextStyle(
                                   fontSize: 8,
                                   fontWeight: FontWeight.w700,

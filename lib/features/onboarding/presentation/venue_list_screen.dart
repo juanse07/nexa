@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:nexa/l10n/app_localizations.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../shared/presentation/theme/app_colors.dart';
@@ -41,7 +42,7 @@ class _VenueListScreenState extends State<VenueListScreen> {
       final token = await AuthService.getJwt();
       if (token == null) {
         setState(() {
-          _error = 'Not authenticated';
+          _error = AppLocalizations.of(context)!.notAuthenticated;
           _isLoading = false;
         });
         return;
@@ -98,7 +99,7 @@ class _VenueListScreenState extends State<VenueListScreen> {
         });
       } else {
         setState(() {
-          _error = 'Failed to load venues';
+          _error = AppLocalizations.of(context)!.failedToLoadVenues;
           _isLoading = false;
         });
       }
@@ -119,7 +120,7 @@ class _VenueListScreenState extends State<VenueListScreen> {
 
     if (result == true && mounted) {
       _loadVenues(); // Reload list after adding
-      _showSnackBar('Venue added successfully!', Colors.green);
+      _showSnackBar(AppLocalizations.of(context)!.venueAddedSuccessfully, Colors.green);
     }
   }
 
@@ -132,7 +133,7 @@ class _VenueListScreenState extends State<VenueListScreen> {
 
     if (result == true && mounted) {
       _loadVenues(); // Reload list after editing
-      _showSnackBar('Venue updated successfully!', Colors.green);
+      _showSnackBar(AppLocalizations.of(context)!.venueUpdatedSuccessfully, Colors.green);
     }
   }
 
@@ -143,7 +144,7 @@ class _VenueListScreenState extends State<VenueListScreen> {
     try {
       final token = await AuthService.getJwt();
       if (token == null) {
-        _showSnackBar('Not authenticated', Colors.red);
+        _showSnackBar(AppLocalizations.of(context)!.notAuthenticated, Colors.red);
         return;
       }
 
@@ -159,12 +160,12 @@ class _VenueListScreenState extends State<VenueListScreen> {
       if (response.statusCode == 204 || response.statusCode == 200) {
         if (mounted) {
           _loadVenues(); // Reload list after deletion
-          _showSnackBar('Venue removed successfully!', Colors.orange);
+          _showSnackBar(AppLocalizations.of(context)!.venueRemovedSuccessfully, Colors.orange);
         }
       } else {
         final responseBody = jsonDecode(response.body);
         _showSnackBar(
-            (responseBody['message'] as String?) ?? 'Failed to delete venue', Colors.red);
+            (responseBody['message'] as String?) ?? AppLocalizations.of(context)!.failedToDeleteVenue, Colors.red);
       }
     } catch (e) {
       _showSnackBar('Error: $e', Colors.red);
@@ -172,26 +173,27 @@ class _VenueListScreenState extends State<VenueListScreen> {
   }
 
   Future<bool?> _showDeleteConfirmationDialog(Venue venue) async {
+    final l10n = AppLocalizations.of(context)!;
     return showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Remove Venue?'),
+          title: Text(l10n.removeVenueConfirmation),
           content: Text(
-            'Are you sure you want to remove "${venue.name}"?',
+            l10n.confirmRemoveVenue(venue.name),
             style: const TextStyle(fontSize: 16),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+              child: Text(l10n.cancel),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
               style: FilledButton.styleFrom(
                 backgroundColor: Colors.red,
               ),
-              child: const Text('Remove'),
+              child: Text(l10n.remove),
             ),
           ],
         );
@@ -210,6 +212,7 @@ class _VenueListScreenState extends State<VenueListScreen> {
   }
 
   Widget _buildSourceBadge(Venue venue) {
+    final l10n = AppLocalizations.of(context)!;
     final isManual = venue.isManual;
     final isPlaces = venue.isFromPlaces;
 
@@ -220,15 +223,15 @@ class _VenueListScreenState extends State<VenueListScreen> {
     if (isPlaces) {
       badgeColor = AppColors.oceanBlue;
       badgeIcon = Icons.place;
-      badgeText = 'Places';
+      badgeText = l10n.placesSource;
     } else if (isManual) {
       badgeColor = Colors.green;
       badgeIcon = Icons.person;
-      badgeText = 'Manual';
+      badgeText = l10n.manualSource;
     } else {
       badgeColor = AppColors.navySpaceCadet;
       badgeIcon = Icons.smart_toy;
-      badgeText = 'AI';
+      badgeText = l10n.aiSource;
     }
 
     return Container(
@@ -265,9 +268,10 @@ class _VenueListScreenState extends State<VenueListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Venues'),
+        title: Text(l10n.myVenues),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -282,7 +286,7 @@ class _VenueListScreenState extends State<VenueListScreen> {
           ? FloatingActionButton.extended(
               onPressed: _addVenue,
               icon: const Icon(Icons.add),
-              label: const Text('Add Venue'),
+              label: Text(l10n.addVenue),
             )
           : null,
       body: _isLoading
@@ -302,7 +306,7 @@ class _VenueListScreenState extends State<VenueListScreen> {
                           });
                           _loadVenues();
                         },
-                        child: const Text('Retry'),
+                        child: Text(l10n.retry),
                       ),
                     ],
                   ),
@@ -315,20 +319,20 @@ class _VenueListScreenState extends State<VenueListScreen> {
                           const Icon(Icons.location_off,
                               size: 64, color: Colors.grey),
                           const SizedBox(height: 16),
-                          const Text(
-                            'No venues yet',
-                            style: TextStyle(fontSize: 18, color: Colors.grey),
+                          Text(
+                            l10n.noVenuesYet,
+                            style: const TextStyle(fontSize: 18, color: Colors.grey),
                           ),
                           const SizedBox(height: 8),
-                          const Text(
-                            'Add your first venue or run venue discovery',
-                            style: TextStyle(color: Colors.grey),
+                          Text(
+                            l10n.addFirstVenueOrDiscover,
+                            style: const TextStyle(color: Colors.grey),
                           ),
                           const SizedBox(height: 24),
                           FilledButton.icon(
                             onPressed: _addVenue,
                             icon: const Icon(Icons.add),
-                            label: const Text('Add First Venue'),
+                            label: Text(l10n.addFirstVenue),
                           ),
                         ],
                       ),
@@ -346,7 +350,7 @@ class _VenueListScreenState extends State<VenueListScreen> {
                               Text(
                                 _cities.isNotEmpty
                                     ? _cities.first.name
-                                    : (_preferredCity ?? 'Your Area'),
+                                    : (_preferredCity ?? l10n.yourArea),
                                 style: const TextStyle(
                                   fontSize: 24,
                                   fontWeight: FontWeight.bold,
@@ -354,7 +358,7 @@ class _VenueListScreenState extends State<VenueListScreen> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                '${_venues.length} venues',
+                                '${_venues.length} ${l10n.venues.toLowerCase()}',
                                 style: TextStyle(
                                   fontSize: 16,
                                   color: Colors.grey[600],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
+import 'package:nexa/l10n/app_localizations.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 class ExpandableFab extends StatefulWidget {
@@ -17,11 +18,11 @@ class _ExpandableFabState extends State<ExpandableFab>
   late Animation<double> _rotationAnimation;
   bool _isExpanded = false;
 
-  final List<FabAction> _actions = [
-    FabAction(icon: Icons.camera_alt, label: 'Scan', color: AppColors.techBlue),
-    FabAction(icon: Icons.chat_bubble, label: 'AI Chat', color: AppColors.yellow),
-    FabAction(icon: Icons.calendar_today, label: 'Event', color: AppColors.yellow),
-    FabAction(icon: Icons.upload_file, label: 'Upload', color: AppColors.techBlue),
+  List<FabAction> _buildActions(AppLocalizations l10n) => [
+    FabAction(icon: Icons.camera_alt, label: l10n.scanLabel, color: AppColors.techBlue),
+    FabAction(icon: Icons.chat_bubble, label: l10n.aiChatLabel, color: AppColors.yellow),
+    FabAction(icon: Icons.calendar_today, label: l10n.event, color: AppColors.yellow),
+    FabAction(icon: Icons.upload_file, label: l10n.uploadLabel, color: AppColors.techBlue),
   ];
 
   @override
@@ -64,6 +65,7 @@ class _ExpandableFabState extends State<ExpandableFab>
 
   @override
   Widget build(BuildContext context) {
+    final actions = _buildActions(AppLocalizations.of(context)!);
     return Stack(
       alignment: Alignment.bottomRight,
       children: [
@@ -77,7 +79,7 @@ class _ExpandableFabState extends State<ExpandableFab>
           ),
 
         // Action buttons
-        ..._actions.asMap().entries.map((entry) {
+        ...actions.asMap().entries.map((entry) {
           final index = entry.key;
           final action = entry.value;
           return _buildActionButton(action, index);

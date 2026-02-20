@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import '../../models/attendance_dashboard_models.dart';
 import 'pulse_indicator.dart';
 
@@ -17,12 +18,14 @@ class LiveStaffGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
     if (isLoading) {
-      return _buildLoadingState();
+      return _buildLoadingState(l10n);
     }
 
     if (staff.isEmpty) {
-      return _buildEmptyState();
+      return _buildEmptyState(l10n);
     }
 
     return Column(
@@ -32,9 +35,9 @@ class LiveStaffGrid extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
           child: Row(
             children: [
-              const Text(
-                'Currently Working',
-                style: TextStyle(
+              Text(
+                l10n.currentlyWorking,
+                style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                   color: Colors.black87,
@@ -77,15 +80,15 @@ class LiveStaffGrid extends StatelessWidget {
     );
   }
 
-  Widget _buildLoadingState() {
+  Widget _buildLoadingState(AppLocalizations l10n) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
           child: Text(
-            'Currently Working',
-            style: TextStyle(
+            l10n.currentlyWorking,
+            style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
               color: Colors.black87,
@@ -107,7 +110,7 @@ class LiveStaffGrid extends StatelessWidget {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(AppLocalizations l10n) {
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(24),
@@ -136,7 +139,7 @@ class LiveStaffGrid extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'No staff working',
+                  l10n.noStaffWorking,
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
@@ -145,7 +148,7 @@ class LiveStaffGrid extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Staff will appear here when they clock in',
+                  l10n.staffWillAppearOnClockIn,
                   style: TextStyle(
                     fontSize: 13,
                     color: Colors.grey[500],
@@ -299,6 +302,8 @@ class StaffQuickActionsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -376,7 +381,7 @@ class StaffQuickActionsSheet extends StatelessWidget {
           // Actions
           ListTile(
             leading: const Icon(Icons.info_outline),
-            title: const Text('View Details'),
+            title: Text(l10n.viewDetails),
             onTap: () {
               Navigator.pop(context);
               onViewDetails();
@@ -384,9 +389,9 @@ class StaffQuickActionsSheet extends StatelessWidget {
           ),
           ListTile(
             leading: const Icon(Icons.logout, color: Colors.red),
-            title: const Text(
-              'Force Clock-Out',
-              style: TextStyle(color: Colors.red),
+            title: Text(
+              l10n.forceClockOut,
+              style: const TextStyle(color: Colors.red),
             ),
             onTap: () {
               Navigator.pop(context);
@@ -401,15 +406,17 @@ class StaffQuickActionsSheet extends StatelessWidget {
   }
 
   void _showForceClockOutConfirmation(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Force Clock-Out'),
-        content: Text('Are you sure you want to clock out ${staff.name}?'),
+        title: Text(l10n.forceClockOut),
+        content: Text(l10n.clockOutConfirmation(staff.name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(l10n.cancel),
           ),
           ElevatedButton(
             onPressed: () {
@@ -420,7 +427,7 @@ class StaffQuickActionsSheet extends StatelessWidget {
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
             ),
-            child: const Text('Clock Out'),
+            child: Text(l10n.clockOut),
           ),
         ],
       ),

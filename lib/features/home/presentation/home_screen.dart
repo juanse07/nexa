@@ -12,6 +12,7 @@ import '../data/services/home_stats_service.dart';
 import '../../../../services/terminology_provider.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
 import 'package:nexa/core/navigation/route_error_manager.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -36,65 +37,68 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   // Filter dropdown - will be initialized in initState
   late String _selectedFilter;
 
-  final List<FeatureItem> _features = [
-    FeatureItem(
-      icon: Icons.chat_bubble_outline,
-      title: 'Chat',
-      description: 'send jobs through the chat',
-      color: AppColors.techBlue,
-      accentColor: AppColors.yellow,
-      index: 3, // Chat screen index in MainScreen (ConversationsScreen)
-    ),
-    FeatureItem(
-      icon: Icons.auto_awesome,
-      title: 'AI Chat',
-      description: 'create, update, ask questions ',
-      color: AppColors.pink, // Pink
-      accentColor: const Color(0xFFF472B6),
-      index: -2, // Special index for AI Chat screen
-      isAI: true,
-    ),
-    FeatureItem(
-      icon: Icons.calendar_today,
-      title: 'Jobs',
-      description: 'Manage your created cards',
-      color: AppColors.yellow, // Purple
-      accentColor: const Color(0xFFA78BFA),
-      index: 2, // Jobs/Events tab in MainScreen
-    ),
-    FeatureItem(
-      icon: Icons.group_outlined,
-      title: 'Teams',
-      description: 'invite people to Join',
-      color: AppColors.successLight, // Green
-      accentColor: const Color(0xFF34D399),
-      index: -3, // Special index for Teams Management page
-    ),
-    FeatureItem(
-      icon: Icons.access_time,
-      title: 'Hours',
-      description: 'Trackteam work hours',
-      color: AppColors.warning, // Orange
-      accentColor: const Color(0xFFFBBF24),
-      index: -4, // Special index for Hours screen
-    ),
-    FeatureItem(
-      icon: Icons.inventory_2_outlined,
-      title: 'Catalog',
-      description: 'create clients, roles, and tariffs',
-      color: AppColors.techBlue, // Blue
-      accentColor: const Color(0xFF60A5FA),
-      index: 4, // Catalog screen index in MainScreen
-    ),
-  ];
+  List<FeatureItem> _buildFeatures(AppLocalizations l10n) {
+    return [
+      FeatureItem(
+        icon: Icons.chat_bubble_outline,
+        title: l10n.navChat,
+        description: l10n.featureChatDesc,
+        color: AppColors.techBlue,
+        accentColor: AppColors.yellow,
+        index: 3, // Chat screen index in MainScreen (ConversationsScreen)
+      ),
+      FeatureItem(
+        icon: Icons.auto_awesome,
+        title: l10n.aiChat,
+        description: l10n.featureAIChatDesc,
+        color: AppColors.pink, // Pink
+        accentColor: const Color(0xFFF472B6),
+        index: -2, // Special index for AI Chat screen
+        isAI: true,
+      ),
+      FeatureItem(
+        icon: Icons.calendar_today,
+        title: l10n.jobs, // Jobs title
+        description: l10n.featureJobsDesc,
+        color: AppColors.yellow, // Purple
+        accentColor: const Color(0xFFA78BFA),
+        index: 2, // Jobs/Events tab in MainScreen
+      ),
+      FeatureItem(
+        icon: Icons.group_outlined,
+        title: l10n.teams,
+        description: l10n.featureTeamsDesc,
+        color: AppColors.successLight, // Green
+        accentColor: const Color(0xFF34D399),
+        index: -3, // Special index for Teams Management page
+      ),
+      FeatureItem(
+        icon: Icons.access_time,
+        title: l10n.navHours,
+        description: l10n.featureHoursDesc,
+        color: AppColors.warning, // Orange
+        accentColor: const Color(0xFFFBBF24),
+        index: -4, // Special index for Hours screen
+      ),
+      FeatureItem(
+        icon: Icons.inventory_2_outlined,
+        title: l10n.navCatalog,
+        description: l10n.featureCatalogDesc,
+        color: AppColors.techBlue, // Blue
+        accentColor: const Color(0xFF60A5FA),
+        index: 4, // Catalog screen index in MainScreen
+      ),
+    ];
+  }
 
-  final List<QuickAction> _quickActions = [
-    QuickAction(icon: Icons.auto_awesome, label: 'AI Chat', isAIChat: true), // AI Chat screen
-    QuickAction(icon: Icons.upload_file, label: 'Upload', tabIndex: 0), // Upload tab
-    QuickAction(icon: Icons.add_circle_outline, label: 'Create', tabIndex: 2), // Manual tab
-    QuickAction(icon: Icons.qr_code_scanner, label: 'Timesheet', tabIndex: 0), // Scan goes to Upload (merged)
-   
-  ];
+  List<QuickAction> _buildQuickActions(AppLocalizations l10n) {
+    return [
+      QuickAction(icon: Icons.auto_awesome, label: l10n.aiChat, isAIChat: true), // AI Chat screen
+      QuickAction(icon: Icons.upload_file, label: l10n.quickActionUpload, tabIndex: 0), // Upload tab
+      QuickAction(icon: Icons.add_circle_outline, label: l10n.navCreate, tabIndex: 2), // Manual tab
+      QuickAction(icon: Icons.qr_code_scanner, label: l10n.quickActionTimesheet, tabIndex: 0), // Scan goes to Upload (merged)
+    ];
+  }
 
   @override
   void initState() {
@@ -454,18 +458,18 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'Welcome back!',
-                              style: TextStyle(
+                            Text(
+                              AppLocalizations.of(context)!.welcomeBack,
+                              style: const TextStyle(
                                 color: Color(0xE6FFFFFF), // 90% opacity white
                                 fontSize: 16,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
                             const SizedBox(height: 8),
-                            const Text(
-                              'Manage your events',
-                              style: TextStyle(
+                            Text(
+                              AppLocalizations.of(context)!.manageYourEvents,
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 32,
                                 fontWeight: FontWeight.bold,
@@ -516,11 +520,19 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                       alignment: AlignmentDirectional.bottomStart,
                                       selectedItemBuilder: (BuildContext context) {
                                         final terminology = context.read<TerminologyProvider>().plural;
+                                        final l10n = AppLocalizations.of(context)!;
+                                        final displayLabels = {
+                                          terminology: terminology,
+                                          'Clients': l10n.clients,
+                                          'Teams': l10n.teams,
+                                          'Catalog': l10n.navCatalog,
+                                          'AI Chat': l10n.aiChat,
+                                        };
                                         return [terminology, 'Clients', 'Teams', 'Catalog', 'AI Chat'].map((String value) {
                                           return Align(
                                             alignment: Alignment.centerLeft,
                                             child: Text(
-                                              value,
+                                              displayLabels[value] ?? value,
                                               style: const TextStyle(
                                                 color: Colors.white,
                                                 fontSize: 16,
@@ -549,10 +561,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                         child: IconTheme(
                                           data: const IconThemeData(color: Colors.white),
                                           child: Row(
-                                            children: const [
-                                              Icon(Icons.business, size: 18),
-                                              SizedBox(width: 12),
-                                              Text('Clients'),
+                                            children: [
+                                              const Icon(Icons.business, size: 18),
+                                              const SizedBox(width: 12),
+                                              Text(AppLocalizations.of(context)!.clients),
                                             ],
                                           ),
                                         ),
@@ -562,10 +574,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                         child: IconTheme(
                                           data: const IconThemeData(color: Colors.white),
                                           child: Row(
-                                            children: const [
-                                              Icon(Icons.group, size: 18),
-                                              SizedBox(width: 12),
-                                              Text('Teams'),
+                                            children: [
+                                              const Icon(Icons.group, size: 18),
+                                              const SizedBox(width: 12),
+                                              Text(AppLocalizations.of(context)!.teams),
                                             ],
                                           ),
                                         ),
@@ -575,10 +587,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                         child: IconTheme(
                                           data: const IconThemeData(color: Colors.white),
                                           child: Row(
-                                            children: const [
-                                              Icon(Icons.inventory_2_outlined, size: 18),
-                                              SizedBox(width: 12),
-                                              Text('Catalog'),
+                                            children: [
+                                              const Icon(Icons.inventory_2_outlined, size: 18),
+                                              const SizedBox(width: 12),
+                                              Text(AppLocalizations.of(context)!.navCatalog),
                                             ],
                                           ),
                                         ),
@@ -588,10 +600,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                         child: IconTheme(
                                           data: const IconThemeData(color: Colors.white),
                                           child: Row(
-                                            children: const [
-                                              Icon(Icons.auto_awesome, size: 18),
-                                              SizedBox(width: 12),
-                                              Text('AI Chat'),
+                                            children: [
+                                              const Icon(Icons.auto_awesome, size: 18),
+                                              const SizedBox(width: 12),
+                                              Text(AppLocalizations.of(context)!.aiChat),
                                             ],
                                           ),
                                         ),
@@ -668,11 +680,19 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           alignment: AlignmentDirectional.bottomStart,
                           selectedItemBuilder: (BuildContext context) {
                             final terminology = context.read<TerminologyProvider>().plural;
+                            final l10n = AppLocalizations.of(context)!;
+                            final displayLabels = {
+                              terminology: terminology,
+                              'Clients': l10n.clients,
+                              'Teams': l10n.teams,
+                              'Catalog': l10n.navCatalog,
+                              'AI Chat': l10n.aiChat,
+                            };
                             return [terminology, 'Clients', 'Teams', 'Catalog', 'AI Chat'].map((String value) {
                               return Align(
                                 alignment: Alignment.centerLeft,
                                 child: Text(
-                                  value,
+                                  displayLabels[value] ?? value,
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 13,
@@ -701,10 +721,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             child: IconTheme(
                               data: const IconThemeData(color: Colors.white),
                               child: Row(
-                                children: const [
-                                  Icon(Icons.business, size: 16),
-                                  SizedBox(width: 8),
-                                  Text('Clients'),
+                                children: [
+                                  const Icon(Icons.business, size: 16),
+                                  const SizedBox(width: 8),
+                                  Text(AppLocalizations.of(context)!.clients),
                                 ],
                               ),
                             ),
@@ -714,10 +734,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             child: IconTheme(
                               data: const IconThemeData(color: Colors.white),
                               child: Row(
-                                children: const [
-                                  Icon(Icons.group, size: 16),
-                                  SizedBox(width: 8),
-                                  Text('Teams'),
+                                children: [
+                                  const Icon(Icons.group, size: 16),
+                                  const SizedBox(width: 8),
+                                  Text(AppLocalizations.of(context)!.teams),
                                 ],
                               ),
                             ),
@@ -727,10 +747,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             child: IconTheme(
                               data: const IconThemeData(color: Colors.white),
                               child: Row(
-                                children: const [
-                                  Icon(Icons.inventory_2_outlined, size: 16),
-                                  SizedBox(width: 8),
-                                  Text('Catalog'),
+                                children: [
+                                  const Icon(Icons.inventory_2_outlined, size: 16),
+                                  const SizedBox(width: 8),
+                                  Text(AppLocalizations.of(context)!.navCatalog),
                                 ],
                               ),
                             ),
@@ -740,10 +760,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             child: IconTheme(
                               data: const IconThemeData(color: Colors.white),
                               child: Row(
-                                children: const [
-                                  Icon(Icons.auto_awesome, size: 16),
-                                  SizedBox(width: 8),
-                                  Text('AI Chat'),
+                                children: [
+                                  const Icon(Icons.auto_awesome, size: 16),
+                                  const SizedBox(width: 8),
+                                  Text(AppLocalizations.of(context)!.aiChat),
                                 ],
                               ),
                             ),
@@ -792,43 +812,48 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               ),
               child: _statsLoading
                   ? const Center(child: CircularProgressIndicator())
-                  : ListView(
-                    scrollDirection: Axis.horizontal,
-                    physics: const BouncingScrollPhysics(),
-                    children: [
-                      SizedBox(
-                        width: cardWidth,
-                        child: StatsCard(
-                          title: 'Jobs',
-                          value: _upcomingJobsCount.toString(),
-                          icon: Icons.work_outline,
-                          color: AppColors.techBlue,
-                          subtitle: 'Upcoming',
-                        ),
-                      ),
-                      SizedBox(width: spacing),
-                      SizedBox(
-                        width: cardWidth,
-                        child: StatsCard(
-                          title: 'Team Members',
-                          value: _teamMembersCount.toString(),
-                          icon: Icons.people_outline,
-                          color: AppColors.yellow,
-                          subtitle: _teamName,
-                        ),
-                      ),
-                      SizedBox(width: spacing),
-                      SizedBox(
-                        width: cardWidth,
-                        child: StatsCard(
-                          title: 'Hours',
-                          value: _weekHours.toString(),
-                          icon: Icons.access_time,
-                          color: AppColors.warning,
-                          subtitle: 'This Week',
-                        ),
-                      ),
-                    ],
+                  : Builder(
+                    builder: (context) {
+                      final l10n = AppLocalizations.of(context)!;
+                      return ListView(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        children: [
+                          SizedBox(
+                            width: cardWidth,
+                            child: StatsCard(
+                              title: l10n.jobs,
+                              value: _upcomingJobsCount.toString(),
+                              icon: Icons.work_outline,
+                              color: AppColors.techBlue,
+                              subtitle: l10n.upcoming,
+                            ),
+                          ),
+                          SizedBox(width: spacing),
+                          SizedBox(
+                            width: cardWidth,
+                            child: StatsCard(
+                              title: l10n.teamMembers,
+                              value: _teamMembersCount.toString(),
+                              icon: Icons.people_outline,
+                              color: AppColors.yellow,
+                              subtitle: _teamName,
+                            ),
+                          ),
+                          SizedBox(width: spacing),
+                          SizedBox(
+                            width: cardWidth,
+                            child: StatsCard(
+                              title: l10n.hours,
+                              value: _weekHours.toString(),
+                              icon: Icons.access_time,
+                              color: AppColors.warning,
+                              subtitle: l10n.thisWeek,
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
             );
           },
@@ -840,18 +865,24 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   Widget _buildQuickActionsSection() {
     return SliverToBoxAdapter(
       child: RepaintBoundary(
-        child: Container(
-          height: 100,
-          margin: const EdgeInsets.only(left: 20, right: 20, top: 10, bottom: 10),
-          child: ListView.builder(
-          scrollDirection: Axis.horizontal,
-          physics: const BouncingScrollPhysics(),
-          itemCount: _quickActions.length,
-          itemBuilder: (context, index) {
-            final action = _quickActions[index];
-            return _buildQuickActionChip(action, index);
+        child: Builder(
+          builder: (context) {
+            final l10n = AppLocalizations.of(context)!;
+            final quickActions = _buildQuickActions(l10n);
+            return Container(
+              height: 100,
+              margin: const EdgeInsets.only(left: 20, right: 20, top: 10, bottom: 10),
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                itemCount: quickActions.length,
+                itemBuilder: (context, index) {
+                  final action = quickActions[index];
+                  return _buildQuickActionChip(action, index);
+                },
+              ),
+            );
           },
-          ),
         ),
       ),
     );
@@ -921,6 +952,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   Widget _buildFeaturesGrid() {
     return Builder(
       builder: (context) {
+        final l10n = AppLocalizations.of(context)!;
+        final features = _buildFeatures(l10n);
         final screenWidth = MediaQuery.of(context).size.width;
         final isDesktop = screenWidth >= 1200;
         final crossAxisCount = isDesktop ? 4 : 2;
@@ -938,10 +971,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             ),
             delegate: SliverChildBuilderDelegate(
               (context, index) {
-                final feature = _features[index];
+                final feature = features[index];
                 return _buildFeatureCard(feature, index);
               },
-              childCount: _features.length,
+              childCount: features.length,
             ),
           ),
         );
@@ -1099,15 +1132,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   Widget _buildRecentActivitySection() {
+    final l10n = AppLocalizations.of(context)!;
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 20), // Normal padding - SafeArea handles bottom
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Recent Activity',
-              style: TextStyle(
+            Text(
+              l10n.recentActivity,
+              style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
                 color: AppColors.textDark,

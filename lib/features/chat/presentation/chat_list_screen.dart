@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 class ChatListScreen extends StatelessWidget {
@@ -6,17 +7,18 @@ class ChatListScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: AppColors.surfaceLight,
       appBar: AppBar(
-        title: const Text('Chats'),
+        title: Text(l10n.chatTitle),
         backgroundColor: AppColors.tealInfo,
         elevation: 0,
       ),
-      body: const Center(
+      body: Center(
         child: Text(
-          'Chat List Screen',
-          style: TextStyle(fontSize: 20, color: Colors.grey),
+          l10n.chatTitle,
+          style: const TextStyle(fontSize: 20, color: Colors.grey),
         ),
       ),
     );

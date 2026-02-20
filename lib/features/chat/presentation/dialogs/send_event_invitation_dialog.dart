@@ -139,7 +139,7 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to send invitation: $e'),
+            content: Text('${AppLocalizations.of(context)!.failedToSendInvitation}: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -243,7 +243,7 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _loadEvents,
-              child: const Text('Retry'),
+              child: Text(AppLocalizations.of(context)!.retry),
             ),
           ],
         ),
@@ -283,8 +283,8 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
                       const SizedBox(height: 16),
                       Text(
                         _searchQuery.isEmpty
-                            ? 'No upcoming jobs'
-                            : 'No jobs match your search',
+                            ? AppLocalizations.of(context)!.noUpcomingJobs
+                            : AppLocalizations.of(context)!.noJobsMatch,
                         style: TextStyle(
                           fontSize: 16,
                           color: Colors.grey.shade600,
@@ -308,7 +308,7 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
 
   Widget _buildEventCard(Map<String, dynamic> event) {
     // Use client name as the primary title since job titles are often missing
-    final clientName = event['client_name'] as String? ?? 'Unknown Client';
+    final clientName = event['client_name'] as String? ?? AppLocalizations.of(context)!.unknownClient;
 
     // Debug: Print available fields
     print('[INVITATION_DIALOG] Event fields: ${event.keys.toList()}');
@@ -407,7 +407,7 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
                   ] else ...[
                     Expanded(
                       child: Text(
-                        'No venue specified',
+                        AppLocalizations.of(context)!.noVenueSpecified,
                         style: TextStyle(
                           fontSize: 14,
                           color: Colors.grey.shade500,
@@ -450,7 +450,7 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
                   ] else
                     Expanded(
                       child: Text(
-                        'No date specified',
+                        AppLocalizations.of(context)!.noDateSpecified,
                         style: TextStyle(
                           fontSize: 14,
                           color: Colors.grey.shade500,
@@ -490,7 +490,7 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
                   ),
                   Expanded(
                     child: Text(
-                      _selectedEvent!['title'] as String? ?? 'Event',
+                      _selectedEvent!['title'] as String? ?? AppLocalizations.of(context)!.event,
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
@@ -500,9 +500,9 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
                 ],
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Select a role for the staff member:',
-                style: TextStyle(
+              Text(
+                AppLocalizations.of(context)!.selectRoleForStaffMember,
+                style: const TextStyle(
                   fontSize: 14,
                   color: Colors.grey,
                 ),
@@ -521,7 +521,7 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
                       Icon(Icons.badge_outlined, size: 64, color: Colors.grey.shade300),
                       const SizedBox(height: 16),
                       Text(
-                        'No roles available for this job',
+                        AppLocalizations.of(context)!.noRolesAvailable,
                         style: TextStyle(
                           fontSize: 16,
                           color: Colors.grey.shade600,
@@ -566,7 +566,7 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
                       ),
                     )
                   : const Icon(Icons.send),
-              label: Text(_sending ? 'Sending...' : 'Send Invitation'),
+              label: Text(_sending ? AppLocalizations.of(context)!.sending : AppLocalizations.of(context)!.sendInvitation),
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.techBlue,
                 padding: const EdgeInsets.symmetric(vertical: 16),

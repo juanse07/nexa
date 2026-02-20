@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import 'package:nexa/shared/widgets/tappable_app_title.dart';
 import 'package:nexa/shared/widgets/web_content_wrapper.dart';
 import '../../statistics/data/models/statistics_models.dart';
@@ -93,8 +94,9 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
       debugPrint('[AttendanceDashboard] Load error: $e');
       if (mounted) {
         setState(() => _isLoading = false);
+        final l10n = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load data: $e')),
+          SnackBar(content: Text('${l10n.failedToLoadData}: $e')),
         );
       }
     }
@@ -179,8 +181,9 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
         staff: staff,
         onViewDetails: () {
           // TODO: Navigate to staff detail screen
+          final l10n = AppLocalizations.of(context)!;
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Viewing details for ${staff.name}')),
+            SnackBar(content: Text(l10n.viewingDetailsFor(staff.name))),
           );
         },
         onForceClockOut: () => _forceClockOut(staff),
@@ -189,15 +192,16 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
   }
 
   Future<void> _forceClockOut(ClockedInStaff staff) async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Force Clock-Out'),
-        content: Text('Are you sure you want to clock out ${staff.name}?'),
+        title: Text(l10n.forceClockOut),
+        content: Text(l10n.confirmClockOutMessage(staff.name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(l10n.cancel),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
@@ -205,7 +209,7 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
             ),
-            child: const Text('Clock Out'),
+            child: Text(l10n.clockOut),
           ),
         ],
       ),
@@ -222,15 +226,15 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
         if (success) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('${staff.name} clocked out successfully'),
+              content: Text(l10n.staffClockedOutSuccessfully(staff.name)),
               backgroundColor: Colors.green,
             ),
           );
           _refresh();
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Failed to clock out staff'),
+            SnackBar(
+              content: Text(l10n.failedToClockOutStaff),
               backgroundColor: Colors.red,
             ),
           );
@@ -240,15 +244,16 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
   }
 
   Future<void> _forceClockOutRecord(AttendanceRecord record) async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Force Clock-Out'),
-        content: Text('Are you sure you want to clock out ${record.staffName}?'),
+        title: Text(l10n.forceClockOut),
+        content: Text(l10n.confirmClockOutMessage(record.staffName)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(l10n.cancel),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
@@ -256,7 +261,7 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
             ),
-            child: const Text('Clock Out'),
+            child: Text(l10n.clockOut),
           ),
         ],
       ),
@@ -274,15 +279,15 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${record.staffName} clocked out successfully'),
+            content: Text(l10n.staffClockedOutSuccessfully(record.staffName)),
             backgroundColor: Colors.green,
           ),
         );
         _refresh();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to clock out staff'),
+          SnackBar(
+            content: Text(l10n.failedToClockOutStaff),
             backgroundColor: Colors.red,
           ),
         );
@@ -322,14 +327,16 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
       debugPrint('[AttendanceDashboard] AI analysis error: $e');
       if (mounted) {
         setState(() => _isAnalyzing = false);
+        final l10n = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load analysis data: $e')),
+          SnackBar(content: Text('${l10n.failedToLoadData}: $e')),
         );
       }
     }
   }
 
   Widget _buildValerioFab() {
+    final l10n = AppLocalizations.of(context)!;
     final icon = _isAnalyzing
         ? const SizedBox(
             width: 22,
@@ -386,7 +393,7 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
                           ? Padding(
                               padding: const EdgeInsets.only(left: 8),
                               child: Text(
-                                _isAnalyzing ? 'Analyzing...' : 'AI Analysis',
+                                _isAnalyzing ? l10n.analyzing : l10n.aiAnalysis,
                                 overflow: TextOverflow.clip,
                                 maxLines: 1,
                                 style: const TextStyle(
@@ -409,6 +416,7 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Stack(
       children: [
         Scaffold(
@@ -434,7 +442,7 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
                 collapseMode: CollapseMode.parallax,
               ),
               title: TappableAppTitle.text(
-                'Attendance',
+                l10n.attendanceTitle,
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
@@ -495,9 +503,9 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'Recent Activity',
-                      style: TextStyle(
+                    Text(
+                      l10n.recentActivity,
+                      style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                         color: Colors.black87,
@@ -535,9 +543,10 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
                       },
                       onViewHistory: () {
                         // TODO: Navigate to history screen
+                        final l10n = AppLocalizations.of(context)!;
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text('Viewing history for ${record.staffName}'),
+                            content: Text(l10n.viewingHistoryFor(record.staffName)),
                           ),
                         );
                       },
@@ -594,6 +603,7 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
   }
 
   Widget _buildEmptyState() {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(32),
@@ -610,7 +620,7 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            'No attendance records',
+            l10n.noAttendanceRecords,
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w600,
@@ -620,8 +630,8 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
           const SizedBox(height: 8),
           Text(
             _filters.hasActiveFilters
-                ? 'Try adjusting your filters'
-                : 'Records will appear here when staff clock in',
+                ? l10n.tryAdjustingFilters
+                : l10n.recordsAppearWhenStaffClockIn,
             style: TextStyle(
               fontSize: 14,
               color: Colors.grey[500],
@@ -635,7 +645,7 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
                 setState(() => _filters = const AttendanceFilters());
                 _loadData();
               },
-              child: const Text('Clear Filters'),
+              child: Text(l10n.clearFilters),
             ),
           ],
         ],

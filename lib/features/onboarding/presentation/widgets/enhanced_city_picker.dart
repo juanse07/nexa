@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 
 /// Enhanced city picker with comprehensive list + free-form entry
 class EnhancedCityPicker extends StatefulWidget {
@@ -74,6 +75,7 @@ class _EnhancedCityPickerState extends State<EnhancedCityPicker> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final uniqueCountries =
         allCities.map((c) => c.country).toSet().toList()..sort();
 
@@ -96,9 +98,9 @@ class _EnhancedCityPickerState extends State<EnhancedCityPicker> {
             // Header
             Row(
               children: [
-                const Text(
-                  'Select or Type City',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                Text(
+                  l10n.selectOrTypeCity,
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
                 IconButton(
@@ -113,7 +115,7 @@ class _EnhancedCityPickerState extends State<EnhancedCityPicker> {
             DropdownButtonFormField<String>(
               value: _selectedCountry,
               decoration: InputDecoration(
-                labelText: 'Country',
+                labelText: l10n.country,
                 prefixIcon: const Icon(Icons.public),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 filled: true,
@@ -121,7 +123,7 @@ class _EnhancedCityPickerState extends State<EnhancedCityPicker> {
               ),
               isExpanded: true,
               items: [
-                const DropdownMenuItem<String>(value: null, child: Text('All Countries')),
+                DropdownMenuItem<String>(value: null, child: Text(l10n.allCountries)),
                 ...uniqueCountries.map((c) => DropdownMenuItem(value: c, child: Text(c))),
               ],
               onChanged: (value) {
@@ -139,14 +141,14 @@ class _EnhancedCityPickerState extends State<EnhancedCityPicker> {
               DropdownButtonFormField<String>(
                 value: _selectedState,
                 decoration: InputDecoration(
-                  labelText: 'State/Province',
+                  labelText: l10n.stateProvince,
                   prefixIcon: const Icon(Icons.map),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                   filled: true,
                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
                 items: [
-                  const DropdownMenuItem<String>(value: null, child: Text('All States')),
+                  DropdownMenuItem<String>(value: null, child: Text(l10n.allStates)),
                   ...uniqueStates.map((String s) => DropdownMenuItem<String>(value: s, child: Text(s))),
                 ],
                 onChanged: (value) {
@@ -164,8 +166,8 @@ class _EnhancedCityPickerState extends State<EnhancedCityPicker> {
             TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                labelText: 'Type or Search City',
-                hintText: 'Enter any city name...',
+                labelText: l10n.typeOrSearchCity,
+                hintText: l10n.enterAnyCityName,
                 prefixIcon: const Icon(Icons.search),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 filled: true,
@@ -194,9 +196,9 @@ class _EnhancedCityPickerState extends State<EnhancedCityPicker> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'Use custom city:',
-                              style: TextStyle(fontSize: 12, color: Colors.grey),
+                            Text(
+                              l10n.useCustomCity,
+                              style: const TextStyle(fontSize: 12, color: Colors.grey),
                             ),
                             Text(
                               '"${_searchController.text}"',
@@ -218,7 +220,7 @@ class _EnhancedCityPickerState extends State<EnhancedCityPicker> {
 
             // Results count
             Text(
-              '${_filteredCities.length} suggested cities',
+              '${_filteredCities.length} ${l10n.suggestedCities}',
               style: TextStyle(color: Colors.grey[600], fontSize: 12),
             ),
             const SizedBox(height: 8),
@@ -233,12 +235,12 @@ class _EnhancedCityPickerState extends State<EnhancedCityPicker> {
                           Icon(Icons.search_off, size: 48, color: Colors.grey[400]),
                           const SizedBox(height: 8),
                           Text(
-                            'No matching cities in suggestions',
+                            l10n.noMatchingCitiesSuggestions,
                             style: TextStyle(color: Colors.grey[600]),
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'You can type any city name above',
+                            l10n.canTypeAnyCityAbove,
                             style: TextStyle(color: Colors.grey[500], fontSize: 12),
                           ),
                         ],
@@ -258,9 +260,9 @@ class _EnhancedCityPickerState extends State<EnhancedCityPicker> {
                               : Text(city.country),
                           trailing: city.isTourist
                               ? Chip(
-                                  label: const Text(
-                                    'Tourist',
-                                    style: TextStyle(fontSize: 10),
+                                  label: Text(
+                                    l10n.tourist,
+                                    style: const TextStyle(fontSize: 10),
                                   ),
                                   backgroundColor: Colors.orange.withOpacity(0.2),
                                   side: const BorderSide(color: Colors.orange),

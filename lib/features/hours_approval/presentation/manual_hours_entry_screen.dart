@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:nexa/features/extraction/services/users_service.dart';
 import 'package:nexa/features/hours_approval/services/timesheet_extraction_service.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 
 class ManualHoursEntryScreen extends StatefulWidget {
   final Map<String, dynamic> event;
@@ -49,7 +50,7 @@ class _ManualHoursEntryScreenState extends State<ManualHoursEntryScreen> {
       }
     } catch (e) {
       setState(() {
-        _error = 'Failed to load users: $e';
+        _error = '${AppLocalizations.of(context)!.failedToLoadUsers}: $e';
         _isSearching = false;
       });
     }
@@ -77,7 +78,7 @@ class _ManualHoursEntryScreenState extends State<ManualHoursEntryScreen> {
       }
     } catch (e) {
       setState(() {
-        _error = 'Failed to search users: $e';
+        _error = '${AppLocalizations.of(context)!.failedToSearchUsers}: $e';
         _isSearching = false;
       });
     }
@@ -110,9 +111,10 @@ class _ManualHoursEntryScreenState extends State<ManualHoursEntryScreen> {
         .where((s) => s.signInTime == null || s.signOutTime == null || s.hours <= 0)
         .toList();
     if (invalidStaff.isNotEmpty) {
+      final l10n = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter sign-in and sign-out times for all selected staff'),
+        SnackBar(
+          content: Text(l10n.pleaseEnterTimesForAllStaff),
           backgroundColor: Colors.orange,
         ),
       );
@@ -159,7 +161,7 @@ class _ManualHoursEntryScreenState extends State<ManualHoursEntryScreen> {
           SnackBar(
             content: Text(
               result.processedCount > 0
-                  ? 'Hours submitted and approved successfully'
+                  ? AppLocalizations.of(context)!.hoursSubmittedAndApproved
                   : result.message,
             ),
             backgroundColor: result.processedCount > 0 ? Colors.green : Colors.orange,
@@ -176,7 +178,7 @@ class _ManualHoursEntryScreenState extends State<ManualHoursEntryScreen> {
       }
     } catch (e) {
       setState(() {
-        _error = 'Failed to submit hours: $e';
+        _error = '${AppLocalizations.of(context)!.failedToSubmitHours}: $e';
         _isSubmitting = false;
       });
     }
@@ -185,10 +187,11 @@ class _ManualHoursEntryScreenState extends State<ManualHoursEntryScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Manual Hours Entry'),
+        title: Text(l10n.manualHoursEntry),
         actions: [
           if (_selectedStaff.isNotEmpty)
             Center(
@@ -211,7 +214,7 @@ class _ManualHoursEntryScreenState extends State<ManualHoursEntryScreen> {
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'Search staff by name or email',
+                hintText: l10n.searchStaffByNameEmail,
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _searchController.text.isNotEmpty
                     ? IconButton(
@@ -247,7 +250,7 @@ class _ManualHoursEntryScreenState extends State<ManualHoursEntryScreen> {
             child: _isSearching
                 ? const Center(child: CircularProgressIndicator())
                 : _searchResults.isEmpty
-                    ? const Center(child: Text('No users found'))
+                    ? Center(child: Text(l10n.noUsersFound))
                     : ListView.builder(
                         padding: const EdgeInsets.all(16),
                         itemCount: _searchResults.length,
@@ -271,7 +274,7 @@ class _ManualHoursEntryScreenState extends State<ManualHoursEntryScreen> {
                   child: FilledButton.icon(
                     onPressed: _isSubmitting ? null : _submitHours,
                     icon: const Icon(Icons.check_circle),
-                    label: Text('Submit Hours (${_selectedStaff.length})'),
+                    label: Text(l10n.submitHoursButton(_selectedStaff.length)),
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
@@ -389,6 +392,7 @@ class _ManualHoursEntryScreenState extends State<ManualHoursEntryScreen> {
   }
 
   Future<void> _showHoursInputDialog(_StaffHoursInput staffInput) async {
+    final l10n = AppLocalizations.of(context)!;
     final roleController = TextEditingController(text: staffInput.role ?? '');
     final notesController = TextEditingController(text: staffInput.notes ?? '');
 
@@ -410,7 +414,7 @@ class _ManualHoursEntryScreenState extends State<ManualHoursEntryScreen> {
           }
 
           return AlertDialog(
-            title: Text('Hours for ${staffInput.name}'),
+            title: Text(l10n.hoursForStaff(staffInput.name)),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -418,11 +422,11 @@ class _ManualHoursEntryScreenState extends State<ManualHoursEntryScreen> {
                   // Sign-In Time Picker
                   ListTile(
                     leading: const Icon(Icons.login),
-                    title: const Text('Sign-In Time *'),
+                    title: Text(l10n.signInTimeRequired),
                     subtitle: Text(
                       signInTime != null
                           ? _formatTimeOfDay(signInTime!)
-                          : 'Not set',
+                          : l10n.notSet,
                     ),
                     trailing: const Icon(Icons.access_time),
                     onTap: () async {
@@ -442,11 +446,11 @@ class _ManualHoursEntryScreenState extends State<ManualHoursEntryScreen> {
                   // Sign-Out Time Picker
                   ListTile(
                     leading: const Icon(Icons.logout),
-                    title: const Text('Sign-Out Time *'),
+                    title: Text(l10n.signOutTimeRequired),
                     subtitle: Text(
                       signOutTime != null
                           ? _formatTimeOfDay(signOutTime!)
-                          : 'Not set',
+                          : l10n.notSet,
                     ),
                     trailing: const Icon(Icons.access_time),
                     onTap: () async {
@@ -476,7 +480,7 @@ class _ManualHoursEntryScreenState extends State<ManualHoursEntryScreen> {
                               const Icon(Icons.schedule, color: Colors.white),
                               const SizedBox(width: 8),
                               Text(
-                                'Total: ${calculatedHours.toStringAsFixed(2)} hours',
+                                l10n.totalHoursFormat(calculatedHours.toStringAsFixed(2)),
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w300,
@@ -493,19 +497,19 @@ class _ManualHoursEntryScreenState extends State<ManualHoursEntryScreen> {
                   const SizedBox(height: 8),
                   TextField(
                     controller: roleController,
-                    decoration: const InputDecoration(
-                      labelText: 'Role',
-                      hintText: 'Bartender',
-                      prefixIcon: Icon(Icons.badge),
+                    decoration: InputDecoration(
+                      labelText: l10n.roleHint,
+                      hintText: l10n.bartenderHint,
+                      prefixIcon: const Icon(Icons.badge),
                     ),
                   ),
                   const SizedBox(height: 16),
                   TextField(
                     controller: notesController,
-                    decoration: const InputDecoration(
-                      labelText: 'Notes',
-                      hintText: 'Optional notes',
-                      prefixIcon: Icon(Icons.note),
+                    decoration: InputDecoration(
+                      labelText: l10n.notesLabel,
+                      hintText: l10n.optionalNotes,
+                      prefixIcon: const Icon(Icons.note),
                     ),
                     maxLines: 3,
                   ),
@@ -515,7 +519,7 @@ class _ManualHoursEntryScreenState extends State<ManualHoursEntryScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
+                child: Text(l10n.cancel),
               ),
               FilledButton(
                 onPressed: () {
@@ -536,7 +540,7 @@ class _ManualHoursEntryScreenState extends State<ManualHoursEntryScreen> {
                   });
                   Navigator.pop(context);
                 },
-                child: const Text('Save'),
+                child: Text(l10n.save),
               ),
             ],
           );

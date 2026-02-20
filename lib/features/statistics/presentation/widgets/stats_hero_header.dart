@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import '../../data/models/statistics_models.dart';
 
 /// Hero header displaying key statistics metrics
@@ -14,6 +15,7 @@ class StatsHeroHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final summary = statistics.summary;
     final compliance = statistics.compliance;
 
@@ -41,7 +43,7 @@ class StatsHeroHeader extends StatelessWidget {
           children: [
             // Period label
             Text(
-              periodLabel.isEmpty ? 'This Month' : periodLabel,
+              periodLabel.isEmpty ? l10n.thisMonth : periodLabel,
               style: const TextStyle(
                 color: Colors.white70,
                 fontSize: 14,
@@ -57,7 +59,7 @@ class StatsHeroHeader extends StatelessWidget {
                   child: _StatCard(
                     icon: Icons.attach_money,
                     value: '\$${_formatNumber(summary.totalPayroll)}',
-                    label: 'Total Payroll',
+                    label: l10n.totalPayroll,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -65,7 +67,7 @@ class StatsHeroHeader extends StatelessWidget {
                   child: _StatCard(
                     icon: Icons.schedule,
                     value: '${summary.totalStaffHours.toStringAsFixed(0)}h',
-                    label: 'Staff Hours',
+                    label: l10n.staffHoursLabel,
                   ),
                 ),
               ],
@@ -79,7 +81,7 @@ class StatsHeroHeader extends StatelessWidget {
                   child: _StatCard(
                     icon: Icons.event_available,
                     value: '${summary.completedEvents}/${summary.totalEvents}',
-                    label: 'Events Completed',
+                    label: l10n.eventsCompletedLabel,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -87,7 +89,7 @@ class StatsHeroHeader extends StatelessWidget {
                   child: _StatCard(
                     icon: Icons.check_circle_outline,
                     value: '${summary.fulfillmentRate}%',
-                    label: 'Fulfillment Rate',
+                    label: l10n.fulfillmentRateLabel,
                   ),
                 ),
               ],

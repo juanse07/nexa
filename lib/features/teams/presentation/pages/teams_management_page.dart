@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:nexa/core/network/socket_manager.dart';
 import 'package:nexa/features/teams/data/services/teams_service.dart';
 import 'package:nexa/features/teams/presentation/pages/team_detail_page.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 
 class TeamsManagementPage extends StatefulWidget {
   const TeamsManagementPage({super.key});
@@ -63,6 +64,7 @@ class _TeamsManagementPageState extends State<TeamsManagementPage> {
   }
 
   Future<void> _createTeam() async {
+    final l10n = AppLocalizations.of(context)!;
     final nameCtrl = TextEditingController();
     final descriptionCtrl = TextEditingController();
     final formKey = GlobalKey<FormState>();
@@ -70,7 +72,7 @@ class _TeamsManagementPageState extends State<TeamsManagementPage> {
     final created = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Create Team'),
+        title: Text(l10n.createTeamTitle),
         content: Form(
           key: formKey,
           child: Column(
@@ -78,10 +80,10 @@ class _TeamsManagementPageState extends State<TeamsManagementPage> {
             children: [
               TextFormField(
                 controller: nameCtrl,
-                decoration: const InputDecoration(labelText: 'Team name'),
+                decoration: InputDecoration(labelText: l10n.teamNameLabel),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return 'Enter a team name';
+                    return l10n.enterTeamNameError;
                   }
                   return null;
                 },
@@ -91,8 +93,8 @@ class _TeamsManagementPageState extends State<TeamsManagementPage> {
                 controller: descriptionCtrl,
                 minLines: 2,
                 maxLines: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Description (optional)',
+                decoration: InputDecoration(
+                  labelText: l10n.descriptionOptional,
                 ),
               ),
             ],
@@ -101,7 +103,7 @@ class _TeamsManagementPageState extends State<TeamsManagementPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+            child: Text(l10n.cancel),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -118,11 +120,11 @@ class _TeamsManagementPageState extends State<TeamsManagementPage> {
               } catch (e) {
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Failed to create team: $e')),
+                  SnackBar(content: Text('${l10n.failedToCreateTeam}: $e')),
                 );
               }
             },
-            child: const Text('Create'),
+            child: Text(l10n.create),
           ),
         ],
       ),
@@ -134,22 +136,21 @@ class _TeamsManagementPageState extends State<TeamsManagementPage> {
   }
 
   Future<void> _deleteTeam(String teamId) async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete team?'),
-        content: const Text(
-          'Deleting this team will remove it permanently. Events that reference it will block deletion.',
-        ),
+        title: Text(l10n.deleteTeamConfirmation),
+        content: Text(l10n.deleteTeamWarning),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+            child: Text(l10n.cancel),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-            child: const Text('Delete'),
+            child: Text(l10n.delete),
           ),
         ],
       ),
@@ -162,13 +163,13 @@ class _TeamsManagementPageState extends State<TeamsManagementPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Team deleted')));
+      ).showSnackBar(SnackBar(content: Text(l10n.teamDeleted)));
       await _loadTeams();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Failed to delete team: $e')));
+      ).showSnackBar(SnackBar(content: Text('${l10n.failedToDeleteTeam}: $e')));
     }
   }
 
@@ -187,6 +188,7 @@ class _TeamsManagementPageState extends State<TeamsManagementPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: Navigator.of(context).canPop(),
@@ -196,18 +198,19 @@ class _TeamsManagementPageState extends State<TeamsManagementPage> {
                 onPressed: () => Navigator.of(context).maybePop(),
               )
             : null,
-        title: const Text('Teams'),
+        title: Text(l10n.teams),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _createTeam,
         icon: const Icon(Icons.group_add),
-        label: const Text('New team'),
+        label: Text(l10n.newTeam),
       ),
       body: RefreshIndicator(onRefresh: _loadTeams, child: _buildBody()),
     );
   }
 
   Widget _buildBody() {
+    final l10n = AppLocalizations.of(context)!;
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -219,16 +222,16 @@ class _TeamsManagementPageState extends State<TeamsManagementPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Something went wrong',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                Text(
+                  l10n.somethingWentWrong,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 12),
                 Text(_error!),
                 const SizedBox(height: 12),
                 ElevatedButton(
                   onPressed: _loadTeams,
-                  child: const Text('Retry'),
+                  child: Text(l10n.retry),
                 ),
               ],
             ),
@@ -238,11 +241,11 @@ class _TeamsManagementPageState extends State<TeamsManagementPage> {
     }
     if (_teams.isEmpty) {
       return ListView(
-        children: const [
-          SizedBox(height: 48),
-          Icon(Icons.groups_outlined, size: 48, color: Colors.grey),
-          SizedBox(height: 12),
-          Center(child: Text('No teams yet. Tap “New team” to create one.')),
+        children: [
+          const SizedBox(height: 48),
+          const Icon(Icons.groups_outlined, size: 48, color: Colors.grey),
+          const SizedBox(height: 12),
+          Center(child: Text(l10n.noTeamsYet)),
         ],
       );
     }
@@ -253,8 +256,8 @@ class _TeamsManagementPageState extends State<TeamsManagementPage> {
         final team = _teams[index];
         final name = (team['name'] ?? '').toString();
         final description = (team['description'] ?? '').toString();
-        final memberCount = team['memberCount'] ?? 0;
-        final pendingInvites = team['pendingInvites'] ?? 0;
+        final memberCount = (team['memberCount'] as int?) ?? 0;
+        final pendingInvites = (team['pendingInvites'] as int?) ?? 0;
         final isOwner = team['isOwner'] as bool? ?? true;
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
@@ -271,7 +274,7 @@ class _TeamsManagementPageState extends State<TeamsManagementPage> {
                         children: [
                           Flexible(
                             child: Text(
-                              name.isEmpty ? 'Untitled team' : name,
+                              name.isEmpty ? l10n.untitledTeam : name,
                               style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w600,
@@ -287,8 +290,8 @@ class _TeamsManagementPageState extends State<TeamsManagementPage> {
                                 color: const Color(0xFF6366F1).withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(8),
                               ),
-                              child: const Text(
-                                'Co-Manager',
+                              child: Text(
+                                l10n.coManager,
                                 style: TextStyle(
                                   fontSize: 10,
                                   color: Color(0xFF6366F1),
@@ -309,7 +312,7 @@ class _TeamsManagementPageState extends State<TeamsManagementPage> {
                         },
                         icon: const Icon(Icons.delete_outline),
                         color: Colors.redAccent,
-                        tooltip: 'Delete team',
+                        tooltip: l10n.deleteTeamConfirmation,
                       ),
                   ],
                 ),
@@ -325,16 +328,12 @@ class _TeamsManagementPageState extends State<TeamsManagementPage> {
                   children: [
                     Chip(
                       avatar: const Icon(Icons.people_alt, size: 18),
-                      label: Text(
-                        '$memberCount member${memberCount == 1 ? '' : 's'}',
-                      ),
+                      label: Text(l10n.members(memberCount)),
                     ),
                     const SizedBox(width: 8),
                     Chip(
                       avatar: const Icon(Icons.mark_email_unread, size: 18),
-                      label: Text(
-                        '$pendingInvites pending invite${pendingInvites == 1 ? '' : 's'}',
-                      ),
+                      label: Text(l10n.pendingInvites(pendingInvites)),
                     ),
                   ],
                 ),
@@ -343,7 +342,7 @@ class _TeamsManagementPageState extends State<TeamsManagementPage> {
                   alignment: Alignment.centerRight,
                   child: TextButton(
                     onPressed: () => _openTeamDetail(team),
-                    child: const Text('View details'),
+                    child: Text(l10n.viewDetails),
                   ),
                 ),
               ],

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
+import 'package:nexa/l10n/app_localizations.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../shared/presentation/theme/app_colors.dart';
@@ -196,7 +197,7 @@ class _VenueFormScreenState extends State<VenueFormScreen> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to get place details: $e'),
+            content: Text('${AppLocalizations.of(context)!.failedToGetPlaceDetails}: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -316,7 +317,7 @@ class _VenueFormScreenState extends State<VenueFormScreen> {
       final token = await AuthService.getJwt();
       if (token == null) {
         setState(() {
-          _errorMessage = 'Not authenticated';
+          _errorMessage = AppLocalizations.of(context)!.notAuthenticated;
           _isSaving = false;
         });
         return;
@@ -368,15 +369,16 @@ class _VenueFormScreenState extends State<VenueFormScreen> {
           final message = responseBody['message'] as String?;
 
           // Show appropriate snackbar based on response
+          final l10n = AppLocalizations.of(context)!;
           String snackMessage;
           if (wasUpdated && cityCreated) {
-            snackMessage = message ?? 'Venue updated and city tab added!';
+            snackMessage = message ?? l10n.venueUpdatedCityTabAdded;
           } else if (cityCreated) {
-            snackMessage = 'Venue added and new city tab created!';
+            snackMessage = l10n.venueAddedCityTabCreated;
           } else if (isEditMode) {
-            snackMessage = 'Venue updated successfully!';
+            snackMessage = l10n.venueUpdatedSuccessfully;
           } else {
-            snackMessage = 'Venue added successfully!';
+            snackMessage = l10n.venueAddedSuccessfully;
           }
 
           ScaffoldMessenger.of(context).showSnackBar(
@@ -393,7 +395,7 @@ class _VenueFormScreenState extends State<VenueFormScreen> {
         final responseBody = jsonDecode(response.body);
         setState(() {
           _errorMessage =
-              (responseBody['message'] as String?) ?? 'Failed to save venue';
+              (responseBody['message'] as String?) ?? AppLocalizations.of(context)!.failedToSaveVenue;
           _isSaving = false;
         });
       }
@@ -420,6 +422,7 @@ class _VenueFormScreenState extends State<VenueFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return GestureDetector(
       onTap: () {
         FocusScope.of(context).unfocus();
@@ -427,7 +430,7 @@ class _VenueFormScreenState extends State<VenueFormScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(isEditMode ? 'Edit Venue' : 'Add Venue'),
+          title: Text(isEditMode ? l10n.editVenue : l10n.addVenue),
           leading: IconButton(
             icon: const Icon(Icons.close),
             onPressed: () => Navigator.of(context).pop(),
@@ -473,8 +476,8 @@ class _VenueFormScreenState extends State<VenueFormScreen> {
                     Expanded(
                       child: Text(
                         isEditMode
-                            ? 'Edit venue details below'
-                            : 'Search for a venue and we\'ll auto-fill the details',
+                            ? l10n.editVenueDetailsBelow
+                            : l10n.searchVenueAutoFill,
                         style: TextStyle(
                           color: AppColors.navySpaceCadet,
                           fontSize: 14,
@@ -495,8 +498,8 @@ class _VenueFormScreenState extends State<VenueFormScreen> {
                     controller: _searchController,
                     onChanged: _onSearchChanged,
                     decoration: InputDecoration(
-                      labelText: 'Search venue',
-                      hintText: 'e.g., Ball Arena Denver',
+                      labelText: l10n.searchVenue,
+                      hintText: l10n.venueSearchExample,
                       prefixIcon: Container(
                         margin: const EdgeInsets.all(8),
                         padding: const EdgeInsets.all(8),
@@ -550,7 +553,7 @@ class _VenueFormScreenState extends State<VenueFormScreen> {
                       });
                     },
                     icon: const Icon(Icons.edit, size: 18),
-                    label: const Text('Enter manually instead'),
+                    label: Text(l10n.enterManuallyInstead),
                     style: TextButton.styleFrom(
                       foregroundColor: Colors.grey.shade600,
                     ),
@@ -577,7 +580,7 @@ class _VenueFormScreenState extends State<VenueFormScreen> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            'Venue found via Google Places',
+                            l10n.venueFoundGooglePlaces,
                             style: TextStyle(
                               color: Colors.green.shade800,
                               fontWeight: FontWeight.w500,
@@ -586,7 +589,7 @@ class _VenueFormScreenState extends State<VenueFormScreen> {
                         ),
                         TextButton(
                           onPressed: _clearSelection,
-                          child: const Text('Clear'),
+                          child: Text(l10n.clear),
                         ),
                       ],
                     ),
@@ -598,8 +601,8 @@ class _VenueFormScreenState extends State<VenueFormScreen> {
                 TextFormField(
                   controller: _nameController,
                   decoration: InputDecoration(
-                    labelText: 'Venue Name *',
-                    hintText: 'e.g., Ball Arena',
+                    labelText: l10n.venueName,
+                    hintText: l10n.venueNameExample,
                     prefixIcon: const Icon(Icons.business),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -609,7 +612,7 @@ class _VenueFormScreenState extends State<VenueFormScreen> {
                   textCapitalization: TextCapitalization.words,
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
-                      return 'Please enter a venue name';
+                      return l10n.pleaseEnterVenueName;
                     }
                     return null;
                   },
@@ -620,8 +623,8 @@ class _VenueFormScreenState extends State<VenueFormScreen> {
                 TextFormField(
                   controller: _addressController,
                   decoration: InputDecoration(
-                    labelText: 'Address *',
-                    hintText: 'e.g., 1000 Chopper Cir, Denver, CO 80204',
+                    labelText: l10n.addressRequired,
+                    hintText: l10n.addressExample,
                     prefixIcon: const Icon(Icons.location_on),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -632,7 +635,7 @@ class _VenueFormScreenState extends State<VenueFormScreen> {
                   maxLines: 2,
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
-                      return 'Please enter an address';
+                      return l10n.pleaseEnterAddress;
                     }
                     return null;
                   },
@@ -647,7 +650,7 @@ class _VenueFormScreenState extends State<VenueFormScreen> {
                       child: TextFormField(
                         controller: _cityController,
                         decoration: InputDecoration(
-                          labelText: 'City *',
+                          labelText: '${l10n.city} *',
                           hintText: 'Denver',
                           prefixIcon: const Icon(Icons.location_city),
                           border: OutlineInputBorder(
@@ -658,7 +661,7 @@ class _VenueFormScreenState extends State<VenueFormScreen> {
                         textCapitalization: TextCapitalization.words,
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
-                            return 'Required';
+                            return l10n.required;
                           }
                           return null;
                         },
@@ -670,7 +673,7 @@ class _VenueFormScreenState extends State<VenueFormScreen> {
                       child: TextFormField(
                         controller: _stateController,
                         decoration: InputDecoration(
-                          labelText: 'State',
+                          labelText: l10n.state,
                           hintText: 'CO',
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -734,8 +737,8 @@ class _VenueFormScreenState extends State<VenueFormScreen> {
                         : const Icon(Icons.save),
                     label: Text(
                       _isSaving
-                          ? 'Saving...'
-                          : (isEditMode ? 'Save Changes' : 'Add Venue'),
+                          ? l10n.saving
+                          : (isEditMode ? l10n.saveChanges : l10n.addVenue),
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:intl/intl.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import '../../models/attendance_dashboard_models.dart';
 import 'pulse_indicator.dart';
 
@@ -23,7 +24,8 @@ class StaffAttendanceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final card = _buildCard(context);
+    final l10n = AppLocalizations.of(context)!;
+    final card = _buildCard(context, l10n);
 
     if (!showSwipeActions) {
       return card;
@@ -40,7 +42,7 @@ class StaffAttendanceCard extends StatelessWidget {
             backgroundColor: const Color(0xFF1E3A8A),
             foregroundColor: Colors.white,
             icon: Icons.history,
-            label: 'History',
+            label: l10n.history,
             borderRadius: const BorderRadius.horizontal(
               left: Radius.circular(12),
             ),
@@ -57,7 +59,7 @@ class StaffAttendanceCard extends StatelessWidget {
                   backgroundColor: Colors.red,
                   foregroundColor: Colors.white,
                   icon: Icons.logout,
-                  label: 'Clock Out',
+                  label: l10n.clockOut,
                   borderRadius: const BorderRadius.horizontal(
                     right: Radius.circular(12),
                   ),
@@ -69,9 +71,9 @@ class StaffAttendanceCard extends StatelessWidget {
     );
   }
 
-  Widget _buildCard(BuildContext context) {
+  Widget _buildCard(BuildContext context, AppLocalizations l10n) {
     final timeFormat = DateFormat('h:mm a');
-    final statusConfig = _getStatusConfig();
+    final statusConfig = _getStatusConfig(l10n);
 
     return GestureDetector(
       onTap: onTap,
@@ -237,7 +239,7 @@ class StaffAttendanceCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 2),
                     Text(
-                      'On-site',
+                      l10n.onSite,
                       style: TextStyle(
                         fontSize: 11,
                         color: Colors.green[600],
@@ -276,7 +278,7 @@ class StaffAttendanceCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        'Auto clocked-out',
+                        l10n.autoClockOut,
                         style: TextStyle(
                           fontSize: 11,
                           color: Colors.orange[700],
@@ -294,32 +296,34 @@ class StaffAttendanceCard extends StatelessWidget {
     );
   }
 
-  _StatusConfig _getStatusConfig() {
+  _StatusConfig _getStatusConfig(AppLocalizations l10n) {
     switch (record.displayStatus) {
       case AttendanceDisplayStatus.working:
         return _StatusConfig(
-          label: 'Working',
+          label: l10n.working,
           color: Colors.green,
         );
       case AttendanceDisplayStatus.completed:
         return _StatusConfig(
-          label: 'Completed',
+          label: l10n.completed,
           color: Colors.grey,
         );
       case AttendanceDisplayStatus.flagged:
         return _StatusConfig(
-          label: 'Flagged',
+          label: l10n.flagged,
           color: Colors.orange,
         );
       case AttendanceDisplayStatus.noShow:
         return _StatusConfig(
-          label: 'No-show',
+          label: l10n.noShow,
           color: Colors.red,
         );
     }
   }
 
   void _showQuickStats(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -328,26 +332,26 @@ class StaffAttendanceCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildStatRow('Event', record.eventName),
-            _buildStatRow('Role', record.role ?? 'Not specified'),
+            _buildStatRow(l10n.event, record.eventName),
+            _buildStatRow(l10n.role, record.role ?? l10n.notSpecified),
             _buildStatRow(
-              'Clock-in',
+              l10n.clockInTime,
               DateFormat('MMM d, h:mm a').format(record.clockInAt.toLocal()),
             ),
             if (record.clockOutAt != null)
               _buildStatRow(
-                'Clock-out',
+                l10n.clockOutTime,
                 DateFormat('MMM d, h:mm a').format(record.clockOutAt!.toLocal()),
               ),
-            _buildStatRow('Duration', record.hoursWorkedFormatted),
+            _buildStatRow(l10n.durationLabel, record.hoursWorkedFormatted),
             if (record.clockInLocation != null)
-              _buildStatRow('Location', 'Verified on-site'),
+              _buildStatRow(l10n.location, l10n.verifiedOnSite),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+            child: Text(l10n.close),
           ),
         ],
       ),

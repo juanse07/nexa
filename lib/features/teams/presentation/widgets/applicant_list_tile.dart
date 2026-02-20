@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 
 class ApplicantListTile extends StatelessWidget {
   const ApplicantListTile({
@@ -16,6 +17,7 @@ class ApplicantListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final name = (applicant['name'] ?? '').toString();
     final email = (applicant['email'] ?? '').toString();
     final appliedAt = applicant['appliedAt']?.toString() ?? '';
@@ -24,7 +26,7 @@ class ApplicantListTile extends StatelessWidget {
         ? name
         : email.isNotEmpty
             ? email
-            : 'Unknown applicant';
+            : l10n.unknownApplicant;
 
     String formattedDate = '';
     if (appliedAt.isNotEmpty) {
@@ -76,7 +78,7 @@ class ApplicantListTile extends StatelessWidget {
                     ),
                   if (formattedDate.isNotEmpty)
                     Text(
-                      'Applied $formattedDate',
+                      l10n.appliedDate(formattedDate),
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey.shade500,
@@ -96,7 +98,7 @@ class ApplicantListTile extends StatelessWidget {
                 onPressed: onDeny,
                 icon: const Icon(Icons.close),
                 color: Colors.red,
-                tooltip: 'Deny',
+                tooltip: l10n.deny,
                 style: IconButton.styleFrom(
                   backgroundColor: Colors.red.shade50,
                 ),
@@ -106,7 +108,7 @@ class ApplicantListTile extends StatelessWidget {
                 onPressed: onApprove,
                 icon: const Icon(Icons.check),
                 color: Colors.green,
-                tooltip: 'Approve',
+                tooltip: l10n.approve,
                 style: IconButton.styleFrom(
                   backgroundColor: Colors.green.shade50,
                 ),

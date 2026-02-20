@@ -13,6 +13,7 @@ import '../../../features/auth/presentation/pages/login_page.dart';
 import '../../main/presentation/main_screen.dart';
 import 'package:get_it/get_it.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 
 class CatalogScreen extends StatefulWidget {
   const CatalogScreen({super.key});
@@ -99,19 +100,20 @@ class _CatalogScreenState extends State<CatalogScreen> {
   }
 
   Future<void> _handleLogout(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Logout'),
-        content: const Text('Are you sure you want to logout?'),
+        title: Text(l10n.logout),
+        content: Text(l10n.confirmLogoutMessage),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(l10n.cancel),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Logout'),
+            child: Text(l10n.logout),
           ),
         ],
       ),
@@ -130,8 +132,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
   Widget _buildProfileMenu(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     return PopupMenuButton<String>(
-      tooltip: 'Account',
+      tooltip: l10n.account,
       position: PopupMenuPosition.under,
       onSelected: (value) async {
         if (value == 'profile') {
@@ -151,33 +154,33 @@ class _CatalogScreenState extends State<CatalogScreen> {
         }
       },
       itemBuilder: (context) => [
-        const PopupMenuItem<String>(
+        PopupMenuItem<String>(
           value: 'profile',
           child: ListTile(
-            leading: Icon(Icons.account_circle),
-            title: Text('My Profile'),
+            leading: const Icon(Icons.account_circle),
+            title: Text(l10n.myProfile),
           ),
         ),
-        const PopupMenuItem<String>(
+        PopupMenuItem<String>(
           value: 'settings',
           child: ListTile(
-            leading: Icon(Icons.settings),
-            title: Text('Settings'),
+            leading: const Icon(Icons.settings),
+            title: Text(l10n.settings),
           ),
         ),
-        const PopupMenuItem<String>(
+        PopupMenuItem<String>(
           value: 'teams',
           child: ListTile(
-            leading: Icon(Icons.groups_outlined),
-            title: Text('Manage Teams'),
+            leading: const Icon(Icons.groups_outlined),
+            title: Text(l10n.manageTeams),
           ),
         ),
         const PopupMenuDivider(),
-        const PopupMenuItem<String>(
+        PopupMenuItem<String>(
           value: 'logout',
           child: ListTile(
-            leading: Icon(Icons.logout),
-            title: Text('Logout'),
+            leading: const Icon(Icons.logout),
+            title: Text(l10n.logout),
           ),
         ),
       ],
@@ -218,10 +221,10 @@ class _CatalogScreenState extends State<CatalogScreen> {
             _buildProfileMenu(context),
           ],
         ),
-        body: const Center(
+        body: Center(
           child: Text(
-            'Catalog Screen',
-            style: TextStyle(fontSize: 20, color: Colors.grey),
+            AppLocalizations.of(context)!.navCatalog,
+            style: const TextStyle(fontSize: 20, color: Colors.grey),
           ),
         ),
       );

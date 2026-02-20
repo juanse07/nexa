@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import '../services/attendance_service.dart';
 
 /// Screen for managers to bulk clock-in multiple staff members at once
@@ -71,9 +72,10 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
   }
 
   Future<void> _performBulkClockIn() async {
+    final l10n = AppLocalizations.of(context)!;
     if (_selectedUserKeys.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select at least one staff member')),
+        SnackBar(content: Text(l10n.pleaseSelectAtLeastOneStaff)),
       );
       return;
     }
@@ -93,7 +95,7 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Successfully clocked in $successful of $total staff'),
+            content: Text(l10n.successfullyClockedIn(successful, total)),
             backgroundColor: Colors.green,
           ),
         );
@@ -102,8 +104,8 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
         _showResultsDialog(response);
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to perform bulk clock-in'),
+          SnackBar(
+            content: Text(l10n.failedBulkClockIn),
             backgroundColor: Colors.red,
           ),
         );
@@ -111,7 +113,7 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text('${l10n.somethingWentWrong}: $e')),
         );
       }
     } finally {
@@ -124,12 +126,14 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
   void _showResultsDialog(Map<String, dynamic> response) {
     final results = response['results'] as List<dynamic>?;
     if (results == null) return;
+    final l10n = AppLocalizations.of(context)!;
 
     showDialog(
       context: context,
       builder: (context) {
+        final l10n = AppLocalizations.of(context)!;
         return AlertDialog(
-          title: const Text('Bulk Clock-In Results'),
+          title: Text(l10n.bulkClockInResults),
           content: SizedBox(
             width: double.maxFinite,
             child: ListView.builder(
@@ -139,7 +143,7 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
                 final result = results[index] as Map<String, dynamic>;
                 final status = result['status'] as String?;
                 final isSuccess = status == 'success';
-                final staffName = result['staffName'] as String? ?? 'Unknown';
+                final staffName = result['staffName'] as String? ?? l10n.unknown;
 
                 return ListTile(
                   leading: Icon(
@@ -163,7 +167,7 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
                 Navigator.pop(context); // Close dialog
                 Navigator.pop(context, true); // Return success to previous screen
               },
-              child: const Text('Done'),
+              child: Text(l10n.done),
             ),
           ],
         );
@@ -173,6 +177,7 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final eventDate = widget.event['date'] != null
         ? DateTime.parse(widget.event['date'] as String)
         : null;
@@ -181,7 +186,7 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        title: const Text('Bulk Clock-In'),
+        title: Text(l10n.bulkClockIn),
         backgroundColor: const Color(0xFF212C4A),
         foregroundColor: Colors.white,
         actions: [
@@ -189,8 +194,8 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
             onPressed: _selectAll,
             child: Text(
               _selectedUserKeys.length == _acceptedStaff.length
-                  ? 'Deselect All'
-                  : 'Select All',
+                  ? l10n.deselectAll
+                  : l10n.selectAll,
               style: const TextStyle(color: Colors.white),
             ),
           ),
@@ -253,8 +258,8 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
           // Staff selection list
           Expanded(
             child: _acceptedStaff.isEmpty
-                ? const Center(
-                    child: Text('No accepted staff for this event'),
+                ? Center(
+                    child: Text(l10n.noAcceptedStaffForEvent),
                   )
                 : ListView.builder(
                     itemCount: _acceptedStaff.length,
@@ -275,8 +280,8 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
                   TextField(
                     controller: _noteController,
                     decoration: InputDecoration(
-                      labelText: 'Override Note (optional)',
-                      hintText: 'e.g., Group check-in at entrance',
+                      labelText: l10n.overrideNoteOptional,
+                      hintText: l10n.groupCheckInHint,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -311,7 +316,7 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
                               ),
                             )
                           : Text(
-                              'Clock In ${_selectedUserKeys.length} Staff',
+                              l10n.clockInStaffCount(_selectedUserKeys.length),
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
@@ -329,6 +334,7 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
   }
 
   Widget _buildStaffTile(Map<String, dynamic> staff) {
+    final l10n = AppLocalizations.of(context)!;
     final userKey = staff['userKey'] as String?;
     final isSelected = userKey != null && _selectedUserKeys.contains(userKey);
     final isAlreadyClockedIn = _isAlreadyClockedIn(staff);
@@ -378,7 +384,7 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
           ],
         ),
         title: Text(
-          name.isEmpty ? 'Unknown' : name,
+          name.isEmpty ? l10n.unknown : name,
           style: TextStyle(
             fontWeight: FontWeight.w500,
             color: isAlreadyClockedIn ? Colors.grey : Colors.black,
@@ -393,9 +399,9 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
                 style: TextStyle(color: Colors.grey[600]),
               ),
             if (isAlreadyClockedIn)
-              const Text(
-                'Already clocked in',
-                style: TextStyle(
+              Text(
+                l10n.alreadyClockedIn,
+                style: const TextStyle(
                   color: Colors.green,
                   fontStyle: FontStyle.italic,
                   fontSize: 12,

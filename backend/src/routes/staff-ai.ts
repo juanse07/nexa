@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/requireAuth';
+import { requireActiveSubscription } from '../middleware/requireActiveSubscription';
+import { isInFreeMonth } from '../utils/subscriptionUtils';
 import axios from 'axios';
 import geoip from 'geoip-lite';
 import multer from 'multer';
@@ -804,7 +806,7 @@ const STAFF_AI_TOOLS = [
   },
   {
     name: 'get_earnings_summary',
-    description: 'Get my earnings and hours worked. Use when I ask about pay, earnings, or "how much have I made".',
+    description: 'Get my earnings and hours worked, including breakdown by venue, role, and client. Use when I ask about pay, earnings, "how much have I made", or want earnings broken down by venue/location/role/client.',
     parameters: {
       type: 'object',
       properties: {
@@ -834,7 +836,7 @@ const STAFF_AI_TOOLS = [
   },
   {
     name: 'get_performance',
-    description: 'Get my performance statistics: events worked, hours, earnings, breakdown by role. Use for "how am I doing", "my stats", "performance this month/year".',
+    description: 'Get my performance statistics: events worked, hours, earnings, breakdown by role and by month. Use for "how am I doing", "my stats", "performance this month/year".',
     parameters: {
       type: 'object',
       properties: {
@@ -884,7 +886,7 @@ const STAFF_AI_TOOLS = [
   },
   {
     name: 'get_shift_details',
-    description: 'Get full details about a specific shift/event including pay info, notes, dress code, and all role details. Use when staff asks "what are the details for...", "how much does it pay", "what should I wear".',
+    description: 'Get full details about a specific shift/event including pay info, notes, dress code, contact info, and arrival time. Use when staff asks "what are the details for...", "how much does it pay", "what should I wear", "who do I contact", "when should I arrive".',
     parameters: {
       type: 'object',
       properties: {
@@ -1070,7 +1072,7 @@ async function executeGetMySchedule(
     const events = await EventModel.find(query)
     .sort({ date: 1 })
     .limit(eventLimit)
-    .select('shift_name event_name client_name date start_time end_time venue_name venue_address city state accepted_staff status')
+    .select('shift_name event_name client_name date start_time end_time venue_name venue_address city state accepted_staff status roles pay_rate_info')
     .lean();
 
     console.log('[executeGetMySchedule] Found', events.length, 'events');
@@ -1091,6 +1093,8 @@ async function executeGetMySchedule(
       const userInEvent = event.accepted_staff?.find((staff: any) =>
         staff.userKey === userKey
       );
+      const userRole = userInEvent?.role || userInEvent?.position;
+      const roleInfo = event.roles?.find((r: any) => r.role_name === userRole || r.role === userRole);
       return {
         id: event._id,
         name: event.shift_name || event.event_name || event.client_name || 'Untitled',
@@ -1099,7 +1103,8 @@ async function executeGetMySchedule(
         time: `${event.start_time}-${event.end_time}`,
         venue: event.venue_name,
         addr: event.venue_address,
-        role: userInEvent?.role || userInEvent?.position || 'Unknown',
+        role: userRole || 'Unknown',
+        pay: roleInfo?.pay_rate_info || event.pay_rate_info || null,
         status: userInEvent?.response || 'accepted',
       };
     });
@@ -1205,7 +1210,7 @@ async function executeGetEarningsSummary(
       status: { $ne: 'cancelled' },
       ...dateFilter
     })
-    .select('date start_time end_time accepted_staff roles pay_rate_info managerId client_name')
+    .select('date start_time end_time accepted_staff roles pay_rate_info managerId client_name venue_name')
     .lean();
 
     // Enrich events with tariff rates (same as Flutter earnings page)
@@ -1214,6 +1219,9 @@ async function executeGetEarningsSummary(
     let totalEarnings = 0;
     let totalHoursWorked = 0;
     let eventCount = 0;
+    const venueTotals: Record<string, { earned: number; hours: number; events: number }> = {};
+    const roleTotals: Record<string, { earned: number; hours: number; events: number }> = {};
+    const clientTotals: Record<string, { earned: number; hours: number; events: number }> = {};
 
     events.forEach((event: any) => {
       const userInEvent = event.accepted_staff?.find((staff: any) =>
@@ -1247,18 +1255,52 @@ async function executeGetEarningsSummary(
       const roleInfo = event.roles?.find((r: any) => r.role_name === userRole || r.role === userRole);
       const tariffRate = roleInfo?.tariff?.rate;
       const wage = tariffRate || parsePayRate(roleInfo?.pay_rate_info) || parsePayRate(event.pay_rate_info);
-      totalEarnings += wage * hours;
+      const eventEarnings = wage * hours;
+      totalEarnings += eventEarnings;
       eventCount++;
+
+      // Bucket into venue breakdown
+      const venueName = event.venue_name || 'Unknown Venue';
+      if (!venueTotals[venueName]) venueTotals[venueName] = { earned: 0, hours: 0, events: 0 };
+      venueTotals[venueName].earned += eventEarnings;
+      venueTotals[venueName].hours += hours;
+      venueTotals[venueName].events++;
+
+      // Bucket into role breakdown
+      const roleName = userRole || 'Unknown Role';
+      if (!roleTotals[roleName]) roleTotals[roleName] = { earned: 0, hours: 0, events: 0 };
+      roleTotals[roleName].earned += eventEarnings;
+      roleTotals[roleName].hours += hours;
+      roleTotals[roleName].events++;
+
+      // Bucket into client breakdown
+      const clientName = event.client_name || 'Unknown Client';
+      if (!clientTotals[clientName]) clientTotals[clientName] = { earned: 0, hours: 0, events: 0 };
+      clientTotals[clientName].earned += eventEarnings;
+      clientTotals[clientName].hours += hours;
+      clientTotals[clientName].events++;
     });
 
-    // Cost optimization: Compressed response format
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    const round1 = (n: number) => Math.round(n * 10) / 10;
+
+    // Cost optimization: Compressed response format with venue/role breakdowns
     return {
       success: true,
       message: `${eventCount} completed event(s)`,
       data: {
-        earned: Math.round(totalEarnings * 100) / 100,
-        hours: Math.round(totalHoursWorked * 10) / 10,
-        events: eventCount
+        earned: round2(totalEarnings),
+        hours: round1(totalHoursWorked),
+        events: eventCount,
+        byVenue: Object.entries(venueTotals)
+          .map(([name, s]) => ({ name, earned: round2(s.earned), hours: round1(s.hours), events: s.events }))
+          .sort((a, b) => b.earned - a.earned),
+        byRole: Object.entries(roleTotals)
+          .map(([name, s]) => ({ name, earned: round2(s.earned), hours: round1(s.hours), events: s.events }))
+          .sort((a, b) => b.earned - a.earned),
+        byClient: Object.entries(clientTotals)
+          .map(([name, s]) => ({ name, earned: round2(s.earned), hours: round1(s.hours), events: s.events }))
+          .sort((a, b) => b.earned - a.earned)
       }
     };
   } catch (error: any) {
@@ -1296,7 +1338,7 @@ async function executeGetAllMyEvents(
     const events = await EventModel.find(query)
       .sort({ date: 1 })
       .limit(30)
-      .select('shift_name event_name client_name date start_time end_time venue_name venue_address city state accepted_staff status')
+      .select('shift_name event_name client_name date start_time end_time venue_name venue_address city state accepted_staff status roles pay_rate_info')
       .lean();
 
     // Extract user's data from accepted_staff for each event
@@ -1304,6 +1346,8 @@ async function executeGetAllMyEvents(
       const userInEvent = event.accepted_staff?.find((staff: any) =>
         staff.userKey === userKey
       );
+      const userRole = userInEvent?.role || userInEvent?.position;
+      const roleInfo = event.roles?.find((r: any) => r.role_name === userRole || r.role === userRole);
       return {
         id: event._id,
         name: event.shift_name || event.event_name || event.client_name || 'Untitled',
@@ -1312,7 +1356,8 @@ async function executeGetAllMyEvents(
         time: `${event.start_time}-${event.end_time}`,
         venue: event.venue_name,
         addr: event.venue_address,
-        role: userInEvent?.role || userInEvent?.position || 'Unknown',
+        role: userRole || 'Unknown',
+        pay: roleInfo?.pay_rate_info || event.pay_rate_info || null,
         status: userInEvent?.response || 'accepted',
       };
     });
@@ -1732,6 +1777,9 @@ async function executeGetPerformance(
       totalHours: Math.round(totalHours * 10) / 10,
       totalEarnings: Math.round(totalEarnings * 100) / 100,
       byPosition,
+      byMonth: Object.entries(monthlyStats)
+        .map(([month, s]) => ({ month, events: s.events, hours: Math.round(s.hours * 10) / 10, earnings: Math.round(s.earnings * 100) / 100 }))
+        .sort((a, b) => a.month.localeCompare(b.month)),
       averageWage: totalHours > 0 ? Math.round((totalEarnings / totalHours) * 100) / 100 : 0
     };
 
@@ -1930,7 +1978,7 @@ async function executeGetShiftDetails(
       _id: eventId,
       'accepted_staff.userKey': userKey
     })
-      .select('shift_name event_name client_name date start_time end_time venue_name venue_address city state notes roles pay_rate_info uniform accepted_staff status')
+      .select('shift_name event_name client_name date start_time end_time venue_name venue_address city state notes roles pay_rate_info uniform accepted_staff status contact_name contact_phone contact_email setup_time')
       .lean();
 
     if (!event) {
@@ -1964,6 +2012,10 @@ async function executeGetShiftDetails(
         yourStatus: userInEvent?.response || 'unknown',
         payRate: roleInfo?.pay_rate_info || e.pay_rate_info || null,
         uniform: e.uniform || null,
+        contactName: e.contact_name || null,
+        contactPhone: e.contact_phone || null,
+        contactEmail: e.contact_email || null,
+        setupTime: e.setup_time || null,
         roleDetails: roleInfo ? {
           name: roleInfo.role_name || roleInfo.role,
           quantity: roleInfo.quantity || roleInfo.count,
@@ -2055,7 +2107,7 @@ async function executeStaffFunction(
  * Staff AI chat endpoint (OpenAI or Claude)
  * Scoped to staff user's own data
  */
-router.post('/ai/staff/chat/message', requireAuth, async (req, res) => {
+router.post('/ai/staff/chat/message', requireAuth, requireActiveSubscription, async (req, res) => {
   try {
     const oauthProvider = (req as any).user?.provider;
     const subject = (req as any).user?.sub;
@@ -2066,7 +2118,7 @@ router.post('/ai/staff/chat/message', requireAuth, async (req, res) => {
 
     // Load staff user details by provider and subject
     const user = await UserModel.findOne({ provider: oauthProvider, subject })
-      .select('_id first_name last_name email phone_number app_id subscription_tier')
+      .select('_id first_name last_name email phone_number app_id subscription_tier createdAt free_month_end_override')
       .lean();
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
@@ -2075,9 +2127,12 @@ router.post('/ai/staff/chat/message', requireAuth, async (req, res) => {
     const userId = String(user._id);
     const userKey = `${oauthProvider}:${subject}`;
     const subscriptionTier = (user as any).subscription_tier || 'free';
+    const userInFreeMonth = isInFreeMonth(user);
 
-    // Free tier message limit enforcement (50 messages/month)
-    if (subscriptionTier === 'free') {
+    // Pro tier: enforce 20 messages/month limit
+    // Free month: unlimited AI (same as Pro used to be)
+    // Read-only users are already blocked by requireActiveSubscription middleware
+    if (subscriptionTier === 'pro') {
       // Get mutable user document for updating counters
       const mutableUser = await UserModel.findOne({ provider: oauthProvider, subject });
       if (!mutableUser) {
@@ -2099,15 +2154,15 @@ router.post('/ai/staff/chat/message', requireAuth, async (req, res) => {
         console.log(`[ai/staff/chat/message] Reset message counter for user ${userId}, next reset: ${nextMonth.toISOString()}`);
       }
 
-      // Check message limit (20 for free tier - changed from 50 to reduce costs)
+      // Check message limit (20 for Pro tier)
       const messagesUsed = mutableUser.ai_messages_used_this_month || 0;
       const messageLimit = 20;
 
       if (messagesUsed >= messageLimit) {
-        console.log(`[ai/staff/chat/message] User ${userId} hit message limit (${messagesUsed}/${messageLimit})`);
+        console.log(`[ai/staff/chat/message] Pro user ${userId} hit message limit (${messagesUsed}/${messageLimit})`);
         return res.status(402).json({
-          message: `You've reached your monthly AI message limit (${messageLimit} messages). Upgrade to Pro for unlimited messages!`,
-          upgradeRequired: true,
+          message: `You've reached your monthly AI message limit (${messageLimit} messages). Your limit resets next month.`,
+          upgradeRequired: false,
           usage: {
             used: messagesUsed,
             limit: messageLimit,
@@ -2120,8 +2175,9 @@ router.post('/ai/staff/chat/message', requireAuth, async (req, res) => {
       mutableUser.ai_messages_used_this_month = messagesUsed + 1;
       await mutableUser.save();
 
-      console.log(`[ai/staff/chat/message] Message count for user ${userId}: ${messagesUsed + 1}/${messageLimit}`);
+      console.log(`[ai/staff/chat/message] Pro message count for user ${userId}: ${messagesUsed + 1}/${messageLimit}`);
     }
+    // Free month users: unlimited AI, no counter needed
 
     const validated = chatMessageSchema.parse(req.body);
     const { messages, temperature, maxTokens, model } = validated;
@@ -2237,6 +2293,14 @@ When showing schedule information, use this friendly format:
 - When user asks about ANY specific date range, past events, history, or "show me shifts from X to Y":
   → You MUST call get_my_schedule with the appropriate date_range. NEVER answer from context alone.
 - The eventSummary.pastEvents count tells you how many past events exist — use the tool to fetch them.
+- get_earnings_summary ALWAYS returns earnings broken down by venue, role, AND client (byVenue, byRole, byClient arrays).
+  → ALWAYS include total earned, total hours, AND total events in your initial earnings response. Never skip hours or event count.
+  → When user asks "break it down by venue/role/client/location", look at the PREVIOUS get_earnings_summary result in conversation — the breakdown is already there. Do NOT call the tool again.
+  → Format the breakdown as a numbered list with earned amount, hours, and event count per entry.
+- get_performance returns byPosition (role breakdown) AND byMonth (monthly breakdown).
+  → When user asks "how many hours in February?" or "break it down by month", use the PREVIOUS get_performance result. Do NOT call the tool again.
+- get_my_schedule and get_all_my_events include pay rate per shift.
+  → When user asks "how much does this pay?" after viewing their schedule, the pay info is already there. Do NOT call get_shift_details just for pay.
 
 🗓️ DATE HANDLING FOR SCHEDULE QUERIES:
 - When user asks about past months (e.g. "October to December", "last summer", "January shifts"):

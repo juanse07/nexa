@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import 'package:nexa/services/terminology_provider.dart';
 import '../../../../core/widgets/custom_sliver_app_bar.dart';
 import '../../../../core/config/app_config.dart';
@@ -110,9 +111,10 @@ class _SettingsPageState extends State<SettingsPage> {
       // Reload venue info after update
       await _loadVenueInfo();
       if (mounted) {
+        final l10n = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Venues updated successfully!'),
+          SnackBar(
+            content: Text(l10n.venuesUpdatedSuccess),
             backgroundColor: Colors.green,
           ),
         );
@@ -123,14 +125,15 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surfaceContainerLowest,
       body: CustomScrollView(
         slivers: [
           CustomSliverAppBar(
-            title: 'Settings',
-            subtitle: 'Manage your preferences',
+            title: l10n.settings,
+            subtitle: l10n.manageYourPreferences,
             onBackPressed: () => Navigator.of(context).pop(),
             expandedHeight: 120.0,
           ),
@@ -162,7 +165,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                 ),
                                 const SizedBox(width: 12),
                                 Text(
-                                  'Work Terminology',
+                                  l10n.workTerminology,
                                   style: theme.textTheme.titleMedium?.copyWith(
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -171,15 +174,15 @@ class _SettingsPageState extends State<SettingsPage> {
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              'How do you prefer to call your work assignments?',
+                              l10n.howPreferWorkAssignments,
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 color: theme.colorScheme.onSurfaceVariant,
                               ),
                             ),
                             const SizedBox(height: 16),
                             RadioListTile<String>(
-                              title: const Text('Jobs'),
-                              subtitle: const Text('e.g., "My Jobs", "Create Job"'),
+                              title: Text(l10n.jobs),
+                              subtitle: Text(l10n.jobsExample),
                               value: 'Jobs',
                               groupValue: _selectedTerminology,
                               onChanged: (value) {
@@ -191,8 +194,8 @@ class _SettingsPageState extends State<SettingsPage> {
                               },
                             ),
                             RadioListTile<String>(
-                              title: const Text('Shifts'),
-                              subtitle: const Text('e.g., "My Shifts", "Create Shift"'),
+                              title: Text(l10n.shifts),
+                              subtitle: Text(l10n.shiftsExample),
                               value: 'Shifts',
                               groupValue: _selectedTerminology,
                               onChanged: (value) {
@@ -204,8 +207,8 @@ class _SettingsPageState extends State<SettingsPage> {
                               },
                             ),
                             RadioListTile<String>(
-                              title: const Text('Events'),
-                              subtitle: const Text('e.g., "My Events", "Create Event"'),
+                              title: Text(l10n.events),
+                              subtitle: Text(l10n.eventsExample),
                               value: 'Events',
                               groupValue: _selectedTerminology,
                               onChanged: (value) {
@@ -225,8 +228,8 @@ class _SettingsPageState extends State<SettingsPage> {
                                         await terminologyProvider.setTerminology(_selectedTerminology!);
                                         if (mounted) {
                                           ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(
-                                              content: Text('Terminology updated successfully!'),
+                                            SnackBar(
+                                              content: Text(l10n.terminologyUpdatedSuccess),
                                               backgroundColor: Colors.green,
                                             ),
                                           );
@@ -234,7 +237,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                       }
                                     : null,
                                 icon: const Icon(Icons.check),
-                                label: const Text('Save Terminology'),
+                                label: Text(l10n.saveTerminology),
                               ),
                             ),
                             const SizedBox(height: 8),
@@ -254,7 +257,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      'This will update how work assignments appear throughout the app',
+                                      l10n.terminologyUpdateInfo,
                                       style: theme.textTheme.bodySmall?.copyWith(
                                         color: theme.colorScheme.onSurfaceVariant,
                                       ),
@@ -290,7 +293,7 @@ class _SettingsPageState extends State<SettingsPage> {
                             ),
                             const SizedBox(width: 12),
                             Text(
-                              'Location & Venues',
+                              l10n.locationVenues,
                               style: theme.textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.bold,
                               ),
@@ -301,24 +304,24 @@ class _SettingsPageState extends State<SettingsPage> {
                         if (_cities.isNotEmpty) ...[
                           _buildInfoRow(
                             icon: Icons.location_city,
-                            label: _cities.length == 1 ? 'City' : 'Cities',
+                            label: _cities.length == 1 ? l10n.city : l10n.cities,
                             value: _cities.length == 1
                                 ? _cities.first.name
-                                : '${_cities.length} cities configured',
+                                : '${_cities.length} ${l10n.citiesConfigured}',
                             theme: theme,
                           ),
                           const SizedBox(height: 12),
                           _buildInfoRow(
                             icon: Icons.business,
-                            label: 'Venues',
-                            value: '$_venueCount discovered',
+                            label: l10n.venues,
+                            value: '$_venueCount ${l10n.discovered}',
                             theme: theme,
                           ),
                           if (_venueUpdatedAt != null) ...[
                             const SizedBox(height: 12),
                             _buildInfoRow(
                               icon: Icons.update,
-                              label: 'Last Updated',
+                              label: l10n.lastUpdated,
                               value: _formatDate(_venueUpdatedAt!),
                               theme: theme,
                             ),
@@ -327,29 +330,29 @@ class _SettingsPageState extends State<SettingsPage> {
                           // Fallback for backward compatibility with old single-city structure
                           _buildInfoRow(
                             icon: Icons.place,
-                            label: 'City',
+                            label: l10n.city,
                             value: _preferredCity!,
                             theme: theme,
                           ),
                           const SizedBox(height: 12),
                           _buildInfoRow(
                             icon: Icons.business,
-                            label: 'Venues',
-                            value: '$_venueCount discovered',
+                            label: l10n.venues,
+                            value: '$_venueCount ${l10n.discovered}',
                             theme: theme,
                           ),
                           if (_venueUpdatedAt != null) ...[
                             const SizedBox(height: 12),
                             _buildInfoRow(
                               icon: Icons.update,
-                              label: 'Last Updated',
+                              label: l10n.lastUpdated,
                               value: _formatDate(_venueUpdatedAt!),
                               theme: theme,
                             ),
                           ],
                         ] else ...[
                           Text(
-                            'No cities configured yet. Add cities to discover venues and help the AI suggest accurate event locations in your area.',
+                            l10n.noCitiesConfiguredDescription,
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
                             ),
@@ -378,8 +381,8 @@ class _SettingsPageState extends State<SettingsPage> {
                                 ? Icons.location_city
                                 : Icons.add_location_alt),
                             label: Text(_cities.isNotEmpty || _preferredCity != null
-                                ? 'Manage Cities'
-                                : 'Add Cities'),
+                                ? l10n.manageCities
+                                : l10n.addCities),
                           ),
                         ),
                         if (_venueCount > 0) ...[
@@ -395,7 +398,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                 );
                               },
                               icon: const Icon(Icons.list),
-                              label: Text('View All $_venueCount Venues'),
+                              label: Text(l10n.viewAllVenues(_venueCount)),
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -411,8 +414,8 @@ class _SettingsPageState extends State<SettingsPage> {
                                 if (result == true && mounted) {
                                   _loadVenueInfo(); // Reload venue count
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Venue added successfully!'),
+                                    SnackBar(
+                                      content: Text(l10n.venueAddedSuccess),
                                       backgroundColor: Colors.green,
                                     ),
                                   );
@@ -423,7 +426,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                 foregroundColor: AppColors.navySpaceCadet,
                               ),
                               icon: const Icon(Icons.add_location_alt),
-                              label: const Text('Add New Venue'),
+                              label: Text(l10n.addNewVenue),
                             ),
                           ),
                         ],
@@ -472,17 +475,18 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   String _formatDate(String isoDate) {
+    final l10n = AppLocalizations.of(context)!;
     try {
       final date = DateTime.parse(isoDate);
       final now = DateTime.now();
       final difference = now.difference(date);
 
       if (difference.inDays == 0) {
-        return 'Today';
+        return l10n.today;
       } else if (difference.inDays == 1) {
-        return 'Yesterday';
+        return l10n.yesterday;
       } else if (difference.inDays < 7) {
-        return '${difference.inDays} days ago';
+        return l10n.daysAgo(difference.inDays);
       } else if (difference.inDays < 30) {
         final weeks = (difference.inDays / 7).floor();
         return '$weeks ${weeks == 1 ? 'week' : 'weeks'} ago';
@@ -490,7 +494,7 @@ class _SettingsPageState extends State<SettingsPage> {
         return '${date.month}/${date.day}/${date.year}';
       }
     } catch (e) {
-      return 'Unknown';
+      return l10n.unknown;
     }
   }
 }

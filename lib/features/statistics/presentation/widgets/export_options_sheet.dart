@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:nexa/features/brand/data/providers/brand_provider.dart';
 import 'package:nexa/features/subscription/presentation/pages/subscription_paywall_page.dart';
@@ -70,6 +71,7 @@ class _ExportOptionsSheetState extends State<ExportOptionsSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -108,20 +110,20 @@ class _ExportOptionsSheetState extends State<ExportOptionsSheet> {
                       ),
                     ),
                     const SizedBox(width: 16),
-                    const Expanded(
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Export Report',
-                            style: TextStyle(
+                            l10n.exportReport,
+                            style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                           Text(
-                            'Choose format and report type',
-                            style: TextStyle(
+                            l10n.chooseFormatAndReportType,
+                            style: const TextStyle(
                               fontSize: 13,
                               color: Colors.grey,
                             ),
@@ -145,9 +147,9 @@ class _ExportOptionsSheetState extends State<ExportOptionsSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Report Type',
-                      style: TextStyle(
+                    Text(
+                      l10n.reportType,
+                      style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: Colors.black87,
@@ -156,16 +158,16 @@ class _ExportOptionsSheetState extends State<ExportOptionsSheet> {
                     const SizedBox(height: 12),
                     _ReportTypeOption(
                       icon: Icons.account_balance_wallet,
-                      label: 'Payroll Report',
-                      description: 'Staff earnings breakdown by hours and pay rate',
+                      label: l10n.payrollReportLabel,
+                      description: l10n.payrollReportDescription,
                       isSelected: _selectedReportType == 'payroll',
                       onTap: () => setState(() => _selectedReportType = 'payroll'),
                     ),
                     const SizedBox(height: 8),
                     _ReportTypeOption(
                       icon: Icons.access_time,
-                      label: 'Attendance Report',
-                      description: 'Clock-in/out times and hours worked',
+                      label: l10n.attendanceReportLabel,
+                      description: l10n.attendanceReportDescription,
                       isSelected: _selectedReportType == 'attendance',
                       onTap: () => setState(() => _selectedReportType = 'attendance'),
                     ),
@@ -181,9 +183,9 @@ class _ExportOptionsSheetState extends State<ExportOptionsSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Document Style',
-                      style: TextStyle(
+                    Text(
+                      l10n.documentStyle,
+                      style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: Colors.black87,
@@ -207,9 +209,9 @@ class _ExportOptionsSheetState extends State<ExportOptionsSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Export Format',
-                      style: TextStyle(
+                    Text(
+                      l10n.exportFormat,
+                      style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: Colors.black87,
@@ -221,8 +223,8 @@ class _ExportOptionsSheetState extends State<ExportOptionsSheet> {
                         Expanded(
                           child: _FormatOption(
                             icon: Icons.table_chart,
-                            label: 'CSV',
-                            description: 'Excel compatible',
+                            label: l10n.csvLabel,
+                            description: l10n.excelCompatible,
                             isSelected: _selectedFormat == 'csv',
                             onTap: () => setState(() => _selectedFormat = 'csv'),
                           ),
@@ -231,8 +233,8 @@ class _ExportOptionsSheetState extends State<ExportOptionsSheet> {
                         Expanded(
                           child: _FormatOption(
                             icon: Icons.picture_as_pdf,
-                            label: 'PDF',
-                            description: 'Print ready',
+                            label: l10n.pdfLabel,
+                            description: l10n.printReady,
                             isSelected: _selectedFormat == 'pdf',
                             onTap: () => setState(() => _selectedFormat = 'pdf'),
                           ),
@@ -260,7 +262,7 @@ class _ExportOptionsSheetState extends State<ExportOptionsSheet> {
                       Icon(Icons.date_range, size: 18, color: Colors.grey.shade600),
                       const SizedBox(width: 8),
                       Text(
-                        _getPeriodLabel(),
+                        _getPeriodLabel(l10n),
                         style: TextStyle(
                           fontSize: 13,
                           color: Colors.grey.shade700,
@@ -304,7 +306,7 @@ class _ExportOptionsSheetState extends State<ExportOptionsSheet> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'Export ${_selectedFormat.toUpperCase()}',
+                          l10n.exportFormatButton(_selectedFormat.toUpperCase()),
                           style: const TextStyle(
                             fontWeight: FontWeight.w600,
                             fontSize: 16,
@@ -322,25 +324,25 @@ class _ExportOptionsSheetState extends State<ExportOptionsSheet> {
     );
   }
 
-  String _getPeriodLabel() {
+  String _getPeriodLabel(AppLocalizations l10n) {
     switch (widget.period) {
       case 'week':
-        return 'Last 7 days';
+        return l10n.lastSevenDays;
       case 'month':
-        return 'This month';
+        return l10n.thisMonth;
       case 'year':
-        return 'This year';
+        return l10n.thisYear;
       case 'all':
-        return 'All time';
+        return l10n.allTime;
       case 'custom':
         if (widget.customDateRange != null) {
           final start = widget.customDateRange!.start;
           final end = widget.customDateRange!.end;
           return '${start.month}/${start.day}/${start.year} - ${end.month}/${end.day}/${end.year}';
         }
-        return 'Custom range';
+        return l10n.customRange;
       default:
-        return 'This month';
+        return l10n.thisMonth;
     }
   }
 }

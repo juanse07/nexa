@@ -2,6 +2,7 @@ import { Router } from 'express';
 import mongoose from 'mongoose';
 import { z } from 'zod';
 import { requireAuth, AuthenticatedUser } from '../middleware/requireAuth';
+import { requireActiveSubscription } from '../middleware/requireActiveSubscription';
 import { AvailabilityModel } from '../models/availability';
 import { EventModel } from '../models/event';
 import { TariffModel } from '../models/tariff';
@@ -1879,7 +1880,7 @@ router.get(['/availability', '/events/availability'], requireAuth, async (req, r
 });
 
 // Create or update an availability block
-router.post(['/availability', '/events/availability'], requireAuth, async (req, res) => {
+router.post(['/availability', '/events/availability'], requireAuth, requireActiveSubscription, async (req, res) => {
   try {
     const userKey = getUserKey(req);
     if (!userKey) return res.status(401).json({ message: 'User not authenticated' });
@@ -2362,7 +2363,7 @@ router.delete('/events/:id/staff/:userKey', requireAuth, async (req, res) => {
   }
 });
 
-router.post('/events/:id/respond', requireAuth, async (req, res) => {
+router.post('/events/:id/respond', requireAuth, requireActiveSubscription, async (req, res) => {
   try {
     const eventId = req.params.id ?? '';
     const responseVal = (req.body?.response ?? '') as string;
@@ -2714,7 +2715,7 @@ const clockInSchema = z.object({
 });
 
 // Clock in to an event (with optional server-side geofence validation)
-router.post('/events/:id/clock-in', requireAuth, async (req, res) => {
+router.post('/events/:id/clock-in', requireAuth, requireActiveSubscription, async (req, res) => {
   try {
     const eventId = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(eventId)) {
@@ -2853,7 +2854,7 @@ const clockOutSchema = z.object({
 });
 
 // Clock out from an event (with optional location storage)
-router.post('/events/:id/clock-out', requireAuth, async (req, res) => {
+router.post('/events/:id/clock-out', requireAuth, requireActiveSubscription, async (req, res) => {
   try {
     const eventId = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(eventId)) {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import '../../data/models/statistics_models.dart';
 
 /// Payroll summary card with staff breakdown
@@ -14,6 +15,7 @@ class PayrollSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final summary = payrollReport.summary;
     final topEntries = payrollReport.entries.take(3).toList();
 
@@ -55,16 +57,16 @@ class PayrollSummaryCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Payroll Summary',
-                        style: TextStyle(
+                      Text(
+                        l10n.payrollSummary,
+                        style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
                           color: Colors.black87,
                         ),
                       ),
                       Text(
-                        '${summary.staffCount} staff members',
+                        l10n.staffMembersCount(summary.staffCount),
                         style: const TextStyle(
                           fontSize: 12,
                           color: Colors.grey,
@@ -76,9 +78,9 @@ class PayrollSummaryCard extends StatelessWidget {
                 if (onViewDetails != null)
                   TextButton(
                     onPressed: onViewDetails,
-                    child: const Text(
-                      'View All',
-                      style: TextStyle(
+                    child: Text(
+                      l10n.viewAll,
+                      style: const TextStyle(
                         color: Color(0xFF1E3A8A),
                         fontWeight: FontWeight.w600,
                       ),
@@ -95,7 +97,7 @@ class PayrollSummaryCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: _StatItem(
-                    label: 'Total Hours',
+                    label: l10n.totalHours,
                     value: '${summary.totalHours.toStringAsFixed(0)}h',
                     icon: Icons.schedule,
                     color: const Color(0xFF3B82F6),
@@ -108,7 +110,7 @@ class PayrollSummaryCard extends StatelessWidget {
                 ),
                 Expanded(
                   child: _StatItem(
-                    label: 'Total Payroll',
+                    label: l10n.totalPayroll,
                     value: '\$${_formatNumber(summary.totalPayroll)}',
                     icon: Icons.attach_money,
                     color: const Color(0xFF22C55E),
@@ -121,7 +123,7 @@ class PayrollSummaryCard extends StatelessWidget {
                 ),
                 Expanded(
                   child: _StatItem(
-                    label: 'Avg/Staff',
+                    label: l10n.averagePerStaff,
                     value: '\$${_formatNumber(summary.averagePerStaff)}',
                     icon: Icons.person,
                     color: const Color(0xFF1E3A8A),
@@ -139,7 +141,7 @@ class PayrollSummaryCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(16),
               child: Text(
-                'Top Earners',
+                l10n.topEarners,
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
@@ -160,7 +162,7 @@ class PayrollSummaryCard extends StatelessWidget {
               padding: const EdgeInsets.all(24),
               child: Center(
                 child: Text(
-                  'No payroll data for this period',
+                  l10n.noPayrollDataForPeriod,
                   style: TextStyle(
                     color: Colors.grey.shade500,
                     fontSize: 14,
@@ -234,6 +236,7 @@ class _PayrollEntryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
@@ -275,7 +278,7 @@ class _PayrollEntryTile extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '${entry.shifts} shifts • ${entry.hours.toStringAsFixed(0)}h',
+                  l10n.shiftsAndHours(entry.shifts, entry.hours.toStringAsFixed(0)),
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.grey.shade500,

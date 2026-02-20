@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get_it/get_it.dart';
 
 import 'package:nexa/core/network/api_client.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import 'package:nexa/features/auth/data/services/auth_service.dart';
 import 'package:nexa/features/auth/presentation/pages/login_page.dart';
 import 'package:nexa/features/extraction/services/clients_service.dart';
@@ -195,9 +196,10 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
   }
 
   Future<void> _createTeam() async {
+    final l10n = AppLocalizations.of(context)!;
     final name = _teamNameCtrl.text.trim();
     if (name.isEmpty) {
-      _showSnack('Enter a team/company name to continue');
+      _showSnack(l10n.enterTeamNameToContinue);
       return;
     }
     setState(() {
@@ -210,10 +212,10 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
       );
       _teamNameCtrl.clear();
       _teamDescCtrl.clear();
-      _showSnack('Team created successfully!');
+      _showSnack(l10n.teamCreatedSuccessfully);
       await _refresh();
     } catch (e) {
-      _showSnack('Failed to create team: $e');
+      _showSnack('${l10n.failedToCreateTeam}: $e');
     } finally {
       if (mounted) {
         setState(() {
@@ -224,9 +226,10 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
   }
 
   Future<void> _createClient() async {
+    final l10n = AppLocalizations.of(context)!;
     final name = _clientNameCtrl.text.trim();
     if (name.isEmpty) {
-      _showSnack('Enter a client name to continue');
+      _showSnack(l10n.enterClientNameToContinue);
       return;
     }
     setState(() {
@@ -235,10 +238,10 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
     try {
       await _clientsService.createClient(name);
       _clientNameCtrl.clear();
-      _showSnack('Client created');
+      _showSnack(l10n.clientCreated);
       await _refresh();
     } catch (e) {
-      _showSnack('Failed to create client: $e');
+      _showSnack('${l10n.failedToCreateClient}: $e');
     } finally {
       if (mounted) {
         setState(() {
@@ -249,9 +252,10 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
   }
 
   Future<void> _createRole() async {
+    final l10n = AppLocalizations.of(context)!;
     final name = _roleNameCtrl.text.trim();
     if (name.isEmpty) {
-      _showSnack('Enter a role name to continue');
+      _showSnack(l10n.enterRoleNameToContinue);
       return;
     }
     setState(() {
@@ -260,10 +264,10 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
     try {
       await _rolesService.createRole(name);
       _roleNameCtrl.clear();
-      _showSnack('Role created');
+      _showSnack(l10n.roleCreated);
       await _refresh();
     } catch (e) {
-      _showSnack('Failed to create role: $e');
+      _showSnack('${l10n.failedToCreateRole}: $e');
     } finally {
       if (mounted) {
         setState(() {
@@ -274,10 +278,11 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
   }
 
   Future<void> _createTariff() async {
+    final l10n = AppLocalizations.of(context)!;
     final snapshot = _snapshot;
     if (snapshot == null) return;
     if (!snapshot.hasClient || !snapshot.hasRole) {
-      _showSnack('Create a client and a role before adding a tariff');
+      _showSnack(l10n.createClientAndRoleBeforeTariff);
       return;
     }
     final clientId = _selectedClientId;
@@ -286,13 +291,13 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
         clientId.isEmpty ||
         roleId == null ||
         roleId.isEmpty) {
-      _showSnack('Select a client and a role');
+      _showSnack(l10n.selectClientAndRole);
       return;
     }
     final rateText = _tariffRateCtrl.text.trim();
     final rate = double.tryParse(rateText);
     if (rate == null || rate <= 0) {
-      _showSnack('Enter a valid hourly rate (e.g. 22.50)');
+      _showSnack(l10n.enterValidHourlyRate);
       return;
     }
     setState(() {
@@ -305,10 +310,10 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
         rate: rate,
       );
       _tariffRateCtrl.clear();
-      _showSnack('Tariff saved');
+      _showSnack(l10n.tariffSaved);
       await _refresh();
     } catch (e) {
-      _showSnack('Failed to save tariff: $e');
+      _showSnack('${l10n.failedToSaveTariff}: $e');
     } finally {
       if (mounted) {
         setState(() {
@@ -351,7 +356,8 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
     } catch (e) {
       if (kIsWeb) print('[WEB DEBUG] Error opening profile: $e');
       if (mounted) {
-        _showSnack('Failed to open profile: $e');
+        final l10n = AppLocalizations.of(context)!;
+        _showSnack('${l10n.failedToOpenProfile}: $e');
       }
     } finally {
       if (mounted) {
@@ -406,6 +412,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     if (_loading) {
       return Scaffold(
         body: Container(
@@ -458,6 +465,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
   }
 
   Widget _buildErrorScreen() {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -506,7 +514,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
                           backgroundColor: AppColors.primaryIndigo,
                           foregroundColor: AppColors.primaryPurple,
                         ),
-                        child: const Text('Retry'),
+                        child: Text(l10n.retry),
                       ),
                       const SizedBox(width: 16),
                       OutlinedButton(
@@ -521,7 +529,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
                           foregroundColor: Colors.white,
                           side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
                         ),
-                        child: const Text('Skip'),
+                        child: Text(l10n.skip),
                       ),
                     ],
                   ),
@@ -536,6 +544,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
 
   /// Premium gradient header with logo, title, progress ring, and sign-out
   Widget _buildGradientHeader(_OnboardingSnapshot snapshot) {
+    final l10n = AppLocalizations.of(context)!;
     final completedCount = snapshot.completedCount;
     const totalSteps = 5;
 
@@ -595,7 +604,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
                       color: Colors.white.withValues(alpha: 0.6),
                     ),
                     label: Text(
-                      'Sign out',
+                      l10n.signOut,
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.6),
                         fontSize: 13,
@@ -613,9 +622,9 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Let\'s get you set up',
-                          style: TextStyle(
+                        Text(
+                          l10n.letsGetYouSetUp,
+                          style: const TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.w800,
                             color: Colors.white,
@@ -624,7 +633,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          '$completedCount of $totalSteps steps complete',
+                          l10n.stepsComplete(completedCount, totalSteps),
                           style: TextStyle(
                             fontSize: 14,
                             color: Colors.white.withValues(alpha: 0.6),
@@ -681,6 +690,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
   }
 
   Widget _buildStepsList(_OnboardingSnapshot snapshot) {
+    final l10n = AppLocalizations.of(context)!;
     return AnimatedBuilder(
       animation: _entranceController,
       builder: (context, _) {
@@ -702,7 +712,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
             const SizedBox(height: 24),
             if (snapshot.missingSteps.isNotEmpty)
               Text(
-                'Complete all steps above to access the full dashboard.',
+                l10n.completeAllStepsForDashboard,
                 style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
                 textAlign: TextAlign.center,
               ),
@@ -724,6 +734,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
   }
 
   Widget _buildIntroCard(_OnboardingSnapshot snapshot) {
+    final l10n = AppLocalizations.of(context)!;
     final missing = snapshot.missingSteps;
     return Container(
       padding: const EdgeInsets.all(20),
@@ -735,9 +746,9 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Finish these steps to activate your FlowShift workspace:',
-            style: TextStyle(
+          Text(
+            l10n.finishStepsToActivateWorkspace,
+            style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
               color: AppColors.textDark,
@@ -748,11 +759,11 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
             spacing: 8,
             runSpacing: 8,
             children: [
-              _buildStatusChip(label: 'Profile', completed: snapshot.hasProfile),
-              _buildStatusChip(label: 'Team', completed: snapshot.hasTeam),
-              _buildStatusChip(label: 'Client', completed: snapshot.hasClient),
-              _buildStatusChip(label: 'Role', completed: snapshot.hasRole),
-              _buildStatusChip(label: 'Tariff', completed: snapshot.hasTariff),
+              _buildStatusChip(label: l10n.statusChipProfile, completed: snapshot.hasProfile),
+              _buildStatusChip(label: l10n.statusChipTeam, completed: snapshot.hasTeam),
+              _buildStatusChip(label: l10n.statusChipClient, completed: snapshot.hasClient),
+              _buildStatusChip(label: l10n.statusChipRole, completed: snapshot.hasRole),
+              _buildStatusChip(label: l10n.statusChipTariff, completed: snapshot.hasTariff),
             ],
           ),
           if (missing.isNotEmpty) ...[
@@ -762,7 +773,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
                 Icon(Icons.arrow_forward_rounded, size: 16, color: AppColors.primaryIndigo),
                 const SizedBox(width: 6),
                 Text(
-                  'Next up: ${missing.first}',
+                  l10n.nextUp(missing.first),
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
                     color: AppColors.primaryPurple,
@@ -819,11 +830,12 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
   }
 
   Widget _buildProfileStep(_OnboardingSnapshot snapshot) {
+    final l10n = AppLocalizations.of(context)!;
     final completed = snapshot.hasProfile;
     final subtitle = completed
-        ? 'Profile ready: ${snapshot.profile.firstName ?? ''} ${snapshot.profile.lastName ?? ''}'
+        ? '${l10n.profileDetailsUpdated} ${snapshot.profile.firstName ?? ''} ${snapshot.profile.lastName ?? ''}'
               .trim()
-        : 'Add your first and last name so staff know who you are.';
+        : l10n.addFirstLastNameForStaff;
 
     // Web-friendly button with explicit pointer handling
     final button = ElevatedButton.icon(
@@ -840,7 +852,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
               child: CircularProgressIndicator(strokeWidth: 2),
             )
           : Icon(completed ? Icons.person : Icons.person_outline),
-      label: Text(completed ? 'Review profile' : 'Update profile'),
+      label: Text(completed ? l10n.reviewProfile : l10n.updateProfile),
     );
 
     // Wrap button in MouseRegion for web to ensure pointer events work
@@ -854,7 +866,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
     return _buildStepCard(
       stepIndex: 0,
       snapshot: snapshot,
-      title: '1. Update your profile',
+      title: l10n.updateYourProfile,
       completed: completed,
       subtitle: subtitle.isEmpty ? 'Profile details updated.' : subtitle,
       action: webButton,
@@ -862,15 +874,16 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
   }
 
   Widget _buildTeamStep(_OnboardingSnapshot snapshot) {
+    final l10n = AppLocalizations.of(context)!;
     final completed = snapshot.hasTeam;
     return _buildStepCard(
       stepIndex: 1,
       snapshot: snapshot,
-      title: '2. Create your team/company',
+      title: l10n.createYourTeamCompany,
       completed: completed,
       subtitle: completed
-          ? 'Team ready: ${snapshot.teams.isNotEmpty ? _resolveName(snapshot.teams.first) : ""}'
-          : 'Set up your staffing company (e.g., "MES - Minneapolis Event Staffing")',
+          ? l10n.teamReady(snapshot.teams.isNotEmpty ? _resolveName(snapshot.teams.first) : '')
+          : l10n.setUpStaffingCompany,
       action: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -878,11 +891,11 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
             controller: _teamNameCtrl,
             enabled: snapshot.hasProfile,
             decoration: InputDecoration(
-              labelText: 'Team/Company name',
+              labelText: l10n.teamCompanyName,
               hintText: 'e.g. MES - Minneapolis Event Staffing',
               helperText: snapshot.hasProfile
                   ? null
-                  : 'Complete your profile first',
+                  : l10n.completeProfileFirst,
             ),
           ),
           const SizedBox(height: 12),
@@ -891,11 +904,11 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
             enabled: snapshot.hasProfile,
             maxLines: 2,
             decoration: InputDecoration(
-              labelText: 'Description (optional)',
-              hintText: 'Brief description of your staffing company',
+              labelText: l10n.descriptionOptionalLabel,
+              hintText: l10n.briefDescriptionHint,
               helperText: snapshot.hasProfile
                   ? null
-                  : 'Complete your profile first',
+                  : l10n.completeProfileFirst,
             ),
           ),
           const SizedBox(height: 12),
@@ -910,7 +923,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.business),
-            label: Text(completed ? 'Add another team' : 'Create team'),
+            label: Text(completed ? l10n.addAnotherTeam : l10n.createTeamButton),
           ),
         ],
       ),
@@ -918,15 +931,16 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
   }
 
   Widget _buildClientStep(_OnboardingSnapshot snapshot) {
+    final l10n = AppLocalizations.of(context)!;
     final completed = snapshot.hasClient;
     return _buildStepCard(
       stepIndex: 2,
       snapshot: snapshot,
-      title: '3. Create your first client',
+      title: l10n.createYourFirstClient,
       completed: completed,
       subtitle: completed
-          ? 'Clients configured: ${snapshot.clients.length}'
-          : 'You need at least one client before you can staff events.',
+          ? l10n.clientsConfiguredCount(snapshot.clients.length)
+          : l10n.needAtLeastOneClientDesc,
       action: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -934,11 +948,11 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
             controller: _clientNameCtrl,
             enabled: snapshot.hasProfile && snapshot.hasTeam,
             decoration: InputDecoration(
-              labelText: 'Client name',
+              labelText: l10n.clientNameLabel,
               hintText: 'e.g. Bluebird Catering',
               helperText: snapshot.hasProfile && snapshot.hasTeam
                   ? null
-                  : 'Complete profile and team first',
+                  : l10n.completeProfileAndTeam,
             ),
           ),
           const SizedBox(height: 12),
@@ -953,7 +967,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.add_business),
-            label: Text(completed ? 'Add another client' : 'Create client'),
+            label: Text(completed ? l10n.addAnotherClient : l10n.createClientButton),
           ),
         ],
       ),
@@ -961,15 +975,16 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
   }
 
   Widget _buildRoleStep(_OnboardingSnapshot snapshot) {
+    final l10n = AppLocalizations.of(context)!;
     final completed = snapshot.hasRole;
     return _buildStepCard(
       stepIndex: 3,
       snapshot: snapshot,
-      title: '4. Add at least one role',
+      title: l10n.addAtLeastOneRole,
       completed: completed,
       subtitle: completed
-          ? 'Roles configured: ${snapshot.roles.length}'
-          : 'Roles help match staff to the right job (waiter, chef, bartender...).',
+          ? l10n.rolesConfiguredCount(snapshot.roles.length)
+          : l10n.rolesHelpMatchStaffDesc,
       action: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -977,11 +992,11 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
             controller: _roleNameCtrl,
             enabled: snapshot.hasProfile && snapshot.hasClient,
             decoration: InputDecoration(
-              labelText: 'Role name',
+              labelText: l10n.roleNameLabel,
               hintText: 'e.g. Lead Server',
               helperText: snapshot.hasProfile && snapshot.hasClient
                   ? null
-                  : 'Finish previous steps first',
+                  : l10n.finishPreviousSteps,
             ),
           ),
           const SizedBox(height: 12),
@@ -997,7 +1012,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.badge_outlined),
-            label: Text(completed ? 'Add another role' : 'Create role'),
+            label: Text(completed ? l10n.addAnotherRole : l10n.createRoleButton),
           ),
         ],
       ),
@@ -1005,17 +1020,18 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
   }
 
   Widget _buildTariffStep(_OnboardingSnapshot snapshot) {
+    final l10n = AppLocalizations.of(context)!;
     final completed = snapshot.hasTariff;
     final clients = snapshot.clients;
     final roles = snapshot.roles;
     return _buildStepCard(
       stepIndex: 4,
       snapshot: snapshot,
-      title: '5. Set your first tariff',
+      title: l10n.setYourFirstTariff,
       completed: completed,
       subtitle: completed
-          ? 'Tariffs configured: ${snapshot.tariffs.length}'
-          : 'Set a rate so staffing assignments know what to bill.',
+          ? l10n.tariffsConfiguredCount(snapshot.tariffs.length)
+          : l10n.setRateDescription,
       action: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1035,8 +1051,8 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
                 )
                 .toList(),
             decoration: InputDecoration(
-              labelText: 'Client',
-              helperText: clients.isEmpty ? 'Create a client first' : null,
+              labelText: l10n.clientLabel,
+              helperText: clients.isEmpty ? l10n.createClientFirst : null,
             ),
           ),
           const SizedBox(height: 12),
@@ -1059,8 +1075,8 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
                 )
                 .toList(),
             decoration: InputDecoration(
-              labelText: 'Role',
-              helperText: roles.isEmpty ? 'Create a role first' : null,
+              labelText: l10n.roleLabel,
+              helperText: roles.isEmpty ? l10n.createRoleFirst : null,
             ),
           ),
           const SizedBox(height: 12),
@@ -1070,12 +1086,12 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
                 snapshot.hasProfile && snapshot.hasClient && snapshot.hasRole,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: InputDecoration(
-              labelText: 'Hourly rate (USD)',
+              labelText: l10n.hourlyRateUsd,
               hintText: 'e.g. 24.00',
               helperText:
                   snapshot.hasProfile && snapshot.hasClient && snapshot.hasRole
-                  ? 'You can adjust this later in Catalog > Tariffs'
-                  : 'Finish previous steps first',
+                  ? l10n.adjustLaterHint
+                  : l10n.finishPreviousSteps,
             ),
           ),
           const SizedBox(height: 12),
@@ -1094,7 +1110,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.attach_money),
-            label: Text(completed ? 'Add another tariff' : 'Save tariff'),
+            label: Text(completed ? l10n.addAnotherTariff : l10n.saveTariff),
           ),
         ],
       ),
@@ -1224,7 +1240,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
       final joined = '$first $last'.trim();
       if (joined.isNotEmpty) return joined;
     }
-    return 'Untitled';
+    return AppLocalizations.of(context)!.untitled;
   }
 }
 

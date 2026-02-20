@@ -162,9 +162,9 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
     if (!isUser && widget.showTypingAnimation) {
       _isTyping = true;
 
-      // Show typing indicator for shorter time (FASTER on web)
-      final baseDelay = kIsWeb ? 200 : 400; // Faster base delay on web
-      Future.delayed(Duration(milliseconds: baseDelay + (widget.message.content.length).clamp(0, 600)), () { // Was 800-2000ms
+      // Fixed delay — don't penalize users for longer responses
+      final baseDelay = kIsWeb ? 150 : 300;
+      Future.delayed(Duration(milliseconds: baseDelay), () {
         if (mounted) {
           setState(() {
             _isTyping = false;
@@ -184,7 +184,12 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
 
   void _startTypewriterEffect() {
     final text = widget.message.content;
-    final duration = Duration(milliseconds: kIsWeb ? 12 : 20); // Slower for a more enjoyable reading pace
+
+    // Adaptive batch size: always complete in ~75 ticks × 20ms ≈ 1.5 seconds,
+    // regardless of response length. Short answers feel like real-time typing;
+    // long answers appear quickly without making the user wait.
+    final charsPerTick = ((text.length / 75).ceil()).clamp(1, 80);
+    const duration = Duration(milliseconds: 20);
 
     _typewriterTimer = Timer.periodic(duration, (timer) {
       if (!mounted) {
@@ -194,11 +199,8 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
 
       setState(() {
         if (_currentCharIndex < text.length) {
-          // Add 1 character at a time for a smooth, readable typing effect
-          _displayedText = text.substring(0, _currentCharIndex + 1);
-          _currentCharIndex += 1;
-
-          // Notify parent to scroll to bottom
+          _currentCharIndex = (_currentCharIndex + charsPerTick).clamp(0, text.length);
+          _displayedText = text.substring(0, _currentCharIndex);
           widget.onTypingTick?.call();
         } else {
           timer.cancel();

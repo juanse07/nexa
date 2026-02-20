@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireAuth, AuthenticatedRequest } from '../middleware/requireAuth';
+import { requireActiveSubscription } from '../middleware/requireActiveSubscription';
 import { ConversationModel } from '../models/conversation';
 import { ChatMessageModel } from '../models/chatMessage';
 import { ManagerModel } from '../models/manager';
@@ -364,7 +365,7 @@ router.get('/conversations/:conversationId/messages', requireAuth, async (req, r
  * Send a message to a user (if manager) or to manager (if user)
  * targetId: managerId if user is sending, userKey if manager is sending
  */
-router.post('/conversations/:targetId/messages', requireAuth, async (req, res) => {
+router.post('/conversations/:targetId/messages', requireAuth, requireActiveSubscription, async (req, res) => {
   try {
     const { targetId } = req.params;
     const { message, messageType, metadata } = req.body;

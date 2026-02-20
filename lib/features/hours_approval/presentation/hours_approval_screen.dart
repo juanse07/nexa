@@ -33,14 +33,15 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final eventName = widget.event['event_name']?.toString() ?? AppLocalizations.of(context)!.shift;
+    final l10n = AppLocalizations.of(context)!;
+    final eventName = widget.event['event_name']?.toString() ?? l10n.shift;
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surfaceContainerLowest,
       body: CustomScrollView(
         slivers: [
           CustomSliverAppBar(
-            title: 'Approve Hours',
+            title: l10n.approveHours,
             subtitle: eventName,
             onBackPressed: () => Navigator.of(context).pop(),
             expandedHeight: 140.0,
@@ -60,7 +61,7 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      widget.event['event_name']?.toString() ?? AppLocalizations.of(context)!.shift,
+                      widget.event['event_name']?.toString() ?? l10n.shift,
                       style: theme.textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -94,12 +95,12 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'Upload Sign-In Sheet',
+                        l10n.uploadSignInSheet,
                         style: theme.textTheme.titleMedium,
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Take a photo or upload the client\'s sign-in/out sheet',
+                        l10n.takePhotoOrUploadSheet,
                         textAlign: TextAlign.center,
                         style: theme.textTheme.bodySmall,
                       ),
@@ -110,12 +111,12 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
                           ElevatedButton.icon(
                             onPressed: () => _pickImage(ImageSource.camera),
                             icon: const Icon(Icons.camera),
-                            label: const Text('Camera'),
+                            label: Text(l10n.camera),
                           ),
                           ElevatedButton.icon(
                             onPressed: () => _pickImage(ImageSource.gallery),
                             icon: const Icon(Icons.photo_library),
-                            label: const Text('Gallery'),
+                            label: Text(l10n.gallery),
                           ),
                         ],
                       ),
@@ -126,7 +127,7 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 8),
                             child: Text(
-                              'OR',
+                              l10n.or.toUpperCase(),
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: theme.colorScheme.onSurfaceVariant,
                               ),
@@ -150,7 +151,7 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
                             }
                           },
                           icon: const Icon(Icons.edit),
-                          label: const Text('Manual Entry'),
+                          label: Text(l10n.manualEntry),
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
@@ -187,14 +188,14 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
                               });
                             },
                             icon: const Icon(Icons.close),
-                            label: const Text('Remove'),
+                            label: Text(l10n.remove),
                           ),
                           const Spacer(),
                           if (_extractedHours == null && !_isAnalyzing)
                             ElevatedButton.icon(
                               onPressed: _analyzeSheet,
                               icon: const Icon(Icons.auto_awesome),
-                              label: const Text('Analyze with AI'),
+                              label: Text(l10n.analyzeWithAi),
                             ),
                         ],
                       ),
@@ -207,14 +208,14 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
 
             // Loading indicator
             if (_isAnalyzing)
-              const Card(
+              Card(
                 child: Padding(
-                  padding: EdgeInsets.all(32),
+                  padding: const EdgeInsets.all(32),
                   child: Column(
                     children: [
-                      CircularProgressIndicator(),
-                      SizedBox(height: 16),
-                      Text('Analyzing sign-in sheet with AI...'),
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 16),
+                      Text(l10n.analyzingSignInSheetWithAi),
                     ],
                   ),
                 ),
@@ -253,14 +254,14 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Extracted Staff Hours',
+                        l10n.extractedStaffHours,
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Review and edit before submitting',
+                        l10n.reviewAndEditBeforeSubmitting,
                         style: theme.textTheme.bodySmall,
                       ),
                     ],
@@ -313,10 +314,10 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Sign In',
+                                    l10n.signInLabel,
                                     style: theme.textTheme.labelSmall,
                                   ),
-                                  Text(hours.signInTime ?? 'N/A'),
+                                  Text(hours.signInTime ?? l10n.notAvailable),
                                 ],
                               ),
                             ),
@@ -325,10 +326,10 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Sign Out',
+                                    l10n.signOutLabel,
                                     style: theme.textTheme.labelSmall,
                                   ),
-                                  Text(hours.signOutTime ?? 'N/A'),
+                                  Text(hours.signOutTime ?? l10n.notAvailable),
                                 ],
                               ),
                             ),
@@ -351,7 +352,7 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
-                                  '$calculatedHours hours',
+                                  l10n.hoursCount(calculatedHours.toString()),
                                   style: TextStyle(
                                     color: theme.colorScheme.onPrimaryContainer,
                                     fontWeight: FontWeight.bold,
@@ -364,7 +365,7 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
                         if (hours.notes != null && hours.notes!.isNotEmpty) ...[
                           const SizedBox(height: 8),
                           Text(
-                            'Notes: ${hours.notes}',
+                            '${l10n.notes}: ${hours.notes}',
                             style: theme.textTheme.bodySmall?.copyWith(
                               fontStyle: FontStyle.italic,
                             ),
@@ -383,7 +384,7 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
                 child: FilledButton.icon(
                   onPressed: _isSubmitting ? null : _bulkApprove,
                   icon: const Icon(Icons.check_circle),
-                  label: const Text('Approve Hours'),
+                  label: Text(l10n.approveHours),
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
@@ -416,7 +417,7 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
       }
     } catch (e) {
       setState(() {
-        _error = 'Failed to pick image: $e';
+        _error = '${AppLocalizations.of(context)!.failedToPickImage}: $e';
       });
     }
   }
@@ -453,7 +454,7 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
       });
     } catch (e) {
       setState(() {
-        _error = 'Analysis failed: $e';
+        _error = '${AppLocalizations.of(context)!.analysisFailed}: $e';
         _isAnalyzing = false;
       });
     }
@@ -475,21 +476,22 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
   Future<void> _bulkApprove() async {
     if (_extractedHours == null) return;
 
+    final l10n = AppLocalizations.of(context)!;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Bulk Approve'),
+        title: Text(l10n.bulkApprove),
         content: Text(
-          'Approve hours for all ${_extractedHours!.length} staff members?',
+          l10n.approveHoursForAllStaff(_extractedHours!.length),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(l10n.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Approve All'),
+            child: Text(l10n.approveAll),
           ),
         ],
       ),
@@ -521,7 +523,7 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
       if (submitResult.processedCount == 0) {
         if (mounted) {
           setState(() {
-            _error = 'No hours were matched. Please check the names on the sheet.';
+            _error = l10n.noHoursMatched;
             _isSubmitting = false;
           });
         }
@@ -546,14 +548,14 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
           Navigator.of(context).pop(true);
         } else {
           setState(() {
-            _error = 'No hours were approved. Check match results above.';
+            _error = l10n.noHoursApproved;
             _isSubmitting = false;
           });
         }
       }
     } catch (e) {
       setState(() {
-        _error = 'Failed to bulk approve: $e';
+        _error = '${l10n.failedToSubmitHours}: $e';
         _isSubmitting = false;
       });
     }
@@ -570,7 +572,7 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
               color: result.unmatchedCount > 0 ? Colors.orange : Colors.green,
             ),
             const SizedBox(width: 8),
-            const Text('Name Matching Results'),
+            Text(AppLocalizations.of(context)!.nameMatchingResults),
           ],
         ),
         content: SizedBox(
@@ -614,7 +616,7 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
+            child: Text(AppLocalizations.of(context)!.ok),
           ),
         ],
       ),
@@ -659,32 +661,33 @@ class _EditHoursDialogState extends State<_EditHoursDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return AlertDialog(
-      title: Text('Edit Hours - ${widget.hours.name}'),
+      title: Text(l10n.editHoursFor(widget.hours.name)),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: _signInController,
-              decoration: const InputDecoration(
-                labelText: 'Sign In Time',
+              decoration: InputDecoration(
+                labelText: l10n.signInTime,
                 hintText: '5:00 PM',
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _signOutController,
-              decoration: const InputDecoration(
-                labelText: 'Sign Out Time',
+              decoration: InputDecoration(
+                labelText: l10n.signOutTime,
                 hintText: '11:30 PM',
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _hoursController,
-              decoration: const InputDecoration(
-                labelText: 'Approved Hours',
+              decoration: InputDecoration(
+                labelText: l10n.approvedHours,
                 hintText: '6.5',
               ),
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -692,9 +695,9 @@ class _EditHoursDialogState extends State<_EditHoursDialog> {
             const SizedBox(height: 12),
             TextField(
               controller: _notesController,
-              decoration: const InputDecoration(
-                labelText: 'Notes',
-                hintText: 'Optional notes',
+              decoration: InputDecoration(
+                labelText: l10n.notesLabel,
+                hintText: l10n.optionalNotes,
               ),
               maxLines: 2,
             ),
@@ -704,7 +707,7 @@ class _EditHoursDialogState extends State<_EditHoursDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(l10n.cancel),
         ),
         FilledButton(
           onPressed: () {
@@ -716,7 +719,7 @@ class _EditHoursDialogState extends State<_EditHoursDialog> {
             );
             Navigator.pop(context, updated);
           },
-          child: const Text('Save'),
+          child: Text(l10n.save),
         ),
       ],
     );

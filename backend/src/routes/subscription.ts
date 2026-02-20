@@ -1,11 +1,12 @@
 import { Router } from 'express';
-import crypto from 'crypto';
+
 import { z } from 'zod';
 import { requireAuth } from '../middleware/requireAuth';
 import { UserModel } from '../models/user';
 import { ManagerModel } from '../models/manager';
 import { TeamMemberModel } from '../models/teamMember';
 import { EventModel } from '../models/event';
+import { isReadOnly, isInFreeMonth, getFreeMonthEndDate } from '../utils/subscriptionUtils';
 
 const router = Router();
 
@@ -37,21 +38,42 @@ router.get('/subscription/status', requireAuth, async (req, res) => {
     const { Model, isManager } = getUserModel(req);
 
     const user = await (Model as any).findOne({ provider, subject })
-      .select('subscription_tier subscription_status subscription_platform subscription_started_at subscription_expires_at')
+      .select('subscription_tier subscription_status subscription_platform subscription_started_at subscription_expires_at createdAt free_month_end_override')
       .lean();
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    // Compute free month info for staff users
+    let freeMonth = null;
+    let readOnly = false;
+    if (!isManager) {
+      const inFreeMonth = isInFreeMonth(user);
+      const endDate = getFreeMonthEndDate(user);
+      const now = new Date();
+      const daysRemaining = inFreeMonth
+        ? Math.ceil((endDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
+        : 0;
+
+      freeMonth = {
+        active: inFreeMonth,
+        endDate: endDate.toISOString(),
+        daysRemaining,
+      };
+      readOnly = isReadOnly(user);
+    }
+
     return res.json({
       tier: user.subscription_tier || 'free',
-      status: user.subscription_status || 'active',
+      status: user.subscription_status || 'free_month',
       platform: user.subscription_platform || null,
       startedAt: user.subscription_started_at || null,
       expiresAt: user.subscription_expires_at || null,
       isActive: user.subscription_tier === 'pro' && user.subscription_status === 'active',
-      userType: isManager ? 'manager' : 'staff', // Indicate which type of user
+      isReadOnly: readOnly,
+      freeMonth,
+      userType: isManager ? 'manager' : 'staff',
     });
   } catch (err: any) {
     console.error('[subscription/status] Error:', err);
@@ -251,8 +273,8 @@ router.post('/subscription/sync', requireAuth, async (req, res) => {
  */
 router.post('/subscription/webhook', async (req, res) => {
   try {
-    // Verify webhook signature
-    const signature = req.headers['x-qonversion-signature'] as string;
+    // Verify Qonversion Basic Authorization token
+    const authHeader = req.headers['authorization'] as string;
     const secret = process.env.QONVERSION_WEBHOOK_SECRET;
 
     if (!secret) {
@@ -260,28 +282,29 @@ router.post('/subscription/webhook', async (req, res) => {
       return res.status(500).json({ message: 'Webhook secret not configured' });
     }
 
-    if (!verifyWebhookSignature(req.body, signature, secret)) {
-      console.warn('[subscription/webhook] Invalid signature');
-      return res.status(401).json({ message: 'Invalid signature' });
+    if (!verifyWebhookAuth(authHeader, secret)) {
+      console.warn('[subscription/webhook] Invalid authorization');
+      return res.status(401).json({ message: 'Invalid authorization' });
     }
 
     const event = req.body;
 
     console.log('[subscription/webhook] Event received:', event.type, 'for user:', event.uid);
 
-    // Handle different event types
+    // Handle different event types (Qonversion uses American English: "canceled" with one L)
     switch (event.type) {
       case 'subscription_renewed':
       case 'subscription_started':
       case 'trial_started':
       case 'trial_converted':
+      case 'trial_still_active':
         await handleSubscriptionActivation(event);
         break;
 
-      case 'subscription_expired':
-      case 'subscription_cancelled':
-      case 'trial_expired':
-      case 'trial_cancelled':
+      case 'subscription_canceled':
+      case 'trial_canceled':
+      case 'subscription_billing_retry_entered':
+      case 'trial_billing_retry_entered':
         await handleSubscriptionDeactivation(event);
         break;
 
@@ -289,8 +312,13 @@ router.post('/subscription/webhook', async (req, res) => {
         await handleRefund(event);
         break;
 
-      case 'subscription_product_changed':
+      case 'subscription_upgraded':
         await handleProductChange(event);
+        break;
+
+      case 'in_app_purchase':
+        console.log('[subscription/webhook] In-app purchase event:', event.uid);
+        await handleSubscriptionActivation(event);
         break;
 
       default:
@@ -305,22 +333,21 @@ router.post('/subscription/webhook', async (req, res) => {
 });
 
 /**
- * Verify Qonversion webhook signature using HMAC SHA256
+ * Verify Qonversion webhook using Basic Authorization header.
+ * Qonversion sends: Authorization: Basic {token}
+ * The token must match QONVERSION_WEBHOOK_SECRET from the integration config.
  */
-function verifyWebhookSignature(payload: any, signature: string, secret: string): boolean {
+function verifyWebhookAuth(authHeader: string, secret: string): boolean {
   try {
-    if (!signature) {
+    if (!authHeader) {
       return false;
     }
 
-    const hash = crypto
-      .createHmac('sha256', secret)
-      .update(JSON.stringify(payload))
-      .digest('hex');
-
-    return hash === signature;
+    // Qonversion sends "Basic <token>" in the Authorization header
+    const token = authHeader.replace(/^Basic\s+/i, '');
+    return token === secret;
   } catch (err) {
-    console.error('[verifyWebhookSignature] Error:', err);
+    console.error('[verifyWebhookAuth] Error:', err);
     return false;
   }
 }

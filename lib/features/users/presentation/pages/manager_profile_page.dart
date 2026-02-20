@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:nexa/core/network/api_client.dart';
 import 'package:nexa/features/auth/data/services/phone_auth_service.dart';
 import 'package:nexa/features/users/data/services/manager_service.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import 'package:nexa/services/file_upload_service.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
 import 'package:nexa/shared/widgets/caricature_generator_sheet.dart';
@@ -72,7 +73,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
       });
     } catch (e) {
       setState(() {
-        _error = 'Failed to load profile. This may be due to backend deployment. Please try again in a few minutes.';
+        _error = AppLocalizations.of(context)!.failedToLoadProfile;
         _loading = false;
       });
     }
@@ -105,7 +106,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
     } catch (e) {
       setState(() {
         _uploading = false;
-        _error = 'Failed to upload image: $e';
+        _error = '${AppLocalizations.of(context)!.failedToUploadImage}: $e';
       });
     }
   }
@@ -135,10 +136,10 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
         _caricatureHistory = me.caricatureHistory;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('New look saved!')),
+        SnackBar(content: Text(AppLocalizations.of(context)!.newLookSaved)),
       );
     } catch (e) {
-      setState(() => _error = 'Failed to save: $e');
+      setState(() => _error = '${AppLocalizations.of(context)!.failedToSave}: $e');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -165,10 +166,10 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
         _originalPicture = updated.originalPicture;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile picture updated!')),
+        SnackBar(content: Text(AppLocalizations.of(context)!.profilePictureUpdated)),
       );
     } catch (e) {
-      setState(() => _error = 'Failed to update: $e');
+      setState(() => _error = '${AppLocalizations.of(context)!.failedToUpdate}: $e');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -176,16 +177,17 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
 
   /// Delete a caricature from history.
   Future<void> _deleteCaricature(int index) async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete creation?'),
-        content: const Text('This will remove it from your gallery.'),
+        title: Text(l10n.deleteCreationConfirm),
+        content: Text(l10n.deleteCreationMessage),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.cancel)),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: Text(l10n.delete, style: const TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -197,12 +199,12 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
       if (!mounted) return;
       setState(() => _caricatureHistory = updated);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Creation deleted')),
+        SnackBar(content: Text(l10n.creationDeleted)),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to delete: $e')),
+        SnackBar(content: Text('${AppLocalizations.of(context)!.failedToDelete}: $e')),
       );
     }
   }
@@ -224,10 +226,10 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
         _originalPicture = null;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Reverted to original photo')),
+        SnackBar(content: Text(AppLocalizations.of(context)!.revertedToOriginal)),
       );
     } catch (e) {
-      setState(() => _error = 'Failed to revert: $e');
+      setState(() => _error = '${AppLocalizations.of(context)!.failedToRevert}: $e');
     } finally {
       if (mounted) setState(() => _reverting = false);
     }
@@ -247,7 +249,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile updated')),
+        SnackBar(content: Text(AppLocalizations.of(context)!.profileUpdated)),
       );
       // Close the profile page and return to onboarding after successful save
       await Future<void>.delayed(const Duration(milliseconds: 300));
@@ -294,15 +296,16 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Profile'),
+        title: Text(l10n.myProfile),
         actions: [
           TextButton(
             onPressed: _saving ? null : _save,
             child: _saving
                 ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Save', style: TextStyle(color: Colors.white)),
+                : Text(l10n.save, style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -329,17 +332,17 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
                     ),
                   TextField(
                     controller: _firstNameCtrl,
-                    decoration: const InputDecoration(labelText: 'First name'),
+                    decoration: InputDecoration(labelText: l10n.firstName),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _lastNameCtrl,
-                    decoration: const InputDecoration(labelText: 'Last name'),
+                    decoration: InputDecoration(labelText: l10n.lastName),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _appIdCtrl,
-                    decoration: const InputDecoration(labelText: 'App ID (9 digits, optional)'),
+                    decoration: InputDecoration(labelText: l10n.appIdOptional),
                     keyboardType: TextInputType.number,
                     maxLength: 9,
                   ),
@@ -356,6 +359,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
   // ── Account section ─────────────────────────────────────────
 
   Widget _buildAccountSection() {
+    final l10n = AppLocalizations.of(context)!;
     final profile = _profile!;
     final primary = profile.provider ?? 'unknown';
     final linked = profile.linkedProviders;
@@ -372,7 +376,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
             Icon(Icons.shield_outlined, size: 18, color: AppColors.primaryPurple.withValues(alpha: 0.7)),
             const SizedBox(width: 8),
             Text(
-              'Account',
+              l10n.account,
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
@@ -385,17 +389,17 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
 
         // Email (read-only)
         if (profile.email != null && profile.email!.isNotEmpty)
-          _buildInfoRow(Icons.email_outlined, 'Email', profile.email!),
+          _buildInfoRow(Icons.email_outlined, l10n.email, profile.email!),
 
         // Phone (read-only)
         if (profile.authPhoneNumber != null && profile.authPhoneNumber!.isNotEmpty)
-          _buildInfoRow(Icons.phone_outlined, 'Phone', profile.authPhoneNumber!),
+          _buildInfoRow(Icons.phone_outlined, l10n.phone, profile.authPhoneNumber!),
 
         const SizedBox(height: 14),
 
         // Linked accounts header
         Text(
-          'Linked Accounts',
+          l10n.linkedAccounts,
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
@@ -458,6 +462,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
   }
 
   Widget _buildProviderChip(String provider, {required bool isPrimary, required bool isLinked}) {
+    final l10n = AppLocalizations.of(context)!;
     final label = _providerDisplayName(provider);
     final icon = _providerIcon(provider);
     final color = _providerColor(provider);
@@ -484,7 +489,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
                 color: color,
                 borderRadius: BorderRadius.circular(6),
               ),
-              child: const Text('Primary', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white)),
+              child: Text(l10n.primary, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white)),
             ),
           ],
         ),
@@ -531,9 +536,9 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
               if (canLink)
                 _linkingPhone
                     ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 1.5))
-                    : Text('Link', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.secondaryPurple))
+                    : Text(l10n.linkAccount, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.secondaryPurple))
               else
-                Text('Coming soon', style: TextStyle(fontSize: 10, color: AppColors.textMuted, fontStyle: FontStyle.italic)),
+                Text(l10n.comingSoon, style: TextStyle(fontSize: 10, color: AppColors.textMuted, fontStyle: FontStyle.italic)),
             ],
           ),
         ),
@@ -584,7 +589,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
       setState(() => _linkingPhone = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Phone number linked successfully!')),
+          SnackBar(content: Text(AppLocalizations.of(context)!.phoneLinkedSuccessfully)),
         );
       }
     }
@@ -608,7 +613,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
             : TextButton.icon(
                 onPressed: _pickAndUploadImage,
                 icon: const Icon(Icons.photo_library_rounded, size: 16),
-                label: const Text('Upload'),
+                label: Text(AppLocalizations.of(context)!.upload),
                 style: TextButton.styleFrom(
                   foregroundColor: Colors.grey.shade600,
                   textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
@@ -618,7 +623,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
           TextButton.icon(
             onPressed: _showCaricatureSheet,
             icon: const Icon(Icons.camera_enhance_rounded, size: 16),
-            label: const Text('Glow Up'),
+            label: Text(AppLocalizations.of(context)!.glowUp),
             style: TextButton.styleFrom(
               foregroundColor: Theme.of(context).colorScheme.secondary,
               textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
@@ -637,7 +642,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
               : TextButton.icon(
                   onPressed: _revertPicture,
                   icon: const Icon(Icons.undo_rounded, size: 16),
-                  label: const Text('Original Photo'),
+                  label: Text(AppLocalizations.of(context)!.originalPhoto),
                   style: TextButton.styleFrom(
                     foregroundColor: Colors.grey.shade600,
                     textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
@@ -732,7 +737,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
             Icon(Icons.collections_rounded, size: 18, color: AppColors.primaryPurple.withValues(alpha: 0.7)),
             const SizedBox(width: 8),
             Text(
-              'My Creations',
+              AppLocalizations.of(context)!.myCreations,
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
@@ -811,9 +816,9 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
                             color: AppColors.primaryPurple,
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Text(
-                            'Active',
-                            style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
+                          child: Text(
+                            AppLocalizations.of(context)!.active,
+                            style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
                           ),
                         ),
                       ),
@@ -923,7 +928,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
                       _deleteCaricature(originalIndex);
                     },
                     icon: const Icon(Icons.delete_outline_rounded, size: 18),
-                    label: const Text('Delete'),
+                    label: Text(AppLocalizations.of(context)!.delete),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.red.shade400,
                       side: BorderSide(color: Colors.red.shade200),
@@ -947,7 +952,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
                             _reuseCaricature(item);
                           },
                     icon: Icon(isActive ? Icons.fullscreen_rounded : Icons.check_rounded, size: 20),
-                    label: Text(isActive ? 'View Full Size' : 'Use This Photo'),
+                    label: Text(isActive ? AppLocalizations.of(context)!.viewFullSize : AppLocalizations.of(context)!.useThisPhoto),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primaryPurple,
                       foregroundColor: Colors.white,
@@ -1083,7 +1088,7 @@ class _PhoneLinkSheetState extends State<_PhoneLinkSheet> {
   Future<void> _sendOtp() async {
     final phone = '$_countryCode${_phoneCtrl.text.trim()}';
     if (_phoneCtrl.text.trim().length < 7) {
-      setState(() => _error = 'Please enter a valid phone number');
+      setState(() => _error = AppLocalizations.of(context)!.pleaseEnterValidPhoneNumber);
       return;
     }
     setState(() { _sendingCode = true; _error = null; });
@@ -1097,9 +1102,10 @@ class _PhoneLinkSheetState extends State<_PhoneLinkSheet> {
         },
         verificationFailed: (FirebaseAuthException e) {
           if (!mounted) return;
-          String msg = 'Verification failed';
-          if (e.code == 'invalid-phone-number') msg = 'Invalid phone number format';
-          else if (e.code == 'too-many-requests') msg = 'Too many attempts. Try later.';
+          final l10n = AppLocalizations.of(context)!;
+          String msg = l10n.verificationFailed;
+          if (e.code == 'invalid-phone-number') msg = l10n.invalidPhoneFormat;
+          else if (e.code == 'too-many-requests') msg = l10n.tooManyAttemptsMessage;
           else if (e.message != null) msg = e.message!;
           setState(() { _sendingCode = false; _error = msg; });
         },
@@ -1117,17 +1123,17 @@ class _PhoneLinkSheetState extends State<_PhoneLinkSheet> {
       );
     } catch (e) {
       if (!mounted) return;
-      setState(() { _sendingCode = false; _error = 'Failed to send code: $e'; });
+      setState(() { _sendingCode = false; _error = '${AppLocalizations.of(context)!.failedToSendCode}: $e'; });
     }
   }
 
   Future<void> _verifyAndLink() async {
     if (_otpCtrl.text.trim().length < 6) {
-      setState(() => _error = 'Please enter the 6-digit code');
+      setState(() => _error = AppLocalizations.of(context)!.pleaseEnterVerificationCode);
       return;
     }
     if (_verificationId == null) {
-      setState(() => _error = 'No verification in progress');
+      setState(() => _error = AppLocalizations.of(context)!.noVerificationInProgress);
       return;
     }
     setState(() { _verifying = true; _error = null; });
@@ -1140,13 +1146,14 @@ class _PhoneLinkSheetState extends State<_PhoneLinkSheet> {
       await _signInAndLink(credential);
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
-      String msg = 'Verification failed';
-      if (e.code == 'invalid-verification-code') msg = 'Invalid code. Check and try again.';
-      else if (e.code == 'session-expired') msg = 'Code expired. Request a new one.';
+      final l10n = AppLocalizations.of(context)!;
+      String msg = l10n.verificationFailed;
+      if (e.code == 'invalid-verification-code') msg = l10n.invalidCodeMessage;
+      else if (e.code == 'session-expired') msg = l10n.codeExpiredMessage;
       setState(() { _verifying = false; _error = msg; });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _verifying = false; _error = 'Verification failed: $e'; });
+      setState(() { _verifying = false; _error = '${AppLocalizations.of(context)!.verificationFailed}: $e'; });
     }
   }
 
@@ -1157,14 +1164,14 @@ class _PhoneLinkSheetState extends State<_PhoneLinkSheet> {
       final user = userCred.user;
       if (user == null) {
         if (!mounted) return;
-        setState(() { _verifying = false; _error = 'Firebase authentication failed'; });
+        setState(() { _verifying = false; _error = AppLocalizations.of(context)!.firebaseAuthFailed; });
         return;
       }
       final idToken = await user.getIdToken();
       if (idToken == null) {
         await FirebaseAuth.instance.signOut();
         if (!mounted) return;
-        setState(() { _verifying = false; _error = 'Failed to get auth token'; });
+        setState(() { _verifying = false; _error = AppLocalizations.of(context)!.failedToGetAuthToken; });
         return;
       }
 
@@ -1176,12 +1183,12 @@ class _PhoneLinkSheetState extends State<_PhoneLinkSheet> {
       if (linked) {
         Navigator.pop(context, true);
       } else {
-        setState(() { _verifying = false; _error = 'Failed to link phone number'; });
+        setState(() { _verifying = false; _error = AppLocalizations.of(context)!.failedToLinkPhoneNumber; });
       }
     } catch (e) {
       await FirebaseAuth.instance.signOut();
       if (!mounted) return;
-      setState(() { _verifying = false; _error = 'Failed to link: $e'; });
+      setState(() { _verifying = false; _error = '${AppLocalizations.of(context)!.failedToLink}: $e'; });
     }
   }
 
@@ -1214,12 +1221,12 @@ class _PhoneLinkSheetState extends State<_PhoneLinkSheet> {
             ),
           ),
           Text(
-            'Link Phone Number',
+            AppLocalizations.of(context)!.linkPhoneNumber,
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.textDark),
           ),
           const SizedBox(height: 4),
           Text(
-            'Add a phone number as an alternative sign-in method',
+            AppLocalizations.of(context)!.addPhoneDescription,
             style: TextStyle(fontSize: 13, color: AppColors.textMuted),
             textAlign: TextAlign.center,
           ),
@@ -1249,10 +1256,10 @@ class _PhoneLinkSheetState extends State<_PhoneLinkSheet> {
                 Expanded(
                   child: TextField(
                     controller: _phoneCtrl,
-                    decoration: const InputDecoration(
-                      hintText: 'Phone number',
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                    decoration: InputDecoration(
+                      hintText: AppLocalizations.of(context)!.phoneNumberHint,
+                      border: const OutlineInputBorder(),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
                     ),
                     keyboardType: TextInputType.phone,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -1273,17 +1280,17 @@ class _PhoneLinkSheetState extends State<_PhoneLinkSheet> {
                 ),
                 child: _sendingCode
                     ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Text('Send Verification Code', style: TextStyle(fontWeight: FontWeight.w600)),
+                    : Text(AppLocalizations.of(context)!.sendVerificationCode, style: const TextStyle(fontWeight: FontWeight.w600)),
               ),
             ),
           ] else ...[
             // OTP input
             TextField(
               controller: _otpCtrl,
-              decoration: const InputDecoration(
-                hintText: '6-digit code',
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+              decoration: InputDecoration(
+                hintText: AppLocalizations.of(context)!.sixDigitCode,
+                border: const OutlineInputBorder(),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
               ),
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(6)],
@@ -1302,7 +1309,7 @@ class _PhoneLinkSheetState extends State<_PhoneLinkSheet> {
                 ),
                 child: _verifying
                     ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Text('Verify & Link', style: TextStyle(fontWeight: FontWeight.w600)),
+                    : Text(AppLocalizations.of(context)!.verifyAndLink, style: const TextStyle(fontWeight: FontWeight.w600)),
               ),
             ),
           ],

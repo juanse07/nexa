@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import '../../models/attendance_dashboard_models.dart';
 import 'pulse_indicator.dart';
 
@@ -24,6 +25,7 @@ class AttendanceHeroHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -48,7 +50,7 @@ class AttendanceHeroHeader extends StatelessWidget {
                     Expanded(
                       child: _StatCard(
                         value: isLoading ? '--' : '${analytics.currentlyWorking}',
-                        label: 'Working',
+                        label: l10n.working,
                         icon: Icons.person_outline,
                         iconColor: Colors.greenAccent,
                         showPulse: analytics.currentlyWorking > 0,
@@ -58,7 +60,7 @@ class AttendanceHeroHeader extends StatelessWidget {
                     Expanded(
                       child: _StatCard(
                         value: isLoading ? '--' : analytics.todayTotalHours.toStringAsFixed(1),
-                        label: 'Hours',
+                        label: l10n.hours,
                         icon: Icons.access_time_rounded,
                         iconColor: Colors.amber,
                       ),
@@ -69,7 +71,7 @@ class AttendanceHeroHeader extends StatelessWidget {
                         onTap: onFlagsTap,
                         child: _StatCard(
                           value: isLoading ? '--' : '${analytics.pendingFlags}',
-                          label: 'Flags',
+                          label: l10n.flags,
                           icon: Icons.flag_outlined,
                           iconColor: analytics.pendingFlags > 0
                               ? Colors.redAccent

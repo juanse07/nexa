@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:nexa/features/brand/data/providers/brand_provider.dart';
 import 'package:nexa/features/brand/presentation/widgets/brand_color_picker_dialog.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 // TODO: Restore these imports when re-enabling Pro subscription gating
 // import 'package:nexa/core/di/injection.dart';
 // import 'package:nexa/features/subscription/data/services/subscription_service.dart';
@@ -51,15 +52,15 @@ class _BrandCustomizationCardState extends State<BrandCustomizationCard> {
 
     if (mounted && success) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Logo uploaded and colors extracted!'),
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.logoUploadedColorsExtracted),
           backgroundColor: Colors.green,
         ),
       );
     } else if (mounted && !success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(provider.error ?? 'Failed to upload logo'),
+          content: Text(provider.error ?? AppLocalizations.of(context)!.failedToUploadLogo),
           backgroundColor: Colors.red,
         ),
       );
@@ -83,9 +84,10 @@ class _BrandCustomizationCardState extends State<BrandCustomizationCard> {
     final provider = context.read<BrandProvider>();
     final success = await provider.saveColors();
     if (mounted) {
+      final l10n = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(success ? 'Colors saved!' : (provider.error ?? 'Failed to save')),
+          content: Text(success ? l10n.colorsSaved : (provider.error ?? l10n.failedToSave)),
           backgroundColor: success ? Colors.green : Colors.red,
         ),
       );
@@ -93,20 +95,18 @@ class _BrandCustomizationCardState extends State<BrandCustomizationCard> {
   }
 
   Future<void> _removeBranding() async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (BuildContext ctx) => AlertDialog(
-        title: const Text('Remove Branding?'),
-        content: const Text(
-          'This will delete your logo and custom colors. '
-          'Exported documents will revert to the default FlowShift styling.',
-        ),
+        title: Text(l10n.removeBrandingConfirmation),
+        content: Text(l10n.removeBrandingWarning),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.cancel)),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Remove'),
+            child: Text(l10n.remove),
           ),
         ],
       ),
@@ -117,9 +117,10 @@ class _BrandCustomizationCardState extends State<BrandCustomizationCard> {
     final provider = context.read<BrandProvider>();
     final success = await provider.deleteBrandProfile();
     if (mounted) {
+      final l10nAfter = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(success ? 'Branding removed' : (provider.error ?? 'Failed to remove')),
+          content: Text(success ? l10nAfter.brandingRemoved : (provider.error ?? l10nAfter.failedToSave)),
           backgroundColor: success ? Colors.green : Colors.red,
         ),
       );
@@ -146,6 +147,7 @@ class _BrandCustomizationCardState extends State<BrandCustomizationCard> {
 
   /// Locked state for non-Pro users.
   Widget _buildLockedContent(ThemeData theme) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -154,7 +156,7 @@ class _BrandCustomizationCardState extends State<BrandCustomizationCard> {
             Icon(Icons.palette_outlined, color: theme.colorScheme.onSurfaceVariant),
             const SizedBox(width: 12),
             Text(
-              'Brand Customization',
+              l10n.brandCustomization,
               style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const Spacer(),
@@ -165,7 +167,7 @@ class _BrandCustomizationCardState extends State<BrandCustomizationCard> {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
-                'PRO',
+                l10n.pro,
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
@@ -187,7 +189,7 @@ class _BrandCustomizationCardState extends State<BrandCustomizationCard> {
               Icon(Icons.lock_outline, size: 32, color: theme.colorScheme.onSurfaceVariant),
               const SizedBox(height: 8),
               Text(
-                'Upgrade to Pro to personalize your exported documents with your own logo and brand colors.',
+                l10n.upgradeToProCustomization,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
@@ -201,7 +203,7 @@ class _BrandCustomizationCardState extends State<BrandCustomizationCard> {
                     MaterialPageRoute<void>(builder: (_) => const SubscriptionPaywallPage()),
                   );
                 },
-                child: const Text('Upgrade to Pro'),
+                child: Text(l10n.upgradeToPro),
               ),
             ],
           ),
@@ -223,6 +225,7 @@ class _BrandCustomizationCardState extends State<BrandCustomizationCard> {
 
   /// Pro content: upload zone or brand profile display.
   Widget _buildProContent(ThemeData theme) {
+    final l10n = AppLocalizations.of(context)!;
     return Consumer<BrandProvider>(
       builder: (BuildContext context, BrandProvider provider, _) {
         final isLoading = provider.state == BrandLoadingState.loading;
@@ -237,7 +240,7 @@ class _BrandCustomizationCardState extends State<BrandCustomizationCard> {
                 Icon(Icons.palette_outlined, color: theme.colorScheme.primary),
                 const SizedBox(width: 12),
                 Text(
-                  'Brand Customization',
+                  l10n.brandCustomization,
                   style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                 ),
               ],
@@ -256,12 +259,12 @@ class _BrandCustomizationCardState extends State<BrandCustomizationCard> {
             if (!isLoading && !isUploading) ...[
               const SizedBox(height: 20),
               Text(
-                'Document Style',
+                l10n.documentStyle,
                 style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 4),
               Text(
-                'Choose how exported documents look',
+                l10n.chooseDocumentStyle,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -280,9 +283,10 @@ class _BrandCustomizationCardState extends State<BrandCustomizationCard> {
   }
 
   Widget _buildUploadProgress(ThemeData theme, BrandProvider provider) {
+    final l10n = AppLocalizations.of(context)!;
     final label = provider.state == BrandLoadingState.extractingColors
-        ? 'Extracting brand colors with AI...'
-        : 'Uploading logo...';
+        ? l10n.extractingColors
+        : l10n.uploadingLogo;
     return Container(
       height: 120,
       width: double.infinity,
@@ -302,6 +306,7 @@ class _BrandCustomizationCardState extends State<BrandCustomizationCard> {
   }
 
   Widget _buildUploadZone(ThemeData theme) {
+    final l10n = AppLocalizations.of(context)!;
     return GestureDetector(
       onTap: _pickAndUploadLogo,
       child: Container(
@@ -321,14 +326,14 @@ class _BrandCustomizationCardState extends State<BrandCustomizationCard> {
             Icon(Icons.cloud_upload_outlined, size: 36, color: theme.colorScheme.primary),
             const SizedBox(height: 8),
             Text(
-              'Upload Your Logo',
+              l10n.uploadYourLogo,
               style: theme.textTheme.bodyLarge?.copyWith(
                 fontWeight: FontWeight.w600,
                 color: theme.colorScheme.primary,
               ),
             ),
             Text(
-              'JPEG, PNG, or WebP (max 5MB)',
+              l10n.logoFormats,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -340,6 +345,7 @@ class _BrandCustomizationCardState extends State<BrandCustomizationCard> {
   }
 
   Widget _buildBrandDisplay(ThemeData theme, BrandProvider provider) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -388,7 +394,7 @@ class _BrandCustomizationCardState extends State<BrandCustomizationCard> {
               Icon(Icons.auto_awesome, size: 14, color: Colors.blue.shade700),
               const SizedBox(width: 4),
               Text(
-                'AI Extracted',
+                l10n.aiExtracted,
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.blue.shade700),
               ),
             ],
@@ -405,7 +411,7 @@ class _BrandCustomizationCardState extends State<BrandCustomizationCard> {
               icon: provider.state == BrandLoadingState.savingColors
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.save),
-              label: const Text('Save Colors'),
+              label: Text(l10n.saveColors),
             ),
           ),
         ],
@@ -418,7 +424,7 @@ class _BrandCustomizationCardState extends State<BrandCustomizationCard> {
               child: OutlinedButton.icon(
                 onPressed: _pickAndUploadLogo,
                 icon: const Icon(Icons.refresh, size: 18),
-                label: const Text('Replace Logo'),
+                label: Text(l10n.replaceLogo),
               ),
             ),
             const SizedBox(width: 8),
@@ -426,7 +432,7 @@ class _BrandCustomizationCardState extends State<BrandCustomizationCard> {
               child: OutlinedButton.icon(
                 onPressed: provider.state == BrandLoadingState.deleting ? null : _removeBranding,
                 icon: const Icon(Icons.delete_outline, size: 18),
-                label: const Text('Remove'),
+                label: Text(l10n.remove),
                 style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
               ),
             ),

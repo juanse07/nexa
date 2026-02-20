@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 import '../data/services/chat_service.dart';
@@ -85,6 +86,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Stack(
       children: [
         GestureDetector(
@@ -95,7 +97,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
               backgroundColor: Colors.white,
               elevation: 0,
               title: TappableAppTitle.text(
-                'Chats',
+                l10n.chatTitle,
                 style: const TextStyle(
                   color: AppColors.charcoal,
                   fontSize: 24,
@@ -114,7 +116,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                     child: TextField(
                       controller: _searchController,
                       decoration: InputDecoration(
-                        hintText: 'Search conversations...',
+                        hintText: l10n.searchConversations,
                         hintStyle: TextStyle(
                           color: Colors.grey.shade400,
                           fontSize: 15,
@@ -199,6 +201,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
   }
 
   Widget _buildBody() {
+    final l10n = AppLocalizations.of(context)!;
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -211,13 +214,13 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
             Icon(Icons.error_outline, size: 48, color: Colors.grey[400]),
             const SizedBox(height: 16),
             Text(
-              'Failed to load conversations',
+              l10n.failedToLoadConversations,
               style: TextStyle(color: Colors.grey[600]),
             ),
             const SizedBox(height: 8),
             TextButton(
               onPressed: _loadConversations,
-              child: const Text('Retry'),
+              child: Text(l10n.retry),
             ),
           ],
         ),
@@ -248,7 +251,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    'No conversations yet',
+                    l10n.noConversationsYet,
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
@@ -257,7 +260,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Start chatting with your team to see your messages here',
+                    l10n.startChattingWithTeam,
                     style: TextStyle(
                       color: Colors.grey[500],
                       fontSize: 14,
@@ -336,6 +339,7 @@ class _ConversationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final hasUnread = conversation.unreadCount > 0;
 
@@ -413,9 +417,9 @@ class _ConversationTile extends StatelessWidget {
                                   color: const Color(0xFF6366F1).withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: const Text(
-                                  'Manager',
-                                  style: TextStyle(
+                                child: Text(
+                                  l10n.managerBadge,
+                                  style: const TextStyle(
                                     fontSize: 10,
                                     color: Color(0xFF6366F1),
                                     fontWeight: FontWeight.w600,
@@ -442,7 +446,7 @@ class _ConversationTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    conversation.lastMessagePreview ?? 'No messages yet',
+                    conversation.lastMessagePreview ?? l10n.noMessagesYet,
                     style: TextStyle(
                       fontSize: 14,
                       color: hasUnread ? Colors.black87 : Colors.grey[600],
@@ -473,6 +477,7 @@ class _AIChatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return InkWell(
       onTap: onTap,
       child: Container(
@@ -518,9 +523,9 @@ class _AIChatTile extends StatelessWidget {
                 children: <Widget>[
                   Row(
                     children: <Widget>[
-                      const Text(
-                        'Valerio Assistant',
-                        style: TextStyle(
+                      Text(
+                        l10n.valerioAssistant,
+                        style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
                           color: AppColors.charcoal,
@@ -536,9 +541,9 @@ class _AIChatTile extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 4),
-                  const Text(
-                    'Create events, manage jobs, and get instant help',
-                    style: TextStyle(
+                  Text(
+                    l10n.valerioAssistantDesc,
+                    style: const TextStyle(
                       fontSize: 14,
                       color: AppColors.textMuted,
                       fontWeight: FontWeight.w500,
@@ -652,6 +657,7 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       height: MediaQuery.of(context).size.height * 0.75,
       decoration: const BoxDecoration(
@@ -675,9 +681,9 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                const Text(
-                  'New Chat',
-                  style: TextStyle(
+                Text(
+                  l10n.newChat,
+                  style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
                     color: AppColors.charcoal,
@@ -697,7 +703,7 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'Search contacts...',
+                hintText: l10n.searchContacts,
                 prefixIcon: const Icon(Icons.search),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -723,6 +729,7 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
   }
 
   Widget _buildContent() {
+    final l10n = AppLocalizations.of(context)!;
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -735,13 +742,13 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
             Icon(Icons.error_outline, size: 48, color: Colors.grey[400]),
             const SizedBox(height: 16),
             Text(
-              'Failed to load contacts',
+              l10n.failedToLoadContacts,
               style: TextStyle(color: Colors.grey[600]),
             ),
             const SizedBox(height: 8),
             TextButton(
               onPressed: _loadContacts,
-              child: const Text('Retry'),
+              child: Text(l10n.retry),
             ),
           ],
         ),
@@ -757,8 +764,8 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
             const SizedBox(height: 16),
             Text(
               _searchController.text.isNotEmpty
-                  ? 'No contacts match your search'
-                  : 'No team members yet',
+                  ? l10n.noContactsMatch
+                  : l10n.noTeamMembersYet,
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w500,
@@ -769,7 +776,7 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
-                  'Add members to your team to start chatting',
+                  l10n.addMembersToStartChatting,
                   style: TextStyle(color: Colors.grey[500]),
                   textAlign: TextAlign.center,
                 ),
@@ -805,7 +812,8 @@ class _ContactTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final name = contact['name'] as String? ?? 'Unknown';
+    final l10n = AppLocalizations.of(context)!;
+    final name = contact['name'] as String? ?? l10n.unknown;
     final email = contact['email'] as String? ?? '';
     final picture = contact['picture'] as String?;
     final hasConversation = contact['hasConversation'] as bool? ?? false;
@@ -848,9 +856,9 @@ class _ContactTile extends StatelessWidget {
                             color: const Color(0xFF6366F1).withOpacity(0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Text(
-                            'Manager',
-                            style: TextStyle(
+                          child: Text(
+                            l10n.managerBadge,
+                            style: const TextStyle(
                               fontSize: 10,
                               color: Color(0xFF6366F1),
                               fontWeight: FontWeight.w600,
@@ -879,7 +887,7 @@ class _ContactTile extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  'Active',
+                  l10n.active,
                   style: TextStyle(
                     fontSize: 12,
                     color: AppColors.tealInfo,

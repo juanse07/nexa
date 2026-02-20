@@ -3,6 +3,7 @@ import 'package:nexa/features/cities/data/models/city.dart';
 import 'package:nexa/features/cities/data/services/city_service.dart';
 import 'package:nexa/features/onboarding/presentation/widgets/enhanced_city_picker.dart';
 import 'package:nexa/core/di/injection.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 
 /// Screen for managing cities in manager profile
 class CitiesListScreen extends StatefulWidget {
@@ -39,7 +40,7 @@ class _CitiesListScreenState extends State<CitiesListScreen> {
       });
     } catch (e) {
       setState(() {
-        _error = 'Failed to load cities: ${e.toString()}';
+        _error = '${AppLocalizations.of(context)!.failedToLoadCities}: ${e.toString()}';
         _loading = false;
       });
     }
@@ -58,8 +59,8 @@ class _CitiesListScreenState extends State<CitiesListScreen> {
     if (_cities.any((c) => c.name.toLowerCase() == cityString.toLowerCase())) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('This city is already in your list'),
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.cityAlreadyInList),
             backgroundColor: Colors.orange,
           ),
         );
@@ -87,7 +88,7 @@ class _CitiesListScreenState extends State<CitiesListScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Added $cityString'),
+            content: Text(AppLocalizations.of(context)!.addedCity(cityString)),
             backgroundColor: Colors.green,
           ),
         );
@@ -96,7 +97,7 @@ class _CitiesListScreenState extends State<CitiesListScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to add city: ${e.toString()}'),
+            content: Text('${AppLocalizations.of(context)!.failedToAddCity}: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );
@@ -117,7 +118,7 @@ class _CitiesListScreenState extends State<CitiesListScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to update city: ${e.toString()}'),
+            content: Text('${AppLocalizations.of(context)!.failedToUpdateCity}: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );
@@ -129,22 +130,23 @@ class _CitiesListScreenState extends State<CitiesListScreen> {
     final city = _cities[index];
 
     // Confirm deletion
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete City'),
+        title: Text(l10n.deleteCity),
         content: Text(
-          'Delete ${city.name}?\n\nThis will also remove all venues associated with this city.',
+          l10n.confirmDeleteCity(city.name),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(l10n.cancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
+            child: Text(l10n.delete),
           ),
         ],
       ),
@@ -160,7 +162,7 @@ class _CitiesListScreenState extends State<CitiesListScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Deleted ${city.name}'),
+            content: Text(AppLocalizations.of(context)!.deletedCity(city.name)),
             backgroundColor: Colors.green,
           ),
         );
@@ -169,7 +171,7 @@ class _CitiesListScreenState extends State<CitiesListScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to delete city: ${e.toString()}'),
+            content: Text('${AppLocalizations.of(context)!.failedToDeleteCity}: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );
@@ -178,24 +180,23 @@ class _CitiesListScreenState extends State<CitiesListScreen> {
   }
 
   Future<void> _discoverVenues(City city) async {
+    final l10n = AppLocalizations.of(context)!;
     // Show confirmation dialog warning about wait time
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Discover Venues'),
+        title: Text(l10n.discoverVenues),
         content: Text(
-          'AI will search the web for event venues in ${city.name}. '
-          'This can take up to 2-3 minutes depending on the city size.\n\n'
-          'Please keep the app open during the search.',
+          l10n.discoverVenuesWarning(city.name),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(l10n.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Start Search'),
+            child: Text(l10n.startSearch),
           ),
         ],
       ),
@@ -212,7 +213,7 @@ class _CitiesListScreenState extends State<CitiesListScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Discovered ${result.venueCount} venues for ${city.name}'),
+            content: Text(AppLocalizations.of(context)!.discoveredVenuesCount(result.venueCount, city.name)),
             backgroundColor: Colors.green,
           ),
         );
@@ -221,7 +222,7 @@ class _CitiesListScreenState extends State<CitiesListScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to discover venues: ${e.toString()}'),
+            content: Text('${AppLocalizations.of(context)!.failedToDiscoverVenues}: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );
@@ -235,14 +236,15 @@ class _CitiesListScreenState extends State<CitiesListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Manage Cities'),
+        title: Text(l10n.manageCities),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadCities,
-            tooltip: 'Refresh',
+            tooltip: l10n.refresh,
           ),
         ],
       ),
@@ -257,7 +259,7 @@ class _CitiesListScreenState extends State<CitiesListScreen> {
                       const SizedBox(height: 16),
                       ElevatedButton(
                         onPressed: _loadCities,
-                        child: const Text('Retry'),
+                        child: Text(l10n.retry),
                       ),
                     ],
                   ),
@@ -274,12 +276,12 @@ class _CitiesListScreenState extends State<CitiesListScreen> {
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            'No cities added yet',
+                            l10n.noCitiesAddedYet,
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Add your first city to discover venues',
+                            l10n.addFirstCityDiscover,
                             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                   color: Colors.grey.shade600,
                                 ),
@@ -321,7 +323,7 @@ class _CitiesListScreenState extends State<CitiesListScreen> {
                                       icon: const Icon(Icons.delete_outline),
                                       color: Colors.red.shade400,
                                       onPressed: () => _deleteCity(index),
-                                      tooltip: 'Delete city',
+                                      tooltip: l10n.deleteCity,
                                     ),
                                   ],
                                 ),
@@ -352,8 +354,8 @@ class _CitiesListScreenState extends State<CitiesListScreen> {
                                         const SizedBox(width: 6),
                                         Text(
                                           city.isTourist
-                                              ? 'Tourist City (strict search)'
-                                              : 'Metro Area (broad search)',
+                                              ? l10n.touristCityStrictSearch
+                                              : l10n.metroAreaBroadSearch,
                                           style: TextStyle(
                                             fontSize: 13,
                                             fontWeight: FontWeight.w500,
@@ -389,7 +391,7 @@ class _CitiesListScreenState extends State<CitiesListScreen> {
                                           )
                                         : const Icon(Icons.search),
                                     label: Text(
-                                      isDiscovering ? 'Searching web... (up to 3 min)' : 'Discover Venues',
+                                      isDiscovering ? l10n.searchingWeb : l10n.discoverVenues,
                                     ),
                                   ),
                                 ),
@@ -402,7 +404,7 @@ class _CitiesListScreenState extends State<CitiesListScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _addCity,
         icon: const Icon(Icons.add_location_alt),
-        label: const Text('Add City'),
+        label: Text(l10n.addCity),
       ),
     );
   }

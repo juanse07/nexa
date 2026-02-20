@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:nexa/features/auth/data/services/phone_auth_service.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 
 /// Widget for phone number authentication
 /// Provides a two-step flow: phone number input → OTP verification
@@ -79,16 +80,17 @@ class _PhoneLoginWidgetState extends State<PhoneLoginWidget> {
   }
 
   Future<void> _sendOtp() async {
+    final l10n = AppLocalizations.of(context)!;
     final phone = _phoneController.text.trim();
     if (phone.isEmpty) {
-      setState(() => _error = 'Please enter your phone number');
+      setState(() => _error = l10n.pleaseEnterPhoneNumber);
       return;
     }
 
     // Basic validation: at least 6 digits
     final digitsOnly = phone.replaceAll(RegExp(r'[^\d]'), '');
     if (digitsOnly.length < 6) {
-      setState(() => _error = 'Please enter a valid phone number');
+      setState(() => _error = l10n.pleaseEnterValidPhoneNumber);
       return;
     }
 
@@ -97,14 +99,15 @@ class _PhoneLoginWidgetState extends State<PhoneLoginWidget> {
   }
 
   Future<void> _verifyOtp() async {
+    final l10n = AppLocalizations.of(context)!;
     final code = _otpController.text.trim();
     if (code.isEmpty) {
-      setState(() => _error = 'Please enter the verification code');
+      setState(() => _error = l10n.pleaseEnterVerificationCode);
       return;
     }
 
     if (code.length != 6) {
-      setState(() => _error = 'Verification code must be 6 digits');
+      setState(() => _error = l10n.verificationCodeMustBe6Digits);
       return;
     }
 
@@ -121,6 +124,7 @@ class _PhoneLoginWidgetState extends State<PhoneLoginWidget> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
 
     return SingleChildScrollView(
       child: Column(
@@ -147,15 +151,15 @@ class _PhoneLoginWidgetState extends State<PhoneLoginWidget> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Phone Sign In',
+                      l10n.phoneSignIn,
                       style: theme.textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     Text(
                       _state == PhoneAuthState.codeSent || _state == PhoneAuthState.verifying
-                          ? 'Enter the verification code'
-                          : 'We\'ll send you a verification code',
+                          ? l10n.enterVerificationCode
+                          : l10n.weWillSendVerificationCode,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
@@ -222,6 +226,7 @@ class _PhoneLoginWidgetState extends State<PhoneLoginWidget> {
   }
 
   Widget _buildPhoneInput(ThemeData theme) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -268,7 +273,7 @@ class _PhoneLoginWidgetState extends State<PhoneLoginWidget> {
                   LengthLimitingTextInputFormatter(15),
                 ],
                 decoration: InputDecoration(
-                  hintText: 'Phone number',
+                  hintText: l10n.phoneNumber,
                   prefixIcon: const Icon(Icons.phone),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -300,7 +305,7 @@ class _PhoneLoginWidgetState extends State<PhoneLoginWidget> {
                       color: Colors.white,
                     ),
                   )
-                : const Text('Send Verification Code'),
+                : Text(l10n.sendVerificationCode),
           ),
         ),
       ],
@@ -308,6 +313,7 @@ class _PhoneLoginWidgetState extends State<PhoneLoginWidget> {
   }
 
   Widget _buildOtpInput(ThemeData theme) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -336,7 +342,7 @@ class _PhoneLoginWidgetState extends State<PhoneLoginWidget> {
               ),
               TextButton(
                 onPressed: _resetFlow,
-                child: const Text('Change'),
+                child: Text(l10n.change),
               ),
             ],
           ),
@@ -394,7 +400,7 @@ class _PhoneLoginWidgetState extends State<PhoneLoginWidget> {
                       color: Colors.white,
                     ),
                   )
-                : const Text('Verify Code'),
+                : Text(l10n.verifyCode),
           ),
         ),
 
@@ -405,7 +411,7 @@ class _PhoneLoginWidgetState extends State<PhoneLoginWidget> {
           onPressed: _state == PhoneAuthState.sendingCode ? null : () {
             _phoneAuthService.resendOtp();
           },
-          child: const Text('Didn\'t receive the code? Resend'),
+          child: Text(l10n.didntReceiveCodeResend),
         ),
       ],
     );

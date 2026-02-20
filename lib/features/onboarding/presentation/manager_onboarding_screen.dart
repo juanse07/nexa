@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 import '../../cities/data/models/city.dart';
@@ -191,13 +192,17 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen>
           _cityController.text = city;
         });
       } else {
+        if (!mounted) return;
+        final l10n = AppLocalizations.of(context)!;
         setState(() {
-          _errorMessage = 'Could not detect your location. Please enter your city manually.';
+          _errorMessage = l10n.couldNotDetectLocationEnterManually;
         });
       }
     } catch (e) {
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context)!;
       setState(() {
-        _errorMessage = 'Location detection failed. Please enter your city manually.';
+        _errorMessage = l10n.locationDetectionFailed;
       });
     }
   }
@@ -213,9 +218,10 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen>
 
   /// Complete onboarding with selected cities
   Future<void> _completeOnboarding() async {
+    final l10n = AppLocalizations.of(context)!;
     if (_selectedCities.isEmpty) {
       setState(() {
-        _errorMessage = 'Please add at least one city';
+        _errorMessage = l10n.pleaseAddAtLeastOneCity;
       });
       return;
     }
@@ -237,8 +243,9 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen>
         _goToStep(1);
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _errorMessage = 'An error occurred. Please try again.';
+        _errorMessage = l10n.anErrorOccurredTryAgain;
       });
       _goToStep(1);
     }
@@ -323,6 +330,7 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen>
 
   /// Step 0: Welcome — logo, staggered text, glassmorphism CTA
   Widget _buildWelcomeStep() {
+    final l10n = AppLocalizations.of(context)!;
     return AnimatedBuilder(
       animation: _entranceController,
       builder: (context, _) {
@@ -354,9 +362,9 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen>
                 opacity: _titleFade,
                 child: SlideTransition(
                   position: _titleSlide,
-                  child: const Text(
-                    'Welcome to FlowShift!',
-                    style: TextStyle(
+                  child: Text(
+                    l10n.welcomeToFlowShift,
+                    style: const TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.w800,
                       color: Colors.white,
@@ -372,7 +380,7 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen>
               FadeTransition(
                 opacity: _subtitleFade,
                 child: Text(
-                  'Let\'s personalize your experience by finding popular event venues in your area.',
+                  l10n.personalizeExperienceWithVenues,
                   style: TextStyle(
                     fontSize: 16,
                     color: Colors.white.withValues(alpha: 0.7),
@@ -408,9 +416,9 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen>
                                 borderRadius: BorderRadius.circular(14),
                               ),
                             ),
-                            child: const Text(
-                              'Get Started',
-                              style: TextStyle(
+                            child: Text(
+                              l10n.getStarted,
+                              style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -421,7 +429,7 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen>
                         TextButton(
                           onPressed: _skipOnboarding,
                           child: Text(
-                            'Skip for now',
+                            l10n.skipForNow,
                             style: TextStyle(
                               color: Colors.white.withValues(alpha: 0.6),
                               fontSize: 14,
@@ -443,6 +451,7 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen>
 
   /// Step 1: City selection — glassmorphism card wrapping city picker
   Widget _buildCitySelectionStep() {
+    final l10n = AppLocalizations.of(context)!;
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
@@ -450,7 +459,7 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen>
         children: [
           const SizedBox(height: 40),
           Text(
-            'Where are you\nlocated?',
+            l10n.whereAreYouLocated,
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.w800,
@@ -460,7 +469,7 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen>
           ),
           const SizedBox(height: 12),
           Text(
-            'Add one or more cities where you operate. You can discover venues for each city later.',
+            l10n.addCitiesWhereYouOperate,
             style: TextStyle(
               fontSize: 14,
               color: Colors.white.withValues(alpha: 0.7),
@@ -566,7 +575,7 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen>
             child: TextButton(
               onPressed: _skipOnboarding,
               child: Text(
-                'Skip for now',
+                l10n.skipForNow,
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.6),
                   fontSize: 14,
@@ -582,6 +591,7 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen>
 
   /// Step 2: Loading — pulsing concentric rings + animated city names
   Widget _buildLoadingStep() {
+    final l10n = AppLocalizations.of(context)!;
     final cityCount = _selectedCities.length;
     final cityNames = _selectedCities.map((c) => c.displayName).toList();
 
@@ -595,8 +605,8 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen>
             const SizedBox(height: 40),
             Text(
               cityCount == 1
-                  ? 'Setting up your city...'
-                  : 'Setting up your $cityCount cities...',
+                  ? l10n.settingUpYourCity
+                  : l10n.settingUpYourCities(cityCount),
               style: const TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w700,
@@ -609,7 +619,7 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen>
             if (cityCount <= 5) _AnimatedCityNames(names: cityNames),
             const SizedBox(height: 12),
             Text(
-              'This will only take a moment...',
+              l10n.thisWillOnlyTakeAMoment,
               style: TextStyle(
                 fontSize: 14,
                 color: Colors.white.withValues(alpha: 0.5),
@@ -623,6 +633,7 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen>
 
   /// Step 3: Success — animated checkmark with gold particles
   Widget _buildSuccessStep() {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.all(28.0),
       child: Column(
@@ -635,9 +646,9 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen>
             showParticles: true,
           ),
           const SizedBox(height: 32),
-          const Text(
-            'All Set!',
-            style: TextStyle(
+          Text(
+            l10n.allSet,
+            style: const TextStyle(
               fontSize: 32,
               fontWeight: FontWeight.w800,
               color: Colors.white,
@@ -647,8 +658,8 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen>
           const SizedBox(height: 16),
           Text(
             _selectedCities.length == 1
-                ? 'Your city has been configured successfully!'
-                : 'Your ${_selectedCities.length} cities have been configured successfully!',
+                ? l10n.yourCityConfiguredSuccessfully
+                : l10n.yourCitiesConfiguredSuccessfully(_selectedCities.length),
             style: TextStyle(
               fontSize: 16,
               color: Colors.white.withValues(alpha: 0.7),
@@ -658,7 +669,7 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen>
           ),
           const SizedBox(height: 8),
           Text(
-            'You can discover venues for each city from Settings > Manage Cities.',
+            l10n.discoverVenuesFromSettings,
             style: TextStyle(
               fontSize: 14,
               color: Colors.white.withValues(alpha: 0.5),
@@ -681,9 +692,9 @@ class _ManagerOnboardingScreenState extends State<ManagerOnboardingScreen>
                     borderRadius: BorderRadius.circular(14),
                   ),
                 ),
-                child: const Text(
-                  'Start Using FlowShift',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                child: Text(
+                  l10n.startUsingFlowShift,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                 ),
               ),
             ),

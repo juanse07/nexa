@@ -102,6 +102,7 @@ class _HoursApprovalListScreenState extends State<HoursApprovalListScreen> {
   }
 
   Widget _buildError(ThemeData theme) {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -115,12 +116,12 @@ class _HoursApprovalListScreenState extends State<HoursApprovalListScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              'Failed to load events',
+              l10n.failedToLoadEvents,
               style: theme.textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
             Text(
-              _error ?? 'Unknown error',
+              _error ?? l10n.unknownError,
               style: theme.textTheme.bodySmall,
               textAlign: TextAlign.center,
             ),
@@ -128,7 +129,7 @@ class _HoursApprovalListScreenState extends State<HoursApprovalListScreen> {
             ElevatedButton.icon(
               onPressed: _loadEvents,
               icon: const Icon(Icons.refresh),
-              label: const Text('Retry'),
+              label: Text(l10n.retry),
             ),
           ],
         ),
@@ -137,6 +138,7 @@ class _HoursApprovalListScreenState extends State<HoursApprovalListScreen> {
   }
 
   Widget _buildEmptyState(ThemeData theme) {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -150,14 +152,14 @@ class _HoursApprovalListScreenState extends State<HoursApprovalListScreen> {
             ),
             const SizedBox(height: 24),
             Text(
-              'All Caught Up!',
+              l10n.allCaughtUp,
               style: theme.textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.bold,
               ),
             ),
             const SizedBox(height: 12),
             Text(
-              'No events need hours approval at the moment.',
+              l10n.noEventsNeedApprovalDescription,
               style: theme.textTheme.bodyMedium,
               textAlign: TextAlign.center,
             ),
@@ -165,7 +167,7 @@ class _HoursApprovalListScreenState extends State<HoursApprovalListScreen> {
             OutlinedButton.icon(
               onPressed: _loadEvents,
               icon: const Icon(Icons.refresh),
-              label: const Text('Refresh'),
+              label: Text(l10n.refresh),
             ),
           ],
         ),
@@ -189,6 +191,7 @@ class _HoursApprovalListScreenState extends State<HoursApprovalListScreen> {
   }
 
   Widget _buildHeader(ThemeData theme) {
+    final l10n = AppLocalizations.of(context)!;
     final pendingCount = _events.where((e) =>
       e['hoursStatus']?.toString() == 'sheet_submitted'
     ).length;
@@ -203,7 +206,7 @@ class _HoursApprovalListScreenState extends State<HoursApprovalListScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Hours Approval',
+            l10n.hoursApproval,
             style: theme.textTheme.headlineMedium?.copyWith(
               fontWeight: FontWeight.bold,
               color: AppColors.primaryPurple,
@@ -232,7 +235,7 @@ class _HoursApprovalListScreenState extends State<HoursApprovalListScreen> {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        '$pendingCount Pending Review',
+                        '$pendingCount ${l10n.pendingReviewLabel}',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -264,7 +267,7 @@ class _HoursApprovalListScreenState extends State<HoursApprovalListScreen> {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        '$needsSubmissionCount Needs Sheet',
+                        '$needsSubmissionCount ${l10n.needsSheetLabel}',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -282,7 +285,8 @@ class _HoursApprovalListScreenState extends State<HoursApprovalListScreen> {
   }
 
   Widget _buildEventCard(Map<String, dynamic> event, ThemeData theme) {
-    final eventName = event['event_name']?.toString() ?? AppLocalizations.of(context)!.untitledJob;
+    final l10n = AppLocalizations.of(context)!;
+    final eventName = event['event_name']?.toString() ?? l10n.untitledJob;
     final clientName = event['client_name']?.toString() ?? '';
     final eventDate = _parseEventDate(event['date']);
     final hoursStatus = event['hoursStatus']?.toString();
@@ -294,11 +298,11 @@ class _HoursApprovalListScreenState extends State<HoursApprovalListScreen> {
     IconData statusIcon;
 
     if (hoursStatus == 'sheet_submitted') {
-      statusLabel = 'Pending Review';
+      statusLabel = l10n.pendingReviewLabel;
       statusColor = Colors.orange;
       statusIcon = Icons.pending_actions;
     } else {
-      statusLabel = 'Needs Sheet';
+      statusLabel = l10n.needsSheetLabel;
       statusColor = Colors.blue;
       statusIcon = Icons.upload_file;
     }
@@ -409,7 +413,7 @@ class _HoursApprovalListScreenState extends State<HoursApprovalListScreen> {
                   Text(
                     eventDate != null
                         ? '${eventDate.month}/${eventDate.day}/${eventDate.year}'
-                        : 'Date unknown',
+                        : l10n.dateUnknown,
                     style: theme.textTheme.bodySmall,
                   ),
                   const SizedBox(width: 16),

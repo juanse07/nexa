@@ -3,6 +3,7 @@ import { z } from 'zod';
 import path from 'path';
 import fs from 'fs';
 import { requireAuth } from '../middleware/requireAuth';
+import { requireActiveSubscription } from '../middleware/requireActiveSubscription';
 import {
   generateCaricature,
   getAllRoles,
@@ -91,13 +92,13 @@ router.get('/styles', requireAuth, async (_req: Request, res: Response) => {
 const generateSchema = z.object({
   role: z.enum(ALL_ROLE_IDS as [string, ...string[]]),
   artStyle: z.enum(['cartoon', 'caricature', 'anime', 'comic', 'pixar', 'watercolor']),
-  model: z.enum(['dev', 'pro']).optional().default('dev'),
+  model: z.enum(['dev', 'pro']).optional().default('pro'),
   name: z.string().max(40).optional(),
   tagline: z.string().max(50).optional(),
   forceNew: z.boolean().optional().default(false),
 });
 
-router.post('/generate', requireAuth, async (req: Request, res: Response) => {
+router.post('/generate', requireAuth, requireActiveSubscription, async (req: Request, res: Response) => {
   try {
     const parsed = generateSchema.safeParse(req.body);
     if (!parsed.success) {

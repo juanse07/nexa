@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:nexa/l10n/app_localizations.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../shared/presentation/theme/app_colors.dart';
@@ -62,7 +63,7 @@ class _TabbedVenueScreenState extends State<TabbedVenueScreen>
       final token = await AuthService.getJwt();
       if (token == null) {
         setState(() {
-          _error = 'Not authenticated';
+          _error = AppLocalizations.of(context)!.notAuthenticated;
           _isLoading = false;
         });
         return;
@@ -118,13 +119,13 @@ class _TabbedVenueScreenState extends State<TabbedVenueScreen>
         });
       } else {
         setState(() {
-          _error = 'Failed to load data';
+          _error = AppLocalizations.of(context)!.failedToLoadData;
           _isLoading = false;
         });
       }
     } catch (e) {
       setState(() {
-        _error = 'Error: $e';
+        _error = e.toString();
         _isLoading = false;
       });
     }
@@ -178,7 +179,7 @@ class _TabbedVenueScreenState extends State<TabbedVenueScreen>
 
     if (result == true && mounted) {
       _loadData(); // Reload data after adding
-      _showSnackBar('Venue added successfully!', Colors.green);
+      _showSnackBar(AppLocalizations.of(context)!.venueAddedSuccessfully, Colors.green);
     }
   }
 
@@ -191,7 +192,7 @@ class _TabbedVenueScreenState extends State<TabbedVenueScreen>
 
     if (result == true && mounted) {
       _loadData(); // Reload data after editing
-      _showSnackBar('Venue updated successfully!', Colors.green);
+      _showSnackBar(AppLocalizations.of(context)!.venueUpdatedSuccessfully, Colors.green);
     }
   }
 
@@ -202,7 +203,7 @@ class _TabbedVenueScreenState extends State<TabbedVenueScreen>
     try {
       final token = await AuthService.getJwt();
       if (token == null) {
-        _showSnackBar('Not authenticated', Colors.red);
+        _showSnackBar(AppLocalizations.of(context)!.notAuthenticated, Colors.red);
         return;
       }
 
@@ -218,40 +219,41 @@ class _TabbedVenueScreenState extends State<TabbedVenueScreen>
       if (response.statusCode == 204 || response.statusCode == 200) {
         if (mounted) {
           _loadData(); // Reload data after deletion
-          _showSnackBar('Venue removed successfully!', Colors.orange);
+          _showSnackBar(AppLocalizations.of(context)!.venueRemovedSuccessfully, Colors.orange);
         }
       } else {
         final responseBody = jsonDecode(response.body);
         _showSnackBar(
-            (responseBody['message'] as String?) ?? 'Failed to delete venue',
+            (responseBody['message'] as String?) ?? AppLocalizations.of(context)!.failedToDeleteVenue,
             Colors.red);
       }
     } catch (e) {
-      _showSnackBar('Error: $e', Colors.red);
+      _showSnackBar(e.toString(), Colors.red);
     }
   }
 
   Future<bool?> _showDeleteConfirmationDialog(Venue venue) async {
+    final l10n = AppLocalizations.of(context)!;
     return showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Remove Venue?'),
+          title: Text(l10n.removeVenueConfirmation),
           content: Text(
-            'Are you sure you want to remove "${venue.name}"?',
+            l10n.confirmRemoveVenue(venue.name),
             style: const TextStyle(fontSize: 16),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+              child: Text(l10n.cancel),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
               style: FilledButton.styleFrom(
                 backgroundColor: Colors.red,
               ),
-              child: const Text('Remove'),
+              child: Text(l10n.remove),
             ),
           ],
         );
@@ -270,6 +272,7 @@ class _TabbedVenueScreenState extends State<TabbedVenueScreen>
   }
 
   Widget _buildSourceBadge(Venue venue) {
+    final l10n = AppLocalizations.of(context)!;
     final isManual = venue.isManual;
     final isPlaces = venue.isFromPlaces;
 
@@ -280,15 +283,15 @@ class _TabbedVenueScreenState extends State<TabbedVenueScreen>
     if (isPlaces) {
       badgeColor = AppColors.oceanBlue;
       badgeIcon = Icons.place;
-      badgeText = 'Places';
+      badgeText = l10n.placesSource;
     } else if (isManual) {
       badgeColor = Colors.green;
       badgeIcon = Icons.person;
-      badgeText = 'Manual';
+      badgeText = l10n.manualSource;
     } else {
       badgeColor = AppColors.yellow;
       badgeIcon = Icons.smart_toy;
-      badgeText = 'AI';
+      badgeText = l10n.aiSource;
     }
 
     return Container(
@@ -374,6 +377,7 @@ class _TabbedVenueScreenState extends State<TabbedVenueScreen>
   }
 
   Widget _buildSearchAndFilters(City city) {
+    final l10n = AppLocalizations.of(context)!;
     final counts = _getSourceCounts(city);
 
     return Container(
@@ -390,7 +394,7 @@ class _TabbedVenueScreenState extends State<TabbedVenueScreen>
                 controller: _searchController,
                 textInputAction: TextInputAction.search,
                 decoration: InputDecoration(
-                  hintText: 'Search venues...',
+                  hintText: l10n.searchVenuesHint,
                   hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
                   prefixIcon: Icon(Icons.search, color: Colors.grey[400], size: 20),
                   suffixIcon: _searchQuery.isNotEmpty
@@ -425,28 +429,28 @@ class _TabbedVenueScreenState extends State<TabbedVenueScreen>
               padding: const EdgeInsets.symmetric(horizontal: 12),
               children: [
                 _buildFilterChip(
-                  label: 'All',
+                  label: l10n.all,
                   filterValue: null,
                   count: counts['all'] ?? 0,
                   color: AppColors.navySpaceCadet,
                   icon: Icons.apps,
                 ),
                 _buildFilterChip(
-                  label: 'AI',
+                  label: l10n.aiSource,
                   filterValue: 'ai',
                   count: counts['ai'] ?? 0,
                   color: AppColors.yellow,
                   icon: Icons.smart_toy,
                 ),
                 _buildFilterChip(
-                  label: 'Manual',
+                  label: l10n.manualSource,
                   filterValue: 'manual',
                   count: counts['manual'] ?? 0,
                   color: Colors.green,
                   icon: Icons.person,
                 ),
                 _buildFilterChip(
-                  label: 'Places',
+                  label: l10n.placesSource,
                   filterValue: 'places',
                   count: counts['places'] ?? 0,
                   color: AppColors.oceanBlue,
@@ -462,6 +466,7 @@ class _TabbedVenueScreenState extends State<TabbedVenueScreen>
   }
 
   Widget _buildCityTab(City city) {
+    final l10n = AppLocalizations.of(context)!;
     final allCityVenues = _allVenues.where(
       (v) => v.city.toLowerCase() == city.displayName.toLowerCase()
     ).toList();
@@ -479,21 +484,21 @@ class _TabbedVenueScreenState extends State<TabbedVenueScreen>
               Icon(Icons.location_off, size: 64, color: Colors.grey.shade400),
               const SizedBox(height: 16),
               Text(
-                'No venues in ${city.displayName} yet',
+                l10n.noVenuesInCity(city.displayName),
                 style: const TextStyle(fontSize: 18, color: Colors.grey),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Add venues manually or discover them from Settings > Manage Cities',
-                style: TextStyle(color: Colors.grey),
+              Text(
+                l10n.addVenuesDescription,
+                style: const TextStyle(color: Colors.grey),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
               FilledButton.icon(
                 onPressed: _addVenue,
                 icon: const Icon(Icons.add),
-                label: const Text('Add First Venue'),
+                label: Text(l10n.addFirstVenue),
               ),
             ],
           ),
@@ -585,6 +590,7 @@ class _TabbedVenueScreenState extends State<TabbedVenueScreen>
 
   /// Empty state when search/filter returns no results
   Widget _buildEmptySearchState() {
+    final l10n = AppLocalizations.of(context)!;
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       child: Padding(
@@ -602,7 +608,7 @@ class _TabbedVenueScreenState extends State<TabbedVenueScreen>
             ),
             const SizedBox(height: 16),
             Text(
-              'No venues match your search',
+              l10n.noVenuesMatch,
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
@@ -612,8 +618,8 @@ class _TabbedVenueScreenState extends State<TabbedVenueScreen>
             const SizedBox(height: 8),
             Text(
               _selectedSourceFilter != null
-                  ? 'Try a different filter or search term'
-                  : 'Try a different search term',
+                  ? l10n.tryDifferentFilterOrTerm
+                  : l10n.tryDifferentSearchTerm,
               style: TextStyle(
                 fontSize: 14,
                 color: Colors.grey[500],
@@ -628,7 +634,7 @@ class _TabbedVenueScreenState extends State<TabbedVenueScreen>
                 });
               },
               icon: const Icon(Icons.clear_all, size: 18),
-              label: const Text('Clear filters'),
+              label: Text(l10n.clearFilters),
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               ),
@@ -723,9 +729,10 @@ class _TabbedVenueScreenState extends State<TabbedVenueScreen>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Venues'),
+        title: Text(l10n.myVenues),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -755,7 +762,7 @@ class _TabbedVenueScreenState extends State<TabbedVenueScreen>
           ? FloatingActionButton.extended(
               onPressed: _addVenue,
               icon: const Icon(Icons.add),
-              label: const Text('Add Venue'),
+              label: Text(l10n.addVenue),
             )
           : null,
       body: _isLoading
@@ -775,7 +782,7 @@ class _TabbedVenueScreenState extends State<TabbedVenueScreen>
                           });
                           _loadData();
                         },
-                        child: const Text('Retry'),
+                        child: Text(l10n.retry),
                       ),
                     ],
                   ),
@@ -788,14 +795,14 @@ class _TabbedVenueScreenState extends State<TabbedVenueScreen>
                           Icon(Icons.location_city_outlined,
                               size: 64, color: Colors.grey.shade400),
                           const SizedBox(height: 16),
-                          const Text(
-                            'No cities configured',
-                            style: TextStyle(fontSize: 18, color: Colors.grey),
+                          Text(
+                            l10n.noCitiesAddedYet,
+                            style: const TextStyle(fontSize: 18, color: Colors.grey),
                           ),
                           const SizedBox(height: 8),
-                          const Text(
-                            'Add cities from Settings > Manage Cities',
-                            style: TextStyle(color: Colors.grey),
+                          Text(
+                            l10n.addCitiesFromSettings,
+                            style: const TextStyle(color: Colors.grey),
                           ),
                         ],
                       ),

@@ -18,526 +18,1459 @@
     "description": "Subtitle for AI chat feature"
   },
   "jobDetails": "Shift Details",
-  "@jobDetails": {
-    "description": "Section header for shift details"
-  },
   "jobInformation": "Shift Information",
-  "@jobInformation": {
-    "description": "Section header for shift information form"
-  },
   "jobTitle": "Shift Title",
-  "@jobTitle": {
-    "description": "Label for shift name/title field"
-  },
   "clientName": "Client Name",
-  "@clientName": {
-    "description": "Label for client name field"
-  },
   "startTime": "Start Time",
-  "@startTime": {
-    "description": "Label for start time field"
-  },
   "endTime": "End Time",
-  "@endTime": {
-    "description": "Label for end time field"
-  },
   "headcount": "Headcount",
-  "@headcount": {
-    "description": "Label for headcount/guests field"
-  },
   "locationInformation": "Location Information",
-  "@locationInformation": {
-    "description": "Section header for location details"
-  },
   "locationName": "Location Name",
-  "@locationName": {
-    "description": "Label for location/venue name field"
-  },
   "address": "Address",
-  "@address": {
-    "description": "Label for address field"
-  },
   "city": "City",
-  "@city": {
-    "description": "Label for city field"
-  },
   "state": "State",
-  "@state": {
-    "description": "Label for state field"
-  },
   "contactName": "Contact Name",
-  "@contactName": {
-    "description": "Label for contact name field"
-  },
   "phoneNumber": "Phone Number",
-  "@phoneNumber": {
-    "description": "Label for phone number field"
-  },
   "email": "Email",
-  "@email": {
-    "description": "Label for email field"
-  },
   "notes": "Notes",
-  "@notes": {
-    "description": "Label for notes field"
-  },
   "shift": "Shift",
-  "@shift": {
-    "description": "Label for shift in summary display"
-  },
   "client": "Client",
-  "@client": {
-    "description": "Label for client in summary display"
-  },
   "date": "Date",
-  "@date": {
-    "description": "Label for date in summary display"
-  },
   "time": "Time",
-  "@time": {
-    "description": "Label for time in summary display"
-  },
   "location": "Location",
-  "@location": {
-    "description": "Label for location in summary display"
-  },
   "phone": "Phone",
-  "@phone": {
-    "description": "Label for phone in summary display"
-  },
-  "jobsTabLabel": "Jobs • {pendingCount} pending, {upcomingCount} upcoming, {pastCount} past",
+  "jobsTabLabel": "Jobs \u2022 {pendingCount} pending, {upcomingCount} upcoming, {pastCount} past",
   "@jobsTabLabel": {
     "description": "Tab label showing shift counts",
     "placeholders": {
-      "pendingCount": {
-        "type": "int"
-      },
-      "upcomingCount": {
-        "type": "int"
-      },
-      "pastCount": {
-        "type": "int"
-      }
+      "pendingCount": { "type": "int" },
+      "upcomingCount": { "type": "int" },
+      "pastCount": { "type": "int" }
     }
   },
-  "pendingUpcomingStatus": "{pendingCount} pending • {upcomingCount} upcoming • {baseTime}",
+  "pendingUpcomingStatus": "{pendingCount} pending \u2022 {upcomingCount} upcoming \u2022 {baseTime}",
   "@pendingUpcomingStatus": {
-    "description": "Status text for pending and upcoming jobs",
     "placeholders": {
-      "pendingCount": {
-        "type": "int"
-      },
-      "upcomingCount": {
-        "type": "int"
-      },
-      "baseTime": {
-        "type": "String"
-      }
+      "pendingCount": { "type": "int" },
+      "upcomingCount": { "type": "int" },
+      "baseTime": { "type": "String" }
     }
   },
-  "upcomingPastStatus": "{upcomingCount} upcoming • {pastCount} past • {baseTime}",
+  "upcomingPastStatus": "{upcomingCount} upcoming \u2022 {pastCount} past \u2022 {baseTime}",
   "@upcomingPastStatus": {
-    "description": "Status text for upcoming and past jobs",
     "placeholders": {
-      "upcomingCount": {
-        "type": "int"
-      },
-      "pastCount": {
-        "type": "int"
-      },
-      "baseTime": {
-        "type": "String"
-      }
+      "upcomingCount": { "type": "int" },
+      "pastCount": { "type": "int" },
+      "baseTime": { "type": "String" }
     }
   },
   "pleaseSelectDate": "Please select a date for the shift",
-  "@pleaseSelectDate": {
-    "description": "Error message when date is not selected"
-  },
   "jobSavedToPending": "Shift saved to pending. Go to Jobs tab to review.",
-  "@jobSavedToPending": {
-    "description": "Success message when shift is saved to pending"
-  },
   "jobDetailsCopied": "Shift details copied to clipboard",
-  "@jobDetailsCopied": {
-    "description": "Success message when shift details are copied"
-  },
   "jobPosted": "Shift posted",
-  "@jobPosted": {
-    "description": "Success message when shift is posted"
-  },
   "sendJobInvitation": "Send Shift Invitation",
-  "@sendJobInvitation": {
-    "description": "Title for dialog to send shift invitation"
-  },
   "inviteToJob": "Invite {name} to a shift",
   "@inviteToJob": {
-    "description": "Subtitle for shift invitation dialog",
     "placeholders": {
-      "name": {
-        "type": "String"
-      }
+      "name": { "type": "String" }
     }
   },
   "jobInvitationSent": "Shift invitation sent!",
-  "@jobInvitationSent": {
-    "description": "Success message when shift invitation is sent"
-  },
   "jobNotFound": "Shift not found",
-  "@jobNotFound": {
-    "description": "Error message when shift is not found"
-  },
   "guests": "{count} guests",
   "@guests": {
-    "description": "Display text for number of guests",
     "placeholders": {
-      "count": {
-        "type": "int"
-      }
+      "count": { "type": "int" }
     }
   },
   "rolesNeeded": "Roles Needed",
-  "@rolesNeeded": {
-    "description": "Section header for roles needed"
-  },
   "untitledJob": "Untitled Shift",
-  "@untitledJob": {
-    "description": "Fallback text when shift has no title"
-  },
   "expectedHeadcount": "Expected Headcount",
-  "@expectedHeadcount": {
-    "description": "Label for expected headcount field"
-  },
   "contactPhone": "Contact Phone",
-  "@contactPhone": {
-    "description": "Label for contact phone field"
-  },
   "contactEmail": "Contact Email",
-  "@contactEmail": {
-    "description": "Label for contact email field"
-  },
   "errorJobIdMissing": "Error: Shift ID is missing...",
-  "@errorJobIdMissing": {
-    "description": "Error message when shift ID is missing"
-  },
   "postJob": "Post Shift",
-  "@postJob": {
-    "description": "Title for post shift screen"
-  },
   "setRolesForJob": "Set roles for this shift",
-  "@setRolesForJob": {
-    "description": "Dialog title for setting roles"
-  },
   "searchJobs": "Search jobs...",
-  "@searchJobs": {
-    "description": "Hint text for shift search field"
-  },
   "locationTbd": "Location TBD",
-  "@locationTbd": {
-    "description": "Placeholder when location is to be determined"
-  },
   "shareJobPrefix": "Shift: {clientName}",
   "@shareJobPrefix": {
-    "description": "Prefix for sharing shift details",
     "placeholders": {
-      "clientName": {
-        "type": "String"
-      }
+      "clientName": { "type": "String" }
     }
   },
 
   "navCreate": "Create",
-  "@navCreate": {
-    "description": "Bottom navigation bar label for create tab"
-  },
   "navJobs": "Jobs",
-  "@navJobs": {
-    "description": "Bottom navigation bar label for jobs/events tab"
-  },
   "navChat": "Chat",
-  "@navChat": {
-    "description": "Bottom navigation bar label for chat tab"
-  },
   "navHours": "Hours",
-  "@navHours": {
-    "description": "Bottom navigation bar label for hours approval tab"
-  },
   "navCatalog": "Catalog",
-  "@navCatalog": {
-    "description": "Bottom navigation bar label for catalog tab"
-  },
 
   "uploadData": "Upload Data",
-  "@uploadData": {
-    "description": "Tab label for upload data option"
-  },
   "manualEntry": "Manual Entry",
-  "@manualEntry": {
-    "description": "Tab label for manual entry option"
-  },
   "multiUpload": "Multi-Upload",
-  "@multiUpload": {
-    "description": "Tab label for multi-upload option"
-  },
   "aiChat": "AI Chat",
-  "@aiChat": {
-    "description": "Tab label for AI chat option"
-  },
   "chooseFile": "Choose File",
-  "@chooseFile": {
-    "description": "Button text for choosing file to upload"
-  },
   "detailedExplanation": "Detailed Explanation",
-  "@detailedExplanation": {
-    "description": "Section header for detailed explanation"
-  },
   "messagesAndTeamMembers": "Messages and team members",
-  "@messagesAndTeamMembers": {
-    "description": "Subtitle for chat screen"
-  },
   "searchNameOrEmail": "Search name or email",
-  "@searchNameOrEmail": {
-    "description": "Search field placeholder in chat"
-  },
   "all": "All",
-  "@all": {
-    "description": "Filter tab for all items"
-  },
   "bartender": "Bartender",
-  "@bartender": {
-    "description": "Role filter for bartender"
-  },
   "server": "Server",
-  "@server": {
-    "description": "Role filter for server"
-  },
   "messages": "Messages ({count})",
   "@messages": {
-    "description": "Messages section header with count",
     "placeholders": {
-      "count": {
-        "type": "int"
-      }
+      "count": { "type": "int" }
     }
   },
   "youveBeenInvitedTo": "You've been invited to {jobName}",
   "@youveBeenInvitedTo": {
-    "description": "Chat message preview for shift invitation",
     "placeholders": {
-      "jobName": {
-        "type": "String"
-      }
+      "jobName": { "type": "String" }
     }
   },
   "hoursApproval": "Hours Approval",
-  "@hoursApproval": {
-    "description": "Title for hours approval screen"
-  },
   "needsSheet": "Needs Sheet",
-  "@needsSheet": {
-    "description": "Badge text when sheet is needed"
-  },
   "needsSheetCount": "{count} Needs Sheet",
   "@needsSheetCount": {
-    "description": "Badge text with count needing sheets",
     "placeholders": {
-      "count": {
-        "type": "int"
-      }
+      "count": { "type": "int" }
     }
   },
   "staffCount": "{count} staff",
   "@staffCount": {
-    "description": "Display text for number of staff",
     "placeholders": {
-      "count": {
-        "type": "int"
-      }
+      "count": { "type": "int" }
     }
   },
-  "catalogClientsRoles": "Catalog • {clientCount} clients, {roleCount} roles",
+  "catalogClientsRoles": "Catalog \u2022 {clientCount} clients, {roleCount} roles",
   "@catalogClientsRoles": {
-    "description": "Catalog header with counts",
     "placeholders": {
-      "clientCount": {
-        "type": "int"
-      },
-      "roleCount": {
-        "type": "int"
-      }
+      "clientCount": { "type": "int" },
+      "roleCount": { "type": "int" }
     }
   },
   "clients": "Clients",
-  "@clients": {
-    "description": "Tab label for clients"
-  },
   "roles": "Roles",
-  "@roles": {
-    "description": "Tab label for roles"
-  },
   "tariffs": "Tariffs",
-  "@tariffs": {
-    "description": "Tab label for tariffs"
-  },
   "addClient": "Add Client",
-  "@addClient": {
-    "description": "Button text for adding a client"
-  },
 
   "teams": "Teams",
-  "@teams": {
-    "description": "Title for teams screen"
-  },
   "members": "{count} members",
   "@members": {
-    "description": "Display text for number of members",
     "placeholders": {
-      "count": {
-        "type": "int"
-      }
+      "count": { "type": "int" }
     }
   },
   "pendingInvites": "{count} pending invites",
   "@pendingInvites": {
-    "description": "Display text for pending invites",
     "placeholders": {
-      "count": {
-        "type": "int"
-      }
+      "count": { "type": "int" }
     }
   },
   "viewDetails": "View details",
-  "@viewDetails": {
-    "description": "Link text to view details"
-  },
   "newTeam": "New team",
-  "@newTeam": {
-    "description": "Button text for creating new team"
-  },
   "myProfile": "My Profile",
-  "@myProfile": {
-    "description": "Menu item for user profile"
-  },
   "settings": "Settings",
-  "@settings": {
-    "description": "Menu item for settings"
-  },
   "manageTeams": "Manage Teams",
-  "@manageTeams": {
-    "description": "Menu item for managing teams"
-  },
   "logout": "Logout",
-  "@logout": {
-    "description": "Menu item for logging out"
-  },
   "selectFiles": "Select Files",
-  "@selectFiles": {
-    "description": "Button text for selecting files"
-  },
   "multiSelectTip": "Tip: Long-press to multi-select in the picker. Or use Add More to append.",
-  "@multiSelectTip": {
-    "description": "Tooltip for multi-select functionality"
-  },
   "contactInformation": "Contact Information",
-  "@contactInformation": {
-    "description": "Section header for contact information"
-  },
   "additionalNotes": "Additional Notes",
-  "@additionalNotes": {
-    "description": "Section header for additional notes"
-  },
   "saveJobDetails": "Save Shift Details",
-  "@saveJobDetails": {
-    "description": "Button text for saving shift details"
-  },
   "saveToPending": "Save to Pending",
-  "@saveToPending": {
-    "description": "Button text for saving to pending"
-  },
   "pending": "Pending",
-  "@pending": {
-    "description": "Tab label for pending items"
-  },
   "upcoming": "Upcoming",
-  "@upcoming": {
-    "description": "Tab label for upcoming items"
-  },
   "past": "Past",
-  "@past": {
-    "description": "Tab label for past items"
-  },
 
   "startConversation": "Start a Conversation",
-  "@startConversation": {
-    "description": "Header for AI chat empty state"
-  },
   "aiWillGuideYou": "The AI will guide you through creating a shift",
-  "@aiWillGuideYou": {
-    "description": "Subtitle explaining AI chat functionality"
-  },
   "startNewConversation": "Start New Conversation",
-  "@startNewConversation": {
-    "description": "Button text to start new AI conversation"
-  },
   "fecha": "Date",
-  "@fecha": {
-    "description": "Label for date field (Spanish-style)"
-  },
   "hora": "Time",
-  "@hora": {
-    "description": "Label for time/hour field (Spanish-style)"
-  },
   "ubicacion": "Location",
-  "@ubicacion": {
-    "description": "Label for location field (Spanish-style)"
-  },
   "direccion": "Address",
-  "@direccion": {
-    "description": "Label for address/direction field (Spanish-style)"
-  },
 
   "jobFor": "Shift for: {clientName}",
   "@jobFor": {
-    "description": "Label showing which client the shift is for",
     "placeholders": {
-      "clientName": {
-        "type": "String"
-      }
+      "clientName": { "type": "String" }
     }
   },
   "accepted": "Accepted",
-  "@accepted": {
-    "description": "Status badge when invitation is accepted"
-  },
   "invitation": "Invitation",
-  "@invitation": {
-    "description": "Status badge for pending invitation"
-  },
 
   "viewJobs": "View Jobs",
-  "@viewJobs": {
-    "description": "Button to view jobs/events"
-  },
   "addToBartender": "Add to Bartender",
-  "@addToBartender": {
-    "description": "Action to add user to bartender role"
-  },
   "addToServer": "Add to Server",
-  "@addToServer": {
-    "description": "Action to add user to server role"
-  },
   "addToRole": "Add to {role}",
   "@addToRole": {
-    "description": "Generic action to add user to a role",
     "placeholders": {
-      "role": {
-        "type": "String"
-      }
+      "role": { "type": "String" }
     }
   },
 
   "typeMessage": "Type a message...",
-  "@typeMessage": {
-    "description": "Placeholder text for chat message input field"
-  }
+
+
+  "save": "Save",
+  "delete": "Delete",
+  "retry": "Retry",
+  "ok": "OK",
+  "done": "Done",
+  "close": "Close",
+  "remove": "Remove",
+  "add": "Add",
+  "share": "Share",
+  "refresh": "Refresh",
+  "create": "Create",
+  "unknown": "Unknown",
+  "selectAll": "Select All",
+  "deselectAll": "Deselect All",
+  "clearAll": "Clear All",
+  "somethingWentWrong": "Something went wrong",
+  "comingSoon": "Coming soon",
+  "or": "or",
+  "cancel": "Cancel",
+  "approve": "Approve",
+  "dismiss": "Dismiss",
+  "apply": "Apply",
+  "skip": "Skip",
+  "today": "Today",
+  "yesterday": "Yesterday",
+  "thisWeek": "This Week",
+  "account": "Account",
+  "role": "Role",
+
+
+  "signIn": "Sign In",
+  "signInToContinue": "Sign in to continue",
+  "signOut": "Sign out",
+  "password": "Password",
+  "continueWithGoogle": "Continue with Google",
+  "continueWithApple": "Continue with Apple",
+  "continueWithPhone": "Continue with Phone",
+  "appRoleManager": "Manager",
+  "termsAndPrivacyDisclaimer": "By continuing, you agree to our\nTerms of Service and Privacy Policy",
+  "pleaseEnterEmailAndPassword": "Please enter email and password",
+  "googleSignInFailed": "Google sign-in failed",
+  "appleSignInFailed": "Apple sign-in failed",
+  "emailSignInFailed": "Email sign-in failed",
+
+  "phoneSignIn": "Phone Sign In",
+  "enterVerificationCode": "Enter the verification code",
+  "weWillSendVerificationCode": "We'll send you a verification code",
+  "sendVerificationCode": "Send Verification Code",
+  "verifyCode": "Verify Code",
+  "change": "Change",
+  "pleaseEnterPhoneNumber": "Please enter your phone number",
+  "pleaseEnterValidPhoneNumber": "Please enter a valid phone number",
+  "pleaseEnterVerificationCode": "Please enter the verification code",
+  "verificationCodeMustBe6Digits": "Verification code must be 6 digits",
+  "didntReceiveCodeResend": "Didn't receive the code? Resend",
+
+
+  "welcomeToFlowShift": "Welcome to FlowShift!",
+  "personalizeExperienceWithVenues": "Let's personalize your experience by finding popular event venues in your area.",
+  "getStarted": "Get Started",
+  "skipForNow": "Skip for now",
+  "whereAreYouLocated": "Where are you\nlocated?",
+  "addCitiesWhereYouOperate": "Add one or more cities where you operate. You can discover venues for each city later.",
+  "settingUpYourCity": "Setting up your city...",
+  "settingUpYourCities": "Setting up your {cityCount} cities...",
+  "@settingUpYourCities": {
+    "placeholders": {
+      "cityCount": { "type": "int" }
+    }
+  },
+  "thisWillOnlyTakeAMoment": "This will only take a moment...",
+  "allSet": "All Set!",
+  "yourCityConfiguredSuccessfully": "Your city has been configured successfully!",
+  "yourCitiesConfiguredSuccessfully": "Your {count} cities have been configured successfully!",
+  "@yourCitiesConfiguredSuccessfully": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "discoverVenuesFromSettings": "You can discover venues for each city from Settings > Manage Cities.",
+  "startUsingFlowShift": "Start Using FlowShift",
+  "couldNotDetectLocationEnterManually": "Could not detect your location. Please enter your city manually.",
+  "locationDetectionFailed": "Location detection failed. Please enter your city manually.",
+  "pleaseAddAtLeastOneCity": "Please add at least one city",
+  "anErrorOccurredTryAgain": "An error occurred. Please try again.",
+
+
+  "letsGetYouSetUp": "Let's get you set up",
+  "stepsComplete": "{completedCount} of {totalSteps} steps complete",
+  "@stepsComplete": {
+    "placeholders": {
+      "completedCount": { "type": "int" },
+      "totalSteps": { "type": "int" }
+    }
+  },
+  "finishStepsToActivateWorkspace": "Finish these steps to activate your FlowShift workspace:",
+  "statusChipProfile": "Profile",
+  "statusChipTeam": "Team",
+  "statusChipClient": "Client",
+  "statusChipRole": "Role",
+  "statusChipTariff": "Tariff",
+  "nextUp": "Next up: {step}",
+  "@nextUp": {
+    "placeholders": {
+      "step": { "type": "String" }
+    }
+  },
+  "completeAllStepsForDashboard": "Complete all steps above to access the full dashboard.",
+  "addFirstLastNameForStaff": "Add your first and last name so staff know who you are.",
+  "reviewProfile": "Review profile",
+  "updateProfile": "Update profile",
+  "updateYourProfile": "1. Update your profile",
+  "profileDetailsUpdated": "Profile details updated.",
+  "createYourTeamCompany": "2. Create your team/company",
+  "setupStaffingCompanyExample": "Set up your staffing company (e.g., \"MES - Minneapolis Event Staffing\")",
+  "teamCompanyName": "Team/Company name",
+  "exampleTeamName": "e.g. MES - Minneapolis Event Staffing",
+  "descriptionOptional": "Description (optional)",
+  "briefDescriptionStaffingCompany": "Brief description of your staffing company",
+  "completeProfileFirst": "Complete your profile first",
+  "createTeam": "Create team",
+  "addAnotherTeam": "Add another team",
+  "createYourFirstClient": "3. Create your first client",
+  "needAtLeastOneClient": "You need at least one client before you can staff events.",
+  "exampleClientName": "e.g. Bluebird Catering",
+  "completeProfileAndTeamFirst": "Complete profile and team first",
+  "createClient": "Create client",
+  "addAnotherClient": "Add another client",
+  "addAtLeastOneRole": "4. Add at least one role",
+  "rolesHelpMatchStaff": "Roles help match staff to the right job (waiter, chef, bartender...).",
+  "roleName": "Role name",
+  "exampleRoleName": "e.g. Lead Server",
+  "finishPreviousStepsFirst": "Finish previous steps first",
+  "createRole": "Create role",
+  "addAnotherRole": "Add another role",
+  "setYourFirstTariff": "5. Set your first tariff",
+  "setRateForBilling": "Set a rate so staffing assignments know what to bill.",
+  "createClientFirst": "Create a client first",
+  "createRoleFirst": "Create a role first",
+  "hourlyRateUsd": "Hourly rate (USD)",
+  "exampleHourlyRate": "e.g. 24.00",
+  "adjustTariffsInCatalog": "You can adjust this later in Catalog > Tariffs",
+  "saveTariff": "Save tariff",
+  "addAnotherTariff": "Add another tariff",
+  "enterTeamNameToContinue": "Enter a team/company name to continue",
+  "teamCreatedSuccessfully": "Team created successfully!",
+  "failedToCreateTeam": "Failed to create team",
+  "enterClientNameToContinue": "Enter a client name to continue",
+  "clientCreated": "Client created",
+  "failedToCreateClient": "Failed to create client",
+  "enterRoleNameToContinue": "Enter a role name to continue",
+  "roleCreated": "Role created",
+  "failedToCreateRole": "Failed to create role",
+  "createClientAndRoleBeforeTariff": "Create a client and a role before adding a tariff",
+  "selectClientAndRole": "Select a client and a role",
+  "enterValidHourlyRate": "Enter a valid hourly rate (e.g. 22.50)",
+  "tariffSaved": "Tariff saved",
+  "failedToSaveTariff": "Failed to save tariff",
+  "failedToOpenProfile": "Failed to open profile",
+
+
+  "navAttendance": "Attendance",
+  "navStats": "Stats",
+  "welcomeBack": "Welcome back!",
+  "manageYourEvents": "Manage your events",
+  "featureChatDesc": "send jobs through the chat",
+  "featureAIChatDesc": "create, update, ask questions",
+  "featureJobsDesc": "Manage your created cards",
+  "featureTeamsDesc": "invite people to Join",
+  "featureHoursDesc": "Track team work hours",
+  "featureCatalogDesc": "create clients, roles, and tariffs",
+  "quickActionUpload": "Upload",
+  "quickActionTimesheet": "Timesheet",
+  "teamMembers": "Team Members",
+  "hours": "Hours",
+  "recentActivity": "Recent Activity",
+  "confirmLogoutMessage": "Are you sure you want to logout?",
+
+
+  "attendanceTitle": "Attendance",
+  "forceClockOut": "Force Clock-Out",
+  "confirmClockOutMessage": "Are you sure you want to clock out {staffName}?",
+  "@confirmClockOutMessage": {
+    "placeholders": {
+      "staffName": { "type": "String" }
+    }
+  },
+  "clockOut": "Clock Out",
+  "staffClockedOutSuccessfully": "{staffName} clocked out successfully",
+  "@staffClockedOutSuccessfully": {
+    "placeholders": {
+      "staffName": { "type": "String" }
+    }
+  },
+  "failedToClockOutStaff": "Failed to clock out staff",
+  "viewingHistoryFor": "Viewing history for {staffName}",
+  "@viewingHistoryFor": {
+    "placeholders": {
+      "staffName": { "type": "String" }
+    }
+  },
+  "viewingDetailsFor": "Viewing details for {staffName}",
+  "@viewingDetailsFor": {
+    "placeholders": {
+      "staffName": { "type": "String" }
+    }
+  },
+  "noAttendanceRecords": "No attendance records",
+  "tryAdjustingFilters": "Try adjusting your filters",
+  "recordsAppearWhenStaffClockIn": "Records will appear here when staff clock in",
+  "clearFilters": "Clear Filters",
+  "analyzing": "Analyzing...",
+  "aiAnalysis": "AI Analysis",
+  "failedToLoadData": "Failed to load data",
+  "bulkClockIn": "Bulk Clock-In",
+  "pleaseSelectAtLeastOneStaff": "Please select at least one staff member",
+  "successfullyClockedIn": "Successfully clocked in {successful} of {total} staff",
+  "@successfullyClockedIn": {
+    "placeholders": {
+      "successful": { "type": "int" },
+      "total": { "type": "int" }
+    }
+  },
+  "failedBulkClockIn": "Failed to perform bulk clock-in",
+  "noAcceptedStaffForEvent": "No accepted staff for this event",
+  "overrideNoteOptional": "Override Note (optional)",
+  "groupCheckInHint": "e.g., Group check-in at entrance",
+  "clockInStaffCount": "Clock In {count} Staff",
+  "@clockInStaffCount": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "bulkClockInResults": "Bulk Clock-In Results",
+  "alreadyClockedIn": "Already clocked in",
+  "flaggedAttendance": "Flagged Attendance",
+  "approved": "Approved",
+  "dismissed": "Dismissed",
+  "noPendingFlags": "No pending flags!",
+  "noFlaggedEntriesFound": "No flagged entries found",
+  "allEntriesLookNormal": "All attendance entries look normal",
+  "reviewFlag": "Review Flag",
+  "reviewNotesOptional": "Review Notes (optional)",
+  "addNotesAboutReview": "Add any notes about this review...",
+  "unknownStaff": "Unknown Staff",
+  "unknownEvent": "Unknown Event",
+  "clockInTime": "Clock-In",
+  "clockOutTime": "Clock-Out",
+  "durationLabel": "Duration",
+  "expectedDuration": "Expected",
+  "unusualHours": "Unusual Hours",
+  "excessiveDuration": "Excessive Duration",
+  "lateClockOut": "Late Clock-Out",
+  "locationMismatch": "Location Mismatch",
+  "filterAttendance": "Filter Attendance",
+  "dateRange": "Date Range",
+  "last7Days": "Last 7 Days",
+  "custom": "Custom",
+  "event": "Event",
+  "allEvents": "All Events",
+  "status": "Status",
+  "applyFilters": "Apply Filters",
+  "working": "Working",
+  "flags": "Flags",
+  "currentlyWorking": "Currently Working",
+  "noStaffWorking": "No staff working",
+  "staffAppearsWhenClockIn": "Staff will appear here when they clock in",
+  "history": "History",
+  "onSite": "On-site",
+  "autoClockOut": "Auto clocked-out",
+  "completed": "Completed",
+  "flagged": "Flagged",
+  "noShow": "No-show",
+  "notSpecified": "Not specified",
+  "clockIn": "Clock In",
+  "verifiedOnSite": "Verified on-site",
+  "weeklyHours": "Weekly Hours",
+  "noDataForPeriod": "No data for this period",
+  "failedToLoadFlaggedAttendance": "Failed to load flagged attendance",
+  "failedToUpdateFlag": "Failed to update flag",
+
+
+  "stats": "Stats",
+  "failedToLoadStatistics": "Failed to load statistics",
+  "week": "Week",
+  "month": "Month",
+  "year": "Year",
+  "allTime": "All Time",
+  "downloadReport": "Download report",
+  "downloadPdf": "Download PDF",
+  "downloadWord": "Download Word",
+  "analyzingYourData": "Analyzing your data...",
+  "failedToGenerate": "Failed to generate",
+  "payrollSummary": "Payroll Summary",
+  "staffMembersCount": "{count} staff members",
+  "@staffMembersCount": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "viewAll": "View All",
+  "totalHours": "Total Hours",
+  "totalPayroll": "Total Payroll",
+  "averagePerStaff": "Avg/Staff",
+  "topEarners": "Top Earners",
+  "noPayrollDataForPeriod": "No payroll data for this period",
+  "shiftsAndHours": "{shifts} shifts \u2022 {hours}h",
+  "@shiftsAndHours": {
+    "placeholders": {
+      "shifts": { "type": "int" },
+      "hours": { "type": "String" }
+    }
+  },
+  "topPerformers": "Top Performers",
+  "basedOnShiftsCompleted": "Based on shifts completed",
+
+
+  "approveHours": "Approve Hours",
+  "uploadSignInSheet": "Upload Sign-In Sheet",
+  "takePhotoOrUploadSheet": "Take a photo or upload the client's sign-in/out sheet",
+  "camera": "Camera",
+  "gallery": "Gallery",
+  "analyzeWithAi": "Analyze with AI",
+  "analyzingSignInSheetWithAi": "Analyzing sign-in sheet with AI...",
+  "extractedStaffHours": "Extracted Staff Hours",
+  "reviewAndEditBeforeSubmitting": "Review and edit before submitting",
+  "signInLabel": "Sign In",
+  "signOutLabel": "Sign Out",
+  "notAvailable": "N/A",
+  "hoursCount": "{hours} hours",
+  "@hoursCount": {
+    "placeholders": {
+      "hours": { "type": "String" }
+    }
+  },
+  "bulkApprove": "Bulk Approve",
+  "approveHoursForAllStaff": "Approve hours for all {count} staff members?",
+  "@approveHoursForAllStaff": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "approveAll": "Approve All",
+  "nameMatchingResults": "Name Matching Results",
+  "staffMembersMatched": "{processed}/{total} staff members matched",
+  "@staffMembersMatched": {
+    "placeholders": {
+      "processed": { "type": "int" },
+      "total": { "type": "int" }
+    }
+  },
+  "editHoursFor": "Edit Hours - {name}",
+  "@editHoursFor": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "signInTime": "Sign In Time",
+  "signOutTime": "Sign Out Time",
+  "approvedHours": "Approved Hours",
+  "optionalNotes": "Optional notes",
+  "noHoursMatched": "No hours were matched. Please check the names on the sheet.",
+  "noHoursApproved": "No hours were approved. Check match results above.",
+  "failedToBulkApprove": "Failed to bulk approve",
+  "analysisFailed": "Analysis failed",
+  "failedToPickImage": "Failed to pick image",
+  "failedToLoadEvents": "Failed to load events",
+  "unknownError": "Unknown error",
+  "allCaughtUp": "All Caught Up!",
+  "noEventsNeedApproval": "No events need hours approval at the moment.",
+  "pendingReviewCount": "{count} Pending Review",
+  "@pendingReviewCount": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "pendingReview": "Pending Review",
+  "dateUnknown": "Date unknown",
+  "manualHoursEntry": "Manual Hours Entry",
+  "selectedCount": "{count} selected",
+  "@selectedCount": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "searchStaffByNameEmail": "Search staff by name or email",
+  "failedToLoadUsers": "Failed to load users",
+  "failedToSearchUsers": "Failed to search users",
+  "noUsersFound": "No users found",
+  "submitHoursCount": "Submit Hours ({count})",
+  "@submitHoursCount": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "hoursForStaff": "Hours for {name}",
+  "@hoursForStaff": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "signInTimeRequired": "Sign-In Time *",
+  "notSet": "Not set",
+  "signOutTimeRequired": "Sign-Out Time *",
+  "totalHoursFormat": "Total: {hours} hours",
+  "@totalHoursFormat": {
+    "placeholders": {
+      "hours": { "type": "String" }
+    }
+  },
+  "hoursSubmittedApprovedSuccess": "Hours submitted and approved successfully",
+  "failedToSubmitHours": "Failed to submit hours",
+  "pleaseEnterSignInSignOut": "Please enter sign-in and sign-out times for all selected staff",
+
+
+  "createTeamTitle": "Create Team",
+  "teamNameLabel": "Team name",
+  "enterTeamNameError": "Enter a team name",
+  "deleteTeamConfirmation": "Delete team?",
+  "deleteTeamWarning": "Deleting this team will remove it permanently. Events that reference it will block deletion.",
+  "teamDeleted": "Team deleted",
+  "failedToDeleteTeam": "Failed to delete team",
+  "noTeamsYet": "No teams yet. Tap \"New team\" to create one.",
+  "untitledTeam": "Untitled team",
+  "coManager": "Co-Manager",
+  "inviteByEmail": "Invite by email",
+  "messageOptional": "Message (optional)",
+  "sendInvite": "Send invite",
+  "failedToSendInvite": "Failed to send invite",
+  "inviteSentTo": "Invite sent to {email}",
+  "@inviteSentTo": {
+    "placeholders": {
+      "email": { "type": "String" }
+    }
+  },
+  "revokeInviteLink": "Revoke Invite Link",
+  "revokeInviteLinkConfirmation": "This will prevent anyone from using this link to join. Continue?",
+  "revoke": "Revoke",
+  "inviteLinkRevoked": "Invite link revoked",
+  "usageLog": "Usage Log",
+  "noUsageRecorded": "No usage recorded yet.",
+  "errorLoadingUsage": "Error loading usage",
+  "publicLinkCreated": "Public Link Created!",
+  "publicLinkDescription": "Share this link on social media to recruit new team members. All applicants will require your approval.",
+  "linkCopied": "Link copied!",
+  "codeLabel": "Code:",
+  "codeCopied": "Code copied!",
+  "shareJoinTeam": "Join our team on FlowShift",
+  "addCoManager": "Add Co-Manager",
+  "addCoManagerInstructions": "Enter the email of a manager to add them as a co-manager. They must already have a FlowShift Manager account.",
+  "managerEmailLabel": "Manager email",
+  "enterEmailError": "Enter an email",
+  "enterValidEmailError": "Enter a valid email",
+  "coManagerAdded": "Co-manager added",
+  "removeCoManager": "Remove Co-Manager",
+  "removeCoManagerConfirmation": "Remove {name} as co-manager?",
+  "@removeCoManagerConfirmation": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "coManagerRemoved": "Co-manager removed",
+  "userMissingProviderError": "User is missing provider/subject information",
+  "addTeamMember": "Add team member",
+  "searchByNameOrEmail": "Search by name or email",
+  "noUsersFoundTryAnother": "No users found. Try another search.",
+  "memberChip": "Member",
+  "addedToTeam": "Added {name} to the team",
+  "@addedToTeam": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "failedToAddMember": "Failed to add member",
+  "inviteCancelled": "Invite cancelled",
+  "failedToCancelInvite": "Failed to cancel invite",
+  "failedToLoadTeamData": "Could not load team data",
+  "membersSection": "Members",
+  "noActiveMembersYet": "No active members yet.",
+  "pendingMember": "Pending member",
+  "coManagersSection": "Co-Managers",
+  "noCoManagersYet": "No co-managers yet.",
+  "removeCoManagerTooltip": "Remove co-manager",
+  "invitesSection": "Invites",
+  "inviteLinkButton": "Invite Link",
+  "publicLinkButton": "Public Link",
+  "emailInviteButton": "Email",
+  "noInvitesYet": "No invites yet.",
+  "pendingApplicants": "Pending Applicants",
+  "activeInviteLinks": "Active Invite Links",
+  "publicBadge": "PUBLIC",
+  "usedLabel": "Used:",
+  "unlimitedUses": "(unlimited)",
+  "joinsLabel": "joins",
+  "denyApplicant": "Deny Applicant",
+  "denyApplicantConfirmation": "Are you sure you want to deny this applicant?",
+  "deny": "Deny",
+  "applicantApproved": "Applicant approved!",
+  "applicantDenied": "Applicant denied",
+
+
+  "chatTitle": "Chats",
+  "searchConversations": "Search conversations...",
+  "failedToLoadConversations": "Failed to load conversations",
+  "noConversationsYet": "No conversations yet",
+  "startChattingWithTeam": "Start chatting with your team to see your messages here",
+  "managerBadge": "Manager",
+  "noMessagesYet": "No messages yet",
+  "addMembersToStartChatting": "Add members to your team to start chatting",
+  "newChat": "New Chat",
+  "searchContacts": "Search contacts...",
+  "failedToLoadContacts": "Failed to load contacts",
+  "noContactsMatch": "No contacts match your search",
+  "noTeamMembersYet": "No team members yet",
+  "active": "Active",
+  "valerioAssistant": "Valerio Assistant",
+  "valerioAssistantDesc": "Create events, manage jobs, and get instant help",
+  "typing": "typing...",
+  "failedToSendMessage": "Failed to send message",
+  "sendMessageToStartConversation": "Send a message to start the conversation",
+  "failedToLoadMessages": "Failed to load messages",
+  "staffAcceptedInvitation": "{name} accepted the invitation!",
+  "@staffAcceptedInvitation": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "staffDeclinedInvitation": "{name} declined the invitation",
+  "@staffDeclinedInvitation": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "failedToSendInvitation": "Failed to send invitation",
+
+  "noUpcomingJobs": "No upcoming jobs",
+  "noJobsMatch": "No jobs match your search",
+  "unknownClient": "Unknown Client",
+  "noVenueSpecified": "No venue specified",
+  "noDateSpecified": "No date specified",
+  "selectRoleForStaffMember": "Select a role for the staff member:",
+  "noRolesAvailable": "No roles available for this job",
+  "sending": "Sending...",
+  "sendInvitation": "Send Invitation",
+  "accept": "Accept",
+  "decline": "Decline",
+  "waitingForResponse": "Waiting for response...",
+  "callTime": "Call time: {time}",
+  "@callTime": {
+    "placeholders": {
+      "time": { "type": "String" }
+    }
+  },
+  "acceptedStaffCount": "Accepted Staff ({count})",
+  "@acceptedStaffCount": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "workingHoursSheet": "Working Hours Sheet",
+  "hoursSheetPdf": "Hours Sheet (PDF)",
+  "hoursSheetWord": "Hours Sheet (Word)",
+  "member": "Member",
+  "staffIdDisplay": "ID: {id}",
+  "@staffIdDisplay": {
+    "placeholders": {
+      "id": { "type": "String" }
+    }
+  },
+  "removeStaffMember": "Remove Staff Member",
+  "confirmRemoveStaff": "Are you sure you want to remove this staff member from the event?",
+  "staffRemovedSuccess": "Staff member removed successfully",
+  "failedToRemoveStaff": "Failed to remove staff member",
+  "confirmClockIn": "Clock in {staffName} for this event?",
+  "@confirmClockIn": {
+    "placeholders": {
+      "staffName": { "type": "String" }
+    }
+  },
+  "alreadyClockedInName": "{staffName} is already clocked in",
+  "@alreadyClockedInName": {
+    "placeholders": {
+      "staffName": { "type": "String" }
+    }
+  },
+  "clockedInSuccess": "{staffName} clocked in successfully",
+  "@clockedInSuccess": {
+    "placeholders": {
+      "staffName": { "type": "String" }
+    }
+  },
+  "clockInFailed": "Clock-in failed. Please try again.",
+  "publish": "Publish",
+  "editDetails": "Edit Details",
+  "keepOpenAfterEvent": "Keep Open After Event",
+  "preventAutoCompletion": "Prevent automatic completion when event date passes",
+  "moveToDrafts": "Move to Drafts",
+  "clockInStaff": "Clock In Staff",
+  "openToAllStaff": "Open to All Staff",
+  "moveToDraftsWithStaff": "This will:\n\u2022 Remove all {count} accepted staff members\n\u2022 Send them a notification\n\u2022 Hide the job from staff view\n\nYou can republish it later.",
+  "@moveToDraftsWithStaff": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "moveToDraftsNoStaff": "This will hide the job from staff view. You can republish it later.",
+  "eventMovedToDrafts": "{name} moved to drafts!",
+  "@eventMovedToDrafts": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "failedToMoveToDrafts": "Failed to move to drafts",
+  "eventStaysOpen": "Event will stay open after completion",
+  "eventAutoCompletes": "Event will auto-complete when past",
+  "failedToUpdate": "Failed to update",
+  "failedToGenerateSheet": "Failed to generate sheet",
+  "confirmOpenToAll": "Make \"{name}\" visible to all staff members?\n\nThis will change the job from private (invited only) to public, allowing all team members to see and accept it.",
+  "@confirmOpenToAll": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "openToAll": "Open to All",
+  "eventNowOpenToAll": "{name} is now open to all staff!",
+  "@eventNowOpenToAll": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "failedToMakePublic": "Failed to make public",
+  "vacanciesLeft": "left",
+
+
+  "manageYourPreferences": "Manage your preferences",
+  "workTerminology": "Work Terminology",
+  "howPreferWorkAssignments": "How do you prefer to call your work assignments?",
+  "jobs": "Jobs",
+  "jobsExample": "e.g., \"My Jobs\", \"Create Job\"",
+  "shifts": "Shifts",
+  "shiftsExample": "e.g., \"My Shifts\", \"Create Shift\"",
+  "events": "Events",
+  "eventsExample": "e.g., \"My Events\", \"Create Event\"",
+  "saveTerminology": "Save Terminology",
+  "terminologyUpdateInfo": "This will update how work assignments appear throughout the app",
+  "venuesUpdatedSuccess": "Venues updated successfully!",
+  "terminologyUpdatedSuccess": "Terminology updated successfully!",
+  "locationVenues": "Location & Venues",
+  "cities": "Cities",
+  "citiesConfigured": "cities configured",
+  "venues": "Venues",
+  "discovered": "discovered",
+  "lastUpdated": "Last Updated",
+  "noCitiesConfiguredDescription": "No cities configured yet. Add cities to discover venues and help the AI suggest accurate event locations in your area.",
+  "manageCities": "Manage Cities",
+  "addCities": "Add Cities",
+  "viewAllVenues": "View All {count} Venues",
+  "@viewAllVenues": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "addNewVenue": "Add New Venue",
+  "venueAddedSuccess": "Venue added successfully!",
+  "daysAgo": "{days} days ago",
+  "@daysAgo": {
+    "placeholders": {
+      "days": { "type": "int" }
+    }
+  },
+
+
+  "failedToLoadProfile": "Failed to load profile. Please try again in a few minutes.",
+  "failedToUploadImage": "Failed to upload image",
+  "newLookSaved": "New look saved!",
+  "failedToSave": "Failed to save",
+  "profilePictureUpdated": "Profile picture updated!",
+  "deleteCreationConfirm": "Delete creation?",
+  "deleteCreationMessage": "This will remove it from your gallery.",
+  "creationDeleted": "Creation deleted",
+  "failedToDelete": "Failed to delete",
+  "revertedToOriginal": "Reverted to original photo",
+  "failedToRevert": "Failed to revert",
+  "profileUpdated": "Profile updated",
+  "firstName": "First name",
+  "lastName": "Last name",
+  "appIdOptional": "App ID (9 digits, optional)",
+  "linkedAccounts": "Linked Accounts",
+  "primary": "Primary",
+  "linkAccount": "Link",
+  "phoneNumberLinkedSuccess": "Phone number linked successfully!",
+  "upload": "Upload",
+  "glowUp": "Glow Up",
+  "originalPhoto": "Original Photo",
+  "myCreations": "My Creations",
+  "viewFullSize": "View Full Size",
+  "useThisPhoto": "Use This Photo",
+  "linkPhoneNumber": "Link Phone Number",
+  "addPhoneSigninMethod": "Add a phone number as an alternative sign-in method",
+  "sixDigitCode": "6-digit code",
+  "verifyAndLink": "Verify & Link",
+  "verificationFailed": "Verification failed",
+  "invalidPhoneNumberFormat": "Invalid phone number format",
+  "tooManyAttempts": "Too many attempts. Try later.",
+  "enterSixDigitCode": "Please enter the 6-digit code",
+  "noVerificationInProgress": "No verification in progress",
+  "invalidCode": "Invalid code. Check and try again.",
+  "codeExpired": "Code expired. Request a new one.",
+  "firebaseAuthFailed": "Firebase authentication failed",
+  "failedToGetAuthToken": "Failed to get auth token",
+  "failedToLinkPhoneNumber": "Failed to link phone number",
+  "failedToLink": "Failed to link",
+  "failedToSendCode": "Failed to send code",
+
+
+  "welcomeFlowShiftPro": "Welcome to FlowShift Pro! All business features unlocked.",
+  "purchaseCancelledFailed": "Purchase cancelled or failed. Please try again.",
+  "subscriptionRestoredSuccess": "Subscription restored successfully!",
+  "noActiveSubscription": "No active subscription found to restore.",
+  "restoreError": "Restore error",
+  "upgradeToPro": "Upgrade to Pro",
+  "scaleYourBusiness": "Scale Your Business",
+  "unlimitedTeamMembers": "Unlimited team members",
+  "noLimitsStaffSize": "No limits on staff size",
+  "unlimitedEvents": "Unlimited events",
+  "createManyEvents": "Create as many events as you need",
+  "advancedAnalytics": "Advanced analytics",
+  "insightsReports": "Insights & reports for your business",
+  "prioritySupport": "Priority support",
+  "getHelpWhenNeeded": "Get help when you need it",
+  "allFutureProFeatures": "All future Pro features",
+  "earlyAccessCapabilities": "Early access to new capabilities",
+  "perMonth": "per month",
+  "cancelAnytimeNoCommitments": "Cancel anytime \u2022 No commitments",
+  "restorePurchase": "Restore Purchase",
+  "freeTierLimits": "Free Tier Limits",
+  "freeTierLimitsList": "\u2022 25 team members max\n\u2022 10 events per month\n\u2022 No analytics access",
+  "subscriptionTermsDisclaimer": "By subscribing, you agree to our Terms of Service and Privacy Policy. Subscription automatically renews unless cancelled at least 24 hours before the end of the current period.",
+
+
+  "notAuthenticated": "Not authenticated",
+  "failedToLoadVenues": "Failed to load venues",
+  "venueAddedSuccessfully": "Venue added successfully!",
+  "venueUpdatedSuccessfully": "Venue updated successfully!",
+  "venueRemovedSuccessfully": "Venue removed successfully!",
+  "failedToDeleteVenue": "Failed to delete venue",
+  "removeVenueConfirmation": "Remove Venue?",
+  "confirmRemoveVenue": "Are you sure you want to remove \"{name}\"?",
+  "@confirmRemoveVenue": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "myVenues": "My Venues",
+  "addVenue": "Add Venue",
+  "noVenuesYet": "No venues yet",
+  "addFirstVenueOrDiscover": "Add your first venue or run venue discovery",
+  "addFirstVenue": "Add First Venue",
+  "yourArea": "Your Area",
+  "placesSource": "Places",
+  "manualSource": "Manual",
+  "aiSource": "AI",
+  "searchVenues": "Search venues...",
+  "noVenuesInCity": "No venues in {cityName} yet",
+  "@noVenuesInCity": {
+    "placeholders": {
+      "cityName": { "type": "String" }
+    }
+  },
+  "addVenuesManuallyOrDiscover": "Add venues manually or discover them from Settings > Manage Cities",
+  "addCitiesFromSettings": "Add cities from Settings > Manage Cities",
+  "noVenuesMatch": "No venues match your search",
+  "tryDifferentFilterOrTerm": "Try a different filter or search term",
+  "tryDifferentSearchTerm": "Try a different search term",
+  "failedToGetPlaceDetails": "Failed to get place details",
+  "editVenue": "Edit Venue",
+  "editVenueDetailsBelow": "Edit venue details below",
+  "searchVenueAutoFill": "Search for a venue and we'll auto-fill the details",
+  "searchVenue": "Search venue",
+  "venueSearchExample": "e.g., Ball Arena Denver",
+  "enterManuallyInstead": "Enter manually instead",
+  "venueFoundGooglePlaces": "Venue found via Google Places",
+  "clear": "Clear",
+  "venueName": "Venue Name *",
+  "venueNameExample": "e.g., Ball Arena",
+  "pleaseEnterVenueName": "Please enter a venue name",
+  "addressRequired": "Address *",
+  "addressExample": "e.g., 1000 Chopper Cir, Denver, CO 80204",
+  "pleaseEnterAddress": "Please enter an address",
+  "required": "Required",
+  "venueAddedCityTabCreated": "Venue added and new city tab created!",
+  "venueUpdatedCityTabAdded": "Venue updated and city tab added!",
+  "failedToSaveVenue": "Failed to save venue",
+  "saving": "Saving...",
+  "saveChanges": "Save Changes",
+
+
+  "failedToLoadCities": "Failed to load cities",
+  "cityAlreadyInList": "This city is already in your list",
+  "addedCity": "Added {city}",
+  "@addedCity": {
+    "placeholders": {
+      "city": { "type": "String" }
+    }
+  },
+  "failedToAddCity": "Failed to add city",
+  "failedToUpdateCity": "Failed to update city",
+  "deleteCity": "Delete City",
+  "confirmDeleteCity": "Delete {cityName}?\n\nThis will also remove all venues associated with this city.",
+  "@confirmDeleteCity": {
+    "placeholders": {
+      "cityName": { "type": "String" }
+    }
+  },
+  "deletedCity": "Deleted {cityName}",
+  "@deletedCity": {
+    "placeholders": {
+      "cityName": { "type": "String" }
+    }
+  },
+  "failedToDeleteCity": "Failed to delete city",
+  "discoverVenues": "Discover Venues",
+  "discoverVenuesWarning": "AI will search the web for event venues in {cityName}. This can take up to 2-3 minutes depending on the city size.\n\nPlease keep the app open during the search.",
+  "@discoverVenuesWarning": {
+    "placeholders": {
+      "cityName": { "type": "String" }
+    }
+  },
+  "startSearch": "Start Search",
+  "discoveredVenuesCount": "Discovered {count} venues for {cityName}",
+  "@discoveredVenuesCount": {
+    "placeholders": {
+      "count": { "type": "int" },
+      "cityName": { "type": "String" }
+    }
+  },
+  "failedToDiscoverVenues": "Failed to discover venues",
+  "noCitiesAddedYet": "No cities added yet",
+  "addFirstCityDiscover": "Add your first city to discover venues",
+  "touristCityStrictSearch": "Tourist City (strict search)",
+  "metroAreaBroadSearch": "Metro Area (broad search)",
+  "searchingWeb": "Searching web... (up to 3 min)",
+  "addCity": "Add City",
+  "selectOrTypeCity": "Select or Type City",
+  "country": "Country",
+  "allCountries": "All Countries",
+  "stateProvince": "State/Province",
+  "allStates": "All States",
+  "typeOrSearchCity": "Type or Search City",
+  "enterAnyCityName": "Enter any city name...",
+  "useCustomCity": "Use custom city:",
+  "noMatchingCitiesSuggestions": "No matching cities in suggestions",
+  "canTypeAnyCityAbove": "You can type any city name above",
+  "tourist": "Tourist",
+  "metro": "Metro",
+  "suggestedCities": "suggested cities",
+  "addYourFirstCity": "Add Your First City",
+  "addAnotherCity": "Add Another City",
+
+
+  "logoUploadedColorsExtracted": "Logo uploaded and colors extracted!",
+  "failedToUploadLogo": "Failed to upload logo",
+  "removeBrandingConfirmation": "Remove Branding?",
+  "removeBrandingWarning": "This will delete your logo and custom colors. Exported documents will revert to the default FlowShift styling.",
+  "brandCustomization": "Brand Customization",
+  "pro": "PRO",
+  "upgradeToProCustomization": "Upgrade to Pro to personalize your exported documents with your own logo and brand colors.",
+  "uploadYourLogo": "Upload Your Logo",
+  "logoFormats": "JPEG, PNG, or WebP (max 5MB)",
+  "replaceLogo": "Replace Logo",
+  "documentStyle": "Document Style",
+  "chooseDocumentStyle": "Choose how exported documents look",
+  "extractingColors": "Extracting brand colors with AI...",
+  "uploadingLogo": "Uploading logo...",
+  "brandingRemoved": "Branding removed",
+  "colorsSaved": "Colors saved!",
+  "saveColors": "Save Colors",
+  "aiExtracted": "AI Extracted",
+  "hexColor": "Hex Color",
+  "presets": "Presets",
+
+
+  "mergeDuplicateClients": "Merge Duplicate Clients",
+  "mergingClients": "Merging clients...",
+  "confirmMerge": "Confirm Merge",
+  "keepPrimary": "Keep: \"{name}\"",
+  "@keepPrimary": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "mergeDuplicatesCount": "Merge & delete {count} duplicate(s):",
+  "@mergeDuplicatesCount": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "transferEventsAndTariffs": "All events and tariffs will be transferred to \"{name}\".",
+  "@transferEventsAndTariffs": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "merge": "Merge",
+  "failedToMerge": "Failed to merge",
+  "mergedClients": "Merged {count} client(s) into \"{name}\"",
+  "@mergedClients": {
+    "placeholders": {
+      "count": { "type": "int" },
+      "name": { "type": "String" }
+    }
+  },
+  "sensitivityLabel": "Sensitivity: {percent}%",
+  "@sensitivityLabel": {
+    "placeholders": {
+      "percent": { "type": "int" }
+    }
+  },
+  "noDuplicatesFound": "No duplicates found",
+  "lowerSensitivity": "Try lowering the sensitivity to find looser matches.",
+  "groupNumber": "Group {number}",
+  "@groupNumber": {
+    "placeholders": {
+      "number": { "type": "int" }
+    }
+  },
+  "similarPercent": "% similar",
+  "clientsCountLabel": "{count} clients",
+  "@clientsCountLabel": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "tapClientSetPrimary": "Tap a client to set it as primary (kept):",
+  "willBeMerged": "will be merged",
+  "keep": "KEEP",
+  "mergeInto": "Merge {count} into \"{name}\"",
+  "@mergeInto": {
+    "placeholders": {
+      "count": { "type": "int" },
+      "name": { "type": "String" }
+    }
+  },
+
+
+  "profileGlowUp": "Profile Glow Up",
+  "whoAreYouToday": "Who are you today?",
+  "seeMore": "See {count} more",
+  "@seeMore": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "seeLess": "Less",
+  "pickYourVibe": "Pick your vibe",
+  "quality": "Quality",
+  "standard": "Standard",
+  "hd": "HD",
+  "higherDetailFacialPreservation": "Higher detail & better facial preservation",
+  "textInImage": "Text in image",
+  "optional": "Optional",
+  "none": "None",
+  "readyForNewLook": "Ready for a new look?",
+  "hitButtonSeeMagic": "Hit the button and see the magic",
+  "lookingGood": "Looking good!",
+  "fromYourHistory": "From your history",
+  "before": "Before",
+  "after": "After",
+  "usuallyTakes15Seconds": "This usually takes about 15 seconds",
+  "failedToLoadStyles": "Failed to load styles",
+  "aiGeneratedMayNotBeAccurate": "AI-generated images may not be accurate",
+  "tryAgain": "Try Again",
+  "generateNew": "Generate New",
+  "getMyNewLook": "Get My New Look",
+  "sendEventInvitationTooltip": "Send Event Invitation",
+
+  "exportReport": "Export Report",
+  "chooseFormatAndReportType": "Choose format and report type",
+  "reportType": "Report Type",
+  "payrollReportLabel": "Payroll Report",
+  "payrollReportDescription": "Staff earnings breakdown by hours and pay rate",
+  "attendanceReportLabel": "Attendance Report",
+  "attendanceReportDescription": "Clock-in/out times and hours worked",
+  "exportFormat": "Export Format",
+  "csvLabel": "CSV",
+  "excelCompatible": "Excel compatible",
+  "pdfLabel": "PDF",
+  "printReady": "Print ready",
+  "exportFormatButton": "Export {format}",
+  "@exportFormatButton": {
+    "placeholders": {
+      "format": {"type": "String"}
+    }
+  },
+  "lastSevenDays": "Last 7 days",
+  "thisMonth": "This month",
+  "thisYear": "This year",
+  "customRange": "Custom range",
+
+  "createInviteLinkTitle": "Create Invite Link",
+  "shareableLinkDescription": "Create a shareable link that anyone can use to join your team.",
+  "linkExpiresIn": "Link expires in:",
+  "maxUsesOptional": "Max uses (optional):",
+  "leaveEmptyUnlimited": "Leave empty for unlimited",
+  "requireApprovalTitle": "Require approval",
+  "requireApprovalSubtitle": "You must approve members after they join",
+  "passwordOptionalLabel": "Password (optional):",
+  "leaveEmptyNoPassword": "Leave empty for no password",
+  "createLinkButton": "Create Link",
+  "inviteLinkCreatedTitle": "Invite Link Created!",
+  "inviteCodeLabel": "Invite Code:",
+  "deepLinkLabel": "Deep Link:",
+  "shareDeepLinkHint": "Share this link - it will open the app automatically",
+  "expiresDate": "Expires: {date}",
+  "@expiresDate": {
+    "placeholders": {
+      "date": {"type": "String"}
+    }
+  },
+  "shareViaApps": "Share via WhatsApp, SMS, etc.",
+  "showQrCode": "Show QR Code",
+  "joinTeamSubject": "Join my team on FlowShift",
+
+  "unknownApplicant": "Unknown applicant",
+  "appliedDate": "Applied {date}",
+  "@appliedDate": {
+    "placeholders": {
+      "date": {"type": "String"}
+    }
+  },
+
+  "errorLoadingEvents": "Error loading events",
+  "noEventsFoundTitle": "No events found",
+  "notLinkedToEventsYet": "This user is not linked to any events yet",
+  "upcomingEventsCount": "Upcoming Events ({count})",
+  "@upcomingEventsCount": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "dateUnknownLabel": "Date Unknown",
+
+  "editEventTitle": "Edit Event",
+  "eventUpdatedSuccessfully": "Event has been updated successfully!",
+  "failedToUpdateEvent": "Failed to update event",
+  "selectDateHint": "Select date",
+  "dateLabel": "Date",
+
+  "clockOutConfirmation": "Are you sure you want to clock out {name}?",
+  "@clockOutConfirmation": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+
+  "removeStaffConfirmation": "Are you sure you want to remove this staff member from the event?",
+  "openToAllStaffConfirmation": "Make \"{name}\" visible to all staff members?\n\nThis will change the job from private (invited only) to public, allowing all team members to see and accept it.",
+  "@openToAllStaffConfirmation": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "openToAll": "Open to All",
+  "failedToMakePublic": "Failed to make public",
+  "failedToMoveToDrafts": "Failed to move to drafts",
+  "failedToUpdate": "Failed to update",
+  "clockInConfirmation": "Clock in {name} for this event?",
+  "@clockInConfirmation": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "hoursSheetPdf": "Hours Sheet (PDF)",
+  "hoursSheetWord": "Hours Sheet (Word)",
+  "workingHoursSheetTooltip": "Working Hours Sheet",
+  "idLabel": "ID: {id}",
+  "@idLabel": {
+    "placeholders": {
+      "id": {"type": "String"}
+    }
+  },
+  "privateLabel": "Private",
+  "publicLabel": "Public",
+  "privatePlusPublic": "Private+Public",
+
+  "setUpStaffingCompany": "Set up your staffing company (e.g., \"MES - Minneapolis Event Staffing\")",
+  "teamCompanyName": "Team/Company name",
+  "completeProfileFirst": "Complete your profile first",
+  "descriptionOptionalLabel": "Description (optional)",
+  "briefDescriptionHint": "Brief description of your staffing company",
+  "createTeamButton": "Create team",
+  "clientsConfiguredCount": "Clients configured: {count}",
+  "@clientsConfiguredCount": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "needAtLeastOneClientDesc": "You need at least one client before you can staff events.",
+  "clientNameLabel": "Client name",
+  "completeProfileAndTeam": "Complete profile and team first",
+  "createClientButton": "Create client",
+  "addAnotherClient": "Add another client",
+  "rolesConfiguredCount": "Roles configured: {count}",
+  "@rolesConfiguredCount": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "rolesHelpMatchStaffDesc": "Roles help match staff to the right job (waiter, chef, bartender...).",
+  "roleNameLabel": "Role name",
+  "finishPreviousSteps": "Finish previous steps first",
+  "createRoleButton": "Create role",
+  "tariffsConfiguredCount": "Tariffs configured: {count}",
+  "@tariffsConfiguredCount": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "setRateDescription": "Set a rate so staffing assignments know what to bill.",
+  "clientLabel": "Client",
+  "roleLabel": "Role",
+  "adjustLaterHint": "You can adjust this later in Catalog > Tariffs",
+
+  "pleaseEnterTimesForAllStaff": "Please enter sign-in and sign-out times for all selected staff",
+  "hoursSubmittedAndApproved": "Hours submitted and approved successfully",
+  "failedToSubmitHours": "Failed to submit hours",
+  "searchStaffByNameEmail": "Search staff by name or email",
+  "submitHoursButton": "Submit Hours ({count})",
+  "@submitHoursButton": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "hoursForStaff": "Hours for {name}",
+  "@hoursForStaff": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "signInTimeRequired": "Sign-In Time *",
+  "signOutTimeRequired": "Sign-Out Time *",
+  "totalHoursFormat": "Total: {hours} hours",
+  "@totalHoursFormat": {
+    "placeholders": {
+      "hours": {"type": "String"}
+    }
+  },
+  "bartenderHint": "Bartender",
+  "optionalNotes": "Optional notes",
+  "notesLabel": "Notes",
+  "roleHint": "Role",
+
+  "failedToLoadEvents": "Failed to load events",
+  "unknownError": "Unknown error",
+  "noEventsNeedApprovalDescription": "No events need hours approval at the moment.",
+  "pendingReviewLabel": "Pending Review",
+  "needsSheetLabel": "Needs Sheet",
+
+  "noHoursMatched": "No hours were matched. Please check the names on the sheet.",
+  "noHoursApproved": "No hours were approved. Check match results above.",
+  "nameMatchingResults": "Name Matching Results",
+
+  "purchaseCancelledMessage": "Purchase cancelled or failed. Please try again.",
+  "upgradeToProTitle": "Upgrade to Pro",
+  "flowShiftPro": "FlowShift Pro",
+  "createAsManyEvents": "Create as many events as you need",
+  "noLimitsDescription": "No limits on staff size",
+  "earlyAccessDescription": "Early access to new capabilities",
+  "subscriptionTerms": "By subscribing, you agree to our Terms of Service and Privacy Policy. Subscription automatically renews unless cancelled at least 24 hours before the end of the current period.",
+
+  "staffWillAppearOnClockIn": "Staff will appear here when they clock in",
+
+  "coManagersSection": "Co-Managers",
+  "noCoManagersYet": "No co-managers yet.",
+  "removeCoManager": "Remove co-manager",
+  "invitesSection": "Invites",
+  "noInvitesYet": "No invites yet.",
+  "cancelInvite": "Cancel invite",
+  "usedCount": "Used: {used} / {max}",
+  "@usedCount": {
+    "placeholders": {
+      "used": {"type": "int"},
+      "max": {"type": "int"}
+    }
+  },
+  "usedCountUnlimited": "Used: {used} (unlimited)",
+  "@usedCountUnlimited": {
+    "placeholders": {
+      "used": {"type": "int"}
+    }
+  },
+  "codePrefix": "Code: {code}",
+  "@codePrefix": {
+    "placeholders": {
+      "code": {"type": "String"}
+    }
+  },
+
+  "addVenuesDescription": "Add venues manually or discover them from Settings > Manage Cities",
+  "searchVenuesHint": "Search venues...",
+
+  "invalidPhoneFormat": "Invalid phone number format",
+  "tooManyAttemptsMessage": "Too many attempts. Try later.",
+  "invalidCodeMessage": "Invalid code. Check and try again.",
+  "codeExpiredMessage": "Code expired. Request a new one.",
+  "addPhoneDescription": "Add a phone number as an alternative sign-in method",
+  "phoneNumberHint": "Phone number",
+
+  "untitled": "Untitled",
+  "message": "Message",
+
+  "eventInformation": "Event Information",
+  "venueInformation": "Venue Information",
+  "staffRolesRequired": "Staff Roles Required",
+  "successTitle": "Success",
+  "selectTimeHint": "Select time",
+  "clockingInStaff": "Clocking in {staffName}...",
+  "@clockingInStaff": {
+    "placeholders": {
+      "staffName": {"type": "String"}
+    }
+  },
+  "roleVacancies": "{roleName} ({accepted}/{total}, {vacancies} left)",
+  "@roleVacancies": {
+    "placeholders": {
+      "roleName": {"type": "String"},
+      "accepted": {"type": "int"},
+      "total": {"type": "int"},
+      "vacancies": {"type": "int"}
+    }
+  },
+
+  "phoneLinkedSuccessfully": "Phone number linked successfully!",
+  "teamReady": "Team ready: {name}",
+  "@teamReady": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "proWelcomeMessage": "Welcome to FlowShift Pro! All business features unlocked.",
+  "dateTbd": "Date TBD",
+  "freeTierLimitsDetails": "\u2022 25 team members max\n\u2022 10 events per month\n\u2022 No analytics access",
+  "errorPrefix": "Error",
+
+  "moveToDraftsConfirmation": "Move \"{name}\" back to drafts?",
+  "@moveToDraftsConfirmation": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "memberRemovedSuccess": "Member removed",
+  "failedToRemoveMember": "Failed to remove member",
+
+  "staffHoursLabel": "Staff Hours",
+  "eventsCompletedLabel": "Events Completed",
+  "fulfillmentRateLabel": "Fulfillment Rate",
+  "scanLabel": "Scan",
+  "aiChatLabel": "AI Chat",
+  "uploadLabel": "Upload"
 }

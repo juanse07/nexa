@@ -53,15 +53,18 @@ export interface UserDocument extends Document {
   }>;
 
   // Subscription fields
-  subscription_tier?: 'free' | 'pro';
-  subscription_status?: 'active' | 'trial' | 'expired' | 'cancelled' | 'grace_period';
+  subscription_tier?: 'free' | 'pro' | 'premium';
+  subscription_status?: 'active' | 'free_month' | 'expired' | 'cancelled' | 'grace_period';
   subscription_platform?: 'ios' | 'android' | 'web' | null;
   qonversion_user_id?: string;
   subscription_started_at?: Date;
   subscription_expires_at?: Date;
+  free_month_end_override?: Date; // When set, overrides createdAt + 30 days for free month calculation
   ai_messages_used_this_month?: number;
   ai_messages_reset_date?: Date;
   groq_request_limit?: number;
+  caricatures_used_this_month?: number; // Future premium tier tracking
+  caricatures_reset_date?: Date; // Future premium tier tracking
 
   // Gamification for punctuality
   gamification?: {
@@ -143,11 +146,11 @@ const UserSchema = new Schema<UserDocument>(
     }],
 
     // Subscription fields
-    subscription_tier: { type: String, enum: ['free', 'pro'], default: 'free' },
+    subscription_tier: { type: String, enum: ['free', 'pro', 'premium'], default: 'free' },
     subscription_status: {
       type: String,
-      enum: ['active', 'trial', 'expired', 'cancelled', 'grace_period'],
-      default: 'active'
+      enum: ['active', 'free_month', 'expired', 'cancelled', 'grace_period'],
+      default: 'free_month'
     },
     subscription_platform: {
       type: String,
@@ -157,6 +160,7 @@ const UserSchema = new Schema<UserDocument>(
     qonversion_user_id: { type: String, sparse: true },
     subscription_started_at: { type: Date, default: null },
     subscription_expires_at: { type: Date, default: null },
+    free_month_end_override: { type: Date, default: null },
     ai_messages_used_this_month: { type: Number, default: 0 },
     groq_request_limit: { type: Number, default: 3 },
     ai_messages_reset_date: {
@@ -169,6 +173,9 @@ const UserSchema = new Schema<UserDocument>(
         return date;
       }
     },
+
+    caricatures_used_this_month: { type: Number, default: 0 },
+    caricatures_reset_date: { type: Date, default: null },
 
     // Gamification for punctuality tracking
     gamification: {

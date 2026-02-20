@@ -202,9 +202,9 @@ class EventInvitationCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                      child: const Text(
-                        'Accept',
-                        style: TextStyle(
+                      child: Text(
+                        AppLocalizations.of(context)!.accept,
+                        style: const TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 14,
                         ),
@@ -226,9 +226,9 @@ class EventInvitationCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                      child: const Text(
-                        'Decline',
-                        style: TextStyle(
+                      child: Text(
+                        AppLocalizations.of(context)!.decline,
+                        style: const TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 14,
                         ),
