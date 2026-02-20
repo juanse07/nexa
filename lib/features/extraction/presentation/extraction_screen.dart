@@ -2282,9 +2282,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                             colors: [
-                              ExColors.navySpaceCadet.withValues(alpha: 0.88),
-                              ExColors.navySpaceCadet.withValues(alpha: 0.88),
-                              ExColors.oceanBlue.withValues(alpha: 0.88),
+                              ExColors.navySpaceCadet.withValues(alpha: 0.95),
+                              ExColors.navySpaceCadet.withValues(alpha: 0.95),
+                              ExColors.oceanBlue.withValues(alpha: 0.95),
                             ],
                           ),
                           boxShadow: const [

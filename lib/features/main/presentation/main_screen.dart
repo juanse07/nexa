@@ -252,12 +252,17 @@ class _MainScreenState extends State<MainScreen>
                   });
                   // Slide 90% off screen when hidden — thin frosted strip remains
                   final translateY = (1 - _bottomBarAnimation.value) * _navBarHeight * 0.9;
+                  // Icons fade out as bar slides away
+                  final iconOpacity = _bottomBarAnimation.value.clamp(0.0, 1.0);
                   return Transform.translate(
                     offset: Offset(0, translateY),
                     child: ClipRect(
                       child: BackdropFilter(
                         filter: ImageFilter.blur(sigmaX: 20.0, sigmaY: 20.0),
-                        child: child,
+                        child: Opacity(
+                          opacity: iconOpacity,
+                          child: child,
+                        ),
                       ),
                     ),
                   );
@@ -276,7 +281,7 @@ class _MainScreenState extends State<MainScreen>
     return Container(
       key: _navBarKey,
       decoration: BoxDecoration(
-        color: AppColors.formFillSlate.withValues(alpha: 0.88),
+        color: AppColors.formFillSlate.withValues(alpha: 0.72),
         border: const Border(
           top: BorderSide(color: AppColors.border, width: 1),
         ),
