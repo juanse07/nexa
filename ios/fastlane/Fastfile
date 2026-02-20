@@ -217,7 +217,8 @@ platform :ios do
     upload_to_app_store(
       skip_binary_upload: true,
       skip_screenshots: false,
-      force: true
+      force: true,
+      precheck_include_in_app_purchases: false
     )
   end
 

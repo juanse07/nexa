@@ -81,6 +81,8 @@
 	<string>FlowShift uses your location to help find nearby venues and provide location-based event services.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>FlowShift needs access to your microphone to record voice input for AI chat conversations.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 
 	<!-- Google Maps API Key -->
 	<key>GMSApiKey</key>
