@@ -2269,23 +2269,25 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   statusBarIconBrightness: Brightness.light,
                   statusBarBrightness: Brightness.dark,
                 ),
-                child: RepaintBoundary(
-                  child: AnimatedBuilder(
+                child: AnimatedBuilder(
                     animation: _headerAnimation,
                     builder: (context, child) {
-                      return Container(
-                        decoration: const BoxDecoration(
-                          // Navy dominant gradient with subtle ocean blue accent
+                      return ClipRect(
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 20.0, sigmaY: 20.0),
+                          child: Container(
+                        decoration: BoxDecoration(
+                          // Navy dominant gradient — semi-transparent so blur shows through
                           gradient: LinearGradient(
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                             colors: [
-                              ExColors.navySpaceCadet, // Navy (dominant)
-                              ExColors.navySpaceCadet, // Navy extended
-                              ExColors.oceanBlue, // Ocean blue (subtle accent)
+                              ExColors.navySpaceCadet.withValues(alpha: 0.88),
+                              ExColors.navySpaceCadet.withValues(alpha: 0.88),
+                              ExColors.oceanBlue.withValues(alpha: 0.88),
                             ],
                           ),
-                          boxShadow: [
+                          boxShadow: const [
                             BoxShadow(
                               color: Colors.black12,
                               blurRadius: 4,
@@ -2343,9 +2345,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                               ),
                           ],
                         ),
+                          ),
+                        ),
                       );
                     },
-                  ),
                 ),
               ),
             ),

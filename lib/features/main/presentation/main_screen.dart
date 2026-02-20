@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -32,6 +33,10 @@ class _MainScreenState extends State<MainScreen>
   // Animation controllers for hide/show effect
   late AnimationController _bottomBarController;
   late Animation<double> _bottomBarAnimation;
+
+  // Nav bar height tracking for partial-hide calculation
+  final GlobalKey _navBarKey = GlobalKey();
+  double _navBarHeight = 82.0;
 
   // Scroll detection variables
   double _lastScrollOffset = 0;
@@ -231,24 +236,33 @@ class _MainScreenState extends State<MainScreen>
               children: _screens,
             ),
 
-            // Animated bottom navigation bar
+            // Animated bottom navigation bar — frosted glass, 90% hide on scroll
             Positioned(
               left: 0,
               right: 0,
               bottom: 0,
-              child: RepaintBoundary(
-                child: AnimatedBuilder(
-                  animation: _bottomBarAnimation,
-                  builder: (context, child) {
-                    // Move completely off screen (bar height + safe area + extra margin)
-                    final translateY = (1 - _bottomBarAnimation.value) * 150;
-                    return Transform.translate(
-                      offset: Offset(0, translateY),
-                      child: child,
-                    );
-                  },
-                  child: _buildBottomNavigationBar(),
-                ),
+              child: AnimatedBuilder(
+                animation: _bottomBarAnimation,
+                builder: (context, child) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    final box = _navBarKey.currentContext?.findRenderObject() as RenderBox?;
+                    if (box != null && box.hasSize) {
+                      _navBarHeight = box.size.height;
+                    }
+                  });
+                  // Slide 90% off screen when hidden — thin frosted strip remains
+                  final translateY = (1 - _bottomBarAnimation.value) * _navBarHeight * 0.9;
+                  return Transform.translate(
+                    offset: Offset(0, translateY),
+                    child: ClipRect(
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 20.0, sigmaY: 20.0),
+                        child: child,
+                      ),
+                    ),
+                  );
+                },
+                child: _buildBottomNavigationBar(),
               ),
             ),
           ],
@@ -260,9 +274,10 @@ class _MainScreenState extends State<MainScreen>
   Widget _buildBottomNavigationBar() {
     final l10n = AppLocalizations.of(context)!;
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.formFillSlate, // Light grey background
-        border: Border(
+      key: _navBarKey,
+      decoration: BoxDecoration(
+        color: AppColors.formFillSlate.withValues(alpha: 0.88),
+        border: const Border(
           top: BorderSide(color: AppColors.border, width: 1),
         ),
       ),
