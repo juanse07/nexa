@@ -250,8 +250,8 @@ class _MainScreenState extends State<MainScreen>
                       _navBarHeight = box.size.height;
                     }
                   });
-                  // Slide 90% off screen when hidden — thin frosted strip remains
-                  final translateY = (1 - _bottomBarAnimation.value) * _navBarHeight * 0.9;
+                  // Slide 75% off screen when hidden — 25% frosted strip remains
+                  final translateY = (1 - _bottomBarAnimation.value) * _navBarHeight * 0.75;
                   // Icons fade out as bar slides away
                   final iconOpacity = _bottomBarAnimation.value.clamp(0.0, 1.0);
                   return Transform.translate(
