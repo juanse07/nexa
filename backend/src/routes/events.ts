@@ -1943,6 +1943,71 @@ router.delete(['/availability/:id', '/events/availability/:id'], requireAuth, as
 // END AVAILABILITY ROUTES
 // ============================================================================
 
+// Get events the authenticated user has accepted (My Shifts)
+router.get('/events/my-shifts', requireAuth, async (req, res) => {
+  try {
+    const authUser = (req as any).user as AuthenticatedUser | undefined;
+    if (!authUser?.provider || !authUser.sub) {
+      return res.status(401).json({ message: 'User not authenticated' });
+    }
+    const audienceKey = `${authUser.provider}:${authUser.sub}`;
+
+    const lastSyncParam = req.query.lastSync as string | undefined;
+    const filter: any = {
+      'accepted_staff.userKey': audienceKey,
+      status: { $ne: 'draft' },
+    };
+
+    if (lastSyncParam) {
+      try {
+        const lastSyncDate = new Date(lastSyncParam);
+        if (!isNaN(lastSyncDate.getTime())) {
+          filter.updatedAt = { $gt: lastSyncDate };
+        }
+      } catch (e) {
+        // Invalid date format, ignore and return all
+      }
+    }
+
+    const events = await EventModel.find(filter).sort({ date: -1 }).lean();
+
+    // Enrich with tariff data
+    const enrichedEvents = await enrichEventsWithTariffs(events);
+
+    // Map events to include string ids
+    const mappedEvents = enrichedEvents.map((event: any) => {
+      const teamIds = Array.isArray(event.audience_team_ids)
+        ? event.audience_team_ids
+            .map((value: any) => {
+              if (!value) return null;
+              if (value instanceof mongoose.Types.ObjectId) {
+                return value.toHexString();
+              }
+              const str = value.toString();
+              return mongoose.Types.ObjectId.isValid(str) ? str : null;
+            })
+            .filter((value: string | null): value is string => !!value)
+        : [];
+
+      return {
+        ...event,
+        id: String(event._id),
+        managerId: event.managerId ? String(event.managerId) : undefined,
+        audience_team_ids: teamIds,
+      };
+    });
+
+    return res.json({
+      events: mappedEvents,
+      serverTimestamp: new Date().toISOString(),
+      deltaSync: !!lastSyncParam,
+    });
+  } catch (err) {
+    console.error('[GET /events/my-shifts] Error:', err);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 // Get a single event by ID
 router.get('/events/:id', requireAuth, async (req, res) => {
   try {
@@ -2149,13 +2214,13 @@ router.get('/events', requireAuth, async (req, res) => {
 
       filter.$or = visibilityFilters;
 
-      // Staff can only see published events (not drafts)
-      // The visibility filters above already ensure they only see events they're invited to
+      // Staff can only see published events (not drafts) — unless they are
+      // personally listed in accepted_staff for that draft
       filter.$and = [
         {
           $or: [
-            { status: { $ne: 'draft' } },  // Non-draft events
-            { accepted_staff: { $exists: true, $ne: [], $not: { $size: 0 } } }  // Events with accepted staff
+            { status: { $ne: 'draft' } },
+            { $and: [{ status: 'draft' }, { 'accepted_staff.userKey': audienceKey }] },
           ]
         }
       ];

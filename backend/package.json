@@ -14,6 +14,7 @@
     "create-test-users": "node scripts/create-test-users.js",
     "seed:bulky": "ts-node --transpile-only --compiler-options '{\"rootDir\":\".\",\"types\":[\"node\"]}' scripts/bulky-seed.ts",
     "seed:demo": "NODE_ENV=production ts-node --transpile-only --compiler-options '{\"rootDir\":\".\",\"types\":[\"node\"]}' scripts/demo-seed.ts",
+    "seed:test-staff": "NODE_ENV=production ts-node --transpile-only --compiler-options '{\"rootDir\":\".\",\"types\":[\"node\"]}' scripts/seed-test-staff.ts",
     "test:concurrent": "node scripts/simulate-concurrent-acceptance.js",
     "test:duplicate": "node scripts/quick-duplicate-test.js",
     "test:load:acceptance": "k6 run load-tests/event-acceptance.k6.js",
