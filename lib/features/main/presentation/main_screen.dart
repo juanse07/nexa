@@ -209,6 +209,7 @@ class _MainScreenState extends State<MainScreen>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    context.watch<TerminologyProvider>().updateSystemLanguage(context);
     final bool isDesktop = MediaQuery.of(context).size.width >= 1200;
 
     if (isDesktop) {
@@ -298,7 +299,7 @@ class _MainScreenState extends State<MainScreen>
               // _buildNavButton(1, Icons.add_circle_outline, 'Create'),
               // ===== END REMOVED BUTTONS =====
               _buildNavButton(0, Icons.view_module, context.watch<TerminologyProvider>().plural), // Events (index 0)
-              _buildNavButton(1, Icons.calendar_month_rounded, 'Schedule'), // Calendar (index 1)
+              _buildNavButton(1, Icons.calendar_month_rounded, l10n.navSchedule), // Calendar (index 1)
               _buildNavButton(2, Icons.chat_bubble_outline, l10n.navChat), // Chat (index 2)
               _buildNavButton(3, Icons.inventory_2, l10n.navCatalog), // Catalog (index 3)
               _buildNavButton(4, Icons.fact_check_outlined, l10n.navAttendance), // Attendance (index 4)
@@ -430,7 +431,7 @@ class _MainScreenState extends State<MainScreen>
           // _buildRailItem(1, Icons.add_circle_outline, 'Create'),
           // ===== END REMOVED BUTTONS =====
           _buildRailItem(0, Icons.view_module, context.watch<TerminologyProvider>().plural), // Events (index 0)
-          _buildRailItem(1, Icons.calendar_month_rounded, 'Schedule'), // Calendar (index 1)
+          _buildRailItem(1, Icons.calendar_month_rounded, l10n.navSchedule), // Calendar (index 1)
           _buildRailItem(2, Icons.chat_bubble_outline, l10n.navChat), // Chat (index 2)
           _buildRailItem(3, Icons.inventory_2, l10n.navCatalog), // Catalog (index 3)
           _buildRailItem(4, Icons.fact_check_outlined, l10n.navAttendance), // Attendance (index 4)

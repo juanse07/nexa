@@ -4775,6 +4775,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     required int fullCount,
     required int completedCount,
   }) {
+    final l10n = AppLocalizations.of(context)!;
     // Chips use padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10)
     // Match that vertical padding so search aligns with chip row position
     return SizedBox(
@@ -4906,7 +4907,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             children: [
               Expanded(
                 child: _buildFilterChipBar(
-                  labels: ['Pending', 'Posted', 'Full', 'Completed'],
+                  labels: [l10n.pending, 'Posted', 'Full', l10n.completed],
                   counts: [pendingCount, availableCount, fullCount, completedCount],
                   selectedIndex: _eventsTabController.index,
                   onSelected: (index) {
@@ -5025,6 +5026,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   /// Show past events in a bottom sheet
   Widget _buildExpiredEventsBanner(int count) {
     if (count == 0) return const SizedBox.shrink();
+    final l10n = AppLocalizations.of(context)!;
     return GestureDetector(
       onTap: _showExpiredEvents,
       child: Container(
@@ -5051,7 +5053,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '$count expired unfulfilled event${count == 1 ? '' : 's'}',
+                    l10n.expiredUnfulfilledEvents(count),
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -5060,7 +5062,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Past events that were never fully staffed',
+                    l10n.pastEventsNeverFullyStaffed,
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.orange.shade700,
@@ -5122,7 +5124,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'Expired Unfulfilled (${expiredEvents.length})',
+                          AppLocalizations.of(parentContext)!.expiredUnfulfilledTitle(expiredEvents.length),
                           style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w700,
@@ -5715,7 +5717,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   /// Shared empty state for events tabs.
   /// [tabIndex]: 0=Pending, 1=Posted, 2=Full, 3=Completed
   Widget _buildEventsEmptyState(int tabIndex) {
-    final terminology = context.read<TerminologyProvider>().plural.toLowerCase();
+    final l10n = AppLocalizations.of(context)!;
+    final terminology = context.read<TerminologyProvider>().pluralLowercase;
 
     if (tabIndex == 2) {
       // Full tab
@@ -5728,7 +5731,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           ),
           const SizedBox(height: 16),
           Text(
-            'No full $terminology yet',
+            l10n.noFullTerminology(terminology),
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -5737,7 +5740,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           ),
           const SizedBox(height: 4),
           Text(
-            'When all positions are filled, they\'ll appear here',
+            l10n.whenPositionsFilled,
             style: TextStyle(fontSize: 13, color: Colors.grey[500]),
           ),
         ],
@@ -5755,7 +5758,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           ),
           const SizedBox(height: 16),
           Text(
-            'No completed $terminology yet',
+            l10n.noCompletedTerminology(terminology),
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -5764,7 +5767,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           ),
           const SizedBox(height: 4),
           Text(
-            'Completed $terminology will show up here',
+            l10n.completedTerminologyAppear(terminology),
             style: TextStyle(fontSize: 13, color: Colors.grey[500]),
           ),
         ],
@@ -5782,7 +5785,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           ),
           const SizedBox(height: 16),
           Text(
-            'No pending $terminology',
+            l10n.noPendingTerminology(terminology),
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -5791,7 +5794,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           ),
           const SizedBox(height: 4),
           Text(
-            'Draft $terminology waiting to be posted will appear here',
+            l10n.draftTerminologyWaiting(terminology),
             style: TextStyle(fontSize: 13, color: Colors.grey[500]),
           ),
         ],
@@ -5808,7 +5811,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         ),
         const SizedBox(height: 16),
         Text(
-          'No posted $terminology',
+          l10n.noPostedTerminology(terminology),
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
@@ -5817,7 +5820,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         ),
         const SizedBox(height: 4),
         Text(
-          'Posted $terminology waiting for staff will appear here',
+          l10n.postedTerminologyWaiting(terminology),
           style: TextStyle(fontSize: 13, color: Colors.grey[500]),
         ),
       ],

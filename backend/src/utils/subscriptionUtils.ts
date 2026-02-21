@@ -30,12 +30,7 @@ export function isReadOnly(user: Pick<UserDocument, 'subscription_tier' | 'subsc
   const tier = user.subscription_tier || 'free';
   const status = user.subscription_status || 'free_month';
 
-  if ((tier === 'pro' || tier === 'premium') && status === 'active') {
-    return false;
-  }
-
-  // Free users in their free month have full access
-  if (isInFreeMonth(user)) {
+  if ((tier === 'pro' || tier === 'premium') && (status === 'active' || status === 'trial')) {
     return false;
   }
 

@@ -54,7 +54,7 @@ export interface UserDocument extends Document {
 
   // Subscription fields
   subscription_tier?: 'free' | 'pro' | 'premium';
-  subscription_status?: 'active' | 'free_month' | 'expired' | 'cancelled' | 'grace_period';
+  subscription_status?: 'active' | 'trial' | 'free_month' | 'expired' | 'cancelled' | 'grace_period';
   subscription_platform?: 'ios' | 'android' | 'web' | null;
   qonversion_user_id?: string;
   subscription_started_at?: Date;
@@ -149,7 +149,7 @@ const UserSchema = new Schema<UserDocument>(
     subscription_tier: { type: String, enum: ['free', 'pro', 'premium'], default: 'free' },
     subscription_status: {
       type: String,
-      enum: ['active', 'free_month', 'expired', 'cancelled', 'grace_period'],
+      enum: ['active', 'trial', 'free_month', 'expired', 'cancelled', 'grace_period'],
       default: 'free_month'
     },
     subscription_platform: {

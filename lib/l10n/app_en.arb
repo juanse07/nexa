@@ -102,6 +102,7 @@
 
   "navCreate": "Create",
   "navJobs": "Jobs",
+  "navSchedule": "Schedule",
   "navChat": "Chat",
   "navHours": "Hours",
   "navCatalog": "Catalog",
@@ -485,6 +486,81 @@
   "onSite": "On-site",
   "autoClockOut": "Auto clocked-out",
   "completed": "Completed",
+  "calendarToday": "Today",
+  "calendarTomorrow": "Tomorrow",
+  "calendarViewMonth": "Month",
+  "calendarViewTwoWeeks": "2 Wks",
+  "calendarViewAgenda": "Agenda",
+  "noUpcomingEvents": "No upcoming events",
+  "scheduleIsClear": "Your schedule is clear going forward",
+  "hidePastEvents": "Hide past events",
+  "showPastDaysWithEvents": "{count, plural, =1{Show 1 past day with events} other{Show {count} past days with events}}",
+  "@showPastDaysWithEvents": {
+    "placeholders": {
+      "count": { "type": "int", "format": "decimalPattern" }
+    }
+  },
+  "noEventsThisDay": "No events this day",
+  "freeDayLabel": "Free day",
+  "nothingWasScheduled": "Nothing was scheduled",
+  "nothingScheduledYet": "Nothing scheduled yet",
+  "couldNotLoadEvents": "Could not load events",
+  "noFullTerminology": "No full {terminology} yet",
+  "@noFullTerminology": {
+    "placeholders": {
+      "terminology": { "type": "String" }
+    }
+  },
+  "whenPositionsFilled": "When all positions are filled, they'll appear here",
+  "expiredUnfulfilledEvents": "{count, plural, =1{1 expired unfulfilled event} other{{count} expired unfulfilled events}}",
+  "@expiredUnfulfilledEvents": {
+    "placeholders": {
+      "count": { "type": "int", "format": "decimalPattern" }
+    }
+  },
+  "pastEventsNeverFullyStaffed": "Past events that were never fully staffed",
+  "expiredUnfulfilledTitle": "Expired Unfulfilled ({count})",
+  "@expiredUnfulfilledTitle": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "noCompletedTerminology": "No completed {terminology} yet",
+  "@noCompletedTerminology": {
+    "placeholders": {
+      "terminology": { "type": "String" }
+    }
+  },
+  "completedTerminologyAppear": "Completed {terminology} will show up here",
+  "@completedTerminologyAppear": {
+    "placeholders": {
+      "terminology": { "type": "String" }
+    }
+  },
+  "noPendingTerminology": "No pending {terminology}",
+  "@noPendingTerminology": {
+    "placeholders": {
+      "terminology": { "type": "String" }
+    }
+  },
+  "draftTerminologyWaiting": "Draft {terminology} waiting to be posted will appear here",
+  "@draftTerminologyWaiting": {
+    "placeholders": {
+      "terminology": { "type": "String" }
+    }
+  },
+  "noPostedTerminology": "No posted {terminology}",
+  "@noPostedTerminology": {
+    "placeholders": {
+      "terminology": { "type": "String" }
+    }
+  },
+  "postedTerminologyWaiting": "Posted {terminology} waiting for staff will appear here",
+  "@postedTerminologyWaiting": {
+    "placeholders": {
+      "terminology": { "type": "String" }
+    }
+  },
   "flagged": "Flagged",
   "noShow": "No-show",
   "notSpecified": "Not specified",

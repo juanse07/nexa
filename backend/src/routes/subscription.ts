@@ -229,9 +229,10 @@ router.post('/subscription/link-user', requireAuth, async (req, res) => {
 
 /**
  * POST /api/subscription/sync
- * Manually sync subscription status from Qonversion
- * (In production, this would call Qonversion API to fetch latest status)
- * Supports both staff users and managers
+ * Sync subscription status after a client-side purchase or restore.
+ * The Qonversion SDK on the client verifies the purchase with Apple/Google,
+ * then reports the entitlement status here so we can update the DB.
+ * Supports both staff users and managers.
  */
 router.post('/subscription/sync', requireAuth, async (req, res) => {
   try {
@@ -243,9 +244,39 @@ router.post('/subscription/sync', requireAuth, async (req, res) => {
     }
 
     const { Model, isManager } = getUserModel(req);
+    const { tier, status, platform } = req.body || {};
 
-    // TODO: In production, call Qonversion API to fetch subscription status
-    // For now, just return current status
+    // Client reports a verified pro entitlement — update the DB
+    if (tier === 'pro' && (status === 'active' || status === 'trial')) {
+      const updateData: Record<string, any> = {
+        subscription_tier: 'pro',
+        subscription_status: status,
+        subscription_started_at: new Date(),
+      };
+      if (platform) {
+        updateData.subscription_platform = platform;
+      }
+
+      const updated = await (Model as any).findOneAndUpdate(
+        { provider, subject },
+        updateData,
+        { new: true }
+      );
+
+      if (!updated) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      console.log(`[subscription/sync] Activated pro for ${isManager ? 'manager' : 'staff'} ${provider}:${subject}`);
+
+      return res.json({
+        success: true,
+        tier: 'pro',
+        status,
+      });
+    }
+
+    // No tier update — just return current status
     const user = await (Model as any).findOne({ provider, subject })
       .select('subscription_tier subscription_status qonversion_user_id')
       .lean();
@@ -254,7 +285,7 @@ router.post('/subscription/sync', requireAuth, async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    console.log(`[subscription/sync] Sync requested for ${isManager ? 'manager' : 'staff'} ${provider}:${subject}`);
+    console.log(`[subscription/sync] Status check for ${isManager ? 'manager' : 'staff'} ${provider}:${subject}`);
 
     return res.json({
       success: true,

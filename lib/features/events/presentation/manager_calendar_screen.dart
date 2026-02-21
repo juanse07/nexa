@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:nexa/features/events/presentation/event_detail_screen.dart';
 import 'package:nexa/features/extraction/services/event_service.dart';
+import 'package:nexa/l10n/app_localizations.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
 import 'package:table_calendar/table_calendar.dart';
 
@@ -33,11 +35,20 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
   // Whether to show past events in the agenda (collapsed by default)
   bool _showPastEvents = false;
 
+  // Current locale code for DateFormat (auto-updated in didChangeDependencies)
+  String _locale = 'en';
+
   @override
   void initState() {
     super.initState();
     _eventService = EventService();
     _loadEvents();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _locale = Localizations.localeOf(context).languageCode;
   }
 
   @override
@@ -164,20 +175,16 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
   }
 
   String _formatDayLabel(DateTime day) {
+    final l10n = AppLocalizations.of(context)!;
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final tomorrow = today.add(const Duration(days: 1));
     final d = DateTime(day.year, day.month, day.day);
 
-    if (d == today) return 'Today';
-    if (d == tomorrow) return 'Tomorrow';
+    if (d == today) return l10n.calendarToday;
+    if (d == tomorrow) return l10n.calendarTomorrow;
 
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    return '${weekdays[day.weekday - 1]}, ${months[day.month - 1]} ${day.day}';
+    return DateFormat('EEE, MMM d', _locale).format(day);
   }
 
   String _staffingLabel(Map<String, dynamic> event) {
@@ -239,9 +246,9 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
                   const Icon(Icons.calendar_month_rounded,
                       color: AppColors.primaryIndigo, size: 22),
                   const SizedBox(width: 10),
-                  const Text(
-                    'Schedule',
-                    style: TextStyle(
+                  Text(
+                    AppLocalizations.of(context)!.navSchedule,
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
@@ -556,7 +563,7 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
               color: AppColors.navySpaceCadet.withValues(alpha: 0.18)),
           const SizedBox(height: 12),
           Text(
-            'No upcoming events',
+            AppLocalizations.of(context)!.noUpcomingEvents,
             style: TextStyle(
               color: AppColors.navySpaceCadet.withValues(alpha: 0.45),
               fontSize: 15,
@@ -565,7 +572,7 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Your schedule is clear going forward',
+            AppLocalizations.of(context)!.scheduleIsClear,
             style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
           ),
         ],
@@ -600,8 +607,8 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
             const SizedBox(width: 8),
             Text(
               _showPastEvents
-                  ? 'Hide past events'
-                  : 'Show $count past ${count == 1 ? 'day' : 'days'} with events',
+                  ? AppLocalizations.of(context)!.hidePastEvents
+                  : AppLocalizations.of(context)!.showPastDaysWithEvents(count),
               style: TextStyle(
                 color: AppColors.navySpaceCadet.withValues(alpha: 0.6),
                 fontSize: 12,
@@ -659,7 +666,7 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
             children: [
               Text(
                 isToday
-                    ? 'Today'
+                    ? AppLocalizations.of(context)!.calendarToday
                     : _weekdayName(day.weekday),
                 style: TextStyle(
                   color: isToday
@@ -696,16 +703,13 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
   }
 
   String _weekdayName(int weekday) {
-    const names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    return names[weekday - 1];
+    // weekday: 1=Mon…7=Sun. Anchor to a known Monday and offset.
+    final monday = DateTime(2025, 1, 6);
+    return DateFormat('EEEE', _locale).format(monday.add(Duration(days: weekday - 1)));
   }
 
   String _monthDayYear(DateTime d) {
-    const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
-    ];
-    return '${months[d.month - 1]} ${d.day}, ${d.year}';
+    return DateFormat.yMMMMd(_locale).format(d);
   }
 
   // ── Empty / error states ──────────────────────────────────────────────────
@@ -737,7 +741,9 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            isPast ? 'No events this day' : 'Free day',
+            isPast
+                ? AppLocalizations.of(context)!.noEventsThisDay
+                : AppLocalizations.of(context)!.freeDayLabel,
             style: TextStyle(
               color: AppColors.navySpaceCadet.withValues(alpha: 0.5),
               fontSize: 15,
@@ -746,7 +752,9 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            isPast ? 'Nothing was scheduled' : 'Nothing scheduled yet',
+            isPast
+                ? AppLocalizations.of(context)!.nothingWasScheduled
+                : AppLocalizations.of(context)!.nothingScheduledYet,
             style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
           ),
         ],
@@ -761,14 +769,14 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
         children: [
           Icon(Icons.wifi_off_rounded, size: 40, color: Colors.grey.shade400),
           const SizedBox(height: 12),
-          Text('Could not load events',
+          Text(AppLocalizations.of(context)!.couldNotLoadEvents,
               style: TextStyle(
                   color: Colors.grey.shade600, fontWeight: FontWeight.w500)),
           const SizedBox(height: 8),
           TextButton.icon(
             onPressed: _loadEvents,
             icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Retry'),
+            label: Text(AppLocalizations.of(context)!.retry),
           ),
         ],
       ),
@@ -1008,6 +1016,7 @@ class _ViewModeToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
@@ -1019,9 +1028,9 @@ class _ViewModeToggle extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _pill('Month', _ViewMode.month, Icons.calendar_view_month_rounded),
-          _pill('2 Wks', _ViewMode.twoWeeks, Icons.calendar_view_week_rounded),
-          _pill('Agenda', _ViewMode.agenda, Icons.view_agenda_rounded),
+          _pill(l10n.calendarViewMonth, _ViewMode.month, Icons.calendar_view_month_rounded),
+          _pill(l10n.calendarViewTwoWeeks, _ViewMode.twoWeeks, Icons.calendar_view_week_rounded),
+          _pill(l10n.calendarViewAgenda, _ViewMode.agenda, Icons.view_agenda_rounded),
         ],
       ),
     );

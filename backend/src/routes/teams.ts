@@ -926,6 +926,66 @@ router.post('/teams/:teamId/invites', requireAuth, async (req, res) => {
   }
 });
 
+// Staff-side: get my pending invites (must be ABOVE /teams/:teamId/invites)
+router.get('/teams/my/invites', requireAuth, async (req, res) => {
+  try {
+    const authUser = (req as any).user as AuthenticatedUser;
+    if (!authUser?.provider || !authUser.sub) {
+      return res.status(400).json({ message: 'Missing user identity' });
+    }
+
+    const match: Record<string, any> = {
+      status: 'pending',
+    };
+
+    const orConditions: Record<string, any>[] = [
+      { provider: authUser.provider, subject: authUser.sub },
+    ];
+
+    if (authUser.email) {
+      orConditions.push({ email: authUser.email });
+    }
+
+    match['$or'] = orConditions;
+
+    const invites = await TeamInviteModel.find(match).sort({ createdAt: -1 }).limit(200).lean();
+
+    if (invites.length === 0) {
+      return res.json({ invites: [] });
+    }
+
+    const teamIds = invites
+      .map((invite) => invite.teamId)
+      .filter((value): value is mongoose.Types.ObjectId => value instanceof mongoose.Types.ObjectId);
+
+    const teams = await TeamModel.find({ _id: { $in: teamIds } })
+      .select('_id name description managerId')
+      .lean();
+    const teamMap = new Map<string, any>(teams.map((team) => [String(team._id), team]));
+
+    const payload = invites.map((invite) => {
+      const team = teamMap.get(String(invite.teamId)) ?? {};
+      return {
+        inviteId: String(invite._id),
+        teamId: String(invite.teamId),
+        teamName: (team as any).name ?? 'Untitled team',
+        teamDescription: (team as any).description,
+        managerId: invite.managerId ? String(invite.managerId) : undefined,
+        email: invite.email,
+        provider: invite.provider,
+        subject: invite.subject,
+        token: invite.token,
+        expiresAt: invite.expiresAt,
+        createdAt: invite.createdAt,
+      };
+    });
+
+    return res.json({ invites: payload });
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to load invites' });
+  }
+});
+
 router.get('/teams/:teamId/invites', requireAuth, async (req, res) => {
   try {
     const manager = await resolveManagerForRequest(req as any);
@@ -1328,65 +1388,6 @@ router.get('/teams/my', requireAuth, async (req, res) => {
     return res.json({ teams: payload });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to load my teams' });
-  }
-});
-
-router.get('/teams/my/invites', requireAuth, async (req, res) => {
-  try {
-    const authUser = (req as any).user as AuthenticatedUser;
-    if (!authUser?.provider || !authUser.sub) {
-      return res.status(400).json({ message: 'Missing user identity' });
-    }
-
-    const match: Record<string, any> = {
-      status: 'pending',
-    };
-
-    const orConditions: Record<string, any>[] = [
-      { provider: authUser.provider, subject: authUser.sub },
-    ];
-
-    if (authUser.email) {
-      orConditions.push({ email: authUser.email });
-    }
-
-    match['$or'] = orConditions;
-
-    const invites = await TeamInviteModel.find(match).sort({ createdAt: -1 }).limit(200).lean();
-
-    if (invites.length === 0) {
-      return res.json({ invites: [] });
-    }
-
-    const teamIds = invites
-      .map((invite) => invite.teamId)
-      .filter((value): value is mongoose.Types.ObjectId => value instanceof mongoose.Types.ObjectId);
-
-    const teams = await TeamModel.find({ _id: { $in: teamIds } })
-      .select('_id name description managerId')
-      .lean();
-    const teamMap = new Map<string, any>(teams.map((team) => [String(team._id), team]));
-
-    const payload = invites.map((invite) => {
-      const team = teamMap.get(String(invite.teamId)) ?? {};
-      return {
-        inviteId: String(invite._id),
-        teamId: String(invite.teamId),
-        teamName: (team as any).name ?? 'Untitled team',
-        teamDescription: (team as any).description,
-        managerId: invite.managerId ? String(invite.managerId) : undefined,
-        email: invite.email,
-        provider: invite.provider,
-        subject: invite.subject,
-        token: invite.token,
-        expiresAt: invite.expiresAt,
-        createdAt: invite.createdAt,
-      };
-    });
-
-    return res.json({ invites: payload });
-  } catch (err) {
-    return res.status(500).json({ message: 'Failed to load invites' });
   }
 });
 

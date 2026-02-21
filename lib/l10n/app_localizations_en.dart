@@ -182,6 +182,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get navJobs => 'Jobs';
 
   @override
+  String get navSchedule => 'Schedule';
+
+  @override
   String get navChat => 'Chat';
 
   @override
@@ -1040,6 +1043,123 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get completed => 'Completed';
+
+  @override
+  String get calendarToday => 'Today';
+
+  @override
+  String get calendarTomorrow => 'Tomorrow';
+
+  @override
+  String get calendarViewMonth => 'Month';
+
+  @override
+  String get calendarViewTwoWeeks => '2 Wks';
+
+  @override
+  String get calendarViewAgenda => 'Agenda';
+
+  @override
+  String get noUpcomingEvents => 'No upcoming events';
+
+  @override
+  String get scheduleIsClear => 'Your schedule is clear going forward';
+
+  @override
+  String get hidePastEvents => 'Hide past events';
+
+  @override
+  String showPastDaysWithEvents(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Show $countString past days with events',
+      one: 'Show 1 past day with events',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get noEventsThisDay => 'No events this day';
+
+  @override
+  String get freeDayLabel => 'Free day';
+
+  @override
+  String get nothingWasScheduled => 'Nothing was scheduled';
+
+  @override
+  String get nothingScheduledYet => 'Nothing scheduled yet';
+
+  @override
+  String get couldNotLoadEvents => 'Could not load events';
+
+  @override
+  String noFullTerminology(String terminology) {
+    return 'No full $terminology yet';
+  }
+
+  @override
+  String get whenPositionsFilled =>
+      'When all positions are filled, they\'ll appear here';
+
+  @override
+  String expiredUnfulfilledEvents(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString expired unfulfilled events',
+      one: '1 expired unfulfilled event',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pastEventsNeverFullyStaffed =>
+      'Past events that were never fully staffed';
+
+  @override
+  String expiredUnfulfilledTitle(int count) {
+    return 'Expired Unfulfilled ($count)';
+  }
+
+  @override
+  String noCompletedTerminology(String terminology) {
+    return 'No completed $terminology yet';
+  }
+
+  @override
+  String completedTerminologyAppear(String terminology) {
+    return 'Completed $terminology will show up here';
+  }
+
+  @override
+  String noPendingTerminology(String terminology) {
+    return 'No pending $terminology';
+  }
+
+  @override
+  String draftTerminologyWaiting(String terminology) {
+    return 'Draft $terminology waiting to be posted will appear here';
+  }
+
+  @override
+  String noPostedTerminology(String terminology) {
+    return 'No posted $terminology';
+  }
+
+  @override
+  String postedTerminologyWaiting(String terminology) {
+    return 'Posted $terminology waiting for staff will appear here';
+  }
 
   @override
   String get flagged => 'Flagged';

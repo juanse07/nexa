@@ -408,6 +408,12 @@ abstract class AppLocalizations {
   /// **'Jobs'**
   String get navJobs;
 
+  /// No description provided for @navSchedule.
+  ///
+  /// In en, this message translates to:
+  /// **'Schedule'**
+  String get navSchedule;
+
   /// No description provided for @navChat.
   ///
   /// In en, this message translates to:
@@ -2003,6 +2009,156 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Completed'**
   String get completed;
+
+  /// No description provided for @calendarToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get calendarToday;
+
+  /// No description provided for @calendarTomorrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Tomorrow'**
+  String get calendarTomorrow;
+
+  /// No description provided for @calendarViewMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Month'**
+  String get calendarViewMonth;
+
+  /// No description provided for @calendarViewTwoWeeks.
+  ///
+  /// In en, this message translates to:
+  /// **'2 Wks'**
+  String get calendarViewTwoWeeks;
+
+  /// No description provided for @calendarViewAgenda.
+  ///
+  /// In en, this message translates to:
+  /// **'Agenda'**
+  String get calendarViewAgenda;
+
+  /// No description provided for @noUpcomingEvents.
+  ///
+  /// In en, this message translates to:
+  /// **'No upcoming events'**
+  String get noUpcomingEvents;
+
+  /// No description provided for @scheduleIsClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Your schedule is clear going forward'**
+  String get scheduleIsClear;
+
+  /// No description provided for @hidePastEvents.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide past events'**
+  String get hidePastEvents;
+
+  /// No description provided for @showPastDaysWithEvents.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Show 1 past day with events} other{Show {count} past days with events}}'**
+  String showPastDaysWithEvents(int count);
+
+  /// No description provided for @noEventsThisDay.
+  ///
+  /// In en, this message translates to:
+  /// **'No events this day'**
+  String get noEventsThisDay;
+
+  /// No description provided for @freeDayLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Free day'**
+  String get freeDayLabel;
+
+  /// No description provided for @nothingWasScheduled.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing was scheduled'**
+  String get nothingWasScheduled;
+
+  /// No description provided for @nothingScheduledYet.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing scheduled yet'**
+  String get nothingScheduledYet;
+
+  /// No description provided for @couldNotLoadEvents.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load events'**
+  String get couldNotLoadEvents;
+
+  /// No description provided for @noFullTerminology.
+  ///
+  /// In en, this message translates to:
+  /// **'No full {terminology} yet'**
+  String noFullTerminology(String terminology);
+
+  /// No description provided for @whenPositionsFilled.
+  ///
+  /// In en, this message translates to:
+  /// **'When all positions are filled, they\'ll appear here'**
+  String get whenPositionsFilled;
+
+  /// No description provided for @expiredUnfulfilledEvents.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 expired unfulfilled event} other{{count} expired unfulfilled events}}'**
+  String expiredUnfulfilledEvents(int count);
+
+  /// No description provided for @pastEventsNeverFullyStaffed.
+  ///
+  /// In en, this message translates to:
+  /// **'Past events that were never fully staffed'**
+  String get pastEventsNeverFullyStaffed;
+
+  /// No description provided for @expiredUnfulfilledTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Expired Unfulfilled ({count})'**
+  String expiredUnfulfilledTitle(int count);
+
+  /// No description provided for @noCompletedTerminology.
+  ///
+  /// In en, this message translates to:
+  /// **'No completed {terminology} yet'**
+  String noCompletedTerminology(String terminology);
+
+  /// No description provided for @completedTerminologyAppear.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed {terminology} will show up here'**
+  String completedTerminologyAppear(String terminology);
+
+  /// No description provided for @noPendingTerminology.
+  ///
+  /// In en, this message translates to:
+  /// **'No pending {terminology}'**
+  String noPendingTerminology(String terminology);
+
+  /// No description provided for @draftTerminologyWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft {terminology} waiting to be posted will appear here'**
+  String draftTerminologyWaiting(String terminology);
+
+  /// No description provided for @noPostedTerminology.
+  ///
+  /// In en, this message translates to:
+  /// **'No posted {terminology}'**
+  String noPostedTerminology(String terminology);
+
+  /// No description provided for @postedTerminologyWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Posted {terminology} waiting for staff will appear here'**
+  String postedTerminologyWaiting(String terminology);
 
   /// No description provided for @flagged.
   ///

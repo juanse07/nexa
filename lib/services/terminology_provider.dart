@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Provider for managing work terminology preferences (Jobs, Shifts, Events)
+/// Terminology choice is stored as English ('Jobs', 'Shifts', 'Events').
+/// Display strings are locale-aware, auto-detected from the system language.
 class TerminologyProvider with ChangeNotifier {
   static const String _key = 'work_terminology';
-  String _terminology = 'Jobs'; // Default
+  String _terminology = 'Jobs'; // Stored key (always English)
+  String _language = 'en'; // Auto-detected from system locale
 
   TerminologyProvider() {
     _loadPreference();
@@ -12,21 +15,53 @@ class TerminologyProvider with ChangeNotifier {
 
   String get terminology => _terminology;
 
-  /// Get singular form (Job, Shift, Event)
+  /// Update system language from current BuildContext locale.
+  /// Call this at the top of build() in any widget that displays terminology.
+  void updateSystemLanguage(BuildContext context) {
+    final locale = Localizations.maybeLocaleOf(context);
+    final newLanguage = (locale?.languageCode == 'es') ? 'es' : 'en';
+    if (_language != newLanguage) {
+      _language = newLanguage;
+      notifyListeners();
+    }
+  }
+
+  /// Get singular form (Job/Trabajo, Shift/Turno, Event/Evento)
   String get singular {
+    if (_language == 'es') {
+      switch (_terminology) {
+        case 'Shifts':
+          return 'Turno';
+        case 'Events':
+          return 'Evento';
+        default:
+          return 'Trabajo';
+      }
+    }
     switch (_terminology) {
       case 'Shifts':
         return 'Shift';
       case 'Events':
         return 'Event';
-      case 'Jobs':
       default:
         return 'Job';
     }
   }
 
-  /// Get plural form (Jobs, Shifts, Events)
-  String get plural => _terminology;
+  /// Get plural form (Jobs/Trabajos, Shifts/Turnos, Events/Eventos)
+  String get plural {
+    if (_language == 'es') {
+      switch (_terminology) {
+        case 'Shifts':
+          return 'Turnos';
+        case 'Events':
+          return 'Eventos';
+        default:
+          return 'Trabajos';
+      }
+    }
+    return _terminology;
+  }
 
   /// Get lowercase singular form
   String get singularLowercase => singular.toLowerCase();
