@@ -28,7 +28,7 @@ export async function createCustomer(
 
 export async function createCheckoutSession(
   customerId: string,
-  priceId: string,
+  lineItems: Array<{ price: string; quantity: number }>,
   orgId: string,
   successUrl: string,
   cancelUrl: string,
@@ -37,11 +37,32 @@ export async function createCheckoutSession(
   return stripe.checkout.sessions.create({
     customer: customerId,
     mode: 'subscription',
-    line_items: [{ price: priceId, quantity: 1 }],
+    line_items: lineItems,
     success_url: successUrl,
     cancel_url: cancelUrl,
     metadata: { orgId },
     subscription_data: { metadata: { orgId } },
+  });
+}
+
+/**
+ * Update the quantity of a specific line item on a subscription.
+ * Finds the item by matching the given price ID.
+ */
+export async function updateSubscriptionItemQuantity(
+  subscriptionId: string,
+  priceId: string,
+  quantity: number,
+): Promise<Stripe.Subscription> {
+  const stripe = getStripe();
+  const sub = await stripe.subscriptions.retrieve(subscriptionId);
+
+  const item = sub.items.data.find((i) => i.price.id === priceId);
+  if (!item) throw new Error(`No subscription item found for price ${priceId}`);
+
+  return stripe.subscriptions.update(subscriptionId, {
+    items: [{ id: item.id, quantity }],
+    proration_behavior: 'create_prorations',
   });
 }
 

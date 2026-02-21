@@ -26,6 +26,7 @@ class _OrganizationPageState extends State<OrganizationPage> {
   List<Map<String, dynamic>>? _staffPool;
   bool _staffPoolLoading = false;
   String? _currentManagerId;
+  int? _staffSeatsUsed;
 
   @override
   void initState() {
@@ -68,6 +69,18 @@ class _OrganizationPageState extends State<OrganizationPage> {
         _org = org;
         _loading = false;
       });
+      // Fetch live seat count if org exists
+      if (org != null) {
+        final orgId = org['id']?.toString() ?? '';
+        if (orgId.isNotEmpty) {
+          final seats = await _orgService.getStaffSeatCount(orgId);
+          if (mounted && seats != null) {
+            setState(() {
+              _staffSeatsUsed = seats['seatsUsed'] as int?;
+            });
+          }
+        }
+      }
     }
   }
 
@@ -716,6 +729,10 @@ class _OrganizationPageState extends State<OrganizationPage> {
       ),
       const SizedBox(height: 16),
 
+      // Staff Seats card
+      _buildStaffSeatsCard(theme),
+      const SizedBox(height: 16),
+
       // Members card
       Card(
         elevation: 0,
@@ -823,6 +840,69 @@ class _OrganizationPageState extends State<OrganizationPage> {
         ),
       ),
     ];
+  }
+
+  Widget _buildStaffSeatsCard(ThemeData theme) {
+    final billingModel = (_org?['billingModel'] ?? 'flat') as String;
+    final isPerSeat = billingModel == 'per_seat';
+    final seatCount = _staffSeatsUsed ?? (_org?['staffSeatsUsed'] as int? ?? 0);
+
+    return Card(
+      elevation: 0,
+      color: theme.colorScheme.surfaceContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.event_seat, color: theme.colorScheme.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Staff Seats',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    '$seatCount',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Active Staff Seats: $seatCount',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              isPerSeat
+                  ? 'Billed per seat \u2022 Usage auto-syncs with Stripe'
+                  : 'Flat rate \u2022 Unlimited staff',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildStaffPolicyCard(ThemeData theme) {

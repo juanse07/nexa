@@ -13,6 +13,7 @@ import {
   createPortalSession,
   constructWebhookEvent,
 } from '../services/stripeService';
+import { countOrgUniqueStaff, syncStaffSeatsToStripe, syncManagerSeatsToStripe } from '../utils/orgStaffCount';
 
 const router = Router();
 
@@ -48,6 +49,7 @@ const inviteMemberSchema = z.object({
 const checkoutSchema = z.object({
   successUrl: z.string().url(),
   cancelUrl: z.string().url(),
+  billingModel: z.enum(['flat', 'per_seat']).default('per_seat'),
 });
 
 const addStaffSchema = z.object({
@@ -182,6 +184,8 @@ router.get('/organizations/mine', requireAuth, async (req: Request, res: Respons
         cancelAtPeriodEnd: org.cancelAtPeriodEnd,
         managerSeatsIncluded: org.managerSeatsIncluded,
         staffSeatsIncluded: org.staffSeatsIncluded,
+        billingModel: org.billingModel || 'flat',
+        staffSeatsUsed: org.staffSeatsUsed || 0,
         staffPolicy: org.staffPolicy || 'open',
         approvedStaffCount: (org.approvedStaff || []).length,
         members: membersWithDetails,
@@ -352,6 +356,11 @@ router.delete(
 
       console.log(`[organizations] Removed manager ${targetManagerId} from org ${org._id}`);
 
+      // Fire-and-forget: sync manager seats if org uses per-seat billing
+      syncManagerSeatsToStripe(String(org._id)).catch((err) =>
+        console.error('[seat-sync] Manager remove error:', err),
+      );
+
       return res.json({ message: 'Member removed' });
     } catch (err) {
       console.error('[organizations] Remove member error:', err);
@@ -416,6 +425,11 @@ router.post('/organizations/join/:token', requireAuth, async (req: Request, res:
     });
 
     console.log(`[organizations] Manager ${managerId} joined org ${org._id} via invite`);
+
+    // Fire-and-forget: sync manager seats if org uses per-seat billing
+    syncManagerSeatsToStripe(String(org._id)).catch((err) =>
+      console.error('[seat-sync] Manager join error:', err),
+    );
 
     return res.json({
       message: 'Successfully joined organization',
@@ -656,8 +670,25 @@ router.post(
       const org = (req as any).org as OrganizationDocument;
       const validated = checkoutSchema.parse(req.body);
 
+      // Build line items based on billing model
+      const isPerSeat = validated.billingModel === 'per_seat';
+
       if (!ENV.stripePriceIdPro) {
         return res.status(500).json({ message: 'Stripe price not configured' });
+      }
+
+      const managerCount = org.members.length;
+      const lineItems: Array<{ price: string; quantity: number }> = [
+        { price: ENV.stripePriceIdPro, quantity: isPerSeat ? Math.max(managerCount, 1) : 1 },
+      ];
+
+      // Per-seat: add a second line item for staff seats
+      if (isPerSeat) {
+        if (!ENV.stripePriceIdPerSeat) {
+          return res.status(500).json({ message: 'Per-seat price not configured' });
+        }
+        const staffCount = await countOrgUniqueStaff(String(org._id));
+        lineItems.push({ price: ENV.stripePriceIdPerSeat, quantity: Math.max(staffCount, 1) });
       }
 
       // Lazily create Stripe customer for orgs created before Stripe was configured
@@ -675,9 +706,14 @@ router.post(
         console.log(`[organizations] Lazily created Stripe customer ${customerId} for org ${org._id}`);
       }
 
+      // Save billing model on the org
+      await OrganizationModel.findByIdAndUpdate(org._id, {
+        billingModel: validated.billingModel,
+      });
+
       const session = await createCheckoutSession(
         customerId,
-        ENV.stripePriceIdPro,
+        lineItems,
         String(org._id),
         validated.successUrl,
         validated.cancelUrl,
@@ -717,6 +753,28 @@ router.post(
   },
 );
 
+// ─── GET /organizations/:id/seats — Staff seat usage ────────────────
+
+router.get(
+  '/organizations/:id/seats',
+  requireAuth,
+  requireOrgMembership(),
+  async (req: Request, res: Response) => {
+    try {
+      const org = (req as any).org as OrganizationDocument;
+      const seatsUsed = await countOrgUniqueStaff(String(org._id));
+
+      return res.json({
+        seatsUsed,
+        billingModel: org.billingModel || 'flat',
+      });
+    } catch (err) {
+      console.error('[organizations] Get seats error:', err);
+      return res.status(500).json({ message: 'Failed to get seat count' });
+    }
+  },
+);
+
 // ─── Stripe Webhook Handler ────────────────────────────────────────
 // CRITICAL: This must receive raw body (not JSON-parsed).
 // It is registered separately in index.ts with express.raw().
@@ -746,6 +804,12 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
 
           // Update all org members' subscription
           await syncOrgMemberTiers(orgId, 'pro');
+
+          // For per-seat orgs, sync the initial seat count
+          syncStaffSeatsToStripe(orgId).catch((err) =>
+            console.error('[stripe-webhook] Seat sync error:', err),
+          );
+
           console.log(`[stripe-webhook] Activated subscription for org ${orgId}`);
         }
         break;

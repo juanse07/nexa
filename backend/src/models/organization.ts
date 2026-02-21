@@ -4,6 +4,7 @@ export type OrgSubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'cancel
 export type OrgSubscriptionTier = 'free' | 'pro';
 export type OrgMemberRole = 'owner' | 'admin' | 'member';
 export type OrgStaffPolicy = 'open' | 'restricted';
+export type OrgBillingModel = 'flat' | 'per_seat';
 
 export interface ApprovedStaffEntry {
   provider: string;
@@ -39,6 +40,8 @@ export interface OrganizationDocument extends Document {
   cancelAtPeriodEnd?: boolean;
   managerSeatsIncluded: number;
   staffSeatsIncluded: number;
+  billingModel: OrgBillingModel;
+  staffSeatsUsed: number;
   staffPolicy: OrgStaffPolicy;
   approvedStaff: ApprovedStaffEntry[];
   members: OrgMember[];
@@ -67,6 +70,12 @@ const OrganizationSchema = new Schema<OrganizationDocument>(
     cancelAtPeriodEnd: { type: Boolean, default: false },
     managerSeatsIncluded: { type: Number, default: 5 },
     staffSeatsIncluded: { type: Number, default: 0 }, // 0 = unlimited
+    billingModel: {
+      type: String,
+      enum: ['flat', 'per_seat'],
+      default: 'flat',
+    },
+    staffSeatsUsed: { type: Number, default: 0 },
     staffPolicy: {
       type: String,
       enum: ['open', 'restricted'],

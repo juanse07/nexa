@@ -15,7 +15,6 @@ import '../../../onboarding/presentation/venue_list_screen.dart';
 import '../../../venues/presentation/venue_form_screen.dart';
 import '../../../../shared/presentation/theme/app_colors.dart';
 import '../../../brand/presentation/widgets/brand_customization_card.dart';
-import '../../../organization/presentation/pages/organization_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -271,33 +270,6 @@ class _SettingsPageState extends State<SettingsPage> {
                         );
                       },
                     ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                // Organization Section (B2B)
-                Card(
-                  elevation: 0,
-                  color: theme.colorScheme.surfaceContainer,
-                  child: ListTile(
-                    leading: Icon(
-                      Icons.business,
-                      color: theme.colorScheme.primary,
-                    ),
-                    title: Text(
-                      'Organization',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    subtitle: const Text('Manage B2B account & billing'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const OrganizationPage(),
-                        ),
-                      );
-                    },
                   ),
                 ),
                 const SizedBox(height: 16),

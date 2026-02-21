@@ -45,5 +45,6 @@ export const ENV = {
   stripeSecretKey: process.env.STRIPE_SECRET_KEY || '',
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
   stripePriceIdPro: process.env.STRIPE_PRICE_ID_PRO || '',
+  stripePriceIdPerSeat: process.env.STRIPE_PRICE_ID_PER_SEAT || '',
   stripePortalReturnUrl: process.env.STRIPE_PORTAL_RETURN_URL || 'https://flowshift.work',
 };

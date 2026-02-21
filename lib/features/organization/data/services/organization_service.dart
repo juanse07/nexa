@@ -143,6 +143,22 @@ class OrganizationService {
     }
   }
 
+  // ─── Staff Seat Count ──────────────────────────────────────────
+
+  /// Get the live staff seat count for an organization
+  Future<Map<String, dynamic>?> getStaffSeatCount(String orgId) async {
+    try {
+      final response = await _apiClient.get('/organizations/$orgId/seats');
+      if (response.statusCode == 200) {
+        return response.data as Map<String, dynamic>;
+      }
+      return null;
+    } catch (e) {
+      print('[OrganizationService] getStaffSeatCount error: $e');
+      return null;
+    }
+  }
+
   // ─── Staff Pool Management ─────────────────────────────────────
 
   /// Get the approved staff pool for an organization

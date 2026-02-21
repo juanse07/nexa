@@ -1,6 +1,8 @@
 import { getTestApp, createAuthenticatedManager, createTestTeam, generateTestToken } from '../helpers';
 import { OrganizationModel } from '../../models/organization';
 import { ManagerModel } from '../../models/manager';
+import { TeamMemberModel } from '../../models/teamMember';
+import { countOrgUniqueStaff, syncStaffSeatsToStripe } from '../../utils/orgStaffCount';
 
 // Mock env with Stripe keys disabled (unit tests don't call Stripe)
 jest.mock('../../config/env', () => ({
@@ -31,6 +33,7 @@ jest.mock('../../config/env', () => ({
     stripeSecretKey: 'sk_test_fake',
     stripeWebhookSecret: 'whsec_test_fake',
     stripePriceIdPro: 'price_test_pro',
+    stripePriceIdPerSeat: 'price_test_per_seat',
     stripePortalReturnUrl: 'https://flowshift.work',
   },
 }));
@@ -58,6 +61,7 @@ jest.mock('../../services/stripeService', () => ({
   createCheckoutSession: jest.fn().mockResolvedValue({ url: 'https://checkout.stripe.com/test' }),
   createPortalSession: jest.fn().mockResolvedValue({ url: 'https://billing.stripe.com/test' }),
   constructWebhookEvent: jest.fn(),
+  updateSubscriptionItemQuantity: jest.fn().mockResolvedValue({ id: 'sub_test', items: { data: [] } }),
 }));
 
 describe('Organizations API', () => {
@@ -834,6 +838,113 @@ describe('Organizations API', () => {
         });
 
       expect(res.status).toBe(201);
+    });
+  });
+
+  // ─── Per-Seat Staff Billing ──────────────────────────────────────
+
+  describe('Per-Seat Staff Billing', () => {
+    let ownerId: any;
+    let ownerToken: string;
+    let orgId: string;
+
+    beforeEach(async () => {
+      const { manager, token } = await createAuthenticatedManager({ email: 'seat-owner@test.com' });
+      ownerId = manager._id;
+      ownerToken = token;
+
+      // Create an org
+      const res = await app
+        .post('/api/organizations')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Seat Test Org' });
+      orgId = res.body.id;
+    });
+
+    it('countOrgUniqueStaff returns correct count across multiple teams', async () => {
+      // Create two teams under the org owner
+      const team1 = await createTestTeam(ownerId, 'Team Alpha');
+      const team2 = await createTestTeam(ownerId, 'Team Beta');
+
+      // Add 3 unique staff members across the two teams
+      await TeamMemberModel.create([
+        { teamId: team1._id, managerId: ownerId, provider: 'google', subject: 'staff-1', status: 'active' },
+        { teamId: team1._id, managerId: ownerId, provider: 'google', subject: 'staff-2', status: 'active' },
+        { teamId: team2._id, managerId: ownerId, provider: 'apple', subject: 'staff-3', status: 'active' },
+      ]);
+
+      const count = await countOrgUniqueStaff(orgId);
+      expect(count).toBe(3);
+    });
+
+    it('countOrgUniqueStaff deduplicates same staff in 2 teams', async () => {
+      const team1 = await createTestTeam(ownerId, 'Team A');
+      const team2 = await createTestTeam(ownerId, 'Team B');
+
+      // Same person (google:dup-user) in both teams
+      await TeamMemberModel.create([
+        { teamId: team1._id, managerId: ownerId, provider: 'google', subject: 'dup-user', status: 'active' },
+        { teamId: team2._id, managerId: ownerId, provider: 'google', subject: 'dup-user', status: 'active' },
+        { teamId: team1._id, managerId: ownerId, provider: 'google', subject: 'unique-user', status: 'active' },
+      ]);
+
+      const count = await countOrgUniqueStaff(orgId);
+      expect(count).toBe(2); // dup-user counted once + unique-user
+    });
+
+    it('countOrgUniqueStaff excludes staff with status left', async () => {
+      const team = await createTestTeam(ownerId, 'Team Left');
+
+      await TeamMemberModel.create([
+        { teamId: team._id, managerId: ownerId, provider: 'google', subject: 'active-staff', status: 'active' },
+        { teamId: team._id, managerId: ownerId, provider: 'google', subject: 'left-staff', status: 'left' },
+      ]);
+
+      const count = await countOrgUniqueStaff(orgId);
+      expect(count).toBe(1); // only active-staff counted
+    });
+
+    it('GET /organizations/:id/seats returns seat count and billing model', async () => {
+      const team = await createTestTeam(ownerId, 'Team Seats');
+      await TeamMemberModel.create([
+        { teamId: team._id, managerId: ownerId, provider: 'google', subject: 'seat-1', status: 'active' },
+        { teamId: team._id, managerId: ownerId, provider: 'google', subject: 'seat-2', status: 'active' },
+      ]);
+
+      const res = await app
+        .get(`/api/organizations/${orgId}/seats`)
+        .set('Authorization', `Bearer ${ownerToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.seatsUsed).toBe(2);
+      expect(res.body.billingModel).toBe('flat'); // default
+    });
+
+    it('checkout with billingModel per_seat saves model on org', async () => {
+      const res = await app
+        .post(`/api/organizations/${orgId}/checkout`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({
+          successUrl: 'https://flowshift.work/success',
+          cancelUrl: 'https://flowshift.work/cancel',
+          billingModel: 'per_seat',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.url).toBe('https://checkout.stripe.com/test');
+
+      // Verify billingModel was saved
+      const org = await OrganizationModel.findById(orgId).lean();
+      expect(org?.billingModel).toBe('per_seat');
+    });
+
+    it('syncStaffSeatsToStripe is no-op for flat billing orgs', async () => {
+      // Org defaults to 'flat' — sync should return without calling Stripe
+      await syncStaffSeatsToStripe(orgId);
+
+      const { updateSubscriptionItemQuantity } = require('../../services/stripeService');
+      // Should not have been called since billingModel is 'flat'
+      expect(updateSubscriptionItemQuantity).not.toHaveBeenCalled();
     });
   });
 });

@@ -19,6 +19,7 @@ import { AvailabilityModel } from '../models/availability';
 import { generateUniqueShortCode, isValidShortCodeFormat } from '../utils/inviteCodeGenerator';
 import { inviteCreateLimiter } from '../middleware/rateLimiter';
 import { canAddStaffToTeam } from '../utils/orgStaffPolicy';
+import { syncStaffSeatsToStripe } from '../utils/orgStaffCount';
 
 const router = Router();
 
@@ -696,6 +697,14 @@ router.post('/teams/:teamId/members', requireAuth, async (req, res) => {
     emitToTeams([String(resolvedMember.teamId)], 'team:memberAdded', memberPayload);
     emitToUser(buildUserKey(provider, subject), 'team:memberAdded', memberPayload);
 
+    // Fire-and-forget: sync staff seats if org uses per-seat billing
+    const mgr = await ManagerModel.findById(managerObjectId).select('organizationId').lean();
+    if (mgr?.organizationId) {
+      syncStaffSeatsToStripe(String(mgr.organizationId)).catch((err) =>
+        console.error('[seat-sync] Error:', err),
+      );
+    }
+
     return res.status(201).json(memberPayload);
   } catch (err) {
     console.error('[teams] POST /teams/:teamId/members failed', err);
@@ -783,6 +792,14 @@ router.delete('/teams/:teamId/members/:memberId', requireAuth, async (req, res) 
     emitToManager(String(managerId), 'team:memberRemoved', payload);
     emitToTeams([String(result.teamId)], 'team:memberRemoved', payload);
     emitToUser(buildUserKey(result.provider, result.subject), 'team:memberRemoved', payload);
+
+    // Fire-and-forget: sync staff seats if org uses per-seat billing
+    const mgr = await ManagerModel.findById(managerId).select('organizationId').lean();
+    if (mgr?.organizationId) {
+      syncStaffSeatsToStripe(String(mgr.organizationId)).catch((err) =>
+        console.error('[seat-sync] Error:', err),
+      );
+    }
 
     return res.json({ message: 'Member removed' });
   } catch (err) {
@@ -1314,6 +1331,14 @@ router.post('/invites/:token/accept', requireAuth, async (req, res) => {
       createdAt: member?.createdAt,
     };
 
+    // Fire-and-forget: sync staff seats if org uses per-seat billing
+    const inviteMgr = await ManagerModel.findById(invite.managerId).select('organizationId').lean();
+    if (inviteMgr?.organizationId) {
+      syncStaffSeatsToStripe(String(inviteMgr.organizationId)).catch((err) =>
+        console.error('[seat-sync] Error:', err),
+      );
+    }
+
     return res.json({
       team: {
         id: String(team._id),
@@ -1743,6 +1768,14 @@ router.post('/teams/:teamId/applicants/:applicantId/approve', requireAuth, async
       applicantId: String(applicant._id),
       teamId: String(teamObjectId),
     });
+
+    // Fire-and-forget: sync staff seats if org uses per-seat billing
+    const approveMgr = await ManagerModel.findById(managerId).select('organizationId').lean();
+    if (approveMgr?.organizationId) {
+      syncStaffSeatsToStripe(String(approveMgr.organizationId)).catch((err) =>
+        console.error('[seat-sync] Error:', err),
+      );
+    }
 
     return res.json({
       message: 'Applicant approved',
