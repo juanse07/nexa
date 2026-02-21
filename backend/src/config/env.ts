@@ -40,4 +40,10 @@ export const ENV = {
   // Document Generation Service
   docServiceUrl: process.env.DOC_SERVICE_URL || 'http://doc-service:5000',
   docServiceSecret: process.env.DOC_SERVICE_SECRET || '',
+
+  // Stripe (B2B org billing)
+  stripeSecretKey: process.env.STRIPE_SECRET_KEY || '',
+  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
+  stripePriceIdPro: process.env.STRIPE_PRICE_ID_PRO || '',
+  stripePortalReturnUrl: process.env.STRIPE_PORTAL_RETURN_URL || 'https://flowshift.work',
 };

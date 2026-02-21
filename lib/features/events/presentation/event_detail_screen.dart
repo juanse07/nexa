@@ -226,8 +226,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               const SizedBox(height: 16),
             ],
 
-            // Action Buttons for Published Events (or drafts sent to staff)
+            // Action Buttons for Published/Fulfilled Events (or drafts sent to staff)
             if (event['status'] == 'published' ||
+                event['status'] == 'fulfilled' ||
                 (event['status'] == 'draft' &&
                     (event['accepted_staff'] as List?)?.isNotEmpty == true)) ...[
               _buildActionButtons(),

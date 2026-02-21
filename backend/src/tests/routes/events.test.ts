@@ -268,4 +268,70 @@ describe('Events API', () => {
       expect(res.status).toBe(400);
     });
   });
+
+  // ── GET /api/events/user/:userKey ──────────────────
+
+  describe('GET /api/events/user/:userKey', () => {
+    it('returns 401 without auth', async () => {
+      const res = await app.get('/api/events/user/google:some-user');
+      expect(res.status).toBe(401);
+    });
+
+    it('manager sees only their own events for a staff member', async () => {
+      const { manager, token } = await createAuthenticatedManager();
+      const staffUserKey = 'google:shared-staff-1';
+      await createTestEvent(manager._id, {
+        accepted_staff: [{ userKey: staffUserKey, role: 'Server', response: 'accepted' }],
+      });
+
+      const res = await app.get(`/api/events/user/${staffUserKey}`).set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(200);
+      expect(res.body.events).toHaveLength(1);
+    });
+
+    it('two managers with the same staff member see only their respective events', async () => {
+      const { manager: m1, token: t1 } = await createAuthenticatedManager();
+      const { manager: m2, token: t2 } = await createAuthenticatedManager();
+      const staffUserKey = 'google:shared-staff-2';
+
+      await createTestEvent(m1._id, {
+        event_name: 'M1 Event',
+        accepted_staff: [{ userKey: staffUserKey, role: 'Server', response: 'accepted' }],
+      });
+      await createTestEvent(m2._id, {
+        event_name: 'M2 Event',
+        accepted_staff: [{ userKey: staffUserKey, role: 'Bartender', response: 'accepted' }],
+      });
+
+      const res1 = await app.get(`/api/events/user/${staffUserKey}`).set('Authorization', `Bearer ${t1}`);
+      expect(res1.status).toBe(200);
+      expect(res1.body.events).toHaveLength(1);
+      expect(res1.body.events[0].event_name).toBe('M1 Event');
+
+      const res2 = await app.get(`/api/events/user/${staffUserKey}`).set('Authorization', `Bearer ${t2}`);
+      expect(res2.status).toBe(200);
+      expect(res2.body.events).toHaveLength(1);
+      expect(res2.body.events[0].event_name).toBe('M2 Event');
+    });
+
+    it('staff can query their own events', async () => {
+      const { user, token: staffToken } = await createAuthenticatedStaffUser();
+      const { manager } = await createAuthenticatedManager();
+      const staffUserKey = `${user.provider}:${user.subject}`;
+
+      await createTestEvent(manager._id, {
+        accepted_staff: [{ userKey: staffUserKey, role: 'Server', response: 'accepted' }],
+      });
+
+      const res = await app.get(`/api/events/user/${staffUserKey}`).set('Authorization', `Bearer ${staffToken}`);
+      expect(res.status).toBe(200);
+      expect(res.body.events).toHaveLength(1);
+    });
+
+    it('staff cannot query another staff member\'s events', async () => {
+      const { token: staffToken } = await createAuthenticatedStaffUser();
+      const res = await app.get('/api/events/user/google:someone-else').set('Authorization', `Bearer ${staffToken}`);
+      expect(res.status).toBe(403);
+    });
+  });
 });

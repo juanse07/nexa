@@ -210,6 +210,8 @@ UserSchema.index({ provider: 1, subject: 1 }, { unique: true });
 UserSchema.index({ app_id: 1 }, { unique: false, sparse: true });
 UserSchema.index({ qonversion_user_id: 1 }, { unique: false, sparse: true });
 UserSchema.index({ auth_phone_number: 1 }, { unique: true, sparse: true }); // Phone auth lookup
+UserSchema.index({ email: 1 }, { sparse: true }); // Email-based account linking lookup
+UserSchema.index({ 'linked_providers.provider': 1, 'linked_providers.subject': 1 }, { sparse: true }); // Linked provider lookup
 
 export const UserModel: Model<UserDocument> =
   mongoose.models.User || mongoose.model<UserDocument>('User', UserSchema);

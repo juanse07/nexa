@@ -52,7 +52,11 @@ if (APPLE_AUDIENCE_IDS.length === 0) {
   );
 }
 
-function issueAppJwt(profile: VerifiedProfile, managerId?: string): string {
+function issueAppJwt(
+  profile: VerifiedProfile,
+  managerId?: string,
+  orgInfo?: { organizationId: string; orgRole: string },
+): string {
   const payload = {
     sub: profile.subject,
     provider: profile.provider,
@@ -61,14 +65,90 @@ function issueAppJwt(profile: VerifiedProfile, managerId?: string): string {
     picture: profile.picture,
     phoneNumber: profile.phoneNumber,
     ...(managerId && { managerId }),
+    ...(orgInfo && { organizationId: orgInfo.organizationId, orgRole: orgInfo.orgRole }),
   } as const;
   return jwt.sign(payload, JWT_SECRET, { algorithm: 'HS256', expiresIn: '7d' });
 }
 
-async function upsertUser(profile: VerifiedProfile) {
-  const filter = { provider: profile.provider, subject: profile.subject } as const;
+async function upsertUser(profile: VerifiedProfile): Promise<VerifiedProfile> {
+  // Step 1: Direct match by provider + subject
+  const directMatch = await UserModel.findOne({
+    provider: profile.provider,
+    subject: profile.subject,
+  }).lean();
 
-  // Try to intelligently split the OAuth name into first and last name for new users
+  if (directMatch) {
+    // Update OAuth fields on returning user
+    const setPicture = !directMatch.picture && profile.picture;
+    await UserModel.updateOne(
+      { _id: directMatch._id },
+      {
+        $set: {
+          email: profile.email,
+          name: profile.name,
+          updatedAt: new Date(),
+          ...(setPicture ? { picture: profile.picture } : {}),
+        },
+      },
+    );
+    return profile;
+  }
+
+  // Step 2: Check if this provider+subject is in another user's linked_providers
+  const linkedMatch = await UserModel.findOne({
+    'linked_providers.provider': profile.provider,
+    'linked_providers.subject': profile.subject,
+  }).lean();
+
+  if (linkedMatch) {
+    // Return the PRIMARY identity from the linked account
+    return {
+      provider: linkedMatch.provider,
+      subject: linkedMatch.subject,
+      email: linkedMatch.email,
+      name: linkedMatch.name,
+      picture: linkedMatch.picture,
+    };
+  }
+
+  // Step 3: Email match — link this provider to the existing account
+  if (profile.email) {
+    const emailMatch = await UserModel.findOne({
+      email: profile.email,
+      // Exclude exact same provider+subject (already handled in step 1)
+      $or: [
+        { provider: { $ne: profile.provider } },
+        { subject: { $ne: profile.subject } },
+      ],
+    }).lean();
+
+    if (emailMatch) {
+      // Add new provider to existing user's linked_providers
+      await UserModel.updateOne(
+        { _id: emailMatch._id },
+        {
+          $addToSet: {
+            linked_providers: {
+              provider: profile.provider,
+              subject: profile.subject,
+              linked_at: new Date(),
+            },
+          },
+          $set: { updatedAt: new Date() },
+        },
+      );
+      // Return the PRIMARY identity (the existing account)
+      return {
+        provider: emailMatch.provider,
+        subject: emailMatch.subject,
+        email: emailMatch.email,
+        name: emailMatch.name,
+        picture: emailMatch.picture,
+      };
+    }
+  }
+
+  // Step 4: No match — create new user
   let firstName: string | undefined;
   let lastName: string | undefined;
   if (profile.name) {
@@ -81,61 +161,148 @@ async function upsertUser(profile: VerifiedProfile) {
     }
   }
 
-  // Check if user already exists with a custom picture (different from OAuth)
-  const existing = await UserModel.findOne(filter).select('picture').lean();
-
-  // Determine if picture should go in $set (user exists but has no custom picture)
-  const setPicture = !existing?.picture && profile.picture;
-
-  const update = {
-    $set: {
-      // Always update these OAuth fields on every login
-      email: profile.email,
-      name: profile.name,
-      updatedAt: new Date(),
-      // Only overwrite picture if user has no custom one yet
-      ...(setPicture ? { picture: profile.picture } : {}),
+  await UserModel.updateOne(
+    { provider: profile.provider, subject: profile.subject },
+    {
+      $set: {
+        email: profile.email,
+        name: profile.name,
+        updatedAt: new Date(),
+        ...(profile.picture ? { picture: profile.picture } : {}),
+      },
+      $setOnInsert: {
+        provider: profile.provider,
+        subject: profile.subject,
+        createdAt: new Date(),
+        ...(firstName && { first_name: firstName }),
+        ...(lastName && { last_name: lastName }),
+      },
     },
-    $setOnInsert: {
-      // Only set these on user creation - preserve custom fields on subsequent logins
-      provider: profile.provider,
-      subject: profile.subject,
-      createdAt: new Date(),
-      // Pre-populate first and last name from OAuth if available (only on creation)
-      ...(firstName && { first_name: firstName }),
-      ...(lastName && { last_name: lastName }),
-      // Set OAuth picture only on first creation, but NOT if already in $set (MongoDB conflict)
-      ...(!setPicture && profile.picture ? { picture: profile.picture } : {}),
-    },
-  } as const;
-  await UserModel.updateOne(filter, update, { upsert: true });
+    { upsert: true },
+  );
+  return profile;
 }
 
-async function ensureManagerDocument(profile: VerifiedProfile) {
-  const filter = { provider: profile.provider, subject: profile.subject } as const;
-  // Check if manager already exists with a custom picture
-  const existing = await ManagerModel.findOne(filter).select('picture').lean();
+async function ensureManagerDocument(
+  profile: VerifiedProfile,
+): Promise<{ primaryProfile: VerifiedProfile; managerId: string; orgInfo?: { organizationId: string; orgRole: string } }> {
+  // Step 1: Direct match by provider + subject
+  const directMatch = await ManagerModel.findOne({
+    provider: profile.provider,
+    subject: profile.subject,
+  }).lean();
 
-  // Determine if picture should go in $set (manager exists but has no custom picture)
-  const setPicture = !existing?.picture && profile.picture;
+  if (directMatch) {
+    const setPicture = !directMatch.picture && profile.picture;
+    await ManagerModel.updateOne(
+      { _id: directMatch._id },
+      {
+        $set: {
+          email: profile.email,
+          name: profile.name,
+          updatedAt: new Date(),
+          ...(setPicture ? { picture: profile.picture } : {}),
+        },
+      },
+    );
+    const orgInfo1 = directMatch.organizationId && directMatch.orgRole
+      ? { organizationId: String(directMatch.organizationId), orgRole: directMatch.orgRole }
+      : undefined;
+    return { primaryProfile: profile, managerId: String(directMatch._id), orgInfo: orgInfo1 };
+  }
 
-  const update = {
-    $set: {
-      provider: profile.provider,
-      subject: profile.subject,
+  // Step 2: Check if this provider+subject is in another manager's linked_providers
+  const linkedMatch = await ManagerModel.findOne({
+    'linked_providers.provider': profile.provider,
+    'linked_providers.subject': profile.subject,
+  }).lean();
+
+  if (linkedMatch) {
+    const orgInfo2 = linkedMatch.organizationId && linkedMatch.orgRole
+      ? { organizationId: String(linkedMatch.organizationId), orgRole: linkedMatch.orgRole }
+      : undefined;
+    return {
+      primaryProfile: {
+        provider: linkedMatch.provider,
+        subject: linkedMatch.subject,
+        email: linkedMatch.email,
+        name: linkedMatch.name,
+        picture: linkedMatch.picture,
+      },
+      managerId: String(linkedMatch._id),
+      orgInfo: orgInfo2,
+    };
+  }
+
+  // Step 3: Email match — link this provider to the existing manager
+  if (profile.email) {
+    const emailMatch = await ManagerModel.findOne({
       email: profile.email,
-      name: profile.name,
-      updatedAt: new Date(),
-      // Only overwrite picture if manager has no custom one yet
-      ...(setPicture ? { picture: profile.picture } : {}),
+      $or: [
+        { provider: { $ne: profile.provider } },
+        { subject: { $ne: profile.subject } },
+      ],
+    }).lean();
+
+    if (emailMatch) {
+      await ManagerModel.updateOne(
+        { _id: emailMatch._id },
+        {
+          $addToSet: {
+            linked_providers: {
+              provider: profile.provider,
+              subject: profile.subject,
+              linked_at: new Date(),
+            },
+          },
+          $set: { updatedAt: new Date() },
+        },
+      );
+      const orgInfo3 = emailMatch.organizationId && emailMatch.orgRole
+        ? { organizationId: String(emailMatch.organizationId), orgRole: emailMatch.orgRole }
+        : undefined;
+      return {
+        primaryProfile: {
+          provider: emailMatch.provider,
+          subject: emailMatch.subject,
+          email: emailMatch.email,
+          name: emailMatch.name,
+          picture: emailMatch.picture,
+        },
+        managerId: String(emailMatch._id),
+        orgInfo: orgInfo3,
+      };
+    }
+  }
+
+  // Step 4: No match — create new manager
+  const result = await ManagerModel.updateOne(
+    { provider: profile.provider, subject: profile.subject },
+    {
+      $set: {
+        provider: profile.provider,
+        subject: profile.subject,
+        email: profile.email,
+        name: profile.name,
+        updatedAt: new Date(),
+        ...(profile.picture ? { picture: profile.picture } : {}),
+      },
+      $setOnInsert: {
+        createdAt: new Date(),
+      },
     },
-    $setOnInsert: {
-      createdAt: new Date(),
-      // Set OAuth picture only on first creation, but NOT if already in $set (MongoDB conflict)
-      ...(!setPicture && profile.picture ? { picture: profile.picture } : {}),
-    },
-  } as const;
-  await ManagerModel.updateOne(filter, update, { upsert: true });
+    { upsert: true },
+  );
+  // Get the _id (either upserted or existing)
+  const managerId = result.upsertedId
+    ? String(result.upsertedId)
+    : String(
+        (await ManagerModel.findOne({
+          provider: profile.provider,
+          subject: profile.subject,
+        }).lean())?._id,
+      );
+  return { primaryProfile: profile, managerId };
 }
 
 async function verifyGoogleIdToken(idToken: string): Promise<VerifiedProfile> {
@@ -262,9 +429,9 @@ router.post('/google', async (req, res) => {
       profile = await verifyGoogleAccessToken(accessToken);
     }
 
-    await upsertUser(profile);
-    const token = issueAppJwt(profile);
-    res.json({ token, user: profile });
+    const primaryProfile = await upsertUser(profile);
+    const token = issueAppJwt(primaryProfile);
+    res.json({ token, user: primaryProfile });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[auth] Google verification failed:', err);
@@ -278,9 +445,9 @@ router.post('/apple', async (req, res) => {
     const identityToken = (req.body?.identityToken ?? '') as string;
     if (!identityToken) return res.status(400).json({ message: 'identityToken is required' });
     const profile = await verifyAppleIdentityToken(identityToken);
-    await upsertUser(profile);
-    const token = issueAppJwt(profile);
-    res.json({ token, user: profile });
+    const primaryProfile = await upsertUser(profile);
+    const token = issueAppJwt(primaryProfile);
+    res.json({ token, user: primaryProfile });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[auth] Apple verification failed:', err);
@@ -308,19 +475,11 @@ router.post('/manager/google', async (req, res) => {
       profile = await verifyGoogleAccessToken(accessToken);
     }
 
-    // Ensure manager document exists and get managerId
-    await ensureManagerDocument(profile);
-    const manager = await ManagerModel.findOne({
-      provider: profile.provider,
-      subject: profile.subject,
-    });
+    // Ensure manager document exists and get managerId (with account linking)
+    const { primaryProfile, managerId, orgInfo } = await ensureManagerDocument(profile);
 
-    if (!manager) {
-      return res.status(500).json({ message: 'Failed to create manager profile' });
-    }
-
-    const token = issueAppJwt(profile, String(manager._id));
-    res.json({ token, user: profile });
+    const token = issueAppJwt(primaryProfile, managerId, orgInfo);
+    res.json({ token, user: primaryProfile });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[auth] Manager Google verification failed:', err);
@@ -336,19 +495,11 @@ router.post('/manager/apple', async (req, res) => {
 
     const profile = await verifyAppleIdentityToken(identityToken);
 
-    // Ensure manager document exists and get managerId
-    await ensureManagerDocument(profile);
-    const manager = await ManagerModel.findOne({
-      provider: profile.provider,
-      subject: profile.subject,
-    });
+    // Ensure manager document exists and get managerId (with account linking)
+    const { primaryProfile, managerId, orgInfo } = await ensureManagerDocument(profile);
 
-    if (!manager) {
-      return res.status(500).json({ message: 'Failed to create manager profile' });
-    }
-
-    const token = issueAppJwt(profile, String(manager._id));
-    res.json({ token, user: profile });
+    const token = issueAppJwt(primaryProfile, managerId, orgInfo);
+    res.json({ token, user: primaryProfile });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[auth] Manager Apple verification failed:', err);
@@ -428,7 +579,10 @@ router.post('/manager/email', async (req, res) => {
       picture: manager.picture,
     };
 
-    const token = issueAppJwt(profile, String(manager._id));
+    const emailOrgInfo = manager.organizationId && manager.orgRole
+      ? { organizationId: String(manager.organizationId), orgRole: manager.orgRole }
+      : undefined;
+    const token = issueAppJwt(profile, String(manager._id), emailOrgInfo);
     res.json({ token, user: profile });
   } catch (err) {
     console.warn('[auth] Manager email login failed:', err);
@@ -555,7 +709,10 @@ router.post('/manager/phone', async (req, res) => {
       }
     }
 
-    // Issue JWT with managerId
+    // Issue JWT with managerId and org info
+    const phoneOrgInfo = manager.organizationId && manager.orgRole
+      ? { organizationId: String(manager.organizationId), orgRole: manager.orgRole }
+      : undefined;
     const token = issueAppJwt(
       {
         provider: manager.provider,
@@ -565,7 +722,8 @@ router.post('/manager/phone', async (req, res) => {
         picture: manager.picture,
         phoneNumber: profile.phoneNumber,
       },
-      String(manager._id)
+      String(manager._id),
+      phoneOrgInfo,
     );
 
     res.json({ token, user: profile });

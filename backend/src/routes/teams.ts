@@ -18,6 +18,7 @@ import { ManagerModel } from '../models/manager';
 import { AvailabilityModel } from '../models/availability';
 import { generateUniqueShortCode, isValidShortCodeFormat } from '../utils/inviteCodeGenerator';
 import { inviteCreateLimiter } from '../middleware/rateLimiter';
+import { canAddStaffToTeam } from '../utils/orgStaffPolicy';
 
 const router = Router();
 
@@ -606,6 +607,12 @@ router.post('/teams/:teamId/members', requireAuth, async (req, res) => {
     capturedProvider = provider;
     capturedSubject = subject;
     const desiredStatus = status ?? 'active';
+
+    // Enforce org staff policy
+    const policyCheck = await canAddStaffToTeam(managerObjectId, provider, subject);
+    if (!policyCheck.allowed) {
+      return res.status(403).json({ message: policyCheck.reason });
+    }
 
     const setFields: Record<string, unknown> = {
       managerId: managerObjectId,
@@ -1252,6 +1259,12 @@ router.post('/invites/:token/accept', requireAuth, async (req, res) => {
 
     const userKey = buildUserKey(authUser.provider, authUser.sub);
 
+    // Enforce org staff policy
+    const policyCheck = await canAddStaffToTeam(invite.managerId as mongoose.Types.ObjectId, authUser.provider, authUser.sub);
+    if (!policyCheck.allowed) {
+      return res.status(403).json({ message: 'This organization restricts which staff can join teams. Contact the org admin.' });
+    }
+
     const member = await TeamMemberModel.findOneAndUpdate(
       {
         teamId: invite.teamId,
@@ -1677,6 +1690,12 @@ router.post('/teams/:teamId/applicants/:applicantId/approve', requireAuth, async
     const team = await findTeamWithAccess(teamObjectId, managerId);
     if (!team) {
       return res.status(404).json({ message: 'Team not found' });
+    }
+
+    // Enforce org staff policy
+    const policyCheck = await canAddStaffToTeam(managerId, applicant.provider, applicant.subject);
+    if (!policyCheck.allowed) {
+      return res.status(403).json({ message: policyCheck.reason });
     }
 
     // Create team member

@@ -10,6 +10,8 @@ export interface AuthenticatedUser {
   name?: string;
   picture?: string;
   managerId?: string;
+  organizationId?: string;
+  orgRole?: string;
 }
 
 export interface AuthenticatedRequest extends Request {
@@ -44,6 +46,8 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
       name: decoded.name,
       picture: decoded.picture,
       managerId: decoded.managerId,
+      organizationId: (decoded as any).organizationId,
+      orgRole: (decoded as any).orgRole,
     } as AuthenticatedUser;
     (req as any).authUser = (req as any).user; // Add authUser alias for compatibility
     next();

@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlowShift Support</title>
+  <meta name="description" content="Get help with FlowShift Manager and FlowShift Staff apps. Contact support, find answers to common questions.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --gold: #FFC107;
+      --navy: #2C3E50;
+      --blue: #3B82F6;
+      --bg: #F8FAFC;
+      --card-bg: #FFFFFF;
+      --text: #1E293B;
+      --text-muted: #64748B;
+      --border: #E2E8F0;
+      --radius: 12px;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* --- NAV --- */
+    nav {
+      background: var(--navy);
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 64px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+    .nav-brand img {
+      height: 36px;
+      width: 36px;
+      border-radius: 8px;
+    }
+    .nav-brand span {
+      color: #fff;
+      font-weight: 700;
+      font-size: 1.125rem;
+    }
+    .nav-brand span em {
+      color: var(--gold);
+      font-style: normal;
+    }
+    .lang-toggle {
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #fff;
+      padding: 6px 14px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-family: inherit;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+    .lang-toggle:hover { background: rgba(255,255,255,0.22); }
+
+    /* --- HERO --- */
+    .hero {
+      background: linear-gradient(135deg, var(--navy) 0%, #1a2636 100%);
+      padding: 80px 24px 64px;
+      text-align: center;
+      color: #fff;
+    }
+    .hero h1 {
+      font-size: 2.25rem;
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+    .hero p {
+      font-size: 1.1rem;
+      color: rgba(255,255,255,0.75);
+      max-width: 520px;
+      margin: 0 auto 32px;
+    }
+    .hero-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--gold);
+      color: var(--navy);
+      font-weight: 600;
+      font-size: 1rem;
+      padding: 14px 28px;
+      border-radius: 28px;
+      text-decoration: none;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .hero-cta:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(255,193,7,0.35);
+    }
+    .hero-cta svg { flex-shrink: 0; }
+
+    /* --- SECTION WRAPPER --- */
+    .section {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 56px 24px;
+    }
+    .section-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: var(--navy);
+    }
+    .section-subtitle {
+      color: var(--text-muted);
+      margin-bottom: 32px;
+    }
+
+    /* --- FAQ --- */
+    .faq-item {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+    .faq-question {
+      width: 100%;
+      background: none;
+      border: none;
+      padding: 18px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-family: inherit;
+      font-size: 0.975rem;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      text-align: left;
+      gap: 12px;
+    }
+    .faq-question:hover { background: #F1F5F9; }
+    .faq-chevron {
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+      transition: transform 0.25s ease;
+      color: var(--text-muted);
+    }
+    .faq-item.open .faq-chevron { transform: rotate(180deg); }
+    .faq-answer {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+    }
+    .faq-answer-inner {
+      padding: 0 20px 18px;
+      color: var(--text-muted);
+      font-size: 0.925rem;
+      line-height: 1.7;
+    }
+    .faq-answer-inner a { color: var(--blue); }
+
+    /* --- CONTACT CARDS --- */
+    .contact-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 20px;
+    }
+    .contact-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 24px;
+      text-align: center;
+    }
+    .contact-card .icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+    .contact-card .icon.email-icon { background: rgba(59,130,246,0.1); color: var(--blue); }
+    .contact-card .icon.time-icon  { background: rgba(255,193,7,0.15); color: #D97706; }
+    .contact-card h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .contact-card p {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+    .contact-card a {
+      color: var(--blue);
+      font-weight: 500;
+      text-decoration: none;
+    }
+    .contact-card a:hover { text-decoration: underline; }
+
+    /* --- FOOTER --- */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 32px 24px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+    footer a { color: var(--text-muted); text-decoration: underline; }
+
+    /* --- RESPONSIVE --- */
+    @media (max-width: 600px) {
+      .hero { padding: 56px 20px 48px; }
+      .hero h1 { font-size: 1.65rem; }
+      .section { padding: 40px 16px; }
+    }
+
+    /* Hide inactive language */
+    [data-lang="es"] { display: none; }
+    body.lang-es [data-lang="en"] { display: none; }
+    body.lang-es [data-lang="es"] { display: revert; }
+  </style>
+</head>
+<body>
+
+<!-- ========== NAV ========== -->
+<nav>
+  <a class="nav-brand" href="#">
+    <img src="logo.png" alt="FlowShift logo">
+    <span>Flow<em>Shift</em></span>
+  </a>
+  <button class="lang-toggle" onclick="toggleLang()" aria-label="Switch language">
+    <span data-lang="en">Espa&ntilde;ol</span>
+    <span data-lang="es">English</span>
+  </button>
+</nav>
+
+<!-- ========== HERO ========== -->
+<section class="hero">
+  <h1 data-lang="en">How can we help?</h1>
+  <h1 data-lang="es">&iquest;C&oacute;mo podemos ayudarte?</h1>
+
+  <p data-lang="en">Find answers to common questions or reach out to our support team for personalized assistance.</p>
+  <p data-lang="es">Encuentra respuestas a preguntas frecuentes o contacta a nuestro equipo de soporte para asistencia personalizada.</p>
+
+  <a class="hero-cta" href="mailto:support@flowshift.work">
+    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+    <span data-lang="en">Email Support</span>
+    <span data-lang="es">Enviar Correo</span>
+  </a>
+</section>
+
+<!-- ========== FAQ ========== -->
+<section class="section">
+  <h2 class="section-title">
+    <span data-lang="en">Frequently Asked Questions</span>
+    <span data-lang="es">Preguntas Frecuentes</span>
+  </h2>
+  <p class="section-subtitle">
+    <span data-lang="en">Quick answers for FlowShift Manager &amp; FlowShift Staff</span>
+    <span data-lang="es">Respuestas r&aacute;pidas para FlowShift Manager y FlowShift Staff</span>
+  </p>
+
+  <!-- Q1 -->
+  <div class="faq-item">
+    <button class="faq-question" onclick="toggleFaq(this)">
+      <span data-lang="en">What is FlowShift?</span>
+      <span data-lang="es">&iquest;Qu&eacute; es FlowShift?</span>
+      <svg class="faq-chevron" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <div class="faq-answer"><div class="faq-answer-inner">
+      <span data-lang="en">FlowShift is an event staffing platform. <strong>FlowShift Manager</strong> lets managers create events, assign staff, track attendance, and manage payroll. <strong>FlowShift Staff</strong> lets team members view their shifts, accept or decline events, and track hours and earnings.</span>
+      <span data-lang="es">FlowShift es una plataforma de personal para eventos. <strong>FlowShift Manager</strong> permite a los gerentes crear eventos, asignar personal, rastrear asistencia y gestionar n&oacute;mina. <strong>FlowShift Staff</strong> permite a los miembros del equipo ver sus turnos, aceptar o rechazar eventos, y rastrear horas y ganancias.</span>
+    </div></div>
+  </div>
+
+  <!-- Q2 -->
+  <div class="faq-item">
+    <button class="faq-question" onclick="toggleFaq(this)">
+      <span data-lang="en">How do I create an account?</span>
+      <span data-lang="es">&iquest;C&oacute;mo creo una cuenta?</span>
+      <svg class="faq-chevron" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <div class="faq-answer"><div class="faq-answer-inner">
+      <span data-lang="en">Download <strong>FlowShift Manager</strong> or <strong>FlowShift Staff</strong> from the App Store. You can sign up using Google, Apple, phone number, or email. Managers create an organization during signup, and staff members join via an invite code from their manager.</span>
+      <span data-lang="es">Descarga <strong>FlowShift Manager</strong> o <strong>FlowShift Staff</strong> desde la App Store. Puedes registrarte con Google, Apple, n&uacute;mero de tel&eacute;fono o correo electr&oacute;nico. Los gerentes crean una organizaci&oacute;n al registrarse, y los miembros del equipo se unen con un c&oacute;digo de invitaci&oacute;n de su gerente.</span>
+    </div></div>
+  </div>
+
+  <!-- Q3 -->
+  <div class="faq-item">
+    <button class="faq-question" onclick="toggleFaq(this)">
+      <span data-lang="en">Which app should I download?</span>
+      <span data-lang="es">&iquest;Qu&eacute; app debo descargar?</span>
+      <svg class="faq-chevron" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <div class="faq-answer"><div class="faq-answer-inner">
+      <span data-lang="en">If you manage events and staff, download <strong>FlowShift Manager</strong>. If you are a team member who works events, download <strong>FlowShift Staff</strong>. Both apps connect to the same platform.</span>
+      <span data-lang="es">Si gestionas eventos y personal, descarga <strong>FlowShift Manager</strong>. Si eres un miembro del equipo que trabaja en eventos, descarga <strong>FlowShift Staff</strong>. Ambas apps se conectan a la misma plataforma.</span>
+    </div></div>
+  </div>
+
+  <!-- Q4 -->
+  <div class="faq-item">
+    <button class="faq-question" onclick="toggleFaq(this)">
+      <span data-lang="en">How do I accept or decline a shift?</span>
+      <span data-lang="es">&iquest;C&oacute;mo acepto o rechazo un turno?</span>
+      <svg class="faq-chevron" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <div class="faq-answer"><div class="faq-answer-inner">
+      <span data-lang="en">Open <strong>FlowShift Staff</strong> and tap on the event notification or find the shift on your calendar. You&rsquo;ll see options to accept or decline. Your manager will be notified of your response in real time.</span>
+      <span data-lang="es">Abre <strong>FlowShift Staff</strong> y toca la notificaci&oacute;n del evento o busca el turno en tu calendario. Ver&aacute;s opciones para aceptar o rechazar. Tu gerente recibir&aacute; tu respuesta en tiempo real.</span>
+    </div></div>
+  </div>
+
+  <!-- Q5 -->
+  <div class="faq-item">
+    <button class="faq-question" onclick="toggleFaq(this)">
+      <span data-lang="en">How does payroll tracking work?</span>
+      <span data-lang="es">&iquest;C&oacute;mo funciona el rastreo de n&oacute;mina?</span>
+      <svg class="faq-chevron" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <div class="faq-answer"><div class="faq-answer-inner">
+      <span data-lang="en">Managers set hourly rates per staff member and per event. FlowShift automatically calculates pay based on check-in and check-out times. Staff can view their earnings history in the <strong>FlowShift Staff</strong> app.</span>
+      <span data-lang="es">Los gerentes establecen tarifas por hora por miembro del equipo y por evento. FlowShift calcula autom&aacute;ticamente el pago basado en las horas de entrada y salida. Los miembros del equipo pueden ver su historial de ganancias en la app <strong>FlowShift Staff</strong>.</span>
+    </div></div>
+  </div>
+
+  <!-- Q6 -->
+  <div class="faq-item">
+    <button class="faq-question" onclick="toggleFaq(this)">
+      <span data-lang="en">Is FlowShift available on Android?</span>
+      <span data-lang="es">&iquest;FlowShift est&aacute; disponible en Android?</span>
+      <svg class="faq-chevron" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <div class="faq-answer"><div class="faq-answer-inner">
+      <span data-lang="en">FlowShift is currently available on iOS. Android support is coming soon. Stay tuned for updates!</span>
+      <span data-lang="es">FlowShift est&aacute; actualmente disponible en iOS. El soporte para Android estar&aacute; disponible pronto. &iexcl;Mantente al tanto de las actualizaciones!</span>
+    </div></div>
+  </div>
+
+  <!-- Q7 -->
+  <div class="faq-item">
+    <button class="faq-question" onclick="toggleFaq(this)">
+      <span data-lang="en">I forgot my password. How do I reset it?</span>
+      <span data-lang="es">Olvid&eacute; mi contrase&ntilde;a. &iquest;C&oacute;mo la restablezco?</span>
+      <svg class="faq-chevron" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <div class="faq-answer"><div class="faq-answer-inner">
+      <span data-lang="en">If you signed up with Google or Apple, simply use that sign-in method again&mdash;no password needed. If you signed up with email, contact us at <a href="mailto:support@flowshift.work">support@flowshift.work</a> and we&rsquo;ll help you reset your account.</span>
+      <span data-lang="es">Si te registraste con Google o Apple, simplemente usa ese m&eacute;todo de inicio de sesi&oacute;n nuevamente&mdash;no necesitas contrase&ntilde;a. Si te registraste con correo electr&oacute;nico, cont&aacute;ctanos en <a href="mailto:support@flowshift.work">support@flowshift.work</a> y te ayudaremos a restablecer tu cuenta.</span>
+    </div></div>
+  </div>
+
+  <!-- Q8 -->
+  <div class="faq-item">
+    <button class="faq-question" onclick="toggleFaq(this)">
+      <span data-lang="en">How do I delete my account?</span>
+      <span data-lang="es">&iquest;C&oacute;mo elimino mi cuenta?</span>
+      <svg class="faq-chevron" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <div class="faq-answer"><div class="faq-answer-inner">
+      <span data-lang="en">To delete your account and all associated data, email <a href="mailto:support@flowshift.work">support@flowshift.work</a> with the subject &ldquo;Account Deletion Request.&rdquo; We will process your request within 7 business days.</span>
+      <span data-lang="es">Para eliminar tu cuenta y todos los datos asociados, env&iacute;a un correo a <a href="mailto:support@flowshift.work">support@flowshift.work</a> con el asunto &ldquo;Solicitud de Eliminaci&oacute;n de Cuenta.&rdquo; Procesaremos tu solicitud en un plazo de 7 d&iacute;as h&aacute;biles.</span>
+    </div></div>
+  </div>
+</section>
+
+<!-- ========== CONTACT ========== -->
+<section class="section" style="padding-top: 0;">
+  <h2 class="section-title">
+    <span data-lang="en">Still need help?</span>
+    <span data-lang="es">&iquest;A&uacute;n necesitas ayuda?</span>
+  </h2>
+  <p class="section-subtitle">
+    <span data-lang="en">Our support team is here for you</span>
+    <span data-lang="es">Nuestro equipo de soporte est&aacute; aqu&iacute; para ti</span>
+  </p>
+
+  <div class="contact-grid">
+    <div class="contact-card">
+      <div class="icon email-icon">
+        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+      </div>
+      <h3 data-lang="en">Email Us</h3>
+      <h3 data-lang="es">Escr&iacute;benos</h3>
+      <p><a href="mailto:support@flowshift.work">support@flowshift.work</a></p>
+    </div>
+    <div class="contact-card">
+      <div class="icon time-icon">
+        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+      </div>
+      <h3 data-lang="en">Response Time</h3>
+      <h3 data-lang="es">Tiempo de Respuesta</h3>
+      <p data-lang="en">We typically respond within 24 hours</p>
+      <p data-lang="es">Normalmente respondemos en menos de 24 horas</p>
+    </div>
+  </div>
+</section>
+
+<!-- ========== FOOTER ========== -->
+<footer>
+  <p>&copy; 2026 Pymesoft LLC. All rights reserved.</p>
+  <p style="margin-top: 8px;">
+    <a href="mailto:support@flowshift.work">
+      <span data-lang="en">Contact</span>
+      <span data-lang="es">Contacto</span>
+    </a>
+  </p>
+</footer>
+
+<!-- ========== JS ========== -->
+<script>
+  function toggleFaq(btn) {
+    const item = btn.parentElement;
+    const answer = item.querySelector('.faq-answer');
+    const isOpen = item.classList.contains('open');
+
+    // close all others
+    document.querySelectorAll('.faq-item.open').forEach(function(el) {
+      el.classList.remove('open');
+      el.querySelector('.faq-answer').style.maxHeight = null;
+    });
+
+    if (!isOpen) {
+      item.classList.add('open');
+      answer.style.maxHeight = answer.scrollHeight + 'px';
+    }
+  }
+
+  function toggleLang() {
+    document.body.classList.toggle('lang-es');
+    document.documentElement.lang = document.body.classList.contains('lang-es') ? 'es' : 'en';
+
+    // re-calc open FAQ heights for new language content
+    document.querySelectorAll('.faq-item.open .faq-answer').forEach(function(answer) {
+      answer.style.maxHeight = answer.scrollHeight + 'px';
+    });
+  }
+</script>
+
+</body>
+</html>

@@ -3642,17 +3642,34 @@ router.post('/events/:id/bulk-approve-hours', requireAuth, async (req, res) => {
 });
 
 // Get events for a specific user by userKey
-router.get('/events/user/:userKey', async (req, res) => {
+router.get('/events/user/:userKey', requireAuth, async (req, res) => {
   try {
+    const authUser = (req as any).user as AuthenticatedUser | undefined;
+    if (!authUser) {
+      return res.status(401).json({ message: 'Not authenticated' });
+    }
+
     const userKey = req.params.userKey ?? '';
     if (!userKey) {
       return res.status(400).json({ message: 'userKey is required' });
     }
 
+    // Build scoped query based on caller type
+    const query: Record<string, any> = { 'accepted_staff.userKey': userKey };
+
+    if (authUser.managerId) {
+      // Manager: only see events they own
+      query.managerId = new mongoose.Types.ObjectId(authUser.managerId);
+    } else {
+      // Staff: can only query their own events
+      const callerKey = `${authUser.provider}:${authUser.sub}`;
+      if (callerKey !== userKey) {
+        return res.status(403).json({ message: 'Cannot view another staff member\'s events' });
+      }
+    }
+
     // Find all events where the user is in accepted_staff
-    const events = await EventModel.find({
-      'accepted_staff.userKey': userKey
-    }).sort({ date: -1 }).lean();
+    const events = await EventModel.find(query).sort({ date: -1 }).lean();
 
     // Map events and include user's specific role and status
     const mappedEvents = events.map((event: any) => {

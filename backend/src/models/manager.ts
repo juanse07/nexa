@@ -1,8 +1,10 @@
-import mongoose, { Document, Model, Schema } from 'mongoose';
+import mongoose, { Document, Model, Schema, Types } from 'mongoose';
 
 export interface ManagerDocument extends Document {
   provider: 'google' | 'apple' | 'phone' | 'email';
   subject: string;
+  organizationId?: Types.ObjectId;
+  orgRole?: 'owner' | 'admin' | 'member';
   email?: string;
   name?: string; // original OAuth full name
   first_name?: string;
@@ -110,6 +112,10 @@ const ManagerSchema = new Schema<ManagerDocument>(
     app_id: { type: String, trim: true },
     passwordHash: { type: String },
 
+    // Organization (B2B multi-tenant)
+    organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', sparse: true },
+    orgRole: { type: String, enum: ['owner', 'admin', 'member'] },
+
     // Linked authentication methods
     linked_providers: [{
       provider: { type: String, required: true, enum: ['google', 'apple', 'phone', 'email'] },
@@ -213,6 +219,9 @@ ManagerSchema.index({ provider: 1, subject: 1 }, { unique: true });
 ManagerSchema.index({ app_id: 1 }, { unique: false, sparse: true });
 ManagerSchema.index({ qonversion_user_id: 1 }, { unique: false, sparse: true });
 ManagerSchema.index({ auth_phone_number: 1 }, { unique: true, sparse: true }); // Phone auth lookup
+ManagerSchema.index({ email: 1 }, { sparse: true }); // Email-based account linking lookup
+ManagerSchema.index({ organizationId: 1 }, { sparse: true }); // Org membership lookup
+ManagerSchema.index({ 'linked_providers.provider': 1, 'linked_providers.subject': 1 }, { sparse: true }); // Linked provider lookup
 
 export const ManagerModel: Model<ManagerDocument> =
   mongoose.models.Manager || mongoose.model<ManagerDocument>('Manager', ManagerSchema);

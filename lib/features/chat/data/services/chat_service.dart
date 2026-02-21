@@ -431,6 +431,14 @@ class ChatService {
     }
   }
 
+  void joinConversation(String conversationId) {
+    SocketManager.instance.socket?.emit('chat:join', conversationId);
+  }
+
+  void leaveConversation(String conversationId) {
+    SocketManager.instance.socket?.emit('chat:leave', conversationId);
+  }
+
   void sendTypingIndicator(
     String conversationId,
     bool isTyping,

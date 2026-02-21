@@ -16,6 +16,7 @@ const managerRoom = (managerId: string) => `manager:${managerId}`;
 const userRoom = (userKey: string) => `user:${userKey}`;
 const teamRoom = (teamId: string) => `team:${teamId}`;
 const eventChatRoom = (eventId: string) => `event_chat:${eventId}`;
+const conversationRoom = (conversationId: string) => `conversation:${conversationId}`;
 
 export function initSocket(server: http.Server): IOServer {
   io = new IOServer(server, {
@@ -40,8 +41,18 @@ export function initSocket(server: http.Server): IOServer {
     const authPayload = normalizeAuthPayload(socket.handshake.auth as RegistrationPayload & { token?: string } | undefined);
     registerFromPayload(socket, authPayload);
 
+    // Store validated identity from JWT — cannot be changed by subsequent register events
+    (socket as any)._validatedManagerId = authPayload.managerId?.toString().trim() || null;
+    (socket as any)._validatedUserKey = authPayload.userKey?.toString().trim() || null;
+
     socket.on('register', (payload: RegistrationPayload) => {
-      registerFromPayload(socket, payload);
+      // Only allow teamIds from register events; identity comes from JWT
+      const safePayload: RegistrationPayload = {
+        managerId: (socket as any)._validatedManagerId ?? undefined,
+        userKey: (socket as any)._validatedUserKey ?? undefined,
+        teamIds: payload?.teamIds,
+      };
+      registerFromPayload(socket, safePayload);
     });
 
     socket.on('joinTeams', (teamIds: Array<string | null | undefined> | string | null) => {
@@ -52,11 +63,25 @@ export function initSocket(server: http.Server): IOServer {
       normalizeTeamIds(teamIds).forEach((id) => socket.leave(teamRoom(id)));
     });
 
-    // Chat typing indicator
+    // Direct chat - join/leave conversation rooms
+    socket.on('chat:join', (id: string) => {
+      if (id && typeof id === 'string') {
+        socket.join(conversationRoom(id));
+      }
+    });
+
+    socket.on('chat:leave', (id: string) => {
+      if (id && typeof id === 'string') {
+        socket.leave(conversationRoom(id));
+      }
+    });
+
+    // Chat typing indicator — scoped to conversation room
     socket.on('chat:typing', (payload: { conversationId: string; isTyping: boolean; senderType: 'manager' | 'user' }) => {
       const { conversationId, isTyping, senderType } = payload;
-      // Broadcast to the other party in the conversation
-      socket.broadcast.emit('chat:typing', { conversationId, isTyping, senderType });
+      if (conversationId && typeof conversationId === 'string') {
+        socket.to(conversationRoom(conversationId)).emit('chat:typing', { conversationId, isTyping, senderType });
+      }
     });
 
     // Event team chat - join/leave rooms
@@ -111,11 +136,15 @@ function normalizeAuthPayload(payload?: (RegistrationPayload & { token?: string 
       algorithms: ['HS256'],
     }) as Partial<{ provider: string; sub: string; managerId?: string }>;
     const inferred: RegistrationPayload = { ...rest };
-    if (!inferred.userKey && decoded?.provider && decoded.sub) {
+    // JWT claims OVERRIDE payload values (server-side truth)
+    if (decoded?.provider && decoded.sub) {
       inferred.userKey = `${decoded.provider}:${decoded.sub}`;
     }
-    if (!inferred.managerId && decoded?.managerId) {
+    if (decoded?.managerId) {
       inferred.managerId = decoded.managerId;
+    } else {
+      // JWT has no managerId — strip any payload-supplied value
+      delete inferred.managerId;
     }
     return inferred;
   } catch (err) {

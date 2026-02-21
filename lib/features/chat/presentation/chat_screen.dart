@@ -71,6 +71,9 @@ class _ChatScreenState extends State<ChatScreen> {
     // In manager app, current user is always a manager
     _currentUserType = SenderType.manager;
     _conversationId = widget.conversationId; // Initialize from widget
+    if (_conversationId != null) {
+      _chatService.joinConversation(_conversationId!);
+    }
 
     // Call _loadMessages with error handling
     _loadMessages().catchError((e) {
@@ -239,6 +242,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
         if (matchingConv != null) {
           _conversationId = matchingConv.id;
+          _chatService.joinConversation(_conversationId!);
           print('[CHAT] Found conversationId: $_conversationId');
         } else {
           // No conversation exists yet
@@ -523,6 +527,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    if (_conversationId != null) {
+      _chatService.leaveConversation(_conversationId!);
+    }
     _messageController.dispose();
     _scrollController.dispose();
     _typingTimer?.cancel();

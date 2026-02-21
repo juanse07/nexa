@@ -7,6 +7,7 @@ import { ManagerModel } from '../models/manager';
 import { TeamMemberModel } from '../models/teamMember';
 import { EventModel } from '../models/event';
 import { isReadOnly, isInFreeMonth, getFreeMonthEndDate } from '../utils/subscriptionUtils';
+import { getEffectiveSubscriptionTier } from '../utils/orgSubscriptionUtils';
 
 const router = Router();
 
@@ -64,16 +65,30 @@ router.get('/subscription/status', requireAuth, async (req, res) => {
       readOnly = isReadOnly(user);
     }
 
+    // For managers, check if org subscription overrides individual
+    let effectiveSource: 'individual' | 'organization' = 'individual';
+    let effectiveOrgId: string | undefined;
+    let effectiveTier = user.subscription_tier || 'free';
+
+    if (isManager) {
+      const effective = await getEffectiveSubscriptionTier(user as any);
+      effectiveTier = effective.tier;
+      effectiveSource = effective.source;
+      effectiveOrgId = effective.orgId;
+    }
+
     return res.json({
-      tier: user.subscription_tier || 'free',
+      tier: effectiveTier,
       status: user.subscription_status || 'free_month',
       platform: user.subscription_platform || null,
       startedAt: user.subscription_started_at || null,
       expiresAt: user.subscription_expires_at || null,
-      isActive: user.subscription_tier === 'pro' && user.subscription_status === 'active',
+      isActive: effectiveTier === 'pro',
       isReadOnly: readOnly,
       freeMonth,
       userType: isManager ? 'manager' : 'staff',
+      source: effectiveSource,
+      ...(effectiveOrgId && { orgId: effectiveOrgId }),
     });
   } catch (err: any) {
     console.error('[subscription/status] Error:', err);
@@ -135,14 +150,15 @@ router.get('/subscription/manager/usage', requireAuth, async (req, res) => {
     }
 
     const manager = await ManagerModel.findOne({ provider, subject })
-      .select('subscription_tier')
+      .select('subscription_tier organizationId')
       .lean();
 
     if (!manager) {
       return res.status(404).json({ message: 'Manager not found' });
     }
 
-    const isFree = manager.subscription_tier === 'free' || !manager.subscription_tier;
+    const effective = await getEffectiveSubscriptionTier(manager);
+    const isFree = effective.tier === 'free';
 
     // Count team members
     const teamMemberCount = await TeamMemberModel.countDocuments({ managerId });
@@ -175,8 +191,10 @@ router.get('/subscription/manager/usage', requireAuth, async (req, res) => {
       analytics: {
         hasAccess: !isFree, // Analytics only for Pro users
       },
-      tier: manager.subscription_tier || 'free',
+      tier: effective.tier,
       isPro: !isFree,
+      source: effective.source,
+      ...(effective.orgId && { orgId: effective.orgId }),
     });
   } catch (err: any) {
     console.error('[subscription/manager/usage] Error:', err);

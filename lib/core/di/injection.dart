@@ -10,6 +10,7 @@ import 'package:nexa/core/network/network_info.dart';
 import 'package:nexa/core/utils/logger.dart';
 import 'package:nexa/features/cities/data/services/city_service.dart';
 import 'package:nexa/features/brand/data/providers/brand_provider.dart';
+import 'package:nexa/features/organization/data/services/organization_service.dart';
 import 'package:nexa/features/subscription/data/services/subscription_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -95,6 +96,11 @@ void _registerCoreServices() {
   // Brand Provider
   getIt.registerLazySingleton<BrandProvider>(
     () => BrandProvider(getIt<ApiClient>()),
+  );
+
+  // Organization Service
+  getIt.registerLazySingleton<OrganizationService>(
+    () => OrganizationService(getIt<ApiClient>()),
   );
 }
 

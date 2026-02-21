@@ -240,4 +240,131 @@ describe('Auth API', () => {
       expect(res.body.success).toBe(true);
     });
   });
+
+  // ── Account Linking (Cross-Provider) ──────────────────
+
+  describe('Account Linking', () => {
+    const jose = require('jose');
+
+    it('auto-links Apple to existing Google user with same email', async () => {
+      // Step 1: Sign in with Google → creates user with email test@gmail.com
+      await app.post('/api/auth/google').send({ idToken: 'valid-google-token' });
+      const googleUser = await UserModel.findOne({ provider: 'google', subject: 'google-123' });
+      expect(googleUser).toBeTruthy();
+
+      // Step 2: Sign in with Apple using the SAME email
+      (jose.jwtVerify as jest.Mock).mockResolvedValueOnce({
+        payload: { sub: 'apple-same-email', email: 'test@gmail.com' },
+      });
+      const res = await app.post('/api/auth/apple').send({ identityToken: 'valid-apple-token' });
+
+      expect(res.status).toBe(200);
+      // JWT should use the Google (primary) identity
+      expect(res.body.user.provider).toBe('google');
+      expect(res.body.user.subject).toBe('google-123');
+
+      // Only one user document should exist
+      const userCount = await UserModel.countDocuments({ email: 'test@gmail.com' });
+      expect(userCount).toBe(1);
+
+      // Apple identity should be in linked_providers
+      const linked = await UserModel.findOne({ provider: 'google', subject: 'google-123' });
+      expect(linked!.linked_providers).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ provider: 'apple', subject: 'apple-same-email' }),
+        ]),
+      );
+    });
+
+    it('returns primary identity on subsequent sign-in via linked provider', async () => {
+      // Setup: Google user with Apple already linked
+      await UserModel.create({
+        provider: 'google',
+        subject: 'google-primary',
+        email: 'linked@test.com',
+        name: 'Primary User',
+        linked_providers: [{ provider: 'apple', subject: 'apple-linked', linked_at: new Date() }],
+      });
+
+      // Sign in with the linked Apple identity
+      (jose.jwtVerify as jest.Mock).mockResolvedValueOnce({
+        payload: { sub: 'apple-linked', email: 'linked@test.com' },
+      });
+      const res = await app.post('/api/auth/apple').send({ identityToken: 'valid-apple-token' });
+
+      expect(res.status).toBe(200);
+      // Should return the primary (Google) identity
+      expect(res.body.user.provider).toBe('google');
+      expect(res.body.user.subject).toBe('google-primary');
+    });
+
+    it('creates separate user when Apple hides email', async () => {
+      // Google user exists
+      await app.post('/api/auth/google').send({ idToken: 'valid-google-token' });
+
+      // Apple sign-in with no email (Hide My Email)
+      (jose.jwtVerify as jest.Mock).mockResolvedValueOnce({
+        payload: { sub: 'apple-no-email' },
+      });
+      const res = await app.post('/api/auth/apple').send({ identityToken: 'valid-apple-token' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.user.provider).toBe('apple');
+      expect(res.body.user.subject).toBe('apple-no-email');
+
+      // Two separate users should exist
+      const googleUser = await UserModel.findOne({ provider: 'google', subject: 'google-123' });
+      const appleUser = await UserModel.findOne({ provider: 'apple', subject: 'apple-no-email' });
+      expect(googleUser).toBeTruthy();
+      expect(appleUser).toBeTruthy();
+    });
+
+    it('does not cross-link users with different emails', async () => {
+      // Google user with email A
+      await app.post('/api/auth/google').send({ idToken: 'valid-google-token' });
+
+      // Apple user with different email (default mock: test@icloud.com)
+      const res = await app.post('/api/auth/apple').send({ identityToken: 'valid-apple-token' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.user.provider).toBe('apple');
+      expect(res.body.user.subject).toBe('apple-123');
+
+      // Two separate users
+      const googleUser = await UserModel.findOne({ provider: 'google', subject: 'google-123' });
+      const appleUser = await UserModel.findOne({ provider: 'apple', subject: 'apple-123' });
+      expect(googleUser).toBeTruthy();
+      expect(appleUser).toBeTruthy();
+      expect(googleUser!.linked_providers?.length ?? 0).toBe(0);
+    });
+
+    it('auto-links Apple to existing Google manager with same email', async () => {
+      // Step 1: Sign in as manager with Google
+      await app.post('/api/auth/manager/google').send({ idToken: 'valid-google-token' });
+      const googleMgr = await ManagerModel.findOne({ provider: 'google', subject: 'google-123' });
+      expect(googleMgr).toBeTruthy();
+
+      // Step 2: Sign in as manager with Apple using same email
+      (jose.jwtVerify as jest.Mock).mockResolvedValueOnce({
+        payload: { sub: 'apple-mgr-same', email: 'test@gmail.com' },
+      });
+      const res = await app.post('/api/auth/manager/apple').send({ identityToken: 'valid-apple-token' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.user.provider).toBe('google');
+      expect(res.body.user.subject).toBe('google-123');
+
+      // Only one manager document
+      const mgrCount = await ManagerModel.countDocuments({ email: 'test@gmail.com' });
+      expect(mgrCount).toBe(1);
+
+      // Apple linked
+      const linked = await ManagerModel.findOne({ provider: 'google', subject: 'google-123' });
+      expect(linked!.linked_providers).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ provider: 'apple', subject: 'apple-mgr-same' }),
+        ]),
+      );
+    });
+  });
 });

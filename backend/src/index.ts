@@ -40,6 +40,8 @@ import groupsRouter from './routes/groups';
 import uploadRouter from './routes/upload';
 import caricatureRouter from './routes/caricature';
 import brandRouter from './routes/brand';
+import organizationsRouter from './routes/organizations';
+import { stripeWebhookHandler } from './routes/organizations';
 import { notificationScheduler } from './services/notificationScheduler';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
@@ -86,6 +88,14 @@ export async function createServer() {
   );
   app.use(helmet());
   app.use(compression());
+
+  // Stripe webhook must receive raw body — register BEFORE express.json()
+  app.post(
+    '/api/organizations/stripe-webhook',
+    express.raw({ type: 'application/json' }),
+    stripeWebhookHandler,
+  );
+
   app.use(express.json({ limit: '50mb' })); // Increased for sign-in sheet photos
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
   app.use(pinoHttp({ logger }));
@@ -114,6 +124,7 @@ export async function createServer() {
   app.use('/api/upload', uploadRouter); // File upload routes
   app.use('/api/caricature', caricatureRouter); // AI caricature generation
   app.use('/api/brand', brandRouter); // Brand customization (Pro tier)
+  app.use('/api', organizationsRouter); // B2B organization management
 
   // Serve locally-stored uploads (caricatures, etc.) when R2 is not configured
   app.use('/uploads', express.static('/app/uploads'));
