@@ -62,6 +62,8 @@ import 'package:nexa/core/network/socket_manager.dart';
 import '../../users/presentation/pages/settings_page.dart';
 import '../../users/data/services/manager_service.dart';
 import '../../hours_approval/presentation/hours_approval_list_screen.dart';
+import '../../hours_approval/presentation/hours_approval_detail_screen.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 import '../../chat/presentation/conversations_screen.dart';
 import '../../chat/data/services/chat_service.dart';
 import '../../chat/domain/entities/conversation.dart';
@@ -2314,29 +2316,41 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                       height: kToolbarHeight,
                                       child: Row(
                                         children: [
-                                          const SizedBox(width: 16),
+                                          // Avatar flush against left margin
+                                          _buildProfileMenu(context),
+                                          // Title left-aligned
                                           Expanded(
                                             child: TappableAppTitle(
                                               child: Text(
                                                 _getAppBarTitle(),
                                                 style: const TextStyle(
                                                   color: ExColors.yellow,
-                                                  fontSize: 24,
-                                                  fontWeight: FontWeight.w800,
-                                                  letterSpacing: 0.5,
-                                                  shadows: [
-                                                    Shadow(
-                                                      color: Colors.black26,
-                                                      offset: Offset(0, 2),
-                                                      blurRadius: 4,
-                                                    ),
-                                                  ],
+                                                  fontSize: 17,
+                                                  fontWeight: FontWeight.w600,
+                                                  letterSpacing: 0.2,
                                                 ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
                                               ),
                                             ),
                                           ),
-                                          _buildProfileMenu(context),
-                                          const SizedBox(width: 8),
+                                          // Search / dismiss
+                                          IconButton(
+                                            icon: Icon(
+                                              _isSearchActive
+                                                  ? Icons.close_rounded
+                                                  : Icons.search_rounded,
+                                              size: 20,
+                                              color: ExColors.yellow,
+                                            ),
+                                            onPressed: _isSearchActive
+                                                ? _dismissSearch
+                                                : () => setState(() { _isSearchActive = true; }),
+                                            splashRadius: 20,
+                                          ),
+                                          // Sort
+                                          _buildAppBarSortButton(),
+                                          const SizedBox(width: 4),
                                         ],
                                       ),
                                     ),
@@ -2378,10 +2392,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               child: _buildTabSelector(),
             ),
 
-            // Floating "New Job" chip for Events/Jobs tab (like email apps)
-            if (_selectedIndex == 1)
+            // Floating "New Job" chip moved to MainScreen nav island
+            if (false)
               Positioned(
-                bottom: 100, // Above bottom nav
+                bottom: 100,
                 right: 16,
                 child: GestureDetector(
                   onTap: () {
@@ -2656,40 +2670,44 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     required int selectedIndex,
     required ValueChanged<int> onSelected,
     required Color activeColor,
+    double trailingSpace = 0,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
-          children: List.generate(labels.length, (index) {
-            final isActive = index == selectedIndex;
-            return Padding(
-              padding: EdgeInsets.only(right: index < labels.length - 1 ? 8 : 0),
-              child: GestureDetector(
-                onTap: () => onSelected(index),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: isActive ? const Color(0xFF1B2A4A) : Colors.transparent,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: isActive ? const Color(0xFF1B2A4A) : Colors.grey[300]!,
+          children: [
+            ...List.generate(labels.length, (index) {
+              final isActive = index == selectedIndex;
+              return Padding(
+                padding: EdgeInsets.only(right: index < labels.length - 1 ? 8 : 0),
+                child: GestureDetector(
+                  onTap: () => onSelected(index),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isActive ? const Color(0xFF1B2A4A) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: isActive ? const Color(0xFF1B2A4A) : Colors.grey[300]!,
+                      ),
                     ),
-                  ),
-                  child: Text(
-                    '${labels[index]} (${counts[index]})',
-                    style: TextStyle(
-                      color: isActive ? Colors.white : ExColors.textPrimary,
-                      fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                      fontSize: 14,
+                    child: Text(
+                      '${labels[index]} (${counts[index]})',
+                      style: TextStyle(
+                        color: isActive ? Colors.white : ExColors.textPrimary,
+                        fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                        fontSize: 14,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            );
-          }),
+              );
+            }),
+            if (trailingSpace > 0) SizedBox(width: trailingSpace),
+          ],
         ),
       ),
     );
@@ -3037,7 +3055,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         ),
       ],
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+        padding: const EdgeInsets.only(left: 16, right: 8),
         child: _buildAvatarOrIcon(theme),
       ),
     );
@@ -4853,12 +4871,13 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                             textAlignVertical: TextAlignVertical.center,
                             decoration: InputDecoration(
                               hintText: 'Search jobs...',
+                              border: InputBorder.none,
+                              focusedBorder: InputBorder.none,
                               hintStyle: TextStyle(
                                 color: ExColors.slateGray,
                                 fontSize: 14,
                                 fontWeight: FontWeight.w400,
                               ),
-                              border: InputBorder.none,
                               isDense: true,
                               contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
                             ),
@@ -4897,35 +4916,22 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     ),
                   ),
                 ),
-                const SizedBox(width: 6),
-                _buildSortButton(),
               ],
             ),
           )
-        : Row(
+        : SizedBox(
             key: const ValueKey('chips'),
-            children: [
-              Expanded(
-                child: _buildFilterChipBar(
-                  labels: [l10n.pending, 'Posted', 'Full', l10n.completed],
-                  counts: [pendingCount, availableCount, fullCount, completedCount],
-                  selectedIndex: _eventsTabController.index,
-                  onSelected: (index) {
-                    setState(() {
-                      _eventsTabController.animateTo(index);
-                    });
-                  },
-                  activeColor: ExColors.navySpaceCadet,
-                ),
-              ),
-              _buildToolButton(
-                icon: Icons.search_rounded,
-                onTap: () => setState(() { _isSearchActive = true; }),
-              ),
-              const SizedBox(width: 4),
-              _buildSortButton(),
-              const SizedBox(width: 8),
-            ],
+            child: _buildFilterChipBar(
+              labels: [l10n.pending, 'Posted', 'Full', l10n.completed],
+              counts: [pendingCount, availableCount, fullCount, completedCount],
+              selectedIndex: _eventsTabController.index,
+              onSelected: (index) {
+                setState(() {
+                  _eventsTabController.animateTo(index);
+                });
+              },
+              activeColor: ExColors.navySpaceCadet,
+            ),
           ),
     ),
     );
@@ -4947,6 +4953,32 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       splashRadius: 20,
       padding: EdgeInsets.zero,
       constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+    );
+  }
+
+  /// Sort button styled for the dark app bar (white icons).
+  Widget _buildAppBarSortButton() {
+    final isCustomSort = _sortMode != _SortMode.dateAsc;
+    return PopupMenuButton<_SortMode>(
+      tooltip: 'Sort jobs',
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      elevation: 12,
+      color: Colors.white,
+      offset: const Offset(0, 42),
+      onSelected: (mode) => setState(() => _sortMode = mode),
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Icon(
+          Icons.swap_vert_rounded,
+          size: 20,
+          color: ExColors.yellow,
+        ),
+      ),
+      itemBuilder: (_) => [
+        _buildSortMenuItem(_SortMode.dateAsc, 'Job Date', Icons.arrow_upward_rounded),
+        _buildSortMenuItem(_SortMode.dateDesc, 'Job Date', Icons.arrow_downward_rounded),
+        _buildSortMenuItem(_SortMode.lastCreated, 'Last Created', Icons.schedule_rounded),
+      ],
     );
   }
 
@@ -5383,7 +5415,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     }
 
     // Calculate total accepted staff
-    final totalAccepted = acceptedStaff.where((s) => s['response'] == 'accept').length;
+    final totalAccepted = acceptedStaff.where((s) {
+      final r = s['response']?.toString();
+      return r == 'accepted' || r == 'accept';
+    }).length;
 
     return totalAccepted < totalNeeded;
   }
@@ -5398,7 +5433,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       totalNeeded += (role['count'] as int?) ?? 0;
     }
 
-    final totalFilled = acceptedStaff.where((s) => s['response'] == 'accept').length;
+    final totalFilled = acceptedStaff.where((s) {
+      final r = s['response']?.toString();
+      return r == 'accepted' || r == 'accept';
+    }).length;
 
     return {'filled': totalFilled, 'total': totalNeeded};
   }
@@ -5526,9 +5564,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         return null;
       }
 
-      final DateTime now = DateTime.now();
-
-      // Filter events into tabs (mutually exclusive)
+      // Classify events using server-computed 'tab' field (single source of truth)
       final List<Map<String, dynamic>> pending = [];
       final List<Map<String, dynamic>> available = [];
       final List<Map<String, dynamic>> full = [];
@@ -5536,80 +5572,14 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       final List<Map<String, dynamic>> expired = [];
 
       for (final e in items) {
-        final status = (e['status'] ?? 'draft').toString();
-        final d = parseDate(e);
-        final eventName = (e['shift_name'] ?? e['client_name'] ?? 'Unknown').toString();
-        final eventId = (e['_id'] ?? e['id'] ?? 'unknown').toString();
-
-        // Check if event is past (FIXED: normalize both dates to midnight to avoid timezone issues)
-        final bool isPast;
-        if (d != null) {
-          final eventDate = DateTime(d.year, d.month, d.day);
-          final todayDate = DateTime(now.year, now.month, now.day);
-          isPast = eventDate.isBefore(todayDate);
-        } else {
-          isPast = false;
-        }
-
-        // Debug: Log each event's status and classification with date details
-        print('[EVENT] "$eventName" (ID: ${eventId.substring(0, 8)}...)');
-        print('  Raw date: ${e['date']}');
-        print('  Parsed date: $d');
-        if (d != null) {
-          print('  Event date normalized: ${DateTime(d.year, d.month, d.day)}');
-          print('  Today date normalized: ${DateTime(now.year, now.month, now.day)}');
-        }
-        final hasOpenPos = _hasOpenPositions(e);
-        final isFull = status == 'fulfilled' || !hasOpenPos;
-        print('  Status: "$status", isPast: $isPast, hasOpenPositions: $hasOpenPos, isFull: $isFull');
-        print('  → Will go to: ${status == 'draft' ? 'PENDING' : (status == 'completed' || (status == 'cancelled' && isPast) || (isFull && isPast)) ? 'COMPLETED' : isFull ? 'FULL' : 'POSTED'}');
-
-        // Tab logic (priority order):
-        // 1. Pending = draft events only
-        // 2. Posted = published/confirmed events (accepting staff)
-        // 3. Full = fulfilled status (all positions filled, event upcoming)
-        // 4. Completed = finished events (status completed or past events)
-        // Note: Backend now consistently sets 'fulfilled' status when positions are filled
-
-        final visibilityType = e['visibilityType']?.toString() ?? 'unknown';
-
-        if (status == 'draft') {
-          // True drafts - not published yet
-          pending.add(e);
-          print('  → Classified as: PENDING (draft)');
-        } else if (isFull && isPast) {
-          // Completed = ONLY events that are both full AND past due
-          // Events must have all positions filled to be considered "completed"
-          past.add(e);
-          print('  → Classified as: COMPLETED (isFull: $isFull, isPast: $isPast)');
-        } else if (isFull) {
-          // Full events that are NOT past (upcoming full events)
-          full.add(e);
-          print('  → Classified as: FULL (upcoming full event)');
-        } else if (status == 'published' || status == 'confirmed' || status == 'in_progress' || status == 'completed') {
-          // Published/confirmed/in-progress/completed events that are NOT full
-          if (isPast) {
-            // Past + not full → expired unfulfilled
-            expired.add(e);
-            print('  → Classified as: EXPIRED (past + not fully staffed)');
-          } else {
-            available.add(e);
-            if (status == 'completed') {
-              print('  → Classified as: POSTED (completed but not full - needs attention)');
-            } else if (visibilityType == 'private') {
-              print('  → Classified as: POSTED (published - private)');
-            } else {
-              print('  → Classified as: POSTED (published - public)');
-            }
-          }
-        } else if (status == 'cancelled') {
-          // Cancelled events go to Pending (as historical record)
-          pending.add(e);
-          print('  → Classified as: PENDING (cancelled event)');
-        } else {
-          // Fallback for other statuses
-          pending.add(e);
-          print('  → Classified as: PENDING (fallback for status: $status)');
+        final tab = e['tab']?.toString() ?? 'pending';
+        switch (tab) {
+          case 'pending':   pending.add(e);
+          case 'posted':    available.add(e);
+          case 'full':      full.add(e);
+          case 'completed': past.add(e);
+          case 'expired':   expired.add(e);
+          default:          pending.add(e);
         }
       }
 
@@ -9106,7 +9076,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     if (!isRolesMissing) {
       final roleStrings = roles
           .where((r) => ((r['count'] as int?) ?? 0) > 0)
-          .map((r) => '${r['role']} (${r['count']})')
+          .map((r) => '${r['role'] ?? r['name'] ?? 'Role'} (${r['count']})')
           .toList();
       rolesDisplay = roleStrings.join(', ');
     }
@@ -9418,6 +9388,49 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                 ),
                               ),
                             ],
+                          ),
+                        ),
+                      // Approve Hours badge (for completed events needing approval)
+                      if (e['tab'] == 'completed' &&
+                          e['approvalCategory'] != null &&
+                          e['approvalCategory'] != 'approved')
+                        GestureDetector(
+                          onTap: () async {
+                            final result = await Navigator.of(context).push<bool>(
+                              MaterialPageRoute(
+                                builder: (_) => HoursApprovalDetailScreen(event: e),
+                              ),
+                            );
+                            if (result == true && mounted) {
+                              _loadEvents();
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryPurple.withValues(alpha: 0.06),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: AppColors.primaryPurple.withValues(alpha: 0.2),
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.schedule, size: 11, color: AppColors.primaryPurple),
+                                const SizedBox(width: 4),
+                                Text(
+                                  AppLocalizations.of(context)!.approveHours,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.primaryPurple,
+                                    height: 1.2,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                     ],
