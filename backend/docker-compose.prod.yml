@@ -85,8 +85,77 @@ services:
       retries: 3
       start_period: 10s
 
+  # ─── Monitoring Stack ────────────────────────────────────────────────────────
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: nexa-prometheus
+    restart: unless-stopped
+    expose:
+      - "9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--storage.tsdb.retention.size=5GB"
+      - "--web.enable-lifecycle"
+    depends_on:
+      api:
+        condition: service_healthy
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: nexa-grafana
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-FlowShift2024!}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=https://metrics.flowshift.work
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: nexa-node-exporter
+    restart: unless-stopped
+    expose:
+      - "9100"
+    command:
+      - "--path.rootfs=/host"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    volumes:
+      - /:/host:ro,rslave
+    pid: host
+
+  mongodb-exporter:
+    image: percona/mongodb_exporter:0.40.0
+    container_name: nexa-mongodb-exporter
+    restart: unless-stopped
+    expose:
+      - "9216"
+    environment:
+      - MONGODB_URI=${MONGO_URI}
+    command:
+      - "--collect-all"
+      - "--compatible-mode"
+
 volumes:
   caddy_data:
     name: nexa_caddy_data
   caddy_config:
     name: nexa_caddy_config
+  prometheus_data:
+    name: nexa_prometheus_data
+  grafana_data:
+    name: nexa_grafana_data

@@ -3,6 +3,7 @@ import { Server as IOServer, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 
 import { ENV } from '../config/env';
+import { socketConnectionsActive } from '../metrics/metrics';
 
 type RegistrationPayload = {
   managerId?: string | null;
@@ -38,6 +39,11 @@ export function initSocket(server: http.Server): IOServer {
   });
 
   io.on('connection', (socket) => {
+    socketConnectionsActive.inc();
+    socket.on('disconnect', () => {
+      socketConnectionsActive.dec();
+    });
+
     const authPayload = normalizeAuthPayload(socket.handshake.auth as RegistrationPayload & { token?: string } | undefined);
     registerFromPayload(socket, authPayload);
 

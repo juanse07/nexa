@@ -13,6 +13,7 @@ import { TeamModel } from '../models/team';
 import { TeamMemberModel } from '../models/teamMember';
 import { resolveManagerForRequest } from '../utils/manager';
 import { emitToManager, emitToTeams, emitToUser } from '../socket/server';
+import { eventsCreatedTotal, clockInsTotal, clockOutsTotal } from '../metrics/metrics';
 import { notificationService } from '../services/notificationService';
 import { UserModel } from '../models/user';
 import { StaffProfileModel } from '../models/staffProfile';
@@ -447,6 +448,7 @@ router.post('/events', requireAuth, async (req, res) => {
       }
     }
 
+    eventsCreatedTotal.inc();
     return res.status(201).json(responsePayload);
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -3082,6 +3084,7 @@ router.post('/events/:id/clock-in', requireAuth, requireActiveSubscription, asyn
     const gamification: any = null;
 
     const existingAttendance = (staffEntry.attendance || []) as any[];
+    clockInsTotal.inc({ type: 'self' });
     return res.status(200).json({
       message: 'Clocked in',
       status: 'clocked_in',
@@ -3151,6 +3154,7 @@ router.post('/events/:id/clock-out', requireAuth, requireActiveSubscription, asy
     const updateFields: any = {
       'accepted_staff.$[staff].attendance.$[session].clockOutAt': clockOutTime,
       'accepted_staff.$[staff].attendance.$[session].estimatedHours': estimatedHours,
+      'accepted_staff.$[staff].attendance.$[session].status': 'clocked',
       'updatedAt': new Date(),
     };
 
@@ -3214,6 +3218,7 @@ router.post('/events/:id/clock-out', requireAuth, requireActiveSubscription, asy
       a.clockInAt && !a.clockOutAt ? updatedLast : a
     );
 
+    clockOutsTotal.inc({ type: 'self' });
     return res.status(200).json({
       message: autoClockOut ? 'Auto clocked out' : 'Clocked out',
       attendance: updatedAttendance,
@@ -3326,6 +3331,7 @@ router.post('/events/:id/bulk-clock-in', requireAuth, async (req, res) => {
           longitude: event.venue_longitude || 0,
           source: 'bulk_manager' as const,
         },
+        status: 'clocked',
         overrideBy: managerKey,
         overrideNote: note || 'Bulk clock-in by manager',
       };
@@ -3392,6 +3398,7 @@ router.post('/events/:id/bulk-clock-in', requireAuth, async (req, res) => {
     }
 
     const successCount = results.filter((r) => r.status === 'success').length;
+    clockInsTotal.inc({ type: 'bulk' }, successCount);
 
     return res.status(200).json({
       message: `Successfully clocked in ${successCount} of ${userKeys.length} staff members`,
@@ -3868,8 +3875,24 @@ router.post('/events/:id/bulk-approve-hours', requireAuth, async (req, res) => {
     for (const staffMember of event.accepted_staff || []) {
       if (staffMember.attendance && staffMember.attendance.length > 0) {
         const lastAttendance = staffMember.attendance[staffMember.attendance.length - 1];
-        if (lastAttendance && lastAttendance.status === 'sheet_submitted' && lastAttendance.approvedHours != null) {
-          console.log(`[bulk-approve] Approving ${staffMember.name || staffMember.userKey}: ${lastAttendance.approvedHours} hours`);
+        if (!lastAttendance || lastAttendance.status === 'approved') {
+          console.log(`[bulk-approve] Skipping ${staffMember.name || staffMember.userKey}: already approved or no attendance`);
+          continue;
+        }
+
+        // Approve if: sheet_submitted with approvedHours, OR digital clock-out (clocked/undefined status) with estimatedHours
+        const isSheetSubmitted = lastAttendance.status === 'sheet_submitted' && lastAttendance.approvedHours != null;
+        const isDigitalClocked = (lastAttendance.status === 'clocked' || lastAttendance.status === undefined) && lastAttendance.clockOutAt;
+
+        if (isSheetSubmitted || isDigitalClocked) {
+          // Use approvedHours if set, otherwise fall back to estimatedHours
+          const hours = lastAttendance.approvedHours ?? lastAttendance.estimatedHours;
+          if (hours == null) {
+            console.log(`[bulk-approve] Skipping ${staffMember.name || staffMember.userKey}: no hours available`);
+            continue;
+          }
+          console.log(`[bulk-approve] Approving ${staffMember.name || staffMember.userKey}: ${hours} hours`);
+          lastAttendance.approvedHours = hours;
           lastAttendance.status = 'approved';
           lastAttendance.approvedBy = approvedBy;
           lastAttendance.approvedAt = new Date();
@@ -4169,6 +4192,7 @@ router.post('/events/:id/force-clock-out/:userKey', requireAuth, async (req, res
       console.warn('[force-clock-out] Failed to send notification:', notifyErr);
     }
 
+    clockOutsTotal.inc({ type: 'force' });
     return res.json({
       message: 'Staff clocked out successfully',
       clockOutAt: now,

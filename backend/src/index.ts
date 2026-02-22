@@ -43,6 +43,10 @@ import brandRouter from './routes/brand';
 import organizationsRouter from './routes/organizations';
 import { stripeWebhookHandler } from './routes/organizations';
 import { notificationScheduler } from './services/notificationScheduler';
+import { metricsMiddleware } from './metrics/metricsMiddleware';
+import metricsRoute from './metrics/metricsRoute';
+import { enableMongooseMetrics } from './metrics/mongooseMetrics';
+import { startBusinessMetricsCollector } from './metrics/businessMetricsCollector';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 
@@ -99,6 +103,12 @@ export async function createServer() {
   app.use(express.json({ limit: '50mb' })); // Increased for sign-in sheet photos
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
   app.use(pinoHttp({ logger }));
+
+  // Prometheus metrics middleware (before routes, after logging)
+  app.use(metricsMiddleware);
+
+  // Metrics scrape endpoint (at root, not under /api)
+  app.use(metricsRoute);
 
   app.use('/api', healthRouter);
   app.use('/api', eventsRouter);
@@ -410,6 +420,11 @@ async function start() {
   try {
     await connectToDatabase();
     logger.info('DB initialized');
+
+    // Enable Mongoose query metrics and start business gauge collector
+    enableMongooseMetrics();
+    startBusinessMetricsCollector();
+    logger.info('Prometheus metrics initialized');
 
     // Initialize notification scheduler
     notificationScheduler.initialize();

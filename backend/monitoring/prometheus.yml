@@ -1,0 +1,31 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "alerts.yml"
+
+scrape_configs:
+  # FlowShift API (prom-client metrics)
+  - job_name: "flowshift-api"
+    metrics_path: "/metrics"
+    authorization:
+      credentials: "igIIgqsSgOHSOdc49YNJD0ui"
+    static_configs:
+      - targets: ["api:4000"]
+        labels:
+          service: "api"
+
+  # Node Exporter (host metrics: CPU, memory, disk, network)
+  - job_name: "node-exporter"
+    static_configs:
+      - targets: ["node-exporter:9100"]
+        labels:
+          service: "host"
+
+  # MongoDB Exporter (connections, queries, replication)
+  - job_name: "mongodb-exporter"
+    static_configs:
+      - targets: ["mongodb-exporter:9216"]
+        labels:
+          service: "mongodb"

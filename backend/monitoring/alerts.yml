@@ -1,0 +1,71 @@
+groups:
+  - name: flowshift-alerts
+    rules:
+      # High 5xx error rate (>5% of requests over 5 minutes)
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(flowshift_http_requests_total{status_code=~"5.."}[5m]))
+            /
+            sum(rate(flowshift_http_requests_total[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High 5xx error rate ({{ $value | humanizePercentage }})"
+          description: "More than 5% of HTTP requests are returning 5xx errors."
+
+      # High p95 latency (>2 seconds over 5 minutes)
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95, sum(rate(flowshift_http_request_duration_seconds_bucket[5m])) by (le))
+          > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High p95 latency ({{ $value | humanizeDuration }})"
+          description: "95th percentile HTTP request latency is above 2 seconds."
+
+      # High memory usage (>90% of available)
+      - alert: HighMemoryUsage
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage ({{ $value | humanizePercentage }})"
+          description: "Server memory usage is above 90%."
+
+      # Low disk space (<10% free)
+      - alert: LowDiskSpace
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Low disk space ({{ $value | humanizePercentage }} free)"
+          description: "Root filesystem has less than 10% free space."
+
+      # API target down
+      - alert: APIDown
+        expr: up{job="flowshift-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "FlowShift API is down"
+          description: "Prometheus cannot reach the FlowShift API metrics endpoint."
+
+      # MongoDB exporter target down
+      - alert: MongoDBExporterDown
+        expr: up{job="mongodb-exporter"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "MongoDB exporter is down"
+          description: "Prometheus cannot reach the MongoDB exporter."

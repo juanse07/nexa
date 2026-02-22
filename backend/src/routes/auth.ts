@@ -8,6 +8,7 @@ import { firebaseAuth } from '../config/firebase';
 import { UserModel } from '../models/user';
 import { ManagerModel } from '../models/manager';
 import { requireAuth, AuthenticatedUser } from '../middleware/requireAuth';
+import { authAttemptsTotal, usersRegisteredTotal } from '../metrics/metrics';
 
 type VerifiedProfile = {
   provider: 'google' | 'apple' | 'phone' | 'email';
@@ -67,7 +68,7 @@ function issueAppJwt(
     ...(managerId && { managerId }),
     ...(orgInfo && { organizationId: orgInfo.organizationId, orgRole: orgInfo.orgRole }),
   } as const;
-  return jwt.sign(payload, JWT_SECRET, { algorithm: 'HS256', expiresIn: '7d' });
+  return jwt.sign(payload, JWT_SECRET, { algorithm: 'HS256', expiresIn: '30d' });
 }
 
 async function upsertUser(profile: VerifiedProfile): Promise<VerifiedProfile> {
@@ -431,10 +432,12 @@ router.post('/google', async (req, res) => {
 
     const primaryProfile = await upsertUser(profile);
     const token = issueAppJwt(primaryProfile);
+    authAttemptsTotal.inc({ provider: 'google', role: 'staff', result: 'success' });
     res.json({ token, user: primaryProfile });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[auth] Google verification failed:', err);
+    authAttemptsTotal.inc({ provider: 'google', role: 'staff', result: 'failure' });
     res.status(401).json({ message: 'Google auth failed' });
   }
 });
@@ -447,10 +450,12 @@ router.post('/apple', async (req, res) => {
     const profile = await verifyAppleIdentityToken(identityToken);
     const primaryProfile = await upsertUser(profile);
     const token = issueAppJwt(primaryProfile);
+    authAttemptsTotal.inc({ provider: 'apple', role: 'staff', result: 'success' });
     res.json({ token, user: primaryProfile });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[auth] Apple verification failed:', err);
+    authAttemptsTotal.inc({ provider: 'apple', role: 'staff', result: 'failure' });
     res.status(401).json({ message: 'Apple auth failed' });
   }
 });
@@ -479,10 +484,12 @@ router.post('/manager/google', async (req, res) => {
     const { primaryProfile, managerId, orgInfo } = await ensureManagerDocument(profile);
 
     const token = issueAppJwt(primaryProfile, managerId, orgInfo);
+    authAttemptsTotal.inc({ provider: 'google', role: 'manager', result: 'success' });
     res.json({ token, user: primaryProfile });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[auth] Manager Google verification failed:', err);
+    authAttemptsTotal.inc({ provider: 'google', role: 'manager', result: 'failure' });
     res.status(401).json({ message: 'Google auth failed' });
   }
 });
@@ -499,10 +506,12 @@ router.post('/manager/apple', async (req, res) => {
     const { primaryProfile, managerId, orgInfo } = await ensureManagerDocument(profile);
 
     const token = issueAppJwt(primaryProfile, managerId, orgInfo);
+    authAttemptsTotal.inc({ provider: 'apple', role: 'manager', result: 'success' });
     res.json({ token, user: primaryProfile });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[auth] Manager Apple verification failed:', err);
+    authAttemptsTotal.inc({ provider: 'apple', role: 'manager', result: 'failure' });
     res.status(401).json({ message: 'Apple auth failed' });
   }
 });
@@ -542,9 +551,11 @@ router.post('/email', async (req, res) => {
     };
 
     const token = issueAppJwt(profile);
+    authAttemptsTotal.inc({ provider: 'email', role: 'staff', result: 'success' });
     res.json({ token, user: profile });
   } catch (err) {
     console.warn('[auth] Email login failed:', err);
+    authAttemptsTotal.inc({ provider: 'email', role: 'staff', result: 'failure' });
     res.status(500).json({ message: 'Email auth failed' });
   }
 });
@@ -583,9 +594,11 @@ router.post('/manager/email', async (req, res) => {
       ? { organizationId: String(manager.organizationId), orgRole: manager.orgRole }
       : undefined;
     const token = issueAppJwt(profile, String(manager._id), emailOrgInfo);
+    authAttemptsTotal.inc({ provider: 'email', role: 'manager', result: 'success' });
     res.json({ token, user: profile });
   } catch (err) {
     console.warn('[auth] Manager email login failed:', err);
+    authAttemptsTotal.inc({ provider: 'email', role: 'manager', result: 'failure' });
     res.status(500).json({ message: 'Email auth failed' });
   }
 });
@@ -663,10 +676,12 @@ router.post('/phone', async (req, res) => {
       phoneNumber: profile.phoneNumber,
     });
 
+    authAttemptsTotal.inc({ provider: 'phone', role: 'staff', result: 'success' });
     res.json({ token, user: profile });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[auth] Phone verification failed:', err);
+    authAttemptsTotal.inc({ provider: 'phone', role: 'staff', result: 'failure' });
     const message = (err as Error).message || 'Phone auth failed';
     res.status(401).json({ message });
   }
@@ -726,10 +741,12 @@ router.post('/manager/phone', async (req, res) => {
       phoneOrgInfo,
     );
 
+    authAttemptsTotal.inc({ provider: 'phone', role: 'manager', result: 'success' });
     res.json({ token, user: profile });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[auth] Manager phone verification failed:', err);
+    authAttemptsTotal.inc({ provider: 'phone', role: 'manager', result: 'failure' });
     const message = (err as Error).message || 'Phone auth failed';
     res.status(401).json({ message });
   }
