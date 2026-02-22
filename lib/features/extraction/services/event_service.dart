@@ -89,8 +89,17 @@ class EventService {
   }
 
   /// Legacy method for backwards compatibility - fetches events without delta sync metadata
-  Future<List<Map<String, dynamic>>> fetchEvents({String? userKey}) async {
-    final result = await fetchEventsWithSync(userKey: userKey, useDeltaSync: false);
+  Future<List<Map<String, dynamic>>> fetchEvents({
+    String? userKey,
+    String? status,
+    bool? isPast,
+  }) async {
+    final result = await fetchEventsWithSync(
+      userKey: userKey,
+      useDeltaSync: false,
+      status: status,
+      isPast: isPast,
+    );
     return result.events;
   }
 
@@ -98,9 +107,14 @@ class EventService {
   ///
   /// If [useDeltaSync] is true and a last sync timestamp exists, only changed events are returned.
   /// Returns both the events and sync metadata for tracking.
+  ///
+  /// [status] - Filter by event status (e.g. 'draft', 'published,confirmed')
+  /// [isPast] - If true, only past events; if false, only future events
   Future<EventFetchResult> fetchEventsWithSync({
     String? userKey,
     bool useDeltaSync = true,
+    String? status,
+    bool? isPast,
   }) async {
     try {
       final options = Options(headers: <String, String>{'Accept': 'application/json'});
@@ -117,6 +131,8 @@ class EventService {
       } else {
         print('[EventService] Full sync - fetching all events');
       }
+      if (status != null) queryParams['status'] = status;
+      if (isPast != null) queryParams['isPast'] = isPast.toString();
 
       final response = await _apiClient.get(
         '/events',

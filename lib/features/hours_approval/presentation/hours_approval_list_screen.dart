@@ -33,21 +33,11 @@ class _HoursApprovalListScreenState extends State<HoursApprovalListScreen> {
     });
 
     try {
-      final allEvents = await _eventService.fetchEvents();
+      final pastEvents = await _eventService.fetchEvents(isPast: true);
 
-      // Filter for completed events that need hours approval
-      final now = DateTime.now();
-      final needsApproval = allEvents.where((event) {
-        // Check if event is in the past
-        final eventDate = _parseEventDate(event['date']);
-        if (eventDate == null || eventDate.isAfter(now)) return false;
-
-        // Check hours status
+      // Filter by hoursStatus (kept client-side since null values are awkward as query params)
+      final needsApproval = pastEvents.where((event) {
         final hoursStatus = event['hoursStatus']?.toString();
-
-        // Show events that are:
-        // - pending (no hours submitted yet)
-        // - sheet_submitted (waiting for approval)
         return hoursStatus == null ||
                hoursStatus == 'pending' ||
                hoursStatus == 'sheet_submitted';

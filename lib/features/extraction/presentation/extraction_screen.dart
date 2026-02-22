@@ -5403,54 +5403,20 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     return {'filled': totalFilled, 'total': totalNeeded};
   }
 
-  /// Determine privacy status: 'private', 'public', or 'mix'
+  /// Determine privacy status: 'private' or 'public'
   String _getPrivacyStatus(Map<String, dynamic> event) {
     // Read from database field if available
     final visibilityType = event['visibilityType']?.toString();
     if (visibilityType != null) {
-      // Map database values to display values
-      if (visibilityType == 'private_public') {
-        return 'private_public';
-      }
+      // Treat legacy 'private_public' as 'public'
+      if (visibilityType == 'private_public') return 'public';
       return visibilityType; // 'private' or 'public'
     }
 
-    // Fallback to calculated logic for events without visibilityType field
+    // Fallback for events without visibilityType field
     final status = (event['status'] ?? 'draft').toString();
-
-    // Draft events are always private
-    if (status == 'draft') {
-      return 'private';
-    }
-
-    // For published events, check if had invitations before publishing
-    if (status == 'published') {
-      final publishedAtRaw = event['publishedAt'];
-      final acceptedStaff = (event['accepted_staff'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-
-      if (publishedAtRaw != null && acceptedStaff.isNotEmpty) {
-        try {
-          final publishedAt = DateTime.parse(publishedAtRaw.toString());
-
-          // Check if any staff accepted before the event was published
-          for (final staff in acceptedStaff) {
-            final respondedAtRaw = staff['respondedAt'];
-            if (respondedAtRaw != null) {
-              try {
-                final respondedAt = DateTime.parse(respondedAtRaw.toString());
-                if (respondedAt.isBefore(publishedAt)) {
-                  return 'private_public'; // Had private invitations before publishing
-                }
-              } catch (_) {}
-            }
-          }
-        } catch (_) {}
-      }
-
-      return 'public'; // Published without prior private invitations
-    }
-
-    // Fallback for other statuses
+    if (status == 'draft') return 'private';
+    if (status == 'published') return 'public';
     return 'private';
   }
 
@@ -5461,9 +5427,6 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         return ExColors.techBlue; // Indigo
       case 'public':
         return ExColors.successDark; // Green
-      case 'private_public':
-      case 'mix': // Legacy fallback
-        return ExColors.capacityMedium; // Amber/Orange
       default:
         return Colors.grey;
     }
@@ -6522,14 +6485,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     });
 
     try {
-      // Fetch draft events from backend (status == 'draft')
-      final allEvents = await _eventService.fetchEvents();
-
-      // Filter to only draft status events
-      final drafts = allEvents.where((event) {
-        final status = event['status']?.toString() ?? '';
-        return status == 'draft';
-      }).toList();
+      // Fetch draft events from backend (server-side status filter)
+      final drafts = await _eventService.fetchEvents(status: 'draft');
 
       setState(() {
         _pendingDrafts = drafts;

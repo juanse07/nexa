@@ -822,14 +822,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final l10n = AppLocalizations.of(context)!;
     final privacyLabel = privacyStatus == 'private'
         ? l10n.privateLabel
-        : privacyStatus == 'public'
-            ? l10n.publicLabel
-            : l10n.privatePlusPublic;
+        : l10n.publicLabel;
     final privacyIcon = privacyStatus == 'private'
         ? Icons.lock_outline
-        : privacyStatus == 'public'
-            ? Icons.public
-            : Icons.group;
+        : Icons.public;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -1151,49 +1147,15 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     // Read from database field if available
     final visibilityType = event['visibilityType']?.toString();
     if (visibilityType != null) {
-      // Map database values to display values
-      if (visibilityType == 'private_public') {
-        return 'private_public';
-      }
+      // Treat legacy 'private_public' as 'public'
+      if (visibilityType == 'private_public') return 'public';
       return visibilityType; // 'private' or 'public'
     }
 
-    // Fallback to calculated logic for events without visibilityType field
+    // Fallback for events without visibilityType field
     final status = (event['status'] ?? 'draft').toString();
-
-    // Draft events are always private
-    if (status == 'draft') {
-      return 'private';
-    }
-
-    // For published events, check if had invitations before publishing
-    if (status == 'published') {
-      final publishedAtRaw = event['publishedAt'];
-      final acceptedStaff = (event['accepted_staff'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-
-      if (publishedAtRaw != null && acceptedStaff.isNotEmpty) {
-        try {
-          final publishedAt = DateTime.parse(publishedAtRaw.toString());
-
-          // Check if any staff accepted before the event was published
-          for (final staff in acceptedStaff) {
-            final respondedAtRaw = staff['respondedAt'];
-            if (respondedAtRaw != null) {
-              try {
-                final respondedAt = DateTime.parse(respondedAtRaw.toString());
-                if (respondedAt.isBefore(publishedAt)) {
-                  return 'private_public'; // Had private invitations before publishing
-                }
-              } catch (_) {}
-            }
-          }
-        } catch (_) {}
-      }
-
-      return 'public'; // Published without prior private invitations
-    }
-
-    // Fallback for other statuses
+    if (status == 'draft') return 'private';
+    if (status == 'published') return 'public';
     return 'private';
   }
 
@@ -1203,9 +1165,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         return AppColors.techBlue; // Indigo
       case 'public':
         return AppColors.success; // Green
-      case 'private_public':
-      case 'mix': // Legacy fallback
-        return AppColors.warning; // Amber/Orange
       default:
         return Colors.grey;
     }

@@ -106,13 +106,23 @@ class AttendanceService {
   }
 
   /// Get flagged attendance entries that need review
-  static Future<List<Map<String, dynamic>>> getFlaggedAttendance() async {
+  ///
+  /// [status] - Optional filter: 'pending', 'approved', 'dismissed' (null returns all)
+  static Future<List<Map<String, dynamic>>> getFlaggedAttendance({
+    String? status,
+  }) async {
     final token = await _getToken();
     if (token == null) return [];
 
     try {
+      final queryParams = <String, String>{};
+      if (status != null) queryParams['status'] = status;
+
+      final uri = Uri.parse('$_apiBaseUrl/api/events/flagged-attendance')
+          .replace(queryParameters: queryParams.isEmpty ? null : queryParams);
+
       final response = await http.get(
-        Uri.parse('$_apiBaseUrl/api/events/flagged-attendance'),
+        uri,
         headers: {'Authorization': 'Bearer $token'},
       ).timeout(const Duration(seconds: 30));
 

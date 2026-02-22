@@ -93,10 +93,10 @@ export interface EventDocument extends Document {
   // Auto-completion control
   keepOpen?: boolean; // If true, prevents automatic status change to 'completed'
 
-  // Event visibility type
-  // - private: Only invited staff (has audience_user_keys/audience_team_ids)
-  // - public: All staff can see (no invitations)
-  // - private_public: Has invitations AND publicly visible to all staff
+  // Event visibility type (binary model)
+  // - private: Only directly invited staff can see the event
+  // - public: Visible to targeted teams (all roles visible to everyone)
+  // Note: 'private_public' is deprecated — kept in Mongoose enum for backward compat with existing docs
   visibilityType?: 'private' | 'public' | 'private_public';
 
   // Notification tracking
@@ -282,7 +282,7 @@ const EventSchema = new Schema<EventDocument>(
     // Auto-completion control
     keepOpen: { type: Boolean, default: false },
 
-    // Event visibility type
+    // Event visibility type — 'private_public' kept for backward compat with existing docs
     visibilityType: {
       type: String,
       enum: ['private', 'public', 'private_public'],

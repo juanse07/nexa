@@ -26,12 +26,11 @@ class _FlaggedAttendanceScreenState extends State<FlaggedAttendanceScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final entries = await AttendanceService.getFlaggedAttendance();
+      final entries = await AttendanceService.getFlaggedAttendance(
+        status: _filterStatus == 'all' ? null : _filterStatus,
+      );
       setState(() {
-        _flaggedEntries = entries
-            .where((e) =>
-                _filterStatus == 'all' || e['status'] == _filterStatus)
-            .toList();
+        _flaggedEntries = entries;
         _isLoading = false;
       });
     } catch (e) {

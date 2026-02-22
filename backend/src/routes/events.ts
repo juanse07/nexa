@@ -567,7 +567,7 @@ const publishEventSchema = z.object({
   audience_user_keys: z.array(z.string()).nullish(),
   audience_team_ids: z.array(z.string()).nullish(),
   audience_group_ids: z.array(z.string()).nullish(),
-  visibilityType: z.enum(['private', 'public', 'private_public']).optional(),
+  visibilityType: z.enum(['private', 'public']).optional(),
 });
 
 router.post('/events/:id/publish', requireAuth, async (req, res) => {
@@ -731,14 +731,11 @@ router.post('/events/:id/publish', requireAuth, async (req, res) => {
       // Caller explicitly specified (Flutter sends 'public')
       event.visibilityType = visibilityType;
     } else {
-      // Auto-infer from audience shape
+      // Auto-infer: teams targeted → public, direct-only → private
       const hasTeams = teamIds.length > 0;
       const hasDirectUsers = !!(audience_user_keys && audience_user_keys.length > 0);
-      const hasInvitedStaff = !!((event as any).invited_staff && (event as any).invited_staff.length > 0);
 
-      if (hasTeams && (hasDirectUsers || hasInvitedStaff)) {
-        event.visibilityType = 'private_public';
-      } else if (hasTeams) {
+      if (hasTeams) {
         event.visibilityType = 'public';
       } else if (hasDirectUsers) {
         event.visibilityType = 'private';
@@ -1036,7 +1033,7 @@ router.post('/events/:id/unpublish', requireAuth, async (req, res) => {
 
 // Change visibility type of a published event
 const changeVisibilitySchema = z.object({
-  visibilityType: z.enum(['private', 'public', 'private_public']),
+  visibilityType: z.enum(['private', 'public']),
   audience_team_ids: z.array(z.string()).nullish(),
   audience_group_ids: z.array(z.string()).nullish(),
 });
@@ -1081,8 +1078,8 @@ router.patch('/events/:id/visibility', requireAuth, async (req, res) => {
     // Update visibility type
     event.visibilityType = visibilityType;
 
-    // If changing to public or private_public, update audience teams
-    if ((visibilityType === 'public' || visibilityType === 'private_public') && audience_team_ids) {
+    // If changing to public, update audience teams
+    if (visibilityType === 'public' && audience_team_ids) {
       const teamIds = await sanitizeTeamIds(managerId, audience_team_ids);
       event.audience_team_ids = teamIds;
     }
@@ -1100,8 +1097,8 @@ router.patch('/events/:id/visibility', requireAuth, async (req, res) => {
     // Emit socket events to notify manager
     emitToManager(String(managerId), 'event:visibility_changed', responsePayload);
 
-    // If changed to public or private_public, notify teams
-    if ((visibilityType === 'public' || visibilityType === 'private_public') && oldVisibilityType === 'private') {
+    // If changed to public, notify teams
+    if (visibilityType === 'public' && oldVisibilityType === 'private') {
       const audienceTeams = (responsePayload.audience_team_ids || []) as string[];
       if (audienceTeams.length > 0) {
         emitToTeams(audienceTeams, 'event:visibility_changed', responsePayload);
@@ -1958,6 +1955,16 @@ router.get('/events/my-shifts', requireAuth, async (req, res) => {
       status: { $ne: 'draft' },
     };
 
+    // Optional period filter: ?period=future or ?period=past
+    const period = req.query.period as string | undefined;
+    if (period === 'future') {
+      const today = new Date().toISOString().split('T')[0];
+      filter.date = { ...(filter.date || {}), $gte: today };
+    } else if (period === 'past') {
+      const today = new Date().toISOString().split('T')[0];
+      filter.date = { ...(filter.date || {}), $lt: today };
+    }
+
     if (lastSyncParam) {
       try {
         const lastSyncDate = new Date(lastSyncParam);
@@ -2004,6 +2011,166 @@ router.get('/events/my-shifts', requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error('[GET /events/my-shifts] Error:', err);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Get available events for staff (future, non-accepted, non-draft, visible)
+router.get('/events/available', requireAuth, async (req, res) => {
+  try {
+    const authUser = (req as any).user as AuthenticatedUser | undefined;
+    if (!authUser?.provider || !authUser.sub) {
+      return res.status(401).json({ message: 'User not authenticated' });
+    }
+    const audienceKey = `${authUser.provider}:${authUser.sub}`;
+
+    const lastSyncParam = req.query.lastSync as string | undefined;
+
+    // Resolve team memberships (same as GET /events staff path)
+    const membershipTeamIdsRaw = await TeamMemberModel.distinct('teamId', {
+      provider: authUser.provider,
+      subject: authUser.sub,
+      status: 'active',
+    });
+
+    const membershipTeamIds = (membershipTeamIdsRaw as unknown[])
+      .map((value) => {
+        if (!value) return null;
+        if (value instanceof mongoose.Types.ObjectId) {
+          return value as mongoose.Types.ObjectId;
+        }
+        const str = value.toString();
+        if (!mongoose.Types.ObjectId.isValid(str)) return null;
+        return new mongoose.Types.ObjectId(str);
+      })
+      .filter((value): value is mongoose.Types.ObjectId => value !== null);
+
+    // Visibility filters — same $or logic as GET /events staff path
+    const visibilityFilters: any[] = [
+      // Public events with no targeting (includes legacy 'private_public' docs)
+      {
+        $and: [
+          {
+            $or: [
+              { audience_team_ids: { $exists: false } },
+              { audience_team_ids: { $eq: [] } },
+            ],
+          },
+          {
+            $or: [
+              { audience_user_keys: { $exists: false } },
+              { audience_user_keys: { $eq: [] } },
+            ],
+          },
+          {
+            $or: [
+              { visibilityType: 'public' },
+              { visibilityType: 'private_public' },
+            ],
+          },
+        ],
+      },
+      // Directly invited staff (any visibilityType)
+      { audience_user_keys: audienceKey },
+    ];
+
+    if (membershipTeamIds.length > 0) {
+      visibilityFilters.push({ audience_team_ids: { $in: membershipTeamIds } });
+    }
+
+    // Today's date as ISO string for date comparison
+    const today = new Date().toISOString().split('T')[0]; // "2026-02-21"
+
+    const filter: any = {
+      $or: visibilityFilters,
+      $and: [
+        { status: { $ne: 'draft' } },
+        { 'accepted_staff.userKey': { $ne: audienceKey } },
+        { date: { $gte: today } },
+      ],
+    };
+
+    // Delta sync support
+    if (lastSyncParam) {
+      try {
+        const lastSyncDate = new Date(lastSyncParam);
+        if (!isNaN(lastSyncDate.getTime())) {
+          filter.updatedAt = { $gt: lastSyncDate };
+        }
+      } catch (e) {
+        // Invalid date format, ignore and return all
+      }
+    }
+
+    const events = await EventModel.find(filter).sort({ date: 1 }).lean();
+
+    // Enrich with tariff data
+    const enrichedEvents = await enrichEventsWithTariffs(events);
+
+    // Filter roles for private events (same logic as GET /events staff path)
+    const processedEvents = enrichedEvents.map((event: any) => {
+      const invitedStaff = event.invited_staff || [];
+      const userInvitation = invitedStaff.find((s: any) => s.userKey === audienceKey);
+
+      if (userInvitation && event.visibilityType === 'private') {
+        const assignedRoleName = userInvitation.roleName;
+        const originalRoles = event.roles || [];
+        const filteredRoles = originalRoles.filter((r: any) => {
+          const roleNameLower = (r.role || '').toLowerCase();
+          const assignedLower = (assignedRoleName || '').toLowerCase();
+          const roleIdLower = (userInvitation.roleId || '').toLowerCase();
+          return roleNameLower === assignedLower || roleNameLower === roleIdLower;
+        });
+
+        const originalRoleStats = event.role_stats || [];
+        const filteredRoleStats = originalRoleStats.filter((rs: any) => {
+          const roleNameLower = (rs.role || '').toLowerCase();
+          const assignedLower = (assignedRoleName || '').toLowerCase();
+          const roleIdLower = (userInvitation.roleId || '').toLowerCase();
+          return roleNameLower === assignedLower || roleNameLower === roleIdLower;
+        });
+
+        return {
+          ...event,
+          roles: filteredRoles.length > 0 ? filteredRoles : event.roles,
+          role_stats: filteredRoleStats.length > 0 ? filteredRoleStats : event.role_stats,
+          assigned_role: assignedRoleName,
+        };
+      }
+
+      return event;
+    });
+
+    // Map events to include string ids
+    const mappedEvents = processedEvents.map((event: any) => {
+      const teamIds = Array.isArray(event.audience_team_ids)
+        ? event.audience_team_ids
+            .map((value: any) => {
+              if (!value) return null;
+              if (value instanceof mongoose.Types.ObjectId) {
+                return value.toHexString();
+              }
+              const str = value.toString();
+              return mongoose.Types.ObjectId.isValid(str) ? str : null;
+            })
+            .filter((value: string | null): value is string => !!value)
+        : [];
+
+      return {
+        ...event,
+        id: String(event._id),
+        managerId: event.managerId ? String(event.managerId) : undefined,
+        audience_team_ids: teamIds,
+      };
+    });
+
+    return res.json({
+      events: mappedEvents,
+      serverTimestamp: new Date().toISOString(),
+      deltaSync: !!lastSyncParam,
+    });
+  } catch (err) {
+    console.error('[GET /events/available] Error:', err);
     return res.status(500).json({ error: 'Internal Server Error' });
   }
 });
@@ -2109,12 +2276,25 @@ router.get('/events', requireAuth, async (req, res) => {
     }
 
     const lastSyncParam = req.query.lastSync as string | undefined;
+    const statusParam = req.query.status as string | undefined;
+    const isPastParam = req.query.isPast as string | undefined;
 
     const filter: any = {};
 
     if (managerScope && managerId) {
       filter.managerId = managerId;
       // Managers see all their events (including drafts)
+
+      if (statusParam) {
+        const statuses = statusParam.split(',').map(s => s.trim()).filter(Boolean);
+        filter.status = statuses.length === 1 ? statuses[0] : { $in: statuses };
+      }
+
+      if (isPastParam === 'true') {
+        filter.date = { $lt: new Date().toISOString().split('T')[0] };
+      } else if (isPastParam === 'false') {
+        filter.date = { $gte: new Date().toISOString().split('T')[0] };
+      }
 
       if (lastSyncParam) {
         try {
@@ -2178,7 +2358,7 @@ router.get('/events', requireAuth, async (req, res) => {
       console.log('[EVENTS DEBUG] Processed team IDs:', membershipTeamIds);
 
       const visibilityFilters: any[] = [
-        // Public/Private+Public events visible to all (no targeting required)
+        // Public events visible to all (includes legacy 'private_public' docs)
         {
           $and: [
             {
@@ -2193,7 +2373,7 @@ router.get('/events', requireAuth, async (req, res) => {
                 { audience_user_keys: { $eq: [] } },
               ],
             },
-            // Only if visibilityType is public or private_public (not private-only)
+            // Only if visibilityType is public (includes legacy 'private_public' docs)
             {
               $or: [
                 { visibilityType: 'public' },
@@ -2225,6 +2405,17 @@ router.get('/events', requireAuth, async (req, res) => {
         }
       ];
 
+      if (statusParam) {
+        const statuses = statusParam.split(',').map(s => s.trim()).filter(Boolean);
+        filter.status = statuses.length === 1 ? statuses[0] : { $in: statuses };
+      }
+
+      if (isPastParam === 'true') {
+        filter.date = { $lt: new Date().toISOString().split('T')[0] };
+      } else if (isPastParam === 'false') {
+        filter.date = { $gte: new Date().toISOString().split('T')[0] };
+      }
+
       console.log('[EVENTS DEBUG] Staff filter:', JSON.stringify(filter, null, 2));
     }
 
@@ -2255,8 +2446,7 @@ router.get('/events', requireAuth, async (req, res) => {
         const invitedStaff = event.invited_staff || [];
         const userInvitation = invitedStaff.find((s: any) => s.userKey === audienceKey);
 
-        if (userInvitation && event.visibilityType === 'private') {
-          // Filter roles to only the assigned role
+          if (userInvitation && event.visibilityType === 'private') {
           const assignedRoleName = userInvitation.roleName;
           const originalRoles = event.roles || [];
           const filteredRoles = originalRoles.filter((r: any) => {

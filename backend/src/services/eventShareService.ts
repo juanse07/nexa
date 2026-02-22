@@ -174,9 +174,8 @@ export async function shareEventPublic(params: {
   // Check availability conflicts
   const availabilityWarnings = await checkAvailabilityConflicts(event, targetUserKeys);
 
-  // Infer visibility
-  const hasInvitedStaff = (event as any).invited_staff && (event as any).invited_staff.length > 0;
-  const visibilityType = hasInvitedStaff ? 'private_public' : 'public';
+  // Share-to-teams is always public visibility
+  const visibilityType = 'public';
 
   // Update event
   event.status = 'published';
