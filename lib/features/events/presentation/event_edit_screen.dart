@@ -5,7 +5,9 @@ import '../../extraction/services/roles_service.dart';
 import '../../extraction/widgets/modern_address_field.dart';
 import '../../extraction/services/google_places_service.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
+import 'package:nexa/shared/services/error_display_service.dart';
 import 'package:nexa/shared/widgets/web_content_wrapper.dart';
+import '../../hours_approval/presentation/hours_approval_detail_screen.dart';
 
 class EventEditScreen extends StatefulWidget {
   final Map<String, dynamic> event;
@@ -266,12 +268,7 @@ class _EventEditScreenState extends State<EventEditScreen> {
     } catch (e) {
       print('DEBUG: Error updating event: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${AppLocalizations.of(context)!.failedToUpdateEvent}: $e'),
-          duration: const Duration(seconds: 5),
-        ),
-      );
+      ErrorDisplayService.showErrorFromException(context, e, prefix: AppLocalizations.of(context)!.failedToUpdateEvent);
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -319,6 +316,47 @@ class _EventEditScreenState extends State<EventEditScreen> {
             child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Hours approval banner for completed events
+              if (widget.event['tab'] == 'completed' &&
+                  widget.event['approvalCategory'] != null &&
+                  widget.event['approvalCategory'] != 'approved') ...[
+                GestureDetector(
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => HoursApprovalDetailScreen(event: widget.event),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryPurple.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppColors.primaryPurple.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.schedule, color: AppColors.primaryPurple),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            AppLocalizations.of(context)!.approveHours,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.primaryPurple,
+                            ),
+                          ),
+                        ),
+                        Icon(Icons.chevron_right, color: AppColors.primaryPurple),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
               // Event Information
               _buildSectionTitle(AppLocalizations.of(context)!.eventInformation, Icons.event),
               const SizedBox(height: 16),
