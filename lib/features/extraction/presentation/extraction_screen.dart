@@ -2316,21 +2316,22 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                       height: kToolbarHeight,
                                       child: Row(
                                         children: [
-                                          // Avatar flush against left margin
-                                          _buildProfileMenu(context),
                                           // Title left-aligned
                                           Expanded(
-                                            child: TappableAppTitle(
-                                              child: Text(
-                                                _getAppBarTitle(),
-                                                style: const TextStyle(
-                                                  color: ExColors.yellow,
-                                                  fontSize: 17,
-                                                  fontWeight: FontWeight.w600,
-                                                  letterSpacing: 0.2,
+                                            child: Padding(
+                                              padding: const EdgeInsets.only(left: 20),
+                                              child: TappableAppTitle(
+                                                child: Text(
+                                                  _getAppBarTitle(),
+                                                  style: const TextStyle(
+                                                    color: ExColors.yellow,
+                                                    fontSize: 21,
+                                                    fontWeight: FontWeight.w600,
+                                                    letterSpacing: 0.2,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
                                                 ),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
                                               ),
                                             ),
                                           ),
