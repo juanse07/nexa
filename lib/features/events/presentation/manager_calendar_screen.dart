@@ -76,7 +76,7 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = e.toString();
+          _error = 'Failed to load calendar data.';
           _isLoading = false;
         });
       }
@@ -792,10 +792,7 @@ class _ManagerCalendarScreenState extends State<ManagerCalendarScreen> {
     final clientName = (event['client_name'] ?? 'Event').toString();
     final startTime = _formatTime(event['start_time']?.toString());
     final endTime = _formatTime(event['end_time']?.toString());
-    final venueRaw = event['venue'];
-    final venue = venueRaw is Map<String, dynamic>
-        ? ((venueRaw['name'] ?? venueRaw['address'] ?? '') as Object).toString()
-        : (venueRaw?.toString() ?? '');
+    final venue = (event['venue_name'] ?? '').toString();
     final staffing = _staffingLabel(event);
 
     return GestureDetector(

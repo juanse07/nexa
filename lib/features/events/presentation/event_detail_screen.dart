@@ -14,8 +14,10 @@ import '../../extraction/presentation/pending_publish_screen.dart';
 import '../../extraction/presentation/pending_edit_screen.dart';
 import '../../extraction/presentation/ai_chat_screen.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
+import 'package:nexa/shared/services/error_display_service.dart';
 import '../../attendance/presentation/bulk_clock_in_screen.dart';
 import '../../attendance/services/attendance_service.dart';
+import '../../hours_approval/presentation/hours_approval_detail_screen.dart';
 
 class EventDetailScreen extends StatefulWidget {
   final Map<String, dynamic> event;
@@ -241,14 +243,32 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               final rows = <Map<String, dynamic>>[];
               if (dateStr.isNotEmpty)
                 rows.add({'icon': Icons.calendar_today_rounded, 'label': l10n.date, 'value': dateStr});
-              if (location.isNotEmpty)
-                rows.add({'icon': Icons.place_rounded, 'label': l10n.location, 'value': location});
               if (headcount != null)
                 rows.add({'icon': Icons.people_rounded, 'label': l10n.headcount, 'value': headcount.toString()});
-              if (event['venue_name'] != null)
-                rows.add({'icon': Icons.location_city_rounded, 'label': l10n.locationName, 'value': event['venue_name'].toString()});
-              if (event['venue_address'] != null)
-                rows.add({'icon': Icons.pin_drop_rounded, 'label': l10n.address, 'value': event['venue_address'].toString()});
+              // Consolidated venue row
+              final venueName = (event['venue_name'] ?? '').toString();
+              final venueAddr = (event['venue_address'] ?? '').toString();
+              final venueCity = (event['city'] ?? '').toString();
+              final venueState = (event['state'] ?? '').toString();
+              final venuePrimary = venueName.isNotEmpty ? venueName : venueAddr;
+              if (venuePrimary.isNotEmpty) {
+                final subtitleParts = <String>[
+                  if (venueName.isNotEmpty && venueAddr.isNotEmpty) venueAddr,
+                  if (venueCity.isNotEmpty) venueCity,
+                  if (venueState.isNotEmpty) venueState,
+                ].where((s) => s.isNotEmpty).toList();
+                final venueSubtitle = subtitleParts.join(', ');
+                final mapsQuery = [venueAddr, venueCity, venueState]
+                    .where((s) => s.isNotEmpty)
+                    .join(', ');
+                rows.add({
+                  'icon': Icons.place_rounded,
+                  'label': l10n.location,
+                  'value': venuePrimary,
+                  if (venueSubtitle.isNotEmpty) 'subtitle': venueSubtitle,
+                  if (mapsQuery.isNotEmpty) 'mapsQuery': mapsQuery,
+                });
+              }
               if (event['start_time'] != null)
                 rows.add({'icon': Icons.schedule_rounded, 'label': l10n.startTime, 'value': event['start_time'].toString()});
               if (event['end_time'] != null)
@@ -273,60 +293,93 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     final icon = row['icon'] as IconData;
                     final label = row['label'] as String;
                     final value = row['value'] as String;
+                    final subtitle = row['subtitle'] as String?;
+                    final mapsQuery = row['mapsQuery'] as String?;
+
+                    Widget rowContent = Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 13,
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              color: AppColors.navySpaceCadet
+                                  .withValues(alpha: 0.07),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(
+                              icon,
+                              size: 16,
+                              color: AppColors.navySpaceCadet,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  label,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey.shade500,
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  value,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.navySpaceCadet,
+                                  ),
+                                ),
+                                if (subtitle != null) ...[
+                                  const SizedBox(height: 1),
+                                  Text(
+                                    subtitle,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade500,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          if (mapsQuery != null)
+                            Icon(
+                              Icons.directions_rounded,
+                              size: 18,
+                              color: Colors.grey.shade400,
+                            ),
+                        ],
+                      ),
+                    );
+
+                    if (mapsQuery != null) {
+                      rowContent = GestureDetector(
+                        onTap: () {
+                          final uri = Uri.parse(
+                            'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(mapsQuery)}',
+                          );
+                          launchUrl(uri, mode: LaunchMode.externalApplication);
+                        },
+                        child: rowContent,
+                      );
+                    }
+
                     return Column(
                       children: [
                         if (idx > 0)
                           const Divider(height: 1, color: Color(0xFFF1F5F9)),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 13,
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 34,
-                                height: 34,
-                                decoration: BoxDecoration(
-                                  color: AppColors.navySpaceCadet
-                                      .withValues(alpha: 0.07),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Icon(
-                                  icon,
-                                  size: 16,
-                                  color: AppColors.navySpaceCadet,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      label,
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.grey.shade500,
-                                        letterSpacing: 0.3,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      value,
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.navySpaceCadet,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        rowContent,
                       ],
                     );
                   }).toList(),
@@ -754,9 +807,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     } catch (e) {
       setState(() => _isRemoving = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${AppLocalizations.of(context)!.failedToRemoveStaff}: $e')),
-      );
+      ErrorDisplayService.showErrorFromException(context, e, prefix: AppLocalizations.of(context)!.failedToRemoveStaff);
     }
   }
 
@@ -1024,6 +1075,23 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             ),
           ),
         ],
+        // Approve Hours button (past events with accepted staff, unapproved hours)
+        if (_shouldShowApproveHoursButton()) ...[
+          const SizedBox(height: 12),
+          ElevatedButton.icon(
+            onPressed: () => _openApproveHours(),
+            icon: const Icon(Icons.fact_check, size: 18),
+            label: Text(AppLocalizations.of(context)!.approveHours),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.info,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
+        ],
         // Open to All Staff button (only for private events)
         if (privacyStatus == 'private') ...[
           const SizedBox(height: 12),
@@ -1062,6 +1130,39 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       return !eventDate.isAfter(todayStart.add(const Duration(days: 1)).subtract(const Duration(milliseconds: 1)));
     } catch (_) {
       return false;
+    }
+  }
+
+  bool _shouldShowApproveHoursButton() {
+    final acceptedStaff = event['accepted_staff'] as List<dynamic>?;
+    if (acceptedStaff == null || acceptedStaff.isEmpty) return false;
+
+    final hoursStatus = event['hoursStatus']?.toString();
+    if (hoursStatus == 'approved') return false;
+
+    final rawDate = event['date'];
+    if (rawDate is! String || rawDate.isEmpty) return false;
+    try {
+      final eventDate = DateTime.parse(rawDate);
+      final today = DateTime.now();
+      final todayStart = DateTime(today.year, today.month, today.day);
+      // Show for past events (not future)
+      return eventDate.isBefore(todayStart);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _openApproveHours() async {
+    final result = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => HoursApprovalDetailScreen(event: event),
+      ),
+    );
+
+    if (result == true && mounted) {
+      // Refresh event data
+      widget.onEventUpdated?.call();
     }
   }
 
@@ -1339,9 +1440,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isGeneratingSheet = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${AppLocalizations.of(context)!.failedToGenerateSheet}: $e')),
-        );
+        ErrorDisplayService.showErrorFromException(context, e, prefix: AppLocalizations.of(context)!.failedToGenerateSheet);
       }
     }
   }
