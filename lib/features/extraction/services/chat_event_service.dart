@@ -1353,50 +1353,10 @@ Respond in the same language the user speaks. Be concise and conversational. Use
     }
   }
 
-  /// Get a greeting message to start the conversation
-  /// Fetches current date/time from backend for contextual greeting
+  /// Get a greeting message to start the conversation (no-op — welcome message removed)
   Future<ChatMessage> getGreeting() async {
-    // Initialize conversation start time if not already set
     _conversationStartTime ??= DateTime.now();
-
-    String greetingContent = 'Hey! 👋 Let\'s create an event. Just tell me about it - I\'ll figure out what I need as we go.';
-
-    try {
-      // Fetch current date/time context from backend
-      final token = await AuthService.getJwt();
-      if (token == null) {
-        throw Exception('Not authenticated');
-      }
-
-      final baseUrl = AppConfig.instance.baseUrl;
-      final response = await http.get(
-        Uri.parse('$baseUrl/ai/system-info'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final welcomeContext = data['welcomeContext'] as String?;
-
-        if (welcomeContext != null) {
-          greetingContent = 'Hey! 👋 It\'s $welcomeContext. Let\'s create an event - just tell me about it and I\'ll figure out what I need as we go.';
-        }
-      }
-    } catch (e) {
-      // If fetching date fails, use default greeting
-      print('[ChatEventService] Failed to fetch system info: $e');
-    }
-
-    final greeting = ChatMessage(
-      role: 'assistant',
-      content: greetingContent,
-      provider: AIProvider.groq,
-    );
-    _conversationHistory.add(greeting);
-    return greeting;
+    return ChatMessage(role: 'assistant', content: '', provider: AIProvider.groq);
   }
 
   /// Export conversation history to JSON (for persistence)

@@ -298,7 +298,7 @@ class _AIChatScreenState extends State<AIChatScreen>
     } catch (e) {
       print('[AIChatScreen] Error picking image from camera: $e');
       if (mounted) {
-        ErrorDisplayService.showError(context, 'Failed to capture photo: $e');
+        ErrorDisplayService.showErrorFromException(context, e, prefix: 'Failed to capture photo');
       }
     }
   }
@@ -320,7 +320,7 @@ class _AIChatScreenState extends State<AIChatScreen>
     } catch (e) {
       print('[AIChatScreen] Error picking image from gallery: $e');
       if (mounted) {
-        ErrorDisplayService.showError(context, 'Failed to select image: $e');
+        ErrorDisplayService.showErrorFromException(context, e, prefix: 'Failed to select image');
       }
     }
   }
@@ -344,7 +344,7 @@ class _AIChatScreenState extends State<AIChatScreen>
     } catch (e) {
       print('[AIChatScreen] Error picking document: $e');
       if (mounted) {
-        ErrorDisplayService.showError(context, 'Failed to select document: $e');
+        ErrorDisplayService.showErrorFromException(context, e, prefix: 'Failed to select document');
       }
     }
   }
@@ -365,7 +365,7 @@ class _AIChatScreenState extends State<AIChatScreen>
     } catch (e) {
       print('[AIChatScreen] Error extracting from image: $e');
       if (mounted) {
-        ErrorDisplayService.showError(context, 'Failed to extract from image: $e');
+        ErrorDisplayService.showErrorFromException(context, e, prefix: 'Failed to extract from image');
       }
     }
   }
@@ -386,7 +386,7 @@ class _AIChatScreenState extends State<AIChatScreen>
     } catch (e) {
       print('[AIChatScreen] Error extracting from document: $e');
       if (mounted) {
-        ErrorDisplayService.showError(context, 'Failed to extract from PDF: $e');
+        ErrorDisplayService.showErrorFromException(context, e, prefix: 'Failed to extract from PDF');
       }
     }
   }
@@ -427,7 +427,7 @@ class _AIChatScreenState extends State<AIChatScreen>
     } catch (e) {
       print('[AIChatScreen] Error saving draft: $e');
       if (mounted) {
-        ErrorDisplayService.showError(context, 'Failed to save shift: $e');
+        ErrorDisplayService.showErrorFromException(context, e, prefix: 'Failed to save shift');
       }
     }
   }
@@ -507,7 +507,7 @@ class _AIChatScreenState extends State<AIChatScreen>
       );
 
       if (mounted) {
-        ErrorDisplayService.showError(context, 'Failed to save shift: $e');
+        ErrorDisplayService.showErrorFromException(context, e, prefix: 'Failed to save shift');
       }
     } finally {
       _stateProvider.setLoading(false);
@@ -683,7 +683,7 @@ class _AIChatScreenState extends State<AIChatScreen>
     } catch (e) {
       print('[AIChatScreen] ✗ Failed to create batch events: $e');
       if (mounted) {
-        ErrorDisplayService.showError(context, 'Failed to create recurring events: $e');
+        ErrorDisplayService.showErrorFromException(context, e, prefix: 'Failed to create recurring events');
       }
     } finally {
       _stateProvider.setLoading(false);
@@ -751,9 +751,11 @@ class _AIChatScreenState extends State<AIChatScreen>
 
                 // Messages list as SliverList (not SliverFillRemaining to fix scroll issues)
                 messages.isEmpty
-                    ? const SliverFillRemaining(
+                    ? SliverFillRemaining(
                         child: Center(
-                          child: CircularProgressIndicator(),
+                          child: _stateProvider.isLoading
+                              ? const CircularProgressIndicator()
+                              : const SizedBox.shrink(),
                         ),
                       )
                     : SliverWebContentWrapper.chat(
@@ -950,23 +952,18 @@ class _AIChatScreenState extends State<AIChatScreen>
                                     child: Row(
                                       children: [
                                         _buildSuggestionChip(
-                                          'New ${terminology[0].toUpperCase()}${terminology.substring(1)}',
-                                          'Create a new $terminology. I\'ll provide the details.',
+                                          '📝 Create event',
+                                          'I want to create a new event',
                                         ),
                                         const SizedBox(width: 6),
                                         _buildSuggestionChip(
-                                          'New Client',
-                                          'I want to add a new client',
+                                          '🔍 Find staff',
+                                          'Find available staff for an upcoming event',
                                         ),
                                         const SizedBox(width: 6),
                                         _buildSuggestionChip(
-                                          'New Role',
-                                          'Create a new staff role for my team',
-                                        ),
-                                        const SizedBox(width: 6),
-                                        _buildSuggestionChip(
-                                          'New Tariff',
-                                          'I need to set up a new pay rate',
+                                          '📊 Event status',
+                                          'What is the status of my upcoming events?',
                                         ),
                                       ],
                                     ),
@@ -1018,7 +1015,7 @@ class _AIChatScreenState extends State<AIChatScreen>
                               _scrollToBottom(animated: true);
                             } catch (e) {
                               if (!mounted) return;
-                              ErrorDisplayService.showError(context, 'Error: ${e.toString()}');
+                              ErrorDisplayService.showErrorFromException(context, e);
                             } finally {
                               _stateProvider.setLoading(false);
                             }
@@ -1189,7 +1186,7 @@ class _AIChatScreenState extends State<AIChatScreen>
               _scrollToBottom(animated: true);
             } catch (e) {
               if (!mounted) return;
-              ErrorDisplayService.showError(context, 'Error: ${e.toString()}');
+              ErrorDisplayService.showErrorFromException(context, e);
             } finally {
               _stateProvider.setLoading(false);
             }
