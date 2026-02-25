@@ -45,7 +45,7 @@ class _UserEventsScreenState extends State<UserEventsScreen> {
       });
     } catch (e) {
       setState(() {
-        _errorMessage = e.toString();
+        _errorMessage = 'Failed to load events.';
         _isLoading = false;
       });
     }

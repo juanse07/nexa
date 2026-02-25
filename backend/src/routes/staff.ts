@@ -248,6 +248,7 @@ router.get('/staff', requireAuth, async (req: Request, res: Response) => {
       }));
 
       return {
+        _id: String(member._id),
         id: String(member._id),
         userKey: member.userKey,
         provider: member.provider,
@@ -362,6 +363,7 @@ router.get('/staff/:userKey', requireAuth, async (req: Request, res: Response) =
     }
 
     return res.json({
+      _id: String(member._id),
       id: String(member._id),
       userKey,
       provider: member.provider,

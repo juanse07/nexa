@@ -30,8 +30,8 @@ export function initSocket(server: http.Server): IOServer {
           .filter((s) => s.length > 0);
         if (allowed.includes(origin)) return callback(null, true);
         if (/^http:\/\/localhost(:\d+)?$/.test(origin)) return callback(null, true);
-        if (/^https:\/\/[a-z0-9]+\.nexa-web\.pages\.dev$/.test(origin)) return callback(null, true);
-        if (origin === 'https://app.nexapymesoft.com') return callback(null, true);
+        if (/^https:\/\/[a-z0-9]+\.(nexa-web|flowshift-web)\.pages\.dev$/.test(origin)) return callback(null, true);
+        if (origin === 'https://app.nexapymesoft.com' || origin === 'https://flowshift.work') return callback(null, true);
         return callback(new Error('Not allowed by CORS'));
       },
       credentials: true,

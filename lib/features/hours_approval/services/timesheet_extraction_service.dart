@@ -1,21 +1,10 @@
-import 'dart:convert';
-import 'dart:io';
-
-import 'package:http/http.dart' as http;
-import 'package:nexa/core/config/app_config.dart';
-import 'package:nexa/core/config/environment.dart';
+import 'package:nexa/core/di/injection.dart';
+import 'package:nexa/core/network/api_client.dart';
 
 class TimesheetExtractionService {
-  final Environment _env = Environment.instance;
+  TimesheetExtractionService() : _apiClient = getIt<ApiClient>();
 
-  String get _apiBaseUrl {
-    final apiBase = _env.get('API_BASE_URL');
-    final pathPrefix = _env.get('API_PATH_PREFIX') ?? '';
-    if (apiBase != null) {
-      return pathPrefix.isNotEmpty ? '$apiBase$pathPrefix' : apiBase;
-    }
-    return 'https://api.nexapymesoft.com/api';
-  }
+  final ApiClient _apiClient;
 
   /// Analyze sign-in sheet photo and extract staff hours using AI
   Future<TimesheetAnalysisResult> analyzeSignInSheet({
@@ -23,23 +12,18 @@ class TimesheetExtractionService {
     required String imageBase64,
   }) async {
     try {
-      final response = await http.post(
-        Uri.parse('$_apiBaseUrl/events/$eventId/analyze-sheet'),
-        headers: {
-          HttpHeaders.contentTypeHeader: 'application/json',
-        },
-        body: jsonEncode({
-          'imageBase64': imageBase64,
-        }),
+      final response = await _apiClient.post<Map<String, dynamic>>(
+        '/events/$eventId/analyze-sheet',
+        data: {'imageBase64': imageBase64},
       );
 
-      if (response.statusCode >= 300) {
+      if (response.statusCode != null && response.statusCode! >= 300) {
         throw Exception(
-          'Failed to analyze sheet (${response.statusCode}): ${response.body}',
+          'Failed to analyze sheet (${response.statusCode}): ${response.data}',
         );
       }
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final data = response.data as Map<String, dynamic>;
       return TimesheetAnalysisResult.fromJson(data);
     } catch (e) {
       throw Exception('Failed to analyze sign-in sheet: $e');
@@ -54,25 +38,22 @@ class TimesheetExtractionService {
     required String submittedBy,
   }) async {
     try {
-      final response = await http.post(
-        Uri.parse('$_apiBaseUrl/events/$eventId/submit-hours'),
-        headers: {
-          HttpHeaders.contentTypeHeader: 'application/json',
-        },
-        body: jsonEncode({
+      final response = await _apiClient.post<Map<String, dynamic>>(
+        '/events/$eventId/submit-hours',
+        data: {
           'staffHours': staffHours.map((sh) => sh.toJson()).toList(),
           'sheetPhotoUrl': sheetPhotoUrl,
           'submittedBy': submittedBy,
-        }),
+        },
       );
 
-      if (response.statusCode >= 300) {
+      if (response.statusCode != null && response.statusCode! >= 300) {
         throw Exception(
-          'Failed to submit hours (${response.statusCode}): ${response.body}',
+          'Failed to submit hours (${response.statusCode}): ${response.data}',
         );
       }
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final data = response.data as Map<String, dynamic>;
       return SubmitHoursResult.fromJson(data);
     } catch (e) {
       throw Exception('Failed to submit hours: $e');
@@ -88,21 +69,18 @@ class TimesheetExtractionService {
     String? notes,
   }) async {
     try {
-      final response = await http.post(
-        Uri.parse('$_apiBaseUrl/events/$eventId/approve-hours/$userKey'),
-        headers: {
-          HttpHeaders.contentTypeHeader: 'application/json',
-        },
-        body: jsonEncode({
+      final response = await _apiClient.post<Map<String, dynamic>>(
+        '/events/$eventId/approve-hours/$userKey',
+        data: {
           'approvedHours': approvedHours,
           'approvedBy': approvedBy,
           if (notes != null) 'notes': notes,
-        }),
+        },
       );
 
-      if (response.statusCode >= 300) {
+      if (response.statusCode != null && response.statusCode! >= 300) {
         throw Exception(
-          'Failed to approve hours (${response.statusCode}): ${response.body}',
+          'Failed to approve hours (${response.statusCode}): ${response.data}',
         );
       }
     } catch (e) {
@@ -116,23 +94,18 @@ class TimesheetExtractionService {
     required String approvedBy,
   }) async {
     try {
-      final response = await http.post(
-        Uri.parse('$_apiBaseUrl/events/$eventId/bulk-approve-hours'),
-        headers: {
-          HttpHeaders.contentTypeHeader: 'application/json',
-        },
-        body: jsonEncode({
-          'approvedBy': approvedBy,
-        }),
+      final response = await _apiClient.post<Map<String, dynamic>>(
+        '/events/$eventId/bulk-approve-hours',
+        data: {'approvedBy': approvedBy},
       );
 
-      if (response.statusCode >= 300) {
+      if (response.statusCode != null && response.statusCode! >= 300) {
         throw Exception(
-          'Failed to bulk approve (${response.statusCode}): ${response.body}',
+          'Failed to bulk approve (${response.statusCode}): ${response.data}',
         );
       }
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final data = response.data as Map<String, dynamic>;
       return BulkApprovalResult(
         message: data['message'] as String? ?? 'Approved',
         approvedCount: data['approvedCount'] as int? ?? 0,

@@ -78,7 +78,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
       _filterConversations();
     } catch (e) {
       setState(() {
-        _error = e.toString();
+        _error = 'Failed to load conversations.';
         _loading = false;
       });
     }
@@ -87,90 +87,83 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return Stack(
-      children: [
-        GestureDetector(
-          onTap: () => FocusScope.of(context).unfocus(),
-          child: Scaffold(
-            backgroundColor: AppColors.surfaceLight,
-            appBar: AppBar(
-              backgroundColor: Colors.white,
-              elevation: 0,
-              title: TappableAppTitle.text(
-                l10n.chatTitle,
-                style: const TextStyle(
-                  color: AppColors.charcoal,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.5,
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
+        backgroundColor: AppColors.surfaceLight,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          title: TappableAppTitle.text(
+            l10n.chatTitle,
+            style: const TextStyle(
+              color: AppColors.charcoal,
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.5,
+            ),
+          ),
+          iconTheme: const IconThemeData(color: AppColors.charcoal),
+          actions: [
+            IconButton(
+              onPressed: _showContactPicker,
+              icon: const Icon(Icons.add_comment_rounded, color: AppColors.charcoal, size: 24),
+              tooltip: l10n.newChat,
+            ),
+          ],
+        ),
+        body: WebContentWrapper.list(
+          child: Column(
+            children: [
+              // Search bar
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: l10n.searchConversations,
+                    hintStyle: TextStyle(
+                      color: Colors.grey.shade400,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w400,
+                    ),
+                    prefixIcon: Icon(
+                      Icons.search_rounded,
+                      color: Colors.grey.shade400,
+                      size: 22,
+                    ),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: Icon(Icons.close, color: Colors.grey.shade400, size: 20),
+                            onPressed: () {
+                              _searchController.clear();
+                            },
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: Colors.grey.shade100,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: Color(0xFF1A1A2E), width: 1.5),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
                 ),
               ),
-              iconTheme: const IconThemeData(color: AppColors.charcoal),
-            ),
-            body: WebContentWrapper.list(
-              child: Column(
-                children: [
-                  // Search bar
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: l10n.searchConversations,
-                        hintStyle: TextStyle(
-                          color: Colors.grey.shade400,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w400,
-                        ),
-                        prefixIcon: Icon(
-                          Icons.search_rounded,
-                          color: Colors.grey.shade400,
-                          size: 22,
-                        ),
-                        suffixIcon: _searchController.text.isNotEmpty
-                            ? IconButton(
-                                icon: Icon(Icons.close, color: Colors.grey.shade400, size: 20),
-                                onPressed: () {
-                                  _searchController.clear();
-                                },
-                              )
-                            : null,
-                        filled: true,
-                        fillColor: Colors.grey.shade100,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide.none,
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide.none,
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: Color(0xFF1A1A2E), width: 1.5),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      ),
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
-                    ),
-                  ),
-                  Expanded(child: _buildBody()),
-                ],
-              ),
-            ),
+              Expanded(child: _buildBody()),
+            ],
           ),
         ),
-        Positioned(
-          bottom: 100,
-          right: 16,
-          child: FloatingActionButton(
-            onPressed: _showContactPicker,
-            backgroundColor: const Color(0xFF1A1A2E),
-            elevation: 4,
-            child: const Icon(Icons.add_comment_rounded, color: Color(0xFFDAA520), size: 24),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
@@ -634,7 +627,7 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
       });
     } catch (e) {
       setState(() {
-        _error = e.toString();
+        _error = 'Failed to load conversations.';
         _loading = false;
       });
     }

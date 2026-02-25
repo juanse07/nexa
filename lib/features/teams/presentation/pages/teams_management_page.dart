@@ -5,6 +5,7 @@ import 'package:nexa/core/network/socket_manager.dart';
 import 'package:nexa/features/teams/data/services/teams_service.dart';
 import 'package:nexa/features/teams/presentation/pages/team_detail_page.dart';
 import 'package:nexa/l10n/app_localizations.dart';
+import 'package:nexa/shared/services/error_display_service.dart';
 
 class TeamsManagementPage extends StatefulWidget {
   const TeamsManagementPage({super.key});
@@ -51,7 +52,7 @@ class _TeamsManagementPageState extends State<TeamsManagementPage> {
       await SocketManager.instance.joinTeams(ids);
     } catch (e) {
       setState(() {
-        _error = e.toString();
+        _error = 'Failed to load teams.';
         _loading = false;
       });
     }
@@ -119,9 +120,7 @@ class _TeamsManagementPageState extends State<TeamsManagementPage> {
                 Navigator.of(ctx).pop(true);
               } catch (e) {
                 if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('${l10n.failedToCreateTeam}: $e')),
-                );
+                ErrorDisplayService.showErrorFromException(context, e, prefix: l10n.failedToCreateTeam);
               }
             },
             child: Text(l10n.create),
@@ -167,9 +166,7 @@ class _TeamsManagementPageState extends State<TeamsManagementPage> {
       await _loadTeams();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('${l10n.failedToDeleteTeam}: $e')));
+      ErrorDisplayService.showErrorFromException(context, e, prefix: l10n.failedToDeleteTeam);
     }
   }
 

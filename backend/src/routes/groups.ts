@@ -34,6 +34,7 @@ router.get('/groups', requireAuth, async (req: Request, res: Response) => {
     }
 
     const payload = groups.map((g: any) => ({
+      _id: String(g._id),
       id: String(g._id),
       name: g.name,
       color: g.color || null,
@@ -76,6 +77,7 @@ router.post('/groups', requireAuth, async (req: Request, res: Response) => {
     await group.save();
 
     return res.status(201).json({
+      _id: String(group._id),
       id: String(group._id),
       name: group.name,
       color: group.color || null,
@@ -136,6 +138,7 @@ router.patch('/groups/:groupId', requireAuth, async (req: Request, res: Response
     }
 
     return res.json({
+      _id: String(group._id),
       id: String(group._id),
       name: group.name,
       color: group.color || null,

@@ -117,7 +117,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   List<Map<String, dynamic>>? _eventsAvailable;
   List<Map<String, dynamic>>? _eventsFull;
   List<Map<String, dynamic>>? _eventsCompleted;
-  List<Map<String, dynamic>>? _eventsExpired;
+  int _expiredTotalCount = 0;
 
   // Search & sort state
   final TextEditingController _searchController = TextEditingController();
@@ -2109,10 +2109,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           switch (_eventsTabController.index) {
             case 0:
               print('[RENDER] Showing PENDING: ${filteredPending.length} items');
-              return _eventsInner(filteredPending, header: _buildExpiredEventsBanner(_eventsExpired?.length ?? 0), tabIndex: 0); // Pending tab
+              return _eventsInner(filteredPending, header: _buildExpiredEventsBanner(_expiredTotalCount), tabIndex: 0); // Pending tab
             case 1:
               print('[RENDER] Showing POSTED: ${filteredAvailable.length} items');
-              return _eventsInner(filteredAvailable, header: _buildExpiredEventsBanner(_eventsExpired?.length ?? 0), tabIndex: 1); // Posted tab
+              return _eventsInner(filteredAvailable, header: _buildExpiredEventsBanner(_expiredTotalCount), tabIndex: 1); // Posted tab
             case 2:
               print('[RENDER] Showing FULL: ${filteredFull.length} items');
               return _eventsInner(filteredFull, tabIndex: 2); // Full tab
@@ -2127,8 +2127,8 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           return TabBarView(
             controller: _eventsTabController,
             children: [
-              _eventsInner(filteredPending, header: _buildExpiredEventsBanner(_eventsExpired?.length ?? 0), tabIndex: 0), // Pending tab
-              _eventsInner(filteredAvailable, header: _buildExpiredEventsBanner(_eventsExpired?.length ?? 0), tabIndex: 1), // Posted tab
+              _eventsInner(filteredPending, header: _buildExpiredEventsBanner(_expiredTotalCount), tabIndex: 0), // Pending tab
+              _eventsInner(filteredAvailable, header: _buildExpiredEventsBanner(_expiredTotalCount), tabIndex: 1), // Posted tab
               _eventsInner(filteredFull, tabIndex: 2), // Full tab
               _eventsInner(filteredCompleted, tabIndex: 3), // Completed tab
             ],
@@ -5116,200 +5116,19 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   }
 
   void _showExpiredEvents() {
-    final expiredEvents = List<Map<String, dynamic>>.from(_eventsExpired ?? []);
-    final parentContext = context;
-
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (bottomSheetContext) => StatefulBuilder(
-        builder: (context, setSheetState) => DraggableScrollableSheet(
-          initialChildSize: 0.7,
-          minChildSize: 0.5,
-          maxChildSize: 0.95,
-          builder: (context, scrollController) => Container(
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(20),
-                topRight: Radius.circular(20),
-              ),
-            ),
-            child: Column(
-              children: [
-                // Handle bar
-                Container(
-                  margin: const EdgeInsets.only(top: 12, bottom: 8),
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                // Header
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  child: Row(
-                    children: [
-                      Icon(Icons.warning_amber_rounded, size: 24, color: Colors.orange.shade700),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          AppLocalizations.of(parentContext)!.expiredUnfulfilledTitle(expiredEvents.length),
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      if (expiredEvents.isNotEmpty)
-                        TextButton.icon(
-                          icon: const Icon(Icons.delete_sweep, size: 20, color: ExColors.errorDark),
-                          label: const Text('Delete All', style: TextStyle(color: ExColors.errorDark, fontSize: 13)),
-                          onPressed: () async {
-                            final count = expiredEvents.length;
-                            final confirm = await showDialog<bool>(
-                              context: context,
-                              builder: (context) => AlertDialog(
-                                title: const Text('Delete All Expired Events'),
-                                content: Text('Delete all $count expired event${count == 1 ? '' : 's'}? This cannot be undone.'),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(context, false),
-                                    child: const Text('Cancel'),
-                                  ),
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(context, true),
-                                    child: const Text('Delete All', style: TextStyle(color: ExColors.errorDark)),
-                                  ),
-                                ],
-                              ),
-                            );
-                            if (confirm != true) return;
-
-                            try {
-                              for (final event in List<Map<String, dynamic>>.from(expiredEvents)) {
-                                final eventId = (event['_id'] ?? event['id'] ?? '').toString();
-                                if (eventId.isNotEmpty) {
-                                  await _eventService.deleteEvent(eventId);
-                                }
-                              }
-                              await _loadEvents();
-                              if (!mounted) return;
-                              Navigator.pop(bottomSheetContext);
-                              ScaffoldMessenger.of(parentContext).showSnackBar(
-                                SnackBar(content: Text('$count expired event${count == 1 ? '' : 's'} deleted')),
-                              );
-                            } catch (e) {
-                              if (!mounted) return;
-                              ScaffoldMessenger.of(parentContext).showSnackBar(
-                                SnackBar(
-                                  content: Text('Failed to delete: $e'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                            }
-                          },
-                        ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(bottomSheetContext),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1),
-                // Expired events list
-                Expanded(
-                  child: expiredEvents.isEmpty
-                      ? const Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.event_busy, size: 64, color: Colors.grey),
-                              SizedBox(height: 16),
-                              Text(
-                                'No expired events',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: Colors.grey,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      : ListView.builder(
-                          controller: scrollController,
-                          padding: const EdgeInsets.all(20),
-                          itemCount: expiredEvents.length,
-                          itemBuilder: (context, index) {
-                            final event = expiredEvents[index];
-                            final eventId = (event['_id'] ?? event['id'] ?? '').toString();
-                            return Dismissible(
-                              key: Key(eventId.isNotEmpty ? eventId : 'expired_$index'),
-                              direction: DismissDirection.endToStart,
-                              background: Container(
-                                alignment: Alignment.centerRight,
-                                padding: const EdgeInsets.only(right: 20),
-                                margin: const EdgeInsets.only(bottom: 12),
-                                decoration: BoxDecoration(
-                                  color: Colors.red.shade50,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Icon(Icons.delete, color: Colors.red.shade700),
-                              ),
-                              confirmDismiss: (direction) async {
-                                return await showDialog<bool>(
-                                  context: context,
-                                  builder: (context) => AlertDialog(
-                                    title: const Text('Delete Event'),
-                                    content: const Text('Are you sure you want to delete this expired event?'),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () => Navigator.pop(context, false),
-                                        child: const Text('Cancel'),
-                                      ),
-                                      TextButton(
-                                        onPressed: () => Navigator.pop(context, true),
-                                        child: const Text('Delete', style: TextStyle(color: ExColors.errorDark)),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                              onDismissed: (direction) async {
-                                setSheetState(() {
-                                  expiredEvents.removeAt(index);
-                                });
-                                try {
-                                  await _eventService.deleteEvent(eventId);
-                                  await _loadEvents();
-                                  if (!mounted) return;
-                                  if (expiredEvents.isEmpty) {
-                                    Navigator.pop(bottomSheetContext);
-                                  }
-                                } catch (e) {
-                                  if (!mounted) return;
-                                  ScaffoldMessenger.of(parentContext).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Failed to delete: $e'),
-                                      backgroundColor: Colors.red,
-                                    ),
-                                  );
-                                }
-                              },
-                              child: _buildEventCard(event, showMargin: true),
-                            );
-                          },
-                        ),
-                ),
-              ],
-            ),
-          ),
-        ),
+      builder: (_) => _ExpiredEventsSheet(
+        eventService: _eventService,
+        totalCount: _expiredTotalCount,
+        buildEventCard: (event) => _buildEventCard(event, showMargin: true),
+        onCountChanged: (newCount) {
+          if (mounted) {
+            setState(() => _expiredTotalCount = newCount);
+          }
+        },
       ),
     );
   }
@@ -5566,11 +5385,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       }
 
       // Classify events using server-computed 'tab' field (single source of truth)
+      // Note: expired events are no longer sent by the main GET /events endpoint.
+      // They are fetched separately via GET /events/expired (paginated).
       final List<Map<String, dynamic>> pending = [];
       final List<Map<String, dynamic>> available = [];
       final List<Map<String, dynamic>> full = [];
       final List<Map<String, dynamic>> past = [];
-      final List<Map<String, dynamic>> expired = [];
 
       for (final e in items) {
         final tab = e['tab']?.toString() ?? 'pending';
@@ -5579,7 +5399,6 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           case 'posted':    available.add(e);
           case 'full':      full.add(e);
           case 'completed': past.add(e);
-          case 'expired':   expired.add(e);
           default:          pending.add(e);
         }
       }
@@ -5598,27 +5417,17 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       available.sort(ascByDate);
       full.sort(ascByDate);
       past.sort((a, b) => ascByDate(b, a)); // most recent first
-      expired.sort((a, b) => ascByDate(b, a)); // most recent first
 
       // IMPORTANT: Include ALL events (including completed) so delta sync
-      // can properly merge changes. Previously completed events were excluded
-      // which caused them to disappear after delta sync.
+      // can properly merge changes.
       final List<Map<String, dynamic>> allEvents = [
         ...pending,
         ...available,
         ...full,
         ...past,
-        ...expired,
       ];
 
-      // Debug: Log the filtered counts
-      print('[EVENTS DEBUG] Filtered: ${pending.length} pending, ${available.length} posted, ${full.length} full, ${past.length} past, ${expired.length} expired');
-      if (full.isNotEmpty) {
-        print('[EVENTS DEBUG] Full events: ${full.map((e) => e['name']).toList()}');
-      }
-      if (past.isNotEmpty) {
-        print('[EVENTS DEBUG] Completed events: ${past.map((e) => e['name']).toList()}');
-      }
+      print('[EVENTS DEBUG] Filtered: ${pending.length} pending, ${available.length} posted, ${full.length} full, ${past.length} past');
 
       setState(() {
         _events = allEvents;
@@ -5626,25 +5435,31 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         _eventsAvailable = available;
         _eventsFull = full;
         _eventsCompleted = past;
-        _eventsExpired = expired;
         _isEventsLoading = false;
       });
 
-      print('');
-      print('╔════════════════════════════════════════════════════════════════╗');
-      print('║                    EVENTS CATEGORIZATION SUMMARY               ║');
-      print('╠════════════════════════════════════════════════════════════════╣');
-      print('║ PENDING (${pending.length}): ${pending.map((e) => e['shift_name'] ?? e['client_name']).toList()}');
-      print('║ POSTED (${available.length}): ${available.map((e) => e['shift_name'] ?? e['client_name']).toList()}');
-      print('║ FULL (${full.length}): ${full.map((e) => e['shift_name'] ?? e['client_name']).toList()}');
-      print('║ COMPLETED (${past.length}): ${past.map((e) => e['shift_name'] ?? e['client_name']).toList()}');
-      print('╚════════════════════════════════════════════════════════════════╝');
-      print('');
+      // Fetch expired count from dedicated endpoint (non-blocking)
+      _loadExpiredCount();
     } catch (e) {
       setState(() {
         _eventsError = e.toString();
         _isEventsLoading = false;
       });
+    }
+  }
+
+  /// Fetches just the totalCount of expired unfulfilled events for the banner.
+  Future<void> _loadExpiredCount() async {
+    try {
+      final data = await _eventService.fetchExpiredEvents(skip: 0, limit: 1);
+      final count = (data['totalCount'] as num?)?.toInt() ?? 0;
+      if (mounted) {
+        setState(() {
+          _expiredTotalCount = count;
+        });
+      }
+    } catch (e) {
+      print('[_loadExpiredCount] Error: $e');
     }
   }
 
@@ -5788,7 +5603,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
     // Build expired banner for Pending tab (case 0) and Posted tab (case 1)
     final bool showExpiredBanner = _eventsTabController.index == 0 || _eventsTabController.index == 1;
-    final int expiredCount = _eventsExpired?.length ?? 0;
+    final int expiredCount = _expiredTotalCount;
 
     // Build event cards as individual slivers for proper scrolling
     if (currentTabEvents.isEmpty) {
@@ -11608,6 +11423,310 @@ class _AnimatedSuccessBannerState extends State<_AnimatedSuccessBanner>
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Paginated bottom sheet for expired unfulfilled events.
+/// Fetches events 10 at a time from GET /events/expired and supports
+/// infinite scroll, swipe-to-delete, and bulk delete all.
+class _ExpiredEventsSheet extends StatefulWidget {
+  const _ExpiredEventsSheet({
+    required this.eventService,
+    required this.totalCount,
+    required this.buildEventCard,
+    required this.onCountChanged,
+  });
+
+  final EventService eventService;
+  final int totalCount;
+  final Widget Function(Map<String, dynamic> event) buildEventCard;
+  final ValueChanged<int> onCountChanged;
+
+  @override
+  State<_ExpiredEventsSheet> createState() => _ExpiredEventsSheetState();
+}
+
+class _ExpiredEventsSheetState extends State<_ExpiredEventsSheet> {
+  static const _pageSize = 10;
+
+  final List<Map<String, dynamic>> _events = [];
+  bool _isLoading = true;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  int _totalCount = 0;
+  bool _isDeleting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _totalCount = widget.totalCount;
+    _fetchPage();
+  }
+
+  Future<void> _fetchPage() async {
+    if (_isLoadingMore || !_hasMore) return;
+
+    setState(() {
+      if (_events.isEmpty) {
+        _isLoading = true;
+      } else {
+        _isLoadingMore = true;
+      }
+    });
+
+    try {
+      final data = await widget.eventService.fetchExpiredEvents(
+        skip: _events.length,
+        limit: _pageSize,
+      );
+
+      final newEvents = (data['events'] as List?)
+              ?.whereType<Map<String, dynamic>>()
+              .toList() ??
+          [];
+      final serverTotal = (data['totalCount'] as num?)?.toInt() ?? 0;
+      final hasMore = data['hasMore'] == true;
+
+      if (mounted) {
+        setState(() {
+          _events.addAll(newEvents);
+          _totalCount = serverTotal;
+          _hasMore = hasMore;
+          _isLoading = false;
+          _isLoadingMore = false;
+        });
+        widget.onCountChanged(serverTotal);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isLoadingMore = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteAll() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete All Expired Events'),
+        content: Text(
+          'Delete all $_totalCount expired event${_totalCount == 1 ? '' : 's'}? This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete All', style: TextStyle(color: ExColors.errorDark)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+
+    setState(() => _isDeleting = true);
+
+    try {
+      final result = await widget.eventService.deleteAllExpiredEvents();
+      final deletedCount = (result['deletedCount'] as num?)?.toInt() ?? 0;
+      widget.onCountChanged(0);
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$deletedCount expired event${deletedCount == 1 ? '' : 's'} deleted')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isDeleting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      builder: (context, scrollController) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+        ),
+        child: Column(
+          children: [
+            // Handle bar
+            Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            // Header
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              child: Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, size: 24, color: Colors.orange.shade700),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      l10n.expiredUnfulfilledTitle(_totalCount),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  if (_events.isNotEmpty && !_isDeleting)
+                    TextButton.icon(
+                      icon: const Icon(Icons.delete_sweep, size: 20, color: ExColors.errorDark),
+                      label: const Text('Delete All', style: TextStyle(color: ExColors.errorDark, fontSize: 13)),
+                      onPressed: _deleteAll,
+                    ),
+                  if (_isDeleting)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            // Content
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _events.isEmpty
+                      ? const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.event_busy, size: 64, color: Colors.grey),
+                              SizedBox(height: 16),
+                              Text(
+                                'No expired events',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : NotificationListener<ScrollNotification>(
+                          onNotification: (notification) {
+                            if (notification is ScrollEndNotification &&
+                                notification.metrics.extentAfter < 200 &&
+                                _hasMore &&
+                                !_isLoadingMore) {
+                              _fetchPage();
+                            }
+                            return false;
+                          },
+                          child: ListView.builder(
+                            controller: scrollController,
+                            padding: const EdgeInsets.all(20),
+                            itemCount: _events.length + (_hasMore ? 1 : 0),
+                            itemBuilder: (context, index) {
+                              // Loading spinner at the end
+                              if (index >= _events.length) {
+                                return const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 16),
+                                  child: Center(child: CircularProgressIndicator()),
+                                );
+                              }
+
+                              final event = _events[index];
+                              final eventId = (event['_id'] ?? event['id'] ?? '').toString();
+
+                              return Dismissible(
+                                key: Key(eventId.isNotEmpty ? eventId : 'expired_$index'),
+                                direction: DismissDirection.endToStart,
+                                background: Container(
+                                  alignment: Alignment.centerRight,
+                                  padding: const EdgeInsets.only(right: 20),
+                                  margin: const EdgeInsets.only(bottom: 12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.shade50,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Icon(Icons.delete, color: Colors.red.shade700),
+                                ),
+                                confirmDismiss: (direction) async {
+                                  return await showDialog<bool>(
+                                    context: context,
+                                    builder: (ctx) => AlertDialog(
+                                      title: const Text('Delete Event'),
+                                      content: const Text('Are you sure you want to delete this expired event?'),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(ctx, false),
+                                          child: const Text('Cancel'),
+                                        ),
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(ctx, true),
+                                          child: const Text('Delete', style: TextStyle(color: ExColors.errorDark)),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                                onDismissed: (direction) async {
+                                  setState(() {
+                                    _events.removeAt(index);
+                                    _totalCount = (_totalCount - 1).clamp(0, _totalCount);
+                                  });
+                                  widget.onCountChanged(_totalCount);
+                                  try {
+                                    await widget.eventService.deleteEvent(eventId);
+                                    if (mounted && _events.isEmpty) {
+                                      Navigator.pop(context);
+                                    }
+                                  } catch (e) {
+                                    if (!mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Failed to delete: $e'),
+                                        backgroundColor: Colors.red,
+                                      ),
+                                    );
+                                  }
+                                },
+                                child: widget.buildEventCard(event),
+                              );
+                            },
+                          ),
+                        ),
+            ),
+          ],
         ),
       ),
     );

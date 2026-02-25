@@ -17,7 +17,7 @@ export function checkIfEventFulfilled(event: EventDocument): boolean {
   // Count accepted staff per role
   const roleAcceptCounts: Record<string, number> = {};
   for (const staff of acceptedStaff) {
-    if (staff.role && staff.response === 'accept') {
+    if (staff.role && (staff.response === 'accept' || staff.response === 'accepted')) {
       const roleKey = staff.role.toLowerCase();
       roleAcceptCounts[roleKey] = (roleAcceptCounts[roleKey] || 0) + 1;
     }
@@ -57,7 +57,7 @@ export function getRoleCapacityStatus(event: EventDocument): Array<{
   // Count accepted staff per role
   const roleAcceptCounts: Record<string, number> = {};
   for (const staff of acceptedStaff) {
-    if (staff.role && staff.response === 'accept') {
+    if (staff.role && (staff.response === 'accept' || staff.response === 'accepted')) {
       const roleKey = staff.role.toLowerCase();
       roleAcceptCounts[roleKey] = (roleAcceptCounts[roleKey] || 0) + 1;
     }
@@ -131,7 +131,7 @@ export function checkRoleHasCapacity(
 
   // Count accepted staff for this role
   const accepted = acceptedStaff.filter(
-    (s) => s.role?.toLowerCase() === roleKey && s.response === 'accept'
+    (s) => s.role?.toLowerCase() === roleKey && (s.response === 'accept' || s.response === 'accepted')
   ).length;
 
   return accepted < required;

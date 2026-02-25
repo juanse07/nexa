@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:nexa/l10n/app_localizations.dart';
+import 'package:nexa/shared/services/error_display_service.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../brand/data/providers/brand_provider.dart';
@@ -53,7 +54,7 @@ class _AIAnalysisSheetState extends State<AIAnalysisSheet> {
       debugPrint('[AIAnalysis] Error: $e');
       if (mounted) {
         setState(() {
-          _error = e.toString().replaceFirst('Exception: ', '');
+          _error = 'Failed to generate analysis.';
           _loading = false;
         });
       }
@@ -88,9 +89,7 @@ class _AIAnalysisSheetState extends State<AIAnalysisSheet> {
       debugPrint('[AIAnalysis] Doc generation error: $e');
       if (mounted) {
         setState(() => _generating = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${AppLocalizations.of(context)!.failedToGenerate}: $e')),
-        );
+        ErrorDisplayService.showErrorFromException(context, e, prefix: AppLocalizations.of(context)!.failedToGenerate);
       }
     }
   }

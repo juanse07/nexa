@@ -78,6 +78,20 @@ class ErrorInterceptor extends Interceptor {
   final Logger _logger;
 
   @override
+  void onResponse(
+    Response<dynamic> response,
+    ResponseInterceptorHandler handler,
+  ) {
+    // validateStatus accepts < 500 so 401 arrives here, not in onError.
+    // Detect it and trigger forced logout so the user is sent back to login.
+    if (response.statusCode == ApiConstants.statusUnauthorized) {
+      _logger.w('Unauthorized response detected - forcing logout');
+      AuthService.forceLogout();
+    }
+    super.onResponse(response, handler);
+  }
+
+  @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
     // Log the error
     _logger.e(

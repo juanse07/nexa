@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:nexa/l10n/app_localizations.dart';
+import 'package:nexa/shared/services/error_display_service.dart';
 import '../services/attendance_service.dart';
 
 /// Screen for managers to bulk clock-in multiple staff members at once
@@ -112,9 +113,7 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${l10n.somethingWentWrong}: $e')),
-        );
+        ErrorDisplayService.showErrorFromException(context, e);
       }
     } finally {
       if (mounted) {

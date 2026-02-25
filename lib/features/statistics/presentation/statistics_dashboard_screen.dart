@@ -12,6 +12,7 @@ import 'widgets/stats_hero_header.dart';
 import 'widgets/period_selector.dart';
 import 'widgets/staff_leaderboard.dart';
 import 'widgets/payroll_summary_card.dart';
+import 'package:nexa/shared/services/error_display_service.dart';
 
 /// Statistics dashboard with team performance metrics and AI analysis
 class StatisticsDashboardScreen extends StatefulWidget {
@@ -90,9 +91,7 @@ class _StatisticsDashboardScreenState extends State<StatisticsDashboardScreen> {
       debugPrint('[StatisticsDashboard] Load error: $e');
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${AppLocalizations.of(context)!.failedToLoadStatistics}: $e')),
-        );
+        ErrorDisplayService.showErrorFromException(context, e, prefix: AppLocalizations.of(context)!.failedToLoadStatistics);
       }
     }
   }

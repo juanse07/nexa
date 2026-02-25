@@ -122,7 +122,8 @@ router.post('/organizations', requireAuth, async (req: Request, res: Response) =
     console.log(`[organizations] Created org "${validated.name}" (${org._id}) by manager ${managerId}`);
 
     return res.status(201).json({
-      id: org._id,
+      _id: String(org._id),
+      id: String(org._id),
       name: org.name,
       slug: org.slug,
       stripeCustomerId: org.stripeCustomerId,
@@ -175,7 +176,8 @@ router.get('/organizations/mine', requireAuth, async (req: Request, res: Respons
 
     return res.json({
       organization: {
-        id: org._id,
+        _id: String(org._id),
+        id: String(org._id),
         name: org.name,
         slug: org.slug,
         subscriptionStatus: org.subscriptionStatus,

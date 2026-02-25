@@ -15,8 +15,16 @@ class RolesService {
           response.statusCode! >= 200 &&
           response.statusCode! < 300) {
         final dynamic decoded = response.data;
-        if (decoded is List) {
-          return decoded
+        final List<dynamic>? items;
+        if (decoded is Map<String, dynamic> && decoded['roles'] is List) {
+          items = decoded['roles'] as List<dynamic>;
+        } else if (decoded is List) {
+          items = decoded;
+        } else {
+          items = null;
+        }
+        if (items != null) {
+          return items
               .whereType<Map<String, dynamic>>()
               .map((e) => e)
               .toList(growable: false);

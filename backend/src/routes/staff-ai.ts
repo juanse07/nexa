@@ -10,7 +10,7 @@ import FormData from 'form-data';
 import fs from 'fs';
 import { getDateTimeContext, getWelcomeDateContext, getFullSystemContext } from '../utils/dateContext';
 import { getProviderConfig } from '../utils/aiProvider';
-import { selectModelForQuery, shouldEscalateFromTools, ESCALATION_MODEL, ESCALATION_PROVIDER } from '../utils/cascadeRouter';
+import { selectModelForQuery, shouldEscalateFromTools, selectToolsForQuery, extractLastUserMessage, extractRecentUserMessages, STAFF_TOOL_CONFIG, ESCALATION_MODEL, ESCALATION_PROVIDER } from '../utils/cascadeRouter';
 import { EventModel } from '../models/event';
 import { UserModel } from '../models/user';
 import { AvailabilityModel } from '../models/availability';
@@ -20,6 +20,7 @@ import { ChatMessageModel } from '../models/chatMessage';
 import { ManagerModel } from '../models/manager';
 import { emitToManager } from '../socket/server';
 import { computeRoleStats } from '../utils/eventCapacity';
+import { logAIUsage } from '../utils/logAIUsage';
 import { enrichEventsWithTariffs } from './events';
 
 const router = Router();
@@ -125,6 +126,7 @@ router.post('/ai/staff/reset-limits', async (req, res) => {
  */
 router.post('/ai/staff/transcribe', requireAuth, upload.single('audio'), async (req, res) => {
   let tempFilePath: string | null = null;
+  const transcribeStartTime = Date.now();
 
   try {
     if (!req.file) {
@@ -197,6 +199,18 @@ router.post('/ai/staff/transcribe', requireAuth, upload.single('audio'), async (
 
     console.log('[ai/staff/transcribe] Transcription successful:', transcribedText.substring(0, 100));
 
+    logAIUsage({
+      userType: 'staff',
+      endpoint: 'staff/transcribe',
+      provider: 'groq',
+      model: 'whisper-large-v3-turbo',
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      durationMs: Date.now() - transcribeStartTime,
+      audioDurationSec: response.data.duration || undefined,
+    }).catch(() => {});
+
     return res.json({
       text: transcribedText,
       duration: response.data.duration || null,
@@ -256,6 +270,7 @@ function cleanAIResponse(text: string): string {
  * Supports: Running late, time off requests, questions, custom messages, translation, polishing, professionalizing
  */
 router.post('/ai/staff/compose-message', requireAuth, async (req, res) => {
+  const composeStartTime = Date.now();
   try {
     const groqKey = process.env.GROQ_API_KEY;
     if (!groqKey) {
@@ -398,6 +413,12 @@ OUTPUT RULES - CRITICAL:
       return res.status(500).json({ message: 'Failed to compose message' });
     }
 
+    // Accumulate usage from primary response
+    const primaryUsage = response.data.usage;
+    let composeInputTokens = primaryUsage?.prompt_tokens || 0;
+    let composeOutputTokens = primaryUsage?.completion_tokens || 0;
+    let composeTotalTokens = primaryUsage?.total_tokens || 0;
+
     // Clean up AI fluff and quotes
     composedMessage = cleanAIResponse(composedMessage);
 
@@ -434,9 +455,28 @@ OUTPUT RULES - CRITICAL:
       if (translation) {
         translation = cleanAIResponse(translation);
       }
+
+      // Accumulate translation usage
+      const translationUsage = translationResponse.data.usage;
+      if (translationUsage) {
+        composeInputTokens += translationUsage.prompt_tokens || 0;
+        composeOutputTokens += translationUsage.completion_tokens || 0;
+        composeTotalTokens += translationUsage.total_tokens || 0;
+      }
     }
 
     console.log(`[ai/staff/compose-message] Success. Original length: ${composedMessage.length}, Has translation: ${!!translation}`);
+
+    logAIUsage({
+      userType: 'staff',
+      endpoint: 'compose-message',
+      provider: 'groq',
+      model: 'openai/gpt-oss-20b',
+      inputTokens: composeInputTokens,
+      outputTokens: composeOutputTokens,
+      totalTokens: composeTotalTokens,
+      durationMs: Date.now() - composeStartTime,
+    }).catch(() => {});
 
     return res.json({
       original: composedMessage,
@@ -1105,7 +1145,7 @@ async function executeGetMySchedule(
         addr: event.venue_address,
         role: userRole || 'Unknown',
         pay: roleInfo?.pay_rate_info || event.pay_rate_info || null,
-        status: userInEvent?.response || 'accepted',
+        status: userInEvent?.response || 'accept',
       };
     });
 
@@ -1358,7 +1398,7 @@ async function executeGetAllMyEvents(
         addr: event.venue_address,
         role: userRole || 'Unknown',
         pay: roleInfo?.pay_rate_info || event.pay_rate_info || null,
-        status: userInEvent?.response || 'accepted',
+        status: userInEvent?.response || 'accept',
       };
     });
 
@@ -1512,7 +1552,7 @@ async function executeAcceptShift(
       first_name: (user as any)?.first_name,
       last_name: (user as any)?.last_name,
       picture: (user as any)?.picture,
-      response: 'accepted',
+      response: 'accept',
       role: resolvedRole,
       respondedAt: new Date(),
     };
@@ -2222,6 +2262,7 @@ async function handleStaffGroqRequest(
   provider: 'groq' | 'together' = 'groq',
   cascadeTier: 'simple' | 'complex' = 'simple'
 ) {
+  const requestStartTime = Date.now();
   const groqModel = model || 'openai/gpt-oss-20b';
   const config = getProviderConfig(provider, groqModel);
 
@@ -2362,8 +2403,13 @@ When showing schedule information, use this friendly format:
     });
   }
 
-  // Build tools array for Chat Completions API
-  const groqTools = STAFF_AI_TOOLS.map(tool => ({
+  // Dynamic tool selection: send only relevant tools based on user's query
+  const lastUserMsg = extractLastUserMessage(messages);
+  const conversationContext = extractRecentUserMessages(messages, 3);
+  const selectedTools = selectToolsForQuery(lastUserMsg, STAFF_AI_TOOLS, STAFF_TOOL_CONFIG, conversationContext);
+  console.log(`[AI:${config.name}] Staff tool selection: ${selectedTools.length}/${STAFF_AI_TOOLS.length} tools for query: "${lastUserMsg.substring(0, 80)}"`);
+
+  const groqTools = selectedTools.map(tool => ({
     type: 'function',
     function: {
       name: tool.name,
@@ -2715,6 +2761,21 @@ When showing schedule information, use this friendly format:
         }
 
         console.log(`[AI:${synthesisConfig.name}] Total usage - prompt: ${totalUsage.prompt_tokens}, completion: ${totalUsage.completion_tokens}, reasoning: ${totalUsage.reasoning_tokens}, total: ${totalUsage.total_tokens}`);
+        logAIUsage({
+          userId,
+          userType: 'staff',
+          endpoint: 'staff/chat/message',
+          provider: synthesisConfig.name as 'groq' | 'together',
+          model: synthesisModel,
+          inputTokens: totalUsage.prompt_tokens,
+          outputTokens: totalUsage.completion_tokens,
+          reasoningTokens: totalUsage.reasoning_tokens,
+          totalTokens: totalUsage.total_tokens,
+          durationMs: Date.now() - requestStartTime,
+          toolCallCount: allToolsUsed.length,
+          toolsSelected: selectedTools.length,
+          tier: cascadeTier,
+        }).catch(() => {});
         return res.json({
           content: finalContent,
           reasoning: finalReasoning || firstRequestReasoning || null,
@@ -2736,6 +2797,21 @@ When showing schedule information, use this friendly format:
         console.log(`[AI:${config.name}] Reasoning content length:`, reasoningContent.length);
       }
 
+      logAIUsage({
+        userId,
+        userType: 'staff',
+        endpoint: 'staff/chat/message',
+        provider: config.name as 'groq' | 'together',
+        model: requestBody.model,
+        inputTokens: totalUsage.prompt_tokens,
+        outputTokens: totalUsage.completion_tokens,
+        reasoningTokens: totalUsage.reasoning_tokens,
+        totalTokens: totalUsage.total_tokens,
+        durationMs: Date.now() - requestStartTime,
+        toolCallCount: 0,
+        toolsSelected: selectedTools.length,
+        tier: cascadeTier,
+      }).catch(() => {});
       return res.json({
         content,
         reasoning: reasoningContent,

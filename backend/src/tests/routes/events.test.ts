@@ -201,7 +201,7 @@ describe('Events API', () => {
       const event = await createTestEvent(manager._id, {
         status: 'published',
         roles: [{ role: 'Bartender', count: 1 }],
-        accepted_staff: [{ userKey: 'google:existing', name: 'Existing', role: 'Bartender', response: 'accepted' }],
+        accepted_staff: [{ userKey: 'google:existing', name: 'Existing', role: 'Bartender', response: 'accept' }],
         role_stats: [{ role: 'Bartender', capacity: 1, taken: 1, remaining: 0, is_full: true }],
       });
       const { token: staffToken } = await createAuthenticatedStaffUser();
@@ -228,7 +228,7 @@ describe('Events API', () => {
       const userKey = `${user.provider}:${user.subject}`;
       const event = await createTestEvent(manager._id, {
         status: 'published',
-        accepted_staff: [{ userKey, name: 'Staff', role: 'Server', response: 'accepted' }],
+        accepted_staff: [{ userKey, name: 'Staff', role: 'Server', response: 'accept' }],
       });
       const res = await app.post(`/api/events/${event._id}/clock-in`).set('Authorization', `Bearer ${staffToken}`).send({});
       expect(res.status).toBe(200);
@@ -281,7 +281,7 @@ describe('Events API', () => {
       const { manager, token } = await createAuthenticatedManager();
       const staffUserKey = 'google:shared-staff-1';
       await createTestEvent(manager._id, {
-        accepted_staff: [{ userKey: staffUserKey, role: 'Server', response: 'accepted' }],
+        accepted_staff: [{ userKey: staffUserKey, role: 'Server', response: 'accept' }],
       });
 
       const res = await app.get(`/api/events/user/${staffUserKey}`).set('Authorization', `Bearer ${token}`);
@@ -296,11 +296,11 @@ describe('Events API', () => {
 
       await createTestEvent(m1._id, {
         event_name: 'M1 Event',
-        accepted_staff: [{ userKey: staffUserKey, role: 'Server', response: 'accepted' }],
+        accepted_staff: [{ userKey: staffUserKey, role: 'Server', response: 'accept' }],
       });
       await createTestEvent(m2._id, {
         event_name: 'M2 Event',
-        accepted_staff: [{ userKey: staffUserKey, role: 'Bartender', response: 'accepted' }],
+        accepted_staff: [{ userKey: staffUserKey, role: 'Bartender', response: 'accept' }],
       });
 
       const res1 = await app.get(`/api/events/user/${staffUserKey}`).set('Authorization', `Bearer ${t1}`);
@@ -320,7 +320,7 @@ describe('Events API', () => {
       const staffUserKey = `${user.provider}:${user.subject}`;
 
       await createTestEvent(manager._id, {
-        accepted_staff: [{ userKey: staffUserKey, role: 'Server', response: 'accepted' }],
+        accepted_staff: [{ userKey: staffUserKey, role: 'Server', response: 'accept' }],
       });
 
       const res = await app.get(`/api/events/user/${staffUserKey}`).set('Authorization', `Bearer ${staffToken}`);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/draft_service.dart';
 import '../../services/event_service.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
+import 'package:nexa/shared/services/error_display_service.dart';
 
 /// Mixin providing shared event data management functionality
 /// for extraction screen tabs
@@ -72,7 +73,7 @@ mixin EventDataMixin<T extends StatefulWidget> on State<T> {
       await clearDraft();
     } catch (e) {
       if (!mounted) return;
-      showErrorSnackBar('Failed to save: ${e.toString()}');
+      ErrorDisplayService.showErrorFromException(context, e, prefix: 'Failed to save');
     }
   }
 }

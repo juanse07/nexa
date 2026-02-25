@@ -5,6 +5,7 @@ import { requireAuth } from '../middleware/requireAuth';
 import { resolveManagerForRequest } from '../utils/manager';
 import { processLogo, extractColorsFromLogo } from '../services/brandService';
 import { deleteFile, extractKeyFromUrl, getPresignedUrl } from '../services/storageService';
+import { logAIUsage } from '../utils/logAIUsage';
 
 const router = Router();
 
@@ -53,7 +54,20 @@ router.post('/logo', requireAuth, upload.single('logo'), async (req, res) => {
     );
 
     // Extract colors via AI vision
-    const colors = await extractColorsFromLogo(req.file.buffer);
+    const colorResult = await extractColorsFromLogo(req.file.buffer);
+    const colors = colorResult.colors;
+
+    logAIUsage({
+      managerId: String(manager._id),
+      userType: 'manager',
+      endpoint: 'extract-colors',
+      provider: 'groq',
+      model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+      inputTokens: colorResult.usage.inputTokens,
+      outputTokens: colorResult.usage.outputTokens,
+      totalTokens: colorResult.usage.totalTokens,
+      durationMs: colorResult.usage.durationMs,
+    }).catch(() => {});
 
     // Save to manager (preserve preferredDocDesign if it was set)
     const now = new Date();

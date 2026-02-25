@@ -55,6 +55,7 @@ router.get('/venues', requireAuth, async (req, res) => {
 
     return res.json({
       venues: venues.map((v) => ({
+        _id: String(v._id),
         id: String(v._id),
         name: v.name,
         address: v.address,
@@ -153,6 +154,7 @@ router.post('/venues', requireAuth, async (req, res) => {
         const fullCityName = await addCityToManager(manager, venueCity, venueData.state, venueData.country);
 
         return res.status(200).json({
+          _id: String(existing._id),
           id: String(existing._id),
           name: existing.name,
           address: existing.address,
@@ -192,6 +194,7 @@ router.post('/venues', requireAuth, async (req, res) => {
     }
 
     return res.status(201).json({
+      _id: String(venue._id),
       id: String(venue._id),
       name: venue.name,
       address: venue.address,
@@ -261,6 +264,7 @@ router.patch('/venues/:id', requireAuth, async (req, res) => {
     await venue.save();
 
     return res.json({
+      _id: String(venue._id),
       id: String(venue._id),
       name: venue.name,
       address: venue.address,

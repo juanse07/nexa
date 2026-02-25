@@ -103,7 +103,7 @@ dependencies:
 
   # Push Notifications
   onesignal_flutter: ^5.1.0
-  flutter_local_notifications: ^16.3.0
+  flutter_local_notifications: ^18.0.0
   badges: ^3.1.1
 
   # Charts & Premium UI

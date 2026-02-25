@@ -175,7 +175,7 @@ const AcceptedStaffMemberSchema = new Schema<AcceptedStaffMember>(
     first_name: { type: String, trim: true },
     last_name: { type: String, trim: true },
     picture: { type: String, trim: true },
-    response: { type: String, trim: true },
+    response: { type: String, trim: true, enum: ['accept', 'decline'] },
     role: { type: String, trim: true },
     respondedAt: { type: Date },
     attendance: {
@@ -370,6 +370,9 @@ EventSchema.index({ 'accepted_staff.userKey': 1 }, { sparse: true });
 
 // Index for efficient date-based queries (published events)
 EventSchema.index({ status: 1, date: 1 });
+
+// Compound index for expired events pagination (managerId + status + date desc)
+EventSchema.index({ managerId: 1, status: 1, date: -1 });
 
 export const EventModel: Model<EventDocument> =
   mongoose.models.Event || mongoose.model<EventDocument>('Event', EventSchema, 'shifts');

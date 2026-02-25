@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:nexa/l10n/app_localizations.dart';
 import 'package:nexa/features/attendance/services/attendance_service.dart';
+import 'package:nexa/shared/services/error_display_service.dart';
 
 /// Screen for managers to review flagged attendance entries
 class FlaggedAttendanceScreen extends StatefulWidget {
@@ -37,9 +38,7 @@ class _FlaggedAttendanceScreenState extends State<FlaggedAttendanceScreen> {
       setState(() => _isLoading = false);
       if (mounted) {
         final l10n = AppLocalizations.of(context)!;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${l10n.failedToLoadFlaggedAttendance}: $e')),
-        );
+        ErrorDisplayService.showErrorFromException(context, e, prefix: l10n.failedToLoadFlaggedAttendance);
       }
     }
   }
@@ -71,9 +70,7 @@ class _FlaggedAttendanceScreenState extends State<FlaggedAttendanceScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${l10n.somethingWentWrong}: $e')),
-        );
+        ErrorDisplayService.showErrorFromException(context, e);
       }
     }
   }

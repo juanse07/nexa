@@ -80,6 +80,7 @@ router.get('/conversations', requireAuth, async (req, res) => {
         }
 
         return {
+          _id: conv._id.toString(),
           id: conv._id.toString(),
           userKey: conv.userKey,
           userName: displayName,
@@ -166,6 +167,7 @@ router.get('/conversations', requireAuth, async (req, res) => {
         }
 
         peerConvResult.push({
+          _id: convId,
           id: convId,
           userKey: conv.userKey,
           userName: displayName,
@@ -194,6 +196,7 @@ router.get('/conversations', requireAuth, async (req, res) => {
         }
 
         peerConvResult.push({
+          _id: convId,
           id: convId,
           userKey: `manager:${peerId}`,
           userName: displayName,
@@ -257,6 +260,7 @@ router.get('/conversations', requireAuth, async (req, res) => {
           }
 
           return {
+            _id: conv._id.toString(),
             id: conv._id.toString(),
             managerId: conv.managerId.toString(),
             managerName: displayName,
@@ -340,6 +344,7 @@ router.get('/conversations/:conversationId/messages', requireAuth, async (req, r
       .lean();
 
     const result = messages.map(msg => ({
+      _id: msg._id.toString(),
       id: msg._id.toString(),
       conversationId: msg.conversationId.toString(),
       senderType: msg.senderType,
@@ -638,6 +643,7 @@ router.post('/conversations/:targetId/messages', requireAuth, requireActiveSubsc
     });
 
     const messagePayload = {
+      _id: String(chatMessage._id),
       id: String(chatMessage._id),
       conversationId: String(conversation._id),
       senderType: chatMessage.senderType,
@@ -1072,6 +1078,7 @@ router.get('/managers', requireAuth, async (req, res) => {
     }).lean();
 
     const result = managers.map(m => ({
+      _id: m._id.toString(),
       id: m._id.toString(),
       name: m.name || m.first_name || 'Manager',
       email: m.email,

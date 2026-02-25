@@ -249,7 +249,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String staffCount(int count) {
-    return '$count staff';
+    return 'Staff: $count';
   }
 
   @override
@@ -2941,6 +2941,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'No events need hours approval at the moment.';
 
   @override
+  String get reviewAndApproveStaffHours =>
+      'Review and approve staff hours for completed events';
+
+  @override
   String get pendingReviewLabel => 'Pending Review';
 
   @override
@@ -3103,4 +3107,100 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get uploadLabel => 'Upload';
+
+  @override
+  String get readyToApprove => 'Ready to Approve';
+
+  @override
+  String get needsHoursEntry => 'Needs Hours Entry';
+
+  @override
+  String get sheetSubmitted => 'Sheet Submitted';
+
+  @override
+  String staffClockedCount(int count, int total) {
+    return '$count of $total staff clocked';
+  }
+
+  @override
+  String estimatedTotalHours(String hours) {
+    return '~$hours hrs total';
+  }
+
+  @override
+  String get digitalClockIn => 'Clock In';
+
+  @override
+  String get digitalClockOut => 'Clock Out';
+
+  @override
+  String get estimatedHoursLabel => 'Estimated';
+
+  @override
+  String get noAttendanceData => 'No Data';
+
+  @override
+  String approveAllReady(int count) {
+    return 'Approve All Ready ($count)';
+  }
+
+  @override
+  String get uploadSheet => 'Upload Sheet';
+
+  @override
+  String get adjustHours => 'Adjust Hours';
+
+  @override
+  String get approveDigitalHours => 'Approve';
+
+  @override
+  String get clockedStatus => 'Clocked';
+
+  @override
+  String get workingStatus => 'Working';
+
+  @override
+  String get sheetHoursStatus => 'Sheet Hours';
+
+  @override
+  String get approvedStatus => 'Approved';
+
+  @override
+  String confirmApproveAll(int count) {
+    return 'Approve all $count staff members with digital clock-out data?';
+  }
+
+  @override
+  String hoursApprovedSuccess(int count) {
+    return '$count staff hours approved';
+  }
+
+  @override
+  String approveIndividualConfirm(String hours, String name) {
+    return 'Approve $hours hours for $name?';
+  }
+
+  @override
+  String adjustHoursFor(String name) {
+    return 'Adjust Hours for $name';
+  }
+
+  @override
+  String get digitalTimesReference => 'Digital Times (Reference)';
+
+  @override
+  String get adjustedHours => 'Adjusted Hours';
+
+  @override
+  String get noteOptional => 'Note (optional)';
+
+  @override
+  String clockedOutCount(int count) {
+    return 'Clocked Out: $count';
+  }
+
+  @override
+  String estHours(String hours) {
+    return 'Est: $hours hrs';
+  }
 }

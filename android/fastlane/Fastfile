@@ -40,4 +40,50 @@ platform :android do
 
     UI.success("✅ All Android screenshots captured!")
   end
+
+  desc "Pull existing Play Console metadata into local files (run once to seed)"
+  lane :download_metadata do
+    download_from_play_store(
+      track: "internal",
+      metadata_path: "./fastlane/metadata/android"
+    )
+  end
+
+  desc "Push local metadata/screenshots to Play Console (no binary upload)"
+  lane :update_metadata do
+    upload_to_play_store(
+      track: "internal",
+      skip_upload_apk: true,
+      skip_upload_aab: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      skip_upload_changelogs: true,
+      changes_not_sent_for_review: true,
+      metadata_path: "./fastlane/metadata/android"
+    )
+  end
+
+  desc "Build release AAB and upload to internal testing track"
+  lane :deploy_internal do
+    # Project path contains spaces (/Volumes/Macintosh HD/...) which breaks Gradle.
+    # Workaround: rsync to a space-free path, build there.
+    project_root = File.expand_path("#{__dir__}/../..")
+    sh("rsync -a --exclude='.gradle' --delete '#{project_root}/' /tmp/nexa-source/")
+    sh("cd /tmp/nexa-source && flutter build appbundle --release")
+    upload_to_play_store(
+      track: "internal",
+      aab: "/tmp/build/app/outputs/bundle/release/app-release.aab",
+      metadata_path: "./fastlane/metadata/android",
+      skip_upload_screenshots: true,
+      skip_upload_images: true
+    )
+  end
+
+  desc "Promote internal build to production"
+  lane :promote_to_production do
+    upload_to_play_store(
+      track: "internal",
+      track_promote_to: "production"
+    )
+  end
 end

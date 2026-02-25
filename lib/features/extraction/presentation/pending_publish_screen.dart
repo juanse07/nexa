@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:nexa/l10n/app_localizations.dart';
+import 'package:nexa/shared/services/error_display_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/event_service.dart';
@@ -162,9 +163,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
     } catch (e) {
       setState(() => _loadingTeams = false);
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to load teams: $e')));
+        ErrorDisplayService.showErrorFromException(context, e, prefix: 'Failed to load teams');
       }
     }
   }
@@ -324,9 +323,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to send invitations: $e')),
-      );
+      ErrorDisplayService.showErrorFromException(context, e, prefix: 'Failed to send invitations');
     } finally {
       if (mounted) setState(() => _publishing = false);
     }
@@ -524,9 +521,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
       ).showSnackBar(SnackBar(content: Text(publishMessage)));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Publish failed: $e')));
+      ErrorDisplayService.showErrorFromException(context, e, prefix: 'Publish failed');
     } finally {
       if (mounted) setState(() => _publishing = false);
     }
@@ -1755,9 +1750,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                       Navigator.of(ctx).pop({'name': newName, 'id': newId});
                     } catch (e) {
                       if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Failed to create client: $e')),
-                      );
+                      ErrorDisplayService.showErrorFromException(context, e, prefix: 'Failed to create client');
                     }
                   },
                   child: const Text('Create & Select'),

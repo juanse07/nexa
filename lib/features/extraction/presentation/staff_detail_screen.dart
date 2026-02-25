@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nexa/shared/services/error_display_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:nexa/shared/widgets/initials_avatar.dart';
 import '../services/staff_service.dart';
@@ -479,9 +480,7 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
       if (mounted) setState(() => _detail = detail);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: ExColors.errorDark),
-        );
+        ErrorDisplayService.showErrorFromException(context, e);
       }
     }
   }
@@ -562,9 +561,7 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
                               });
                             } catch (e) {
                               if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Error: $e')),
-                                );
+                                ErrorDisplayService.showErrorFromException(context, e);
                               }
                             }
                           },
@@ -617,9 +614,7 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
       if (mounted) setState(() => _detail = detail);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error updating groups: $e'), backgroundColor: ExColors.errorDark),
-        );
+        ErrorDisplayService.showErrorFromException(context, e, prefix: 'Error updating groups');
       }
     }
   }

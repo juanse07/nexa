@@ -74,13 +74,13 @@ export async function createServer() {
           return callback(null, true);
         }
 
-        // Allow any Cloudflare Pages subdomain for nexa-web
-        if (origin.match(/^https:\/\/[a-z0-9]+\.nexa-web\.pages\.dev$/)) {
+        // Allow any Cloudflare Pages subdomain for nexa-web or flowshift-web
+        if (origin.match(/^https:\/\/[a-z0-9]+\.(nexa-web|flowshift-web)\.pages\.dev$/)) {
           return callback(null, true);
         }
 
-        // Allow custom domain app.nexapymesoft.com
-        if (origin === 'https://app.nexapymesoft.com') {
+        // Allow custom domains
+        if (origin === 'https://app.nexapymesoft.com' || origin === 'https://flowshift.work') {
           return callback(null, true);
         }
 
@@ -326,7 +326,7 @@ export async function createServer() {
               name: user.name || `Staff ${staffIdx}`,
               first_name: user.first_name || 'Staff',
               last_name: user.last_name || `${staffIdx}`,
-              role: roleReq.role, response: 'accepted',
+              role: roleReq.role, response: 'accept',
               respondedAt: new Date(eventDate.getTime() - (1 + Math.floor(Math.random() * 5)) * 86400000),
               attendance: [{
                 clockInAt: ciDate, clockOutAt: coDate,

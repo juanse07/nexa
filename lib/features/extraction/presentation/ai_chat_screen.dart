@@ -696,10 +696,8 @@ class _AIChatScreenState extends State<AIChatScreen>
     final currentData = _stateProvider.currentEventData;
     final hasEventData = currentData.isNotEmpty;
 
-    final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
-
     return Scaffold(
-      resizeToAvoidBottomInset: false,
+      resizeToAvoidBottomInset: true,
       backgroundColor: AppColors.surfaceLight,
       body: Stack(
           children: [
@@ -755,7 +753,47 @@ class _AIChatScreenState extends State<AIChatScreen>
                         child: Center(
                           child: _stateProvider.isLoading
                               ? const CircularProgressIndicator()
-                              : const SizedBox.shrink(),
+                              : Padding(
+                                  padding: const EdgeInsets.only(bottom: 120),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      // Valerio avatar
+                                      Container(
+                                        width: 64,
+                                        height: 64,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(0.08),
+                                              blurRadius: 12,
+                                              offset: const Offset(0, 4),
+                                            ),
+                                          ],
+                                        ),
+                                        child: ClipOval(
+                                          child: Image.asset(
+                                            'assets/ai_assistant_logo.png',
+                                            fit: BoxFit.cover,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 20),
+                                      // Time-of-day greeting
+                                      Text(
+                                        _getTimeOfDayGreeting(),
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontSize: 24,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.charcoal.withOpacity(0.75),
+                                          height: 1.3,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                         ),
                       )
                     : SliverWebContentWrapper.chat(
@@ -764,7 +802,7 @@ class _AIChatScreenState extends State<AIChatScreen>
                             left: 16,
                             right: 16,
                             top: 16,
-                            bottom: 100 + keyboardHeight, // Bottom padding for input area + keyboard
+                            bottom: 100, // Bottom padding for input area
                           ),
                           sliver: SliverList(
                           delegate: SliverChildBuilderDelegate(
@@ -895,11 +933,10 @@ class _AIChatScreenState extends State<AIChatScreen>
               ),
 
             // Fixed input area positioned at bottom
-            if (messages.isNotEmpty)
-              Positioned(
+            Positioned(
                 left: 0,
                 right: 0,
-                bottom: keyboardHeight,
+                bottom: 0,
                 child: Container(
                   decoration: const BoxDecoration(
                     color: Colors.white,
@@ -944,7 +981,10 @@ class _AIChatScreenState extends State<AIChatScreen>
                             duration: const Duration(milliseconds: 200),
                             child: Builder(
                               builder: (context) {
-                                final terminology = context.read<TerminologyProvider>().singular;
+                                final term = context.read<TerminologyProvider>();
+                                final s = term.singularLowercase;
+                                final p = term.pluralLowercase;
+                                final isEs = Localizations.localeOf(context).languageCode == 'es';
                                 return Padding(
                                   padding: const EdgeInsets.only(bottom: 6),
                                   child: SingleChildScrollView(
@@ -952,18 +992,18 @@ class _AIChatScreenState extends State<AIChatScreen>
                                     child: Row(
                                       children: [
                                         _buildSuggestionChip(
-                                          '📝 Create event',
-                                          'I want to create a new event',
+                                          isEs ? '📝 Crear $s' : '📝 Create $s',
+                                          isEs ? 'Quiero crear un nuevo $s' : 'I want to create a new $s',
                                         ),
                                         const SizedBox(width: 6),
                                         _buildSuggestionChip(
-                                          '🔍 Find staff',
-                                          'Find available staff for an upcoming event',
+                                          isEs ? '🔍 Buscar staff' : '🔍 Find staff',
+                                          isEs ? 'Busca staff disponible para un próximo $s' : 'Find available staff for an upcoming $s',
                                         ),
                                         const SizedBox(width: 6),
                                         _buildSuggestionChip(
-                                          '📊 Event status',
-                                          'What is the status of my upcoming events?',
+                                          isEs ? '📊 Estado de $p' : '📊 ${'${term.singular} status'}',
+                                          isEs ? '¿Cuál es el estado de mis próximos $p?' : 'What is the status of my upcoming $p?',
                                         ),
                                       ],
                                     ),
@@ -1147,6 +1187,20 @@ class _AIChatScreenState extends State<AIChatScreen>
   String _capitalize(String text) {
     if (text.isEmpty) return text;
     return text[0].toUpperCase() + text.substring(1);
+  }
+
+  /// Get a time-of-day greeting like Claude's "How can I help you this afternoon?"
+  String _getTimeOfDayGreeting() {
+    final hour = DateTime.now().hour;
+    String timeOfDay;
+    if (hour < 12) {
+      timeOfDay = 'this morning';
+    } else if (hour < 17) {
+      timeOfDay = 'this afternoon';
+    } else {
+      timeOfDay = 'this evening';
+    }
+    return 'How can I help you\n$timeOfDay?';
   }
 
   /// Build a suggestion chip for quick actions

@@ -27,6 +27,16 @@ export interface ExtractedColors {
   neutralColor: string;
 }
 
+export interface ExtractColorsResult {
+  colors: ExtractedColors;
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    durationMs: number;
+  };
+}
+
 type ShapeClassification = 'horizontal' | 'square' | 'vertical' | 'icon';
 
 function classifyShape(width: number, height: number): ShapeClassification {
@@ -88,20 +98,22 @@ export async function processLogo(
  * Extract brand colors from a logo using Groq Llama 4 Scout vision model.
  * Falls back to defaults on failure.
  */
-export async function extractColorsFromLogo(imageBuffer: Buffer): Promise<ExtractedColors> {
+export async function extractColorsFromLogo(imageBuffer: Buffer): Promise<ExtractColorsResult> {
   const defaults: ExtractedColors = {
     primaryColor: '#1e293b',
     secondaryColor: '#334155',
     accentColor: '#3b82f6',
     neutralColor: '#f8fafc',
   };
+  const zeroUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, durationMs: 0 };
 
   const groqKey = process.env.GROQ_API_KEY;
   if (!groqKey) {
     logger.warn('GROQ_API_KEY not set — returning default brand colors');
-    return defaults;
+    return { colors: defaults, usage: zeroUsage };
   }
 
+  const startTime = Date.now();
   try {
     const base64 = imageBuffer.toString('base64');
     const mimeType = 'image/png';
@@ -147,10 +159,18 @@ export async function extractColorsFromLogo(imageBuffer: Buffer): Promise<Extrac
     logger.info({ raw: content }, '[brandService] Groq vision response');
 
     // Extract JSON from response (may be wrapped in markdown code block)
+    const apiUsage = response.data?.usage;
+    const usage = {
+      inputTokens: apiUsage?.prompt_tokens || 0,
+      outputTokens: apiUsage?.completion_tokens || 0,
+      totalTokens: apiUsage?.total_tokens || 0,
+      durationMs: Date.now() - startTime,
+    };
+
     const jsonMatch = content.match(/\{[^}]+\}/);
     if (!jsonMatch) {
       logger.warn('[brandService] No JSON found in Groq response');
-      return defaults;
+      return { colors: defaults, usage };
     }
 
     const parsed = JSON.parse(jsonMatch[0]);
@@ -164,9 +184,9 @@ export async function extractColorsFromLogo(imageBuffer: Buffer): Promise<Extrac
       neutralColor: hexPattern.test(parsed.neutralColor) ? parsed.neutralColor : defaults.neutralColor,
     };
 
-    return result;
+    return { colors: result, usage };
   } catch (err: any) {
     logger.error({ err: err.message }, '[brandService] Color extraction failed — using defaults');
-    return defaults;
+    return { colors: defaults, usage: { ...zeroUsage, durationMs: Date.now() - startTime } };
   }
 }

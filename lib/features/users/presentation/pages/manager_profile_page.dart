@@ -13,6 +13,7 @@ import 'package:nexa/features/users/data/services/manager_service.dart';
 import 'package:nexa/l10n/app_localizations.dart';
 import 'package:nexa/services/file_upload_service.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
+import 'package:nexa/shared/services/error_display_service.dart';
 import 'package:nexa/shared/widgets/caricature_generator_sheet.dart';
 import 'package:nexa/shared/widgets/initials_avatar.dart';
 
@@ -106,7 +107,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
     } catch (e) {
       setState(() {
         _uploading = false;
-        _error = '${AppLocalizations.of(context)!.failedToUploadImage}: $e';
+        _error = AppLocalizations.of(context)!.failedToUploadImage;
       });
     }
   }
@@ -139,7 +140,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
         SnackBar(content: Text(AppLocalizations.of(context)!.newLookSaved)),
       );
     } catch (e) {
-      setState(() => _error = '${AppLocalizations.of(context)!.failedToSave}: $e');
+      setState(() => _error = AppLocalizations.of(context)!.failedToSave);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -169,7 +170,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
         SnackBar(content: Text(AppLocalizations.of(context)!.profilePictureUpdated)),
       );
     } catch (e) {
-      setState(() => _error = '${AppLocalizations.of(context)!.failedToUpdate}: $e');
+      setState(() => _error = AppLocalizations.of(context)!.failedToUpdate);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -203,9 +204,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${AppLocalizations.of(context)!.failedToDelete}: $e')),
-      );
+      ErrorDisplayService.showErrorFromException(context, e, prefix: AppLocalizations.of(context)!.failedToDelete);
     }
   }
 
@@ -229,7 +228,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
         SnackBar(content: Text(AppLocalizations.of(context)!.revertedToOriginal)),
       );
     } catch (e) {
-      setState(() => _error = '${AppLocalizations.of(context)!.failedToRevert}: $e');
+      setState(() => _error = AppLocalizations.of(context)!.failedToRevert);
     } finally {
       if (mounted) setState(() => _reverting = false);
     }
@@ -257,7 +256,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
       Navigator.of(context).pop();
     } catch (e) {
       setState(() {
-        _error = e.toString();
+        _error = AppLocalizations.of(context)!.failedToSave;
       });
     } finally {
       if (mounted) {
@@ -1123,7 +1122,7 @@ class _PhoneLinkSheetState extends State<_PhoneLinkSheet> {
       );
     } catch (e) {
       if (!mounted) return;
-      setState(() { _sendingCode = false; _error = '${AppLocalizations.of(context)!.failedToSendCode}: $e'; });
+      setState(() { _sendingCode = false; _error = AppLocalizations.of(context)!.failedToSendCode; });
     }
   }
 
@@ -1153,7 +1152,7 @@ class _PhoneLinkSheetState extends State<_PhoneLinkSheet> {
       setState(() { _verifying = false; _error = msg; });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _verifying = false; _error = '${AppLocalizations.of(context)!.verificationFailed}: $e'; });
+      setState(() { _verifying = false; _error = AppLocalizations.of(context)!.verificationFailed; });
     }
   }
 
@@ -1188,7 +1187,7 @@ class _PhoneLinkSheetState extends State<_PhoneLinkSheet> {
     } catch (e) {
       await FirebaseAuth.instance.signOut();
       if (!mounted) return;
-      setState(() { _verifying = false; _error = '${AppLocalizations.of(context)!.failedToLink}: $e'; });
+      setState(() { _verifying = false; _error = AppLocalizations.of(context)!.failedToLink; });
     }
   }
 

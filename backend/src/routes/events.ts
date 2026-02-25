@@ -34,6 +34,7 @@ import {
   shareEventPrivate,
   sendDirectInvitation,
 } from '../services/eventShareService';
+import { logAIUsage } from '../utils/logAIUsage';
 
 const router = Router();
 
@@ -1469,6 +1470,74 @@ router.patch('/events/:id', requireAuth, async (req, res) => {
   }
 });
 
+// Bulk delete all expired unfulfilled events
+router.delete('/events/expired', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    const managerId = manager._id as mongoose.Types.ObjectId;
+
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    // Find all expired unfulfilled event IDs
+    const expiredEvents = await EventModel.aggregate([
+      {
+        $match: {
+          managerId,
+          status: { $nin: ['draft', 'cancelled', 'fulfilled'] },
+          date: { $lt: now },
+        },
+      },
+      {
+        $addFields: {
+          _acceptedCount: {
+            $size: {
+              $filter: {
+                input: { $ifNull: ['$accepted_staff', []] },
+                as: 's',
+                cond: { $eq: ['$$s.response', 'accept'] },
+              },
+            },
+          },
+          _totalNeeded: {
+            $reduce: {
+              input: { $ifNull: ['$roles', []] },
+              initialValue: 0,
+              in: { $add: ['$$value', { $ifNull: ['$$this.count', 0] }] },
+            },
+          },
+        },
+      },
+      {
+        $match: {
+          $expr: { $lt: ['$_acceptedCount', '$_totalNeeded'] },
+        },
+      },
+      { $project: { _id: 1 } },
+    ]);
+
+    const ids = expiredEvents.map((e: any) => e._id);
+    if (ids.length === 0) {
+      return res.json({ deletedCount: 0, ids: [] });
+    }
+
+    const result = await EventModel.deleteMany({ _id: { $in: ids }, managerId });
+
+    // Emit socket notifications for each deleted event
+    for (const id of ids) {
+      emitToManager(String(managerId), 'event:deleted', { id: String(id) });
+    }
+
+    return res.json({
+      deletedCount: result.deletedCount,
+      ids: ids.map((id: any) => String(id)),
+    });
+  } catch (err) {
+    console.error('[DELETE /events/expired] Error:', err);
+    return res.status(500).json({ error: 'Failed to delete expired events' });
+  }
+});
+
 // Delete an event
 router.delete('/events/:id', requireAuth, async (req, res) => {
   try {
@@ -2177,6 +2246,87 @@ router.get('/events/available', requireAuth, async (req, res) => {
   }
 });
 
+// ============================================================================
+// EXPIRED UNFULFILLED EVENTS (paginated)
+// Must be defined BEFORE /events/:id to avoid being caught by :id param
+// ============================================================================
+
+router.get('/events/expired', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    const managerId = manager._id as mongoose.Types.ObjectId;
+
+    const skip = Math.max(0, parseInt(req.query.skip as string) || 0);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 10));
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    const result = await EventModel.aggregate([
+      // Stage 1: Match this manager's events that are past-date and not terminal
+      {
+        $match: {
+          managerId,
+          status: { $nin: ['draft', 'cancelled', 'fulfilled'] },
+          date: { $lt: now },
+        },
+      },
+      // Stage 2: Compute accepted count and total needed
+      {
+        $addFields: {
+          _acceptedCount: {
+            $size: {
+              $filter: {
+                input: { $ifNull: ['$accepted_staff', []] },
+                as: 's',
+                cond: { $eq: ['$$s.response', 'accept'] },
+              },
+            },
+          },
+          _totalNeeded: {
+            $reduce: {
+              input: { $ifNull: ['$roles', []] },
+              initialValue: 0,
+              in: { $add: ['$$value', { $ifNull: ['$$this.count', 0] }] },
+            },
+          },
+        },
+      },
+      // Stage 3: Keep only unfulfilled (accepted < needed)
+      {
+        $match: {
+          $expr: { $lt: ['$_acceptedCount', '$_totalNeeded'] },
+        },
+      },
+      // Stage 4: Facet for total count + paginated results
+      {
+        $facet: {
+          totalCount: [{ $count: 'count' }],
+          events: [
+            { $sort: { date: -1 } },
+            { $skip: skip },
+            { $limit: limit },
+            { $project: { _acceptedCount: 0, _totalNeeded: 0 } },
+          ],
+        },
+      },
+    ]);
+
+    const totalCount = result[0]?.totalCount[0]?.count ?? 0;
+    const events = result[0]?.events ?? [];
+
+    return res.json({
+      events,
+      totalCount,
+      skip,
+      limit,
+      hasMore: skip + events.length < totalCount,
+    });
+  } catch (err) {
+    console.error('[GET /events/expired] Error:', err);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 // Get a single event by ID
 router.get('/events/:id', requireAuth, async (req, res) => {
   try {
@@ -2484,7 +2634,7 @@ router.get('/events', requireAuth, async (req, res) => {
       });
     }
 
-    // Map events to include string ids
+    // Map events to include string ids and computed approval fields
     const mappedEvents = processedEvents.map((event: any) => {
       const teamIds = Array.isArray(event.audience_team_ids)
         ? event.audience_team_ids
@@ -2499,23 +2649,96 @@ router.get('/events', requireAuth, async (req, res) => {
             .filter((value: string | null): value is string => !!value)
         : [];
 
+      // Compute approval category from attendance data
+      const acceptedStaff = event.accepted_staff || [];
+      let clockedOutCount = 0;
+      let totalEstimatedHours = 0;
+      let hasDigitalHours = false;
+      for (const staff of acceptedStaff) {
+        const attendance = staff.attendance || [];
+        if (attendance.length === 0) continue;
+        const last = attendance[attendance.length - 1];
+        if (!last) continue;
+        if (last.clockOutAt) {
+          clockedOutCount++;
+          hasDigitalHours = true;
+          totalEstimatedHours += (last.estimatedHours ?? 0);
+        } else if (last.clockInAt) {
+          hasDigitalHours = true;
+        }
+      }
+
+      let approvalCategory: string | undefined;
+      if (event.hoursStatus === 'approved') {
+        approvalCategory = 'approved';
+      } else if (event.hoursStatus === 'sheet_submitted') {
+        approvalCategory = 'sheet_submitted';
+      } else if (hasDigitalHours && clockedOutCount > 0) {
+        approvalCategory = 'ready_to_approve';
+      } else if (acceptedStaff.length > 0) {
+        approvalCategory = 'needs_hours_entry';
+      }
+
+      // Compute tab classification server-side (single source of truth)
+      const eventDate = event.date ? new Date(event.date) : null;
+      const todayUTC = new Date();
+      todayUTC.setUTCHours(0, 0, 0, 0);
+      const isPast = eventDate ? eventDate < todayUTC : false;
+
+      const acceptedCount = (acceptedStaff || [])
+        .filter((s: any) => s.response === 'accept' || s.response === 'accepted')
+        .length;
+      const totalNeeded = (event.roles || [])
+        .reduce((sum: number, r: any) => sum + (r.count || 0), 0);
+      const isFull = event.status === 'fulfilled' || (totalNeeded > 0 && acceptedCount >= totalNeeded);
+
+      let tab: string;
+      if (event.status === 'draft') {
+        tab = 'pending';
+      } else if (event.status === 'cancelled') {
+        tab = 'pending';
+      } else if (isPast && isFull) {
+        // Completed = fully staffed + past date (regardless of DB status)
+        tab = 'completed';
+      } else if (isPast && !isFull) {
+        // Expired = past date but never fully staffed (even if DB says 'completed')
+        tab = 'expired';
+      } else if (isFull) {
+        // Full = fully staffed, date still upcoming
+        tab = 'full';
+      } else {
+        // Posted = published, still accepting staff
+        tab = 'posted';
+      }
+
       return {
         ...event,
         id: String(event._id),
         managerId: event.managerId ? String(event.managerId) : undefined,
         audience_team_ids: teamIds,
+        approvalCategory,
+        clockedOutCount,
+        totalEstimatedHours: Math.round(totalEstimatedHours * 100) / 100,
+        tab,
       };
     });
 
+    // Optional: filter by tab after computation
+    // By default, exclude expired events (they have their own paginated endpoint)
+    const tabFilter = req.query.tab as string | undefined;
+    const finalEvents = tabFilter
+      ? mappedEvents.filter((e: any) => e.tab === tabFilter)
+      : mappedEvents.filter((e: any) => e.tab !== 'expired');
+
     // Include current server timestamp for next sync
     if (!managerScope) {
-      console.log('[EVENTS DEBUG] Returning to staff app:', mappedEvents.length, 'events');
-      if (mappedEvents.length > 0) {
-        console.log('[EVENTS DEBUG] Sample event dates:', mappedEvents.slice(0, 3).map((e: any) => e.date));
+      console.log('[EVENTS DEBUG] Returning to staff app:', finalEvents.length, 'events');
+      if (finalEvents.length > 0) {
+        console.log('[EVENTS DEBUG] Sample event dates:', finalEvents.slice(0, 3).map((e: any) => e.date));
       }
     }
     return res.json({
-      events: mappedEvents,
+      events: finalEvents,
       serverTimestamp: new Date().toISOString(),
       deltaSync: !!lastSyncParam
     });
@@ -3416,6 +3639,7 @@ router.post('/events/:id/bulk-clock-in', requireAuth, async (req, res) => {
 
 // Analyze sign-in sheet photo with OpenAI
 router.post('/events/:id/analyze-sheet', requireAuth, async (req, res) => {
+  const ocrStartTime = Date.now();
   try {
     const manager = await resolveManagerForRequest(req as any);
     const eventId = req.params.id ?? '';
@@ -3504,6 +3728,19 @@ Return ONLY valid JSON in this exact format:
 
     const aiResult = await openaiResponse.json();
     const content = aiResult.choices?.[0]?.message?.content || '{}';
+
+    const ocrUsage = aiResult.usage;
+    logAIUsage({
+      managerId: String(manager._id),
+      userType: 'manager',
+      endpoint: 'analyze-sheet',
+      provider: 'openai',
+      model: 'gpt-4o-mini',
+      inputTokens: ocrUsage?.prompt_tokens || 0,
+      outputTokens: ocrUsage?.completion_tokens || 0,
+      totalTokens: ocrUsage?.total_tokens || 0,
+      durationMs: Date.now() - ocrStartTime,
+    }).catch(() => {});
 
     // Parse JSON from response
     const start = content.indexOf('{');

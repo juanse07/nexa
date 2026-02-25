@@ -63,7 +63,7 @@ class _BulkExtractionScreenState extends State<BulkExtractionScreen>
       }
     } catch (e) {
       if (mounted) {
-        ErrorDisplayService.showError(context, 'Failed to select files: $e');
+        ErrorDisplayService.showErrorFromException(context, e, prefix: 'Failed to select files');
       }
     }
   }

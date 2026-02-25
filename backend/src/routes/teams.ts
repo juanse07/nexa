@@ -149,6 +149,7 @@ router.get('/teams', requireAuth, async (req, res) => {
     }
 
     const payload = teams.map((team) => ({
+      _id: String(team._id),
       id: String(team._id),
       name: team.name,
       description: team.description,
@@ -190,6 +191,7 @@ router.post('/teams', requireAuth, async (req, res) => {
     });
 
     const payload = {
+      _id: String(created._id),
       id: String(created._id),
       name: created.name,
       description: created.description,
@@ -250,6 +252,7 @@ router.patch('/teams/:teamId', requireAuth, async (req, res) => {
     }
 
     const payload = {
+      _id: String(updated._id),
       id: String(updated._id),
       name: updated.name,
       description: updated.description,
@@ -519,6 +522,7 @@ router.get('/teams/:teamId/members', requireAuth, async (req, res) => {
       const payload = membersWithProfiles.map((member: any) => {
         const userProfile = member.userProfile?.[0]; // $lookup returns array
         return {
+          _id: String(member._id),
           id: String(member._id),
           teamId: String(member.teamId),
           provider: member.provider,
@@ -557,6 +561,7 @@ router.get('/teams/:teamId/members', requireAuth, async (req, res) => {
         .lean();
 
       const payload = members.map((member) => ({
+        _id: String(member._id),
         id: String(member._id),
         teamId: String(member.teamId),
         provider: member.provider,
@@ -682,6 +687,7 @@ router.post('/teams/:teamId/members', requireAuth, async (req, res) => {
     });
 
     const memberPayload = {
+      _id: String(resolvedMember._id),
       id: String(resolvedMember._id),
       teamId: String(resolvedMember.teamId),
       provider: resolvedMember.provider,
@@ -723,6 +729,7 @@ router.post('/teams/:teamId/members', requireAuth, async (req, res) => {
       }).lean();
       if (existing) {
         const payload = {
+          _id: String(existing._id),
           id: String(existing._id),
           teamId: String(existing.teamId),
           provider: existing.provider,
@@ -846,6 +853,7 @@ router.get('/teams/:teamId/messages', requireAuth, async (req, res) => {
       .lean();
 
     const payload = messages.map((message) => ({
+      _id: String(message._id),
       id: String(message._id),
       teamId: String(message.teamId),
       messageType: message.messageType,
@@ -921,6 +929,7 @@ router.post('/teams/:teamId/invites', requireAuth, async (req, res) => {
       });
 
       createdInvites.push({
+        _id: String(invite._id),
         id: String(invite._id),
         token: invite.token,
         email: invite.email,
@@ -1034,6 +1043,7 @@ router.get('/teams/:teamId/invites', requireAuth, async (req, res) => {
       .lean();
 
     const payload = invites.map((invite) => ({
+      _id: String(invite._id),
       id: String(invite._id),
       email: invite.email,
       provider: invite.provider,
@@ -1226,6 +1236,7 @@ router.get('/teams/:teamId/invites/links', requireAuth, async (req, res) => {
       .lean();
 
     const payload = invites.map((invite) => ({
+      _id: String(invite._id),
       id: String(invite._id),
       shortCode: invite.shortCode,
       deepLink: `https://flowshift.work/invite/${invite.shortCode}`,
@@ -1320,6 +1331,7 @@ router.post('/invites/:token/accept', requireAuth, async (req, res) => {
       payload: { inviteId: String(invite._id) },
     });
     const memberPayload = {
+      _id: String(member?._id ?? ''),
       id: String(member?._id ?? ''),
       teamId: String(invite.teamId),
       provider: authUser.provider,
@@ -1341,6 +1353,7 @@ router.post('/invites/:token/accept', requireAuth, async (req, res) => {
 
     return res.json({
       team: {
+        _id: String(team._id),
         id: String(team._id),
         name: team.name,
         description: team.description,
@@ -1664,6 +1677,7 @@ router.get('/teams/:teamId/applicants', requireAuth, async (req, res) => {
       .lean();
 
     const payload = applicants.map((a) => ({
+      _id: String(a._id),
       id: String(a._id),
       teamId: String(a.teamId),
       inviteId: String(a.inviteId),

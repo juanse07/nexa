@@ -28,13 +28,14 @@ router.get('/tariffs', requireAuth, async (req, res) => {
     if (roleId && mongoose.Types.ObjectId.isValid(roleId)) filter.roleId = new mongoose.Types.ObjectId(roleId);
     const docs = await TariffModel.find(filter).lean();
     const mapped = (docs || []).map((d: any) => ({
+      _id: String(d._id),
       id: String(d._id),
       clientId: String(d.clientId),
       roleId: String(d.roleId),
       rate: d.rate,
       currency: d.currency,
     }));
-    return res.json(mapped);
+    return res.json({ tariffs: mapped });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to fetch tariffs' });
   }
@@ -77,10 +78,10 @@ router.post('/tariffs', requireAuth, async (req, res) => {
     );
     if (result.upsertedId) {
       const created = await TariffModel.findOne({ managerId: manager._id, clientId, roleId }).lean();
-      return res.status(201).json({ id: created ? String(created._id) : undefined, clientId, roleId, rate, currency });
+      return res.status(201).json({ _id: created ? String(created._id) : undefined, id: created ? String(created._id) : undefined, clientId, roleId, rate, currency });
     }
     const updated = await TariffModel.findOne({ managerId: manager._id, clientId, roleId }).lean();
-    return res.json({ id: updated ? String(updated._id) : undefined, clientId, roleId, rate, currency });
+    return res.json({ _id: updated ? String(updated._id) : undefined, id: updated ? String(updated._id) : undefined, clientId, roleId, rate, currency });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to upsert tariff' });
   }

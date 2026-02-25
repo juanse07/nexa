@@ -222,7 +222,13 @@ class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProv
 
   @override
   Widget build(BuildContext context) {
-    String hintText = 'Type your message...';
+    final term = context.watch<TerminologyProvider>();
+    term.updateSystemLanguage(context);
+    final singularLc = term.singularLowercase;
+    final isEs = Localizations.localeOf(context).languageCode == 'es';
+    String hintText = isEs
+        ? 'ej. crea un $singularLc para este viernes'
+        : 'e.g. create a $singularLc for this Friday';
     if (widget.isLoading) {
       hintText = 'AI is thinking...';
     } else if (_isRecording) {

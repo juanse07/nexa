@@ -165,7 +165,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
       }
     } catch (e) {
       setState(() {
-        _error = e.toString();
+        _error = 'Failed to load profile.';
         _loading = false;
       });
     }

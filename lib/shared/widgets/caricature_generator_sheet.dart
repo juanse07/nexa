@@ -332,7 +332,7 @@ class _CaricatureGeneratorSheetState extends State<CaricatureGeneratorSheet>
       if (!mounted) return;
       setState(() {
         _generating = false;
-        _error = e.toString().replaceFirst('Exception: ', '');
+        _error = 'Failed to generate. Please try again.';
       });
       _loadingMessageTimer?.cancel();
     }
@@ -360,7 +360,7 @@ class _CaricatureGeneratorSheetState extends State<CaricatureGeneratorSheet>
       if (!mounted) return;
       setState(() {
         _accepting = false;
-        _error = e.toString().replaceFirst('Exception: ', '');
+        _error = 'Failed to generate. Please try again.';
       });
     }
   }

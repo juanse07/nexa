@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../extraction/services/event_service.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
+import 'package:nexa/shared/services/error_display_service.dart';
 
 /// Elegant dialog for selecting and sending event invitations
 class SendEventInvitationDialog extends StatefulWidget {
@@ -97,7 +98,7 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
     } catch (e) {
       print('[INVITATION_DIALOG] ERROR loading events: $e');
       setState(() {
-        _error = e.toString();
+        _error = AppLocalizations.of(context)!.failedToLoadData;
         _loading = false;
       });
     }
@@ -137,12 +138,7 @@ class _SendEventInvitationDialogState extends State<SendEventInvitationDialog> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${AppLocalizations.of(context)!.failedToSendInvitation}: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        ErrorDisplayService.showErrorFromException(context, e, prefix: AppLocalizations.of(context)!.failedToSendInvitation);
       }
     } finally {
       if (mounted) {

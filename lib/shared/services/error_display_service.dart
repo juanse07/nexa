@@ -1,4 +1,9 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:nexa/core/constants/error_messages.dart';
+import 'package:nexa/core/errors/error_handler.dart';
+import 'package:nexa/core/errors/exceptions.dart';
+import 'package:nexa/core/errors/failures.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
 /// Message severity levels for consistent styling
@@ -157,32 +162,53 @@ class ErrorDisplayService {
   }
 
   /// Format common exceptions into user-friendly messages
+  ///
+  /// Priority order:
+  /// 1. Typed exceptions (AppException, Failure, DioException)
+  /// 2. String-based pattern matching for untyped exceptions
+  /// 3. "Exception: <message>" extraction with JSON/HTTP stripping
+  /// 4. Safe fallback — never returns raw strings
   static String _formatException(dynamic error) {
-    if (error == null) return 'Unknown error occurred';
+    if (error == null) return ErrorMessages.somethingWentWrong;
 
-    final String errorString = error.toString();
-
-    // Handle common error patterns
-    if (errorString.contains('SocketException') ||
-        errorString.contains('NetworkException')) {
-      return 'Network connection failed';
+    // 1. Typed exceptions — extract the clean message
+    if (error is AppException) {
+      return error.message ?? ErrorMessages.somethingWentWrong;
+    }
+    if (error is Failure) {
+      return error.message;
+    }
+    if (error is DioException) {
+      return ErrorHandler.handleDioError(error).message;
     }
 
-    if (errorString.contains('TimeoutException')) {
-      return 'Request timed out';
+    // 2. String-based detection for untyped exceptions
+    final s = error.toString();
+    if (s.contains('SocketException') || s.contains('NetworkException')) {
+      return ErrorMessages.noInternetConnection;
+    }
+    if (s.contains('TimeoutException')) {
+      return ErrorMessages.connectionTimeout;
+    }
+    if (s.contains('FormatException')) {
+      return ErrorMessages.invalidData;
     }
 
-    if (errorString.contains('FormatException')) {
-      return 'Invalid data format';
+    // 3. Extract message from "Exception: <message>" pattern
+    if (s.contains('Exception:')) {
+      var msg = s.split('Exception:').last.trim();
+      // Strip any JSON payloads leaked from HTTP responses
+      msg = msg.replaceAll(RegExp(r'\{.*\}'), '').trim();
+      // Strip HTTP status patterns like "(401)" or "HTTP 500:"
+      msg = msg.replaceAll(RegExp(r'\(\d{3}\)'), '').trim();
+      msg = msg.replaceAll(RegExp(r'HTTP \d{3}:?'), '').trim();
+      if (msg.isNotEmpty && !msg.startsWith('{') && msg.length < 200) {
+        return msg;
+      }
     }
 
-    if (errorString.contains('Exception:')) {
-      // Extract message after "Exception: "
-      return errorString.split('Exception:').last.trim();
-    }
-
-    // Return original string if no pattern matches
-    return errorString;
+    // 4. Safe fallback — never return raw strings
+    return ErrorMessages.somethingWentWrong;
   }
 
   /// Clear all currently displayed snackbars

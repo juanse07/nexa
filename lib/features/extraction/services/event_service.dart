@@ -93,12 +93,14 @@ class EventService {
     String? userKey,
     String? status,
     bool? isPast,
+    String? tab,
   }) async {
     final result = await fetchEventsWithSync(
       userKey: userKey,
       useDeltaSync: false,
       status: status,
       isPast: isPast,
+      tab: tab,
     );
     return result.events;
   }
@@ -110,11 +112,13 @@ class EventService {
   ///
   /// [status] - Filter by event status (e.g. 'draft', 'published,confirmed')
   /// [isPast] - If true, only past events; if false, only future events
+  /// [tab] - Filter by server-computed tab ('pending', 'posted', 'full', 'completed', 'expired')
   Future<EventFetchResult> fetchEventsWithSync({
     String? userKey,
     bool useDeltaSync = true,
     String? status,
     bool? isPast,
+    String? tab,
   }) async {
     try {
       final options = Options(headers: <String, String>{'Accept': 'application/json'});
@@ -133,6 +137,7 @@ class EventService {
       }
       if (status != null) queryParams['status'] = status;
       if (isPast != null) queryParams['isPast'] = isPast.toString();
+      if (tab != null) queryParams['tab'] = tab;
 
       final response = await _apiClient.get(
         '/events',
@@ -460,6 +465,52 @@ class EventService {
       );
     } on DioException catch (e) {
       throw Exception('Failed to change visibility: ${e.message}');
+    }
+  }
+
+  /// Fetches expired unfulfilled events with pagination.
+  /// Returns a map with: events, totalCount, skip, limit, hasMore.
+  Future<Map<String, dynamic>> fetchExpiredEvents({
+    int skip = 0,
+    int limit = 10,
+  }) async {
+    try {
+      final response = await _apiClient.get(
+        '/events/expired',
+        queryParameters: {'skip': skip.toString(), 'limit': limit.toString()},
+      );
+
+      if (response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300) {
+        final data = response.data as Map<String, dynamic>;
+        return data;
+      }
+      throw Exception(
+        'Failed to fetch expired events (${response.statusCode}): ${response.data}',
+      );
+    } on DioException catch (e) {
+      throw Exception('Failed to fetch expired events: ${e.message}');
+    }
+  }
+
+  /// Bulk deletes all expired unfulfilled events.
+  /// Returns a map with: deletedCount, ids.
+  Future<Map<String, dynamic>> deleteAllExpiredEvents() async {
+    try {
+      final response = await _apiClient.delete('/events/expired');
+
+      if (response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300) {
+        clearLastSyncTimestamp();
+        return response.data as Map<String, dynamic>;
+      }
+      throw Exception(
+        'Failed to delete expired events (${response.statusCode}): ${response.data}',
+      );
+    } on DioException catch (e) {
+      throw Exception('Failed to delete expired events: ${e.message}');
     }
   }
 

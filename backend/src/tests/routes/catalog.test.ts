@@ -33,7 +33,7 @@ describe('Catalog API', () => {
       const { token } = await createAuthenticatedManager();
       const res = await app.get('/api/clients').set('Authorization', `Bearer ${token}`);
       expect(res.status).toBe(200);
-      expect(res.body).toEqual([]);
+      expect(res.body).toEqual({ clients: [] });
     });
 
     it('returns only this manager\'s clients', async () => {
@@ -41,9 +41,9 @@ describe('Catalog API', () => {
       const { token: t2 } = await createAuthenticatedManager();
       await createTestClient(m1._id, 'Client A');
       const res1 = await app.get('/api/clients').set('Authorization', `Bearer ${t1}`);
-      expect(res1.body.length).toBe(1);
+      expect(res1.body.clients.length).toBe(1);
       const res2 = await app.get('/api/clients').set('Authorization', `Bearer ${t2}`);
-      expect(res2.body.length).toBe(0);
+      expect(res2.body.clients.length).toBe(0);
     });
   });
 
@@ -126,7 +126,7 @@ describe('Catalog API', () => {
       await createTestRole(manager._id, 'Server');
       const res = await app.get('/api/roles').set('Authorization', `Bearer ${token}`);
       expect(res.status).toBe(200);
-      expect(res.body.length).toBe(1);
+      expect(res.body.roles.length).toBe(1);
     });
   });
 
@@ -173,7 +173,7 @@ describe('Catalog API', () => {
       const { token } = await createAuthenticatedManager();
       const res = await app.get('/api/tariffs').set('Authorization', `Bearer ${token}`);
       expect(res.status).toBe(200);
-      expect(res.body).toEqual([]);
+      expect(res.body).toEqual({ tariffs: [] });
     });
   });
 

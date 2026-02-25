@@ -25,3 +25,7 @@ plugins {
 }
 
 include(":app")
+
+gradle.allprojects {
+    layout.buildDirectory.set(file("/tmp/nexa-gradle-builds/${project.name}"))
+}

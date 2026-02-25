@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:nexa/l10n/app_localizations.dart';
+import 'package:nexa/shared/services/error_display_service.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../shared/presentation/theme/app_colors.dart';
@@ -125,7 +126,7 @@ class _TabbedVenueScreenState extends State<TabbedVenueScreen>
       }
     } catch (e) {
       setState(() {
-        _error = e.toString();
+        _error = AppLocalizations.of(context)!.failedToLoadData;
         _isLoading = false;
       });
     }
@@ -228,7 +229,9 @@ class _TabbedVenueScreenState extends State<TabbedVenueScreen>
             Colors.red);
       }
     } catch (e) {
-      _showSnackBar(e.toString(), Colors.red);
+      if (mounted) {
+        ErrorDisplayService.showErrorFromException(context, e);
+      }
     }
   }
 

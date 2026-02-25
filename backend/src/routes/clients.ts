@@ -39,8 +39,8 @@ router.get('/clients', requireAuth, async (req, res) => {
     )
       .sort({ normalizedName: 1 })
       .lean();
-    const mapped = (clients || []).map((c: any) => ({ id: String(c._id), name: c.name }));
-    return res.json(mapped);
+    const mapped = (clients || []).map((c: any) => ({ _id: String(c._id), id: String(c._id), name: c.name }));
+    return res.json({ clients: mapped });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to fetch clients' });
   }
@@ -78,7 +78,7 @@ router.post('/clients', requireAuth, async (req, res) => {
       return res.status(409).json({ message: 'Client already exists' });
     }
     const created = await ClientModel.create({ managerId: managerObjectId, name });
-    return res.status(201).json({ id: String(created._id), name: created.name });
+    return res.status(201).json({ _id: String(created._id), id: String(created._id), name: created.name });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to create client' });
   }
@@ -126,7 +126,7 @@ router.patch('/clients/:id', requireAuth, async (req, res) => {
     );
     if (result.matchedCount === 0) return res.status(404).json({ message: 'Client not found' });
     const updated = await ClientModel.findOne({ _id: new mongoose.Types.ObjectId(id), managerId: managerObjectId }).lean();
-    return res.json({ id, name: updated?.name });
+    return res.json({ _id: id, id, name: updated?.name });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to update client' });
   }

@@ -19,8 +19,8 @@ router.get('/roles', requireAuth, async (req, res) => {
     )
       .sort({ normalizedName: 1 })
       .lean();
-    const mapped = (roles || []).map((r: any) => ({ id: String(r._id), name: r.name }));
-    return res.json(mapped);
+    const mapped = (roles || []).map((r: any) => ({ _id: String(r._id), id: String(r._id), name: r.name }));
+    return res.json({ roles: mapped });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to fetch roles' });
   }
@@ -38,7 +38,7 @@ router.post('/roles', requireAuth, async (req, res) => {
     }).lean();
     if (existing) return res.status(409).json({ message: 'Role already exists' });
     const created = await RoleModel.create({ managerId: manager._id, name });
-    return res.status(201).json({ id: String(created._id), name: created.name });
+    return res.status(201).json({ _id: String(created._id), id: String(created._id), name: created.name });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to create role' });
   }
@@ -64,7 +64,7 @@ router.patch('/roles/:id', requireAuth, async (req, res) => {
     );
     if (result.matchedCount === 0) return res.status(404).json({ message: 'Role not found' });
     const updated = await RoleModel.findOne({ _id: new mongoose.Types.ObjectId(id), managerId: manager._id }).lean();
-    return res.json({ id, name: updated?.name });
+    return res.json({ _id: id, id, name: updated?.name });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to update role' });
   }

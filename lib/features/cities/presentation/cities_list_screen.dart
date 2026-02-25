@@ -40,7 +40,7 @@ class _CitiesListScreenState extends State<CitiesListScreen> {
       });
     } catch (e) {
       setState(() {
-        _error = '${AppLocalizations.of(context)!.failedToLoadCities}: ${e.toString()}';
+        _error = AppLocalizations.of(context)!.failedToLoadCities;
         _loading = false;
       });
     }

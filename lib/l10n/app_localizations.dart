@@ -531,7 +531,7 @@ abstract class AppLocalizations {
   /// No description provided for @staffCount.
   ///
   /// In en, this message translates to:
-  /// **'{count} staff'**
+  /// **'Staff: {count}'**
   String staffCount(int count);
 
   /// No description provided for @catalogClientsRoles.
@@ -5376,6 +5376,12 @@ abstract class AppLocalizations {
   /// **'No events need hours approval at the moment.'**
   String get noEventsNeedApprovalDescription;
 
+  /// No description provided for @reviewAndApproveStaffHours.
+  ///
+  /// In en, this message translates to:
+  /// **'Review and approve staff hours for completed events'**
+  String get reviewAndApproveStaffHours;
+
   /// No description provided for @pendingReviewLabel.
   ///
   /// In en, this message translates to:
@@ -5651,6 +5657,162 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Upload'**
   String get uploadLabel;
+
+  /// No description provided for @readyToApprove.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready to Approve'**
+  String get readyToApprove;
+
+  /// No description provided for @needsHoursEntry.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs Hours Entry'**
+  String get needsHoursEntry;
+
+  /// No description provided for @sheetSubmitted.
+  ///
+  /// In en, this message translates to:
+  /// **'Sheet Submitted'**
+  String get sheetSubmitted;
+
+  /// No description provided for @staffClockedCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} of {total} staff clocked'**
+  String staffClockedCount(int count, int total);
+
+  /// No description provided for @estimatedTotalHours.
+  ///
+  /// In en, this message translates to:
+  /// **'~{hours} hrs total'**
+  String estimatedTotalHours(String hours);
+
+  /// No description provided for @digitalClockIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Clock In'**
+  String get digitalClockIn;
+
+  /// No description provided for @digitalClockOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Clock Out'**
+  String get digitalClockOut;
+
+  /// No description provided for @estimatedHoursLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated'**
+  String get estimatedHoursLabel;
+
+  /// No description provided for @noAttendanceData.
+  ///
+  /// In en, this message translates to:
+  /// **'No Data'**
+  String get noAttendanceData;
+
+  /// No description provided for @approveAllReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve All Ready ({count})'**
+  String approveAllReady(int count);
+
+  /// No description provided for @uploadSheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload Sheet'**
+  String get uploadSheet;
+
+  /// No description provided for @adjustHours.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjust Hours'**
+  String get adjustHours;
+
+  /// No description provided for @approveDigitalHours.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve'**
+  String get approveDigitalHours;
+
+  /// No description provided for @clockedStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Clocked'**
+  String get clockedStatus;
+
+  /// No description provided for @workingStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Working'**
+  String get workingStatus;
+
+  /// No description provided for @sheetHoursStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Sheet Hours'**
+  String get sheetHoursStatus;
+
+  /// No description provided for @approvedStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved'**
+  String get approvedStatus;
+
+  /// No description provided for @confirmApproveAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve all {count} staff members with digital clock-out data?'**
+  String confirmApproveAll(int count);
+
+  /// No description provided for @hoursApprovedSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} staff hours approved'**
+  String hoursApprovedSuccess(int count);
+
+  /// No description provided for @approveIndividualConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve {hours} hours for {name}?'**
+  String approveIndividualConfirm(String hours, String name);
+
+  /// No description provided for @adjustHoursFor.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjust Hours for {name}'**
+  String adjustHoursFor(String name);
+
+  /// No description provided for @digitalTimesReference.
+  ///
+  /// In en, this message translates to:
+  /// **'Digital Times (Reference)'**
+  String get digitalTimesReference;
+
+  /// No description provided for @adjustedHours.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjusted Hours'**
+  String get adjustedHours;
+
+  /// No description provided for @noteOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (optional)'**
+  String get noteOptional;
+
+  /// No description provided for @clockedOutCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Clocked Out: {count}'**
+  String clockedOutCount(int count);
+
+  /// No description provided for @estHours.
+  ///
+  /// In en, this message translates to:
+  /// **'Est: {hours} hrs'**
+  String estHours(String hours);
 }
 
 class _AppLocalizationsDelegate

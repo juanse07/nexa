@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:nexa/features/extraction/services/clients_service.dart';
 import 'package:nexa/features/extraction/presentation/theme/extraction_theme.dart';
+import 'package:nexa/shared/services/error_display_service.dart';
 
 /// Page for finding and merging duplicate clients.
 ///
@@ -61,7 +62,7 @@ class _MergeClientsPageState extends State<MergeClientsPage> {
       });
     } catch (e) {
       setState(() {
-        _error = e.toString();
+        _error = 'Failed to load data';
         _loading = false;
       });
     }
@@ -134,12 +135,7 @@ class _MergeClientsPageState extends State<MergeClientsPage> {
         merged++;
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to merge "${dup.name}": $e'),
-            backgroundColor: ExColors.errorDark,
-          ),
-        );
+        ErrorDisplayService.showErrorFromException(context, e, prefix: 'Failed to merge "${dup.name}"');
       }
     }
 

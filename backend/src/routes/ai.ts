@@ -9,7 +9,7 @@ import FormData from 'form-data';
 import fs from 'fs';
 import { getDateTimeContext, getWelcomeDateContext, getFullSystemContext } from '../utils/dateContext';
 import { getProviderConfig } from '../utils/aiProvider';
-import { selectModelForQuery, shouldEscalateFromTools, ESCALATION_MODEL, ESCALATION_PROVIDER } from '../utils/cascadeRouter';
+import { selectModelForQuery, shouldEscalateFromTools, selectToolsForQuery, extractLastUserMessage, extractRecentUserMessages, ESCALATION_MODEL, ESCALATION_PROVIDER } from '../utils/cascadeRouter';
 import { EventModel } from '../models/event';
 import { ClientModel } from '../models/client';
 import { TeamMemberModel } from '../models/teamMember';
@@ -27,6 +27,7 @@ import { TeamModel } from '../models/team';
 import { emitToManager, emitToTeams, emitToUser } from '../socket/server';
 import { notificationService } from '../services/notificationService';
 import { computeRoleStats } from '../utils/eventCapacity';
+import { logAIUsage } from '../utils/logAIUsage';
 import { shareEventPublic, shareEventPrivate, sendDirectInvitation } from '../services/eventShareService';
 
 const router = Router();
@@ -276,6 +277,7 @@ router.get('/ai/manager/context', requireAuth, async (req, res) => {
  */
 router.post('/ai/transcribe', requireAuth, upload.single('audio'), async (req, res) => {
   let tempFilePath: string | null = null;
+  const transcribeStartTime = Date.now();
 
   try {
     if (!req.file) {
@@ -354,6 +356,19 @@ router.post('/ai/transcribe', requireAuth, upload.single('audio'), async (req, r
     }
 
     console.log('[ai/transcribe] Transcription successful:', transcribedText.substring(0, 100));
+
+    logAIUsage({
+      managerId: (req as any).user?.managerId,
+      userType: 'manager',
+      endpoint: 'transcribe',
+      provider: 'groq',
+      model: 'whisper-large-v3-turbo',
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      durationMs: Date.now() - transcribeStartTime,
+      audioDurationSec: response.data.duration || undefined,
+    }).catch(() => {});
 
     return res.json({
       text: transcribedText,
@@ -861,6 +876,28 @@ const AI_TOOLS = [
     }
   },
   {
+    name: 'get_punctuality_report',
+    description: 'Get staff punctuality/lateness report. Shows who clocked in late, how late, and who never clocked in (no-shows). Use when manager asks "who is always late?", "punctuality report", "did everyone show up?", "is Maria on time?", "quién llega tarde?", "tardy", etc.',
+    parameters: {
+      type: 'object',
+      properties: {
+        staff_name: {
+          type: ['string', 'null'],
+          description: 'Optional: specific staff name. Omit for all-staff overview.'
+        },
+        days: {
+          type: ['number', 'null'],
+          description: 'Time period in days (default: 30)'
+        },
+        threshold_minutes: {
+          type: ['number', 'null'],
+          description: 'Grace period in minutes before counting as late (default: 5)'
+        }
+      },
+      required: []
+    }
+  },
+  {
     name: 'create_event',
     description: 'Create a new event/shift as DRAFT (crear evento/turno). Use when user wants to: create event, make shift, add job, schedule staff, create trabajo, crear evento, agendar personal. IMPORTANT: Managers only care about CALL TIME (when staff should arrive), NOT guest arrival time. Call time is the staff arrival time. 🚨 CRITICAL: ALL EVENTS MUST BE IN THE FUTURE - never create events for past dates. After creating, ALWAYS ask the user if they want to publish it to staff.',
     parameters: {
@@ -1298,6 +1335,161 @@ async function sendManagerMessage(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Punctuality / Lateness Computation
+// ---------------------------------------------------------------------------
+
+interface PunctualityEventDetail {
+  date: string;
+  clientName: string;
+  role: string;
+  status: 'on_time' | 'late' | 'no_show';
+  minutesLate: number;
+  bulkClockIn: boolean;
+}
+
+interface PunctualityRecord {
+  staffKey: string;
+  staffName: string;
+  onTimeCount: number;
+  lateCount: number;
+  noShowCount: number;
+  totalLateMinutes: number;
+  totalEvents: number;
+  eventDetails: PunctualityEventDetail[];
+}
+
+/**
+ * Compute punctuality stats from a set of events.
+ *
+ * For each accepted staff member on each event, compares their first clockInAt
+ * against the expected arrival time (role call_time → event start_time fallback).
+ *
+ * @param events       - Pre-queried events (must include accepted_staff, date, start_time, roles, client_name, status)
+ * @param staffUserKey - If set, only compute for this specific staff member
+ * @param staffNamePattern - Fallback regex pattern when userKey is unavailable
+ * @param thresholdMinutes - Grace period before marking late (default 5 min)
+ */
+function computePunctuality(
+  events: any[],
+  staffUserKey?: string | null,
+  staffNamePattern?: string | null,
+  thresholdMinutes: number = 5
+): PunctualityRecord[] {
+  const recordMap = new Map<string, PunctualityRecord>();
+
+  for (const event of events) {
+    if (!event.accepted_staff || !Array.isArray(event.accepted_staff)) continue;
+
+    // Only evaluate completed/fulfilled/in_progress events (future drafts are meaningless)
+    const eventStatus = event.status;
+    if (!['completed', 'fulfilled', 'in_progress'].includes(eventStatus)) continue;
+
+    const eventDate = event.date ? new Date(event.date) : null;
+    if (!eventDate) continue;
+
+    for (const staff of event.accepted_staff) {
+      // Filter: only accepted staff
+      if (staff.response !== 'accepted' && staff.response !== 'accept') continue;
+
+      // Filter to specific staff if requested
+      if (staffUserKey && staff.userKey !== staffUserKey) continue;
+      if (!staffUserKey && staffNamePattern && !new RegExp(staffNamePattern, 'i').test(staff.name || '')) continue;
+
+      // Determine expected arrival time
+      // Priority: role-specific call_time → event start_time
+      let expectedTimeStr: string | null = null;
+
+      if (staff.role && event.roles && Array.isArray(event.roles)) {
+        const matchedRole = event.roles.find(
+          (r: any) => r.role && r.call_time && r.role.toLowerCase() === staff.role.toLowerCase()
+        );
+        if (matchedRole?.call_time) {
+          expectedTimeStr = matchedRole.call_time;
+        }
+      }
+
+      if (!expectedTimeStr && event.start_time) {
+        expectedTimeStr = event.start_time;
+      }
+
+      if (!expectedTimeStr) continue; // Can't compute without an expected time
+
+      // Build full expected datetime
+      const timeParts = expectedTimeStr.split(':').map(Number);
+      const expH = timeParts[0] ?? 0;
+      const expM = timeParts[1] ?? 0;
+      const expectedDt = new Date(eventDate);
+      expectedDt.setHours(expH, expM, 0, 0);
+
+      // Staff key for grouping
+      const key = staff.userKey || staff.name || 'unknown';
+      if (!recordMap.has(key)) {
+        recordMap.set(key, {
+          staffKey: key,
+          staffName: staff.name || staff.first_name || 'Unknown',
+          onTimeCount: 0,
+          lateCount: 0,
+          noShowCount: 0,
+          totalLateMinutes: 0,
+          totalEvents: 0,
+          eventDetails: []
+        });
+      }
+      const record = recordMap.get(key)!;
+      record.totalEvents++;
+
+      const attendance = staff.attendance;
+      const hasClockIn = attendance && Array.isArray(attendance) && attendance.length > 0 && attendance[0].clockInAt;
+
+      if (!hasClockIn) {
+        // No attendance → no-show (only meaningful for completed events)
+        record.noShowCount++;
+        record.eventDetails.push({
+          date: eventDate.toISOString().slice(0, 10),
+          clientName: event.client_name || 'Unknown',
+          role: staff.role || 'N/A',
+          status: 'no_show',
+          minutesLate: 0,
+          bulkClockIn: false
+        });
+        continue;
+      }
+
+      // Use first session's clockInAt
+      const clockIn = new Date(attendance[0].clockInAt);
+      const diffMinutes = (clockIn.getTime() - expectedDt.getTime()) / (1000 * 60);
+      const isBulk = !!attendance[0].overrideBy;
+
+      if (diffMinutes <= thresholdMinutes) {
+        record.onTimeCount++;
+        record.eventDetails.push({
+          date: eventDate.toISOString().slice(0, 10),
+          clientName: event.client_name || 'Unknown',
+          role: staff.role || 'N/A',
+          status: 'on_time',
+          minutesLate: 0,
+          bulkClockIn: isBulk
+        });
+      } else {
+        const minsLate = Math.round(diffMinutes);
+        record.lateCount++;
+        record.totalLateMinutes += minsLate;
+        record.eventDetails.push({
+          date: eventDate.toISOString().slice(0, 10),
+          clientName: event.client_name || 'Unknown',
+          role: staff.role || 'N/A',
+          status: 'late',
+          minutesLate: minsLate,
+          bulkClockIn: isBulk
+        });
+      }
+    }
+  }
+
+  return Array.from(recordMap.values());
+}
+
 /**
  * Execute a function call from the AI model
  * Handles all function types: queries and creates
@@ -1439,9 +1631,26 @@ async function executeFunctionCall(
         const { client_name, date, venue_name, event_name } = functionArgs;
         const filter: any = { managerId };
 
-        if (client_name) filter.client_name = new RegExp(client_name, 'i');
-        if (venue_name) filter.venue_name = new RegExp(venue_name, 'i');
-        if (event_name) filter.event_name = new RegExp(event_name, 'i');
+        // Cross-field name search: any provided name term is searched across ALL name fields
+        // This handles cases where the model puts a venue name in client_name or vice versa
+        const nameTerms: string[] = [];
+        if (client_name) nameTerms.push(client_name);
+        if (venue_name) nameTerms.push(venue_name);
+        if (event_name) nameTerms.push(event_name);
+
+        if (nameTerms.length > 0) {
+          const orConditions: any[] = [];
+          for (const term of nameTerms) {
+            const regex = new RegExp(term, 'i');
+            orConditions.push(
+              { client_name: regex },
+              { venue_name: regex },
+              { event_name: regex },
+              { shift_name: regex }
+            );
+          }
+          filter.$or = orConditions;
+        }
 
         if (date) {
           if (date.length === 7) {
@@ -1458,7 +1667,8 @@ async function executeFunctionCall(
 
         const events = await EventModel.find(filter)
           .sort({ date: -1 })
-          .limit(50)
+          .limit(20)
+          .select('_id event_name shift_name client_name date start_time end_time venue_name venue_address status accepted_staff roles contact_name contact_phone setup_time uniform notes visibilityType')
           .lean();
 
         if (events.length === 0) {
@@ -1473,6 +1683,9 @@ async function executeFunctionCall(
           if (payInfo) line += `, Pay: ${payInfo}`;
           if (e.contact_name) line += `, Contact: ${e.contact_name}${e.contact_phone ? ` (${e.contact_phone})` : ''}`;
           if (e.setup_time) line += `, Setup: ${e.setup_time}`;
+          if ((e as any).uniform) line += `, Uniform: ${(e as any).uniform}`;
+          if ((e as any).notes) line += `, Notes: ${(e as any).notes}`;
+          if ((e as any).venue_address) line += `, Address: ${(e as any).venue_address}`;
           return line;
         }).join('\n');
 
@@ -1993,7 +2206,42 @@ async function executeFunctionCall(
           return `🏆 Top Staff by Points:\n${list}`;
         }
 
-        return `Metric "${metric}" not supported. Use: hours_worked, events_completed, or points.`;
+        if (metric === 'punctuality') {
+          // Reuse same matchFilter already constructed above
+          const punctEvents = await EventModel.find(matchFilter)
+            .select('accepted_staff date start_time roles client_name status')
+            .lean();
+
+          if (punctEvents.length === 0) {
+            return `No completed events found for the last ${days} days${role_name ? ` with role "${role_name}"` : ''}.`;
+          }
+
+          const punctRecords = computePunctuality(punctEvents, null, null, 5);
+
+          // Filter to staff with ≥ 3 events (avoid misleading 100%/0% scores)
+          const qualified = punctRecords.filter(r => r.totalEvents >= 3);
+
+          if (qualified.length === 0) {
+            return `Not enough data — no staff member has 3+ completed events in the last ${days} days.`;
+          }
+
+          // Sort by on-time percentage descending (best first — "top" semantics)
+          qualified.sort((a, b) => {
+            const aPct = a.onTimeCount / a.totalEvents;
+            const bPct = b.onTimeCount / b.totalEvents;
+            return bPct - aPct;
+          });
+
+          const limited = qualified.slice(0, maxLimit);
+          const list = limited.map((r, i) => {
+            const onTimePct = Math.round((r.onTimeCount / r.totalEvents) * 100);
+            return `${i + 1}. ${r.staffName} — ${onTimePct}% on time (${r.onTimeCount}/${r.totalEvents} events), ${r.lateCount} late, ${r.noShowCount} no-shows`;
+          }).join('\n');
+
+          return `⏱️ Most Punctual Staff (last ${days} days)${role_name ? ` - ${role_name}` : ''}:\n${list}`;
+        }
+
+        return `Metric "${metric}" not supported. Use: hours_worked, events_completed, points, or punctuality.`;
       }
 
       case 'get_staff_stats': {
@@ -2028,7 +2276,9 @@ async function executeFunctionCall(
           staffFilter['accepted_staff.name'] = new RegExp(staff_name, 'i');
         }
 
-        const events = await EventModel.find(staffFilter).lean();
+        const events = await EventModel.find(staffFilter)
+          .select('_id accepted_staff client_name start_time end_time date status roles')
+          .lean();
 
         if (events.length === 0) {
           return `No events found for staff member "${staff_name}" in the last ${days} days.`;
@@ -2081,6 +2331,22 @@ async function executeFunctionCall(
 
         const avgHoursPerEvent = eventCount > 0 ? (totalHours / eventCount).toFixed(1) : 0;
 
+        // Compute punctuality for this staff member
+        let punctualityInfo = '';
+        const punctRecords = computePunctuality(events, staffUserKey, staffUserKey ? null : staff_name, 5);
+        const pr = punctRecords.length > 0 ? punctRecords[0] : null;
+        if (pr && pr.totalEvents > 0) {
+          const onTimePct = Math.round((pr.onTimeCount / pr.totalEvents) * 100);
+          punctualityInfo = `\n⏱️ Punctuality: ${pr.onTimeCount}/${pr.totalEvents} on time (${onTimePct}%)`;
+          if (pr.lateCount > 0) {
+            const avgLate = Math.round(pr.totalLateMinutes / pr.lateCount);
+            punctualityInfo += `\n⚠️ Late: ${pr.lateCount} times (avg ${avgLate} min)`;
+          }
+          if (pr.noShowCount > 0) {
+            punctualityInfo += `\n❌ No-shows: ${pr.noShowCount}`;
+          }
+        }
+
         // Try to find gamification data
         let gamificationInfo = '';
         if (teamMember) {
@@ -2106,7 +2372,7 @@ async function executeFunctionCall(
 ⏱️ Total Hours: ${totalHours.toFixed(1)}
 📈 Avg Hours/Event: ${avgHoursPerEvent}
 👔 Roles: ${Array.from(rolesWorked).join(', ') || 'N/A'}
-🏢 Clients: ${Array.from(clientsWorked).join(', ') || 'N/A'}${gamificationInfo}
+🏢 Clients: ${Array.from(clientsWorked).join(', ') || 'N/A'}${punctualityInfo}${gamificationInfo}
 📅 By Month:\n${byMonth}`;
       }
 
@@ -2150,7 +2416,9 @@ async function executeFunctionCall(
           managerId,
           client_name: new RegExp(client_name, 'i'),
           date: { $gte: startDate }
-        }).lean();
+        })
+          .select('_id status accepted_staff client_name date')
+          .lean();
 
         if (events.length === 0) {
           return `No events found for client "${client_name}" in the last ${days} days.`;
@@ -2310,7 +2578,9 @@ async function executeFunctionCall(
         }
 
         // Get events with hours
-        const events = await EventModel.find(matchFilter).lean();
+        const events = await EventModel.find(matchFilter)
+          .select('_id client_name accepted_staff date')
+          .lean();
 
         if (events.length === 0) {
           return `No completed events found for the last ${days} days${client_name ? ` for client "${client_name}"` : ''}.`;
@@ -2603,6 +2873,100 @@ By Severity:
 ${Object.entries(bySeverity).map(([s, c]) => `  • ${s}: ${c}`).join('\n')}
 
 ${topStaff ? `Most Flagged: ${topStaff}` : ''}`;
+      }
+
+      case 'get_punctuality_report': {
+        const { staff_name, days = 30, threshold_minutes = 5 } = functionArgs;
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+        startDate.setHours(0, 0, 0, 0);
+
+        const eventFilter: any = {
+          managerId,
+          date: { $gte: startDate },
+          status: { $in: ['completed', 'fulfilled', 'in_progress'] }
+        };
+
+        let staffUserKey: string | null = null;
+        let staffNamePattern: string | null = null;
+
+        if (staff_name) {
+          // Resolve staff member's userKey
+          const teamMember = await TeamMemberModel.findOne({
+            managerId,
+            $or: [
+              { name: new RegExp(staff_name, 'i') },
+              { email: new RegExp(staff_name, 'i') }
+            ]
+          }).lean();
+
+          if (teamMember) {
+            staffUserKey = `${teamMember.provider}:${teamMember.subject}`;
+            eventFilter['accepted_staff.userKey'] = staffUserKey;
+          } else {
+            staffNamePattern = staff_name;
+            eventFilter['accepted_staff.name'] = new RegExp(staff_name, 'i');
+          }
+        }
+
+        const events = await EventModel.find(eventFilter)
+          .select('accepted_staff date start_time end_time roles client_name status')
+          .lean();
+
+        if (events.length === 0) {
+          return staff_name
+            ? `No events found for "${staff_name}" in the last ${days} days.`
+            : `No completed events found in the last ${days} days.`;
+        }
+
+        const records = computePunctuality(events, staffUserKey, staffNamePattern, threshold_minutes);
+
+        if (records.length === 0) {
+          return staff_name
+            ? `No punctuality data found for "${staff_name}" — they may not have been on any completed events.`
+            : `No punctuality data found for the last ${days} days.`;
+        }
+
+        // Single staff → detailed view
+        if (staff_name && records.length === 1) {
+          const rec = records[0]!;
+          const onTimePct = rec.totalEvents > 0 ? Math.round((rec.onTimeCount / rec.totalEvents) * 100) : 0;
+          const avgLate = rec.lateCount > 0 ? Math.round(rec.totalLateMinutes / rec.lateCount) : 0;
+
+          let details = '';
+          const issues = rec.eventDetails.filter(d => d.status !== 'on_time');
+          if (issues.length > 0) {
+            details = '\n\n📋 Late/missed details:\n' + issues.map(d => {
+              if (d.status === 'no_show') {
+                return `  ❌ ${d.date} — ${d.clientName} — No-show`;
+              }
+              const bulk = d.bulkClockIn ? ' (bulk clock-in)' : '';
+              return `  ⚠️ ${d.date} — ${d.clientName} — ${d.minutesLate} min late${bulk}`;
+            }).join('\n');
+          }
+
+          return `⏱️ Punctuality Report for ${rec.staffName} (last ${days} days):
+📊 ${rec.totalEvents} events total
+✅ On time: ${rec.onTimeCount} (${onTimePct}%)
+⚠️ Late: ${rec.lateCount}${rec.lateCount > 0 ? ` (avg ${avgLate} min late)` : ''}
+❌ No-show: ${rec.noShowCount}${details}`;
+        }
+
+        // All staff → ranked overview (worst punctuality first)
+        const sorted = records
+          .filter(r => r.totalEvents > 0)
+          .sort((a, b) => {
+            const aOnTime = a.onTimeCount / a.totalEvents;
+            const bOnTime = b.onTimeCount / b.totalEvents;
+            return aOnTime - bOnTime; // worst first
+          });
+
+        const list = sorted.map((r, i) => {
+          const onTimePct = Math.round((r.onTimeCount / r.totalEvents) * 100);
+          return `${i + 1}. ${r.staffName} — ${onTimePct}% on time, ${r.lateCount} late, ${r.noShowCount} no-shows (${r.totalEvents} events)`;
+        }).join('\n');
+
+        return `⏱️ Staff Punctuality (last ${days} days):\n${list}`;
       }
 
       case 'create_shift':
@@ -3446,6 +3810,35 @@ Use these examples to understand how this manager typically communicates and cre
 }
 
 /**
+ * Build a compact manager context summary (~80-120 tokens) for system prompt injection.
+ * Replaces the full context blob (~3,000-5,000 tokens) that was previously sent by the frontend.
+ * Runs 5 lightweight count/select queries in parallel.
+ */
+async function getCompactManagerContext(managerId: mongoose.Types.ObjectId): Promise<string> {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const [recentClients, totalClients, upcomingEvents, totalEvents, activeTeam, venueCount] = await Promise.all([
+    ClientModel.find({ managerId }).select('name').sort({ created_at: -1 }).limit(5).lean(),
+    ClientModel.countDocuments({ managerId }),
+    EventModel.countDocuments({ managerId, date: { $gte: today } }),
+    EventModel.countDocuments({ managerId }),
+    TeamMemberModel.countDocuments({ managerId, status: 'active' }),
+    VenueModel.countDocuments({ managerId }),
+  ]);
+
+  const recentNames = recentClients.map((c: any) => c.name).join(', ');
+  const pastEvents = totalEvents - upcomingEvents;
+
+  return `📋 YOUR DATA:
+- ${totalClients} clients${recentNames ? ` (recent: ${recentNames})` : ''}
+- ${totalEvents} events (${upcomingEvents} upcoming, ${pastEvents} past)
+- ${activeTeam} active team members
+- ${venueCount} venues
+Use your tools to look up specific details — do not guess from this summary.`;
+}
+
+/**
  * Handle Groq chat request for manager with optimized Chat Completions API
  * Model is selected by cascade router: Tier 1 (simple) → gpt-oss-20b @ Together, Tier 2 (complex) → gpt-oss-120b @ Groq
  * Features: Parallel tool calls, prompt caching, retry logic, reasoning mode
@@ -3461,6 +3854,7 @@ async function handleGroqRequest(
   provider: 'groq' | 'together' = 'groq',
   cascadeTier: 'simple' | 'complex' = 'simple'
 ) {
+  const requestStartTime = Date.now();
   const groqModel = model || 'openai/gpt-oss-20b';
   const config = getProviderConfig(provider, groqModel);
 
@@ -3600,9 +3994,20 @@ Default behavior:
 
   const dateContext = getFullSystemContext(timezone);
 
+  // Inject compact manager context (counts + recent names) server-side
+  // Replaces the ~3-5K token frontend context blob with ~80-120 tokens
+  let compactContext = '';
+  if (managerId) {
+    try {
+      compactContext = await getCompactManagerContext(managerId);
+    } catch (error) {
+      console.error(`[AI:${config.name}] Failed to fetch compact context:`, error);
+    }
+  }
+
   // Put static instructions FIRST (cacheable), dynamic date context LAST (not cached)
   // Include context examples from successful past conversations for learning
-  const systemContent = `${systemInstructions}\n\n${dateContext}${contextExamplesPrompt ? '\n\n' + contextExamplesPrompt : ''}`;
+  const systemContent = `${systemInstructions}\n\n${dateContext}${compactContext ? '\n\n' + compactContext : ''}${contextExamplesPrompt ? '\n\n' + contextExamplesPrompt : ''}`;
 
   // Build messages: system prompt first (cached), then conversation
   const processedMessages: any[] = [];
@@ -3630,8 +4035,14 @@ Default behavior:
     });
   }
 
-  // Build tools array for Chat Completions API
-  const groqTools = AI_TOOLS.map(tool => ({
+  // Dynamic tool selection: send only relevant tools based on user's query
+  // Uses conversation context as fallback for short follow-ups ("Bartenders", "Yes", etc.)
+  const lastUserMsg = extractLastUserMessage(messages);
+  const conversationContext = extractRecentUserMessages(messages, 3);
+  const selectedTools = selectToolsForQuery(lastUserMsg, AI_TOOLS, undefined, conversationContext);
+  console.log(`[AI:${config.name}] Tool selection: ${selectedTools.length}/${AI_TOOLS.length} tools for query: "${lastUserMsg.substring(0, 80)}"`);
+
+  const groqTools = selectedTools.map(tool => ({
     type: 'function',
     function: {
       name: tool.name,
@@ -3996,6 +4407,21 @@ Default behavior:
         }
 
         console.log(`[AI:${synthesisConfig.name}] Total usage - prompt: ${totalUsage.prompt_tokens}, completion: ${totalUsage.completion_tokens}, reasoning: ${totalUsage.reasoning_tokens}, total: ${totalUsage.total_tokens}`);
+        logAIUsage({
+          managerId,
+          userType: 'manager',
+          endpoint: 'chat/message',
+          provider: synthesisConfig.name as 'groq' | 'together',
+          model: synthesisModel,
+          inputTokens: totalUsage.prompt_tokens,
+          outputTokens: totalUsage.completion_tokens,
+          reasoningTokens: totalUsage.reasoning_tokens,
+          totalTokens: totalUsage.total_tokens,
+          durationMs: Date.now() - requestStartTime,
+          toolCallCount: allToolsUsed.length,
+          toolsSelected: selectedTools.length,
+          tier: cascadeTier,
+        }).catch(() => {});
         return res.json({
           content: finalContent,
           reasoning: finalReasoning || firstRequestReasoning || null,
@@ -4017,6 +4443,21 @@ Default behavior:
         console.log(`[AI:${config.name}] Reasoning content length:`, reasoningContent.length);
       }
 
+      logAIUsage({
+        managerId,
+        userType: 'manager',
+        endpoint: 'chat/message',
+        provider: config.name as 'groq' | 'together',
+        model: requestBody.model,
+        inputTokens: totalUsage.prompt_tokens,
+        outputTokens: totalUsage.completion_tokens,
+        reasoningTokens: totalUsage.reasoning_tokens,
+        totalTokens: totalUsage.total_tokens,
+        durationMs: Date.now() - requestStartTime,
+        toolCallCount: 0,
+        toolsSelected: selectedTools.length,
+        tier: cascadeTier,
+      }).catch(() => {});
       return res.json({
         content,
         reasoning: reasoningContent,
@@ -4094,6 +4535,7 @@ async function callOpenAIWithRetries(
  * Saves personalized venue list to manager's profile
  */
 router.post('/ai/discover-venues', requireAuth, async (req, res) => {
+  const venueStartTime = Date.now();
   try {
     const { city, isTourist } = req.body;
 
@@ -4247,6 +4689,19 @@ YOU MUST RETURN AT LEAST ${minVenues} VENUES. Prioritize the most popular and la
     if (executedTools) {
       console.log('[discover-venues] Groq Compound executed tools:', JSON.stringify(executedTools));
     }
+
+    const venueUsage = response.data?.usage;
+    logAIUsage({
+      managerId: String(manager._id),
+      userType: 'manager',
+      endpoint: 'discover-venues',
+      provider: 'groq',
+      model: 'groq/compound',
+      inputTokens: venueUsage?.prompt_tokens || 0,
+      outputTokens: venueUsage?.completion_tokens || 0,
+      totalTokens: venueUsage?.total_tokens || 0,
+      durationMs: Date.now() - venueStartTime,
+    }).catch(() => {});
 
     console.log('[discover-venues] Response length:', content.length, 'chars');
     console.log('[discover-venues] Full response:', content);

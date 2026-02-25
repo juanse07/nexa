@@ -1445,6 +1445,7 @@
   "failedToLoadEvents": "Failed to load events",
   "unknownError": "Unknown error",
   "noEventsNeedApprovalDescription": "No events need hours approval at the moment.",
+  "reviewAndApproveStaffHours": "Review and approve staff hours for completed events",
   "pendingReviewLabel": "Pending Review",
   "needsSheetLabel": "Needs Sheet",
 
@@ -1548,5 +1549,86 @@
   "fulfillmentRateLabel": "Fulfillment Rate",
   "scanLabel": "Scan",
   "aiChatLabel": "AI Chat",
-  "uploadLabel": "Upload"
+  "uploadLabel": "Upload",
+
+  "readyToApprove": "Ready to Approve",
+  "needsHoursEntry": "Needs Hours Entry",
+  "sheetSubmitted": "Sheet Submitted",
+  "staffClockedCount": "{count} of {total} staff clocked",
+  "@staffClockedCount": {
+    "placeholders": {
+      "count": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "estimatedTotalHours": "~{hours} hrs total",
+  "@estimatedTotalHours": {
+    "placeholders": {
+      "hours": {"type": "String"}
+    }
+  },
+  "digitalClockIn": "Clock In",
+  "digitalClockOut": "Clock Out",
+  "estimatedHoursLabel": "Estimated",
+  "currentlyWorking": "Currently Working",
+  "noAttendanceData": "No Data",
+  "approveAllReady": "Approve All Ready ({count})",
+  "@approveAllReady": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "uploadSheet": "Upload Sheet",
+  "adjustHours": "Adjust Hours",
+  "approveDigitalHours": "Approve",
+  "clockedStatus": "Clocked",
+  "workingStatus": "Working",
+  "sheetHoursStatus": "Sheet Hours",
+  "approvedStatus": "Approved",
+  "confirmApproveAll": "Approve all {count} staff members with digital clock-out data?",
+  "@confirmApproveAll": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "hoursApprovedSuccess": "{count} staff hours approved",
+  "@hoursApprovedSuccess": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "approveIndividualConfirm": "Approve {hours} hours for {name}?",
+  "@approveIndividualConfirm": {
+    "placeholders": {
+      "hours": {"type": "String"},
+      "name": {"type": "String"}
+    }
+  },
+  "adjustHoursFor": "Adjust Hours for {name}",
+  "@adjustHoursFor": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "digitalTimesReference": "Digital Times (Reference)",
+  "adjustedHours": "Adjusted Hours",
+  "noteOptional": "Note (optional)",
+  "staffCount": "Staff: {count}",
+  "@staffCount": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "clockedOutCount": "Clocked Out: {count}",
+  "@clockedOutCount": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "estHours": "Est: {hours} hrs",
+  "@estHours": {
+    "placeholders": {
+      "hours": {"type": "String"}
+    }
+  }
 }

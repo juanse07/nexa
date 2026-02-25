@@ -60,7 +60,7 @@ class _CreateInviteLinkDialogState extends State<CreateInviteLinkDialog> {
       });
     } catch (e) {
       setState(() {
-        _error = e.toString();
+        _error = 'Failed to create invite link.';
         _loading = false;
       });
     }

@@ -75,7 +75,7 @@ export async function createTestEvent(managerId: mongoose.Types.ObjectId, overri
   const accepted_staff = overrides.accepted_staff || [];
   // Compute role_stats from roles and accepted_staff
   const role_stats = roles.map((r: any) => {
-    const taken = accepted_staff.filter((s: any) => s.role === r.role && s.response === 'accepted').length;
+    const taken = accepted_staff.filter((s: any) => s.role === r.role && s.response === 'accept').length;
     return {
       role: r.role,
       capacity: r.count,

@@ -360,43 +360,42 @@ class _MainScreenState extends State<MainScreen>
               const SizedBox(width: 8),
 
               // ── New Job island ─────────────────────────
-              ClipRRect(
-                borderRadius: BorderRadius.circular(22),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-                  child: GestureDetector(
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const AIChatScreen()),
-                    ),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                        colors: [
-                          Color(0xCCFFFFFF),
-                          Color(0xBBEAEEFF),
-                        ],
+              AspectRatio(
+                aspectRatio: 1.0,
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.10),
+                        blurRadius: 24,
+                        offset: const Offset(0, 6),
                       ),
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(
-                          color: Color(0x88FFFFFF),
-                          width: 0.5,
+                    ],
+                  ),
+                  child: ClipOval(
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                      child: GestureDetector(
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const AIChatScreen()),
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.10),
-                            blurRadius: 24,
-                            offset: const Offset(0, 6),
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                              colors: [Color(0xCCFFFFFF), Color(0xBBEAEEFF)],
+                            ),
                           ),
-                        ],
-                      ),
-                      child: Center(
-                        child: Icon(
-                          Icons.add_rounded,
-                          color: AppColors.navySpaceCadet,
-                          size: 22,
+                          child: Center(
+                            child: Icon(
+                              Icons.add_rounded,
+                              color: AppColors.navySpaceCadet,
+                              size: 32,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -434,7 +433,7 @@ class _MainScreenState extends State<MainScreen>
               child: Icon(
                 icon,
                 color: isSelected ? Colors.white : Colors.grey[600],
-                size: 20,
+                size: 29,
               ),
             ),
             const SizedBox(height: 3),
@@ -466,7 +465,7 @@ class _MainScreenState extends State<MainScreen>
           children: [
             AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               decoration: BoxDecoration(
                 color: isActive ? AppColors.navySpaceCadet : Colors.transparent,
                 borderRadius: BorderRadius.circular(16),
@@ -475,7 +474,7 @@ class _MainScreenState extends State<MainScreen>
                 imageUrl: _profilePictureUrl,
                 firstName: _profileFirstName ?? '',
                 lastName: _profileLastName ?? '',
-                radius: 11,
+                radius: 14,
               ),
             ),
             const SizedBox(height: 3),

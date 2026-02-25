@@ -16,6 +16,8 @@ import 'widgets/weekly_hours_chart.dart';
 import 'widgets/staff_attendance_card.dart';
 import 'widgets/attendance_filter_sheet.dart';
 import 'flagged_attendance_screen.dart';
+import 'package:nexa/shared/services/error_display_service.dart';
+import 'package:nexa/features/hours_approval/presentation/hours_approval_list_screen.dart';
 
 /// Premium attendance dashboard with live data visualization
 class AttendanceDashboardScreen extends StatefulWidget {
@@ -94,10 +96,7 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
       debugPrint('[AttendanceDashboard] Load error: $e');
       if (mounted) {
         setState(() => _isLoading = false);
-        final l10n = AppLocalizations.of(context)!;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${l10n.failedToLoadData}: $e')),
-        );
+        ErrorDisplayService.showErrorFromException(context, e, prefix: AppLocalizations.of(context)!.failedToLoadData);
       }
     }
   }
@@ -327,12 +326,79 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
       debugPrint('[AttendanceDashboard] AI analysis error: $e');
       if (mounted) {
         setState(() => _isAnalyzing = false);
-        final l10n = AppLocalizations.of(context)!;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${l10n.failedToLoadData}: $e')),
-        );
+        ErrorDisplayService.showErrorFromException(context, e, prefix: AppLocalizations.of(context)!.failedToLoadData);
       }
     }
+  }
+
+  Widget _buildHoursApprovalCard(AppLocalizations l10n) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        elevation: 1,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const HoursApprovalListScreen(),
+              ),
+            ).then((_) => _refresh());
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF6C5CE7).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.fact_check_outlined,
+                    color: Color(0xFF6C5CE7),
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.hoursApproval,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        l10n.reviewAndApproveStaffHours,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right,
+                  color: Colors.grey[400],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildValerioFab() {
@@ -494,6 +560,11 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
                   debugPrint('Tapped on ${dayData.date}');
                 },
               ),
+            )),
+
+            // Hours Approval action card
+            _wrapSliver(SliverToBoxAdapter(
+              child: _buildHoursApprovalCard(l10n),
             )),
 
             // Section header for attendance list

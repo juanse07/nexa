@@ -325,7 +325,7 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
       ErrorDisplayService.showError(context, e.message);
     } catch (e) {
       if (!mounted) return;
-      ErrorDisplayService.showError(context, 'Failed to create event: $e');
+      ErrorDisplayService.showErrorFromException(context, e, prefix: 'Failed to create event');
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }

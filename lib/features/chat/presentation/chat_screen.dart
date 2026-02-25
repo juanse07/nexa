@@ -13,6 +13,7 @@ import '../../../features/extraction/services/event_service.dart';
 import '../../../features/extraction/services/roles_service.dart';
 import '../../../features/users/presentation/pages/user_events_screen.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
+import 'package:nexa/shared/services/error_display_service.dart';
 import 'package:nexa/shared/widgets/initials_avatar.dart';
 import 'package:nexa/shared/widgets/web_content_wrapper.dart';
 
@@ -256,7 +257,7 @@ class _ChatScreenState extends State<ChatScreen> {
         print('[CHAT ERROR] Failed to fetch conversations: $e');
         print('[CHAT ERROR] Stack: $stack');
         setState(() {
-          _error = e.toString();
+          _error = 'Failed to load conversations.';
           _loading = false;
         });
         return;
@@ -291,7 +292,7 @@ class _ChatScreenState extends State<ChatScreen> {
       print('[CHAT ERROR] Failed to load messages: $e');
       print('[CHAT ERROR] Stack: $stack');
       setState(() {
-        _error = e.toString();
+        _error = 'Failed to load messages.';
         _loading = false;
       });
     }
@@ -383,12 +384,7 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (e) {
       print('[CHAT ERROR] Failed to send message: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${AppLocalizations.of(context)!.failedToSendMessage}: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        ErrorDisplayService.showErrorFromException(context, e, prefix: AppLocalizations.of(context)!.failedToSendMessage);
       }
     } finally {
       setState(() {
@@ -514,12 +510,7 @@ class _ChatScreenState extends State<ChatScreen> {
       print('[INVITATION_ANALYTICS] duration: ${duration.inMilliseconds}ms');
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${AppLocalizations.of(context)!.failedToSendInvitation}: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        ErrorDisplayService.showErrorFromException(context, e, prefix: AppLocalizations.of(context)!.failedToSendInvitation);
       }
       rethrow;
     }

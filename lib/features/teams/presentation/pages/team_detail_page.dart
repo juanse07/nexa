@@ -10,6 +10,7 @@ import 'package:nexa/features/teams/presentation/widgets/applicant_list_tile.dar
 import 'package:nexa/features/subscription/data/services/subscription_service.dart';
 import 'package:nexa/features/subscription/presentation/pages/subscription_paywall_page.dart';
 import 'package:nexa/l10n/app_localizations.dart';
+import 'package:nexa/shared/services/error_display_service.dart';
 
 class TeamDetailPage extends StatefulWidget {
   const TeamDetailPage({
@@ -82,7 +83,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
       });
     } catch (e) {
       setState(() {
-        _error = e.toString();
+        _error = AppLocalizations.of(context)!.failedToLoadData;
         _loading = false;
       });
     }
@@ -101,10 +102,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
       ).showSnackBar(SnackBar(content: Text(l10n.memberRemovedSuccess)));
       await _loadData();
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('${l10n.failedToRemoveMember}: $e')));
+      ErrorDisplayService.showErrorFromException(context, e, prefix: l10n.failedToRemoveMember);
     }
   }
 
@@ -171,10 +169,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
                 if (!mounted) return;
                 Navigator.of(ctx).pop(true);
               } catch (e) {
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('${l10n.failedToSendInvite}: $e')),
-                );
+                ErrorDisplayService.showErrorFromException(context, e, prefix: l10n.failedToSendInvite);
               }
             },
             child: Text(l10n.sendInvite),
@@ -248,11 +243,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
         await _loadData();
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${AppLocalizations.of(context)!.errorPrefix}: $e')),
-        );
-      }
+      ErrorDisplayService.showErrorFromException(context, e);
     }
   }
 
@@ -294,11 +285,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
         ),
       );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${l10n.errorLoadingUsage}: $e')),
-        );
-      }
+      ErrorDisplayService.showErrorFromException(context, e, prefix: l10n.errorLoadingUsage);
     }
   }
 
@@ -414,10 +401,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
 
       await _loadData();
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${AppLocalizations.of(context)!.errorPrefix}: $e')),
-      );
+      ErrorDisplayService.showErrorFromException(context, e);
     }
   }
 
@@ -432,10 +416,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
       );
       await _loadData();
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${AppLocalizations.of(context)!.errorPrefix}: $e')),
-      );
+      ErrorDisplayService.showErrorFromException(context, e);
     } finally {
       if (mounted) setState(() => _processingApplicantId = null);
     }
@@ -469,10 +450,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
       );
       await _loadData();
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${AppLocalizations.of(context)!.errorPrefix}: $e')),
-      );
+      ErrorDisplayService.showErrorFromException(context, e);
     } finally {
       if (mounted) setState(() => _processingApplicantId = null);
     }
@@ -529,10 +507,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
                 if (!ctx.mounted) return;
                 Navigator.of(ctx).pop(true);
               } catch (e) {
-                if (!ctx.mounted) return;
-                ScaffoldMessenger.of(ctx).showSnackBar(
-                  SnackBar(content: Text('$e')),
-                );
+                ErrorDisplayService.showErrorFromException(ctx, e);
               }
             },
             child: Text(l10n.add),
@@ -583,10 +558,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
       );
       await _loadData();
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${AppLocalizations.of(context)!.errorPrefix}: $e')),
-      );
+      ErrorDisplayService.showErrorFromException(context, e);
     }
   }
 
@@ -642,7 +614,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
             });
           } catch (e) {
             setStateSheet(() {
-              error = e.toString();
+              error = AppLocalizations.of(context)!.failedToLoadData;
             });
           } finally {
             setStateSheet(() {
@@ -870,11 +842,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
         context,
       ).showSnackBar(SnackBar(content: Text(l10n.addedToTeam(displayName))));
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('${l10n.failedToAddMember}: $e')));
-      }
+      ErrorDisplayService.showErrorFromException(context, e, prefix: l10n.failedToAddMember);
     } finally {
       if (mounted) {
         setState(() => _addingMember = false);
@@ -895,10 +863,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
       ).showSnackBar(SnackBar(content: Text(l10n.inviteCancelled)));
       await _loadData();
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('${l10n.failedToCancelInvite}: $e')));
+      ErrorDisplayService.showErrorFromException(context, e, prefix: l10n.failedToCancelInvite);
     }
   }
 
