@@ -68,7 +68,7 @@ function issueAppJwt(
     ...(managerId && { managerId }),
     ...(orgInfo && { organizationId: orgInfo.organizationId, orgRole: orgInfo.orgRole }),
   } as const;
-  return jwt.sign(payload, JWT_SECRET, { algorithm: 'HS256', expiresIn: '30d' });
+  return jwt.sign(payload, JWT_SECRET, { algorithm: 'HS256', expiresIn: '90d' });
 }
 
 async function upsertUser(profile: VerifiedProfile): Promise<VerifiedProfile> {

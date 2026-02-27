@@ -45,6 +45,13 @@ class AuthService {
 
   static DateTime? _lastForcedLogout;
 
+  /// Cached token for synchronous access by interceptors (avoids async reads).
+  static String? _cachedToken;
+
+  /// Synchronous accessor for the last-known JWT. Used by ErrorInterceptor
+  /// to check token expiry without awaiting secure storage.
+  static String? get lastKnownToken => _cachedToken;
+
   /// Called by ErrorInterceptor on 401. Clears tokens and emits on the stream.
   /// Debounced to prevent multiple 401s from triggering multiple logouts.
   static Future<void> forceLogout() async {
@@ -115,6 +122,7 @@ class AuthService {
   /// Signs out the current user
   static Future<void> signOut() async {
     _log('Signing out user');
+    _cachedToken = null;
     await _storage.delete(key: _jwtStorageKey);
     // Also delete the mirrored access_token key
     try {
@@ -133,18 +141,16 @@ class AuthService {
 
     // Validate token has managerId field (for manager app)
     if (token != null && token.isNotEmpty) {
+      _cachedToken = token; // Keep sync copy for interceptors
       try {
-        // Decode JWT payload
         final parts = token.split('.');
         if (parts.length == 3) {
           final payload = json.decode(
             utf8.decode(base64Url.decode(_normalizeBase64(parts[1])))
           ) as Map<String, dynamic>;
 
-          // Check if token has managerId (required for manager app)
           if (!payload.containsKey('managerId')) {
             _log('Token missing managerId field - clearing old token', isError: true);
-            // Clear the old token to force re-login
             await signOut();
             return null;
           }
@@ -159,6 +165,7 @@ class AuthService {
 
   /// Saves JWT token to secure storage
   static Future<void> _saveJwt(String token) async {
+    _cachedToken = token; // Keep sync copy for interceptors
     await _storage.write(key: _jwtStorageKey, value: token);
     // For Dio-based client, mirror the token into the common access_token key
     try {

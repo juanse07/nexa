@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:logger/logger.dart';
@@ -70,7 +72,10 @@ class AuthInterceptor extends Interceptor {
   }
 }
 
-/// Error interceptor for handling common errors
+/// Error interceptor for handling common errors.
+///
+/// On 401: checks if the JWT is genuinely expired before forcing logout.
+/// Transient 401s (server restart, network glitch) won't kill the session.
 class ErrorInterceptor extends Interceptor {
   /// Creates an [ErrorInterceptor] with a logger
   ErrorInterceptor(this._logger);
@@ -83,17 +88,15 @@ class ErrorInterceptor extends Interceptor {
     ResponseInterceptorHandler handler,
   ) {
     // validateStatus accepts < 500 so 401 arrives here, not in onError.
-    // Detect it and trigger forced logout so the user is sent back to login.
     if (response.statusCode == ApiConstants.statusUnauthorized) {
-      _logger.w('Unauthorized response detected - forcing logout');
-      AuthService.forceLogout();
+      _logger.w('401 response on ${response.requestOptions.path}');
+      _handleUnauthorized(response.data);
     }
     super.onResponse(response, handler);
   }
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
-    // Log the error
     _logger.e(
       'Error occurred: ${err.type}\n'
       'Status code: ${err.response?.statusCode}\n'
@@ -101,7 +104,6 @@ class ErrorInterceptor extends Interceptor {
       'Response: ${err.response?.data}',
     );
 
-    // Handle specific error cases
     switch (err.type) {
       case DioExceptionType.connectionTimeout:
       case DioExceptionType.sendTimeout:
@@ -112,8 +114,8 @@ class ErrorInterceptor extends Interceptor {
       case DioExceptionType.badResponse:
         final statusCode = err.response?.statusCode;
         if (statusCode == ApiConstants.statusUnauthorized) {
-          _logger.w('Unauthorized error - token expired, forcing logout');
-          AuthService.forceLogout();
+          _logger.w('401 error on ${err.requestOptions.path}');
+          _handleUnauthorized(err.response?.data);
         } else if (statusCode == ApiConstants.statusForbidden) {
           _logger.w('Forbidden error - insufficient permissions');
         } else if (statusCode == ApiConstants.statusNotFound) {
@@ -139,6 +141,59 @@ class ErrorInterceptor extends Interceptor {
     }
 
     super.onError(err, handler);
+  }
+
+  /// Only force logout when the token is genuinely expired or invalid.
+  /// Transient server errors that happen to return 401 won't nuke the session.
+  void _handleUnauthorized(dynamic responseData) {
+    // Check if backend explicitly says "expired" or "sign in again"
+    final message = _extractMessage(responseData);
+    final isExpiredMessage = message.contains('expired') ||
+        message.contains('sign in again') ||
+        message.contains('Authentication required');
+
+    if (isExpiredMessage && _isTokenExpired()) {
+      _logger.w('Token confirmed expired — forcing logout');
+      AuthService.forceLogout();
+    } else if (_isTokenExpired()) {
+      _logger.w('Token exp claim is past — forcing logout');
+      AuthService.forceLogout();
+    } else {
+      _logger.w('401 but token not expired — ignoring (transient server error)');
+    }
+  }
+
+  String _extractMessage(dynamic data) {
+    if (data is Map<String, dynamic>) {
+      return ((data['message'] ?? data['error'] ?? '') as Object).toString().toLowerCase();
+    }
+    return '';
+  }
+
+  /// Decode the stored JWT and check if the exp claim is in the past.
+  bool _isTokenExpired() {
+    try {
+      // Read token synchronously from the auth header we already attached.
+      // Since we can't await in interceptor, decode from the stored constant.
+      // Actually, we'll check the last-known token via a sync helper.
+      final token = AuthService.lastKnownToken;
+      if (token == null || token.isEmpty) return true;
+
+      final parts = token.split('.');
+      if (parts.length != 3) return true;
+
+      final normalized = base64Url.normalize(parts[1]);
+      final payload = json.decode(utf8.decode(base64Url.decode(normalized)))
+          as Map<String, dynamic>;
+      final exp = payload['exp'] as int?;
+      if (exp == null) return true;
+
+      final expiry = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
+      return DateTime.now().isAfter(expiry);
+    } catch (e) {
+      _logger.e('Error checking token expiry: $e');
+      return true; // If we can't decode, treat as expired
+    }
   }
 }
 
