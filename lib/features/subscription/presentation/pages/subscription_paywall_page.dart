@@ -27,7 +27,7 @@ class _SubscriptionPaywallPageState extends State<SubscriptionPaywallPage> {
       if (!mounted) return;
 
       if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text(AppLocalizations.of(context)!.proWelcomeMessage),
             backgroundColor: Colors.green,
@@ -36,7 +36,7 @@ class _SubscriptionPaywallPageState extends State<SubscriptionPaywallPage> {
         );
         Navigator.pop(context, true); // Return true to indicate upgrade
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text(AppLocalizations.of(context)!.purchaseCancelledMessage),
             backgroundColor: Colors.orange,
@@ -45,7 +45,7 @@ class _SubscriptionPaywallPageState extends State<SubscriptionPaywallPage> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(
           content: Text('${AppLocalizations.of(context)!.errorPrefix}: $e'),
           backgroundColor: Colors.red,
@@ -67,7 +67,7 @@ class _SubscriptionPaywallPageState extends State<SubscriptionPaywallPage> {
       if (!mounted) return;
 
       if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text(AppLocalizations.of(context)!.subscriptionRestoredSuccess),
             backgroundColor: Colors.green,
@@ -76,7 +76,7 @@ class _SubscriptionPaywallPageState extends State<SubscriptionPaywallPage> {
         );
         Navigator.pop(context, true);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text(AppLocalizations.of(context)!.noActiveSubscription),
             backgroundColor: Colors.orange,
@@ -85,7 +85,7 @@ class _SubscriptionPaywallPageState extends State<SubscriptionPaywallPage> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(
           content: Text('${AppLocalizations.of(context)!.restoreError}: $e'),
           backgroundColor: Colors.red,

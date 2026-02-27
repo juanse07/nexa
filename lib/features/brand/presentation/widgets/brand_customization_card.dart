@@ -51,14 +51,14 @@ class _BrandCustomizationCardState extends State<BrandCustomizationCard> {
     final success = await provider.uploadLogo(File(picked.path));
 
     if (mounted && success) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(
           content: Text(AppLocalizations.of(context)!.logoUploadedColorsExtracted),
           backgroundColor: Colors.green,
         ),
       );
     } else if (mounted && !success) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(
           content: Text(provider.error ?? AppLocalizations.of(context)!.failedToUploadLogo),
           backgroundColor: Colors.red,
@@ -85,7 +85,7 @@ class _BrandCustomizationCardState extends State<BrandCustomizationCard> {
     final success = await provider.saveColors();
     if (mounted) {
       final l10n = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(
           content: Text(success ? l10n.colorsSaved : (provider.error ?? l10n.failedToSave)),
           backgroundColor: success ? Colors.green : Colors.red,
@@ -118,7 +118,7 @@ class _BrandCustomizationCardState extends State<BrandCustomizationCard> {
     final success = await provider.deleteBrandProfile();
     if (mounted) {
       final l10nAfter = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(
           content: Text(success ? l10nAfter.brandingRemoved : (provider.error ?? l10nAfter.failedToSave)),
           backgroundColor: success ? Colors.green : Colors.red,

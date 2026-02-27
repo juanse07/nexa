@@ -17,6 +17,7 @@ import { eventsCreatedTotal, clockInsTotal, clockOutsTotal } from '../metrics/me
 import { notificationService } from '../services/notificationService';
 import { UserModel } from '../models/user';
 import { StaffProfileModel } from '../models/staffProfile';
+import { ChatMessageModel } from '../models/chatMessage';
 import {
   isWithinGeofence,
   formatDistance,
@@ -3107,6 +3108,48 @@ router.post('/events/:id/respond', requireAuth, requireActiveSubscription, async
         // Don't fail the request if socket broadcast fails
         // eslint-disable-next-line no-console
         console.error('[respond] socket broadcast failed', socketError);
+      }
+
+      // Sync chat invitation message status (best-effort)
+      // When staff accepts/declines via Available Events, update the ChatMessage
+      // so the invitation stamp in chat reflects the response in real-time.
+      try {
+        const respondedAt = new Date();
+        const chatMsg = await ChatMessageModel.findOneAndUpdate(
+          {
+            messageType: 'eventInvitation',
+            'metadata.eventId': eventId,
+            userKey,
+            'metadata.status': { $in: [null, 'pending'] },
+          },
+          {
+            $set: {
+              'metadata.status': responseVal === 'accept' ? 'accepted' : 'declined',
+              'metadata.respondedAt': respondedAt,
+            },
+          },
+          { new: true }
+        );
+
+        if (chatMsg && updatedEvent.managerId) {
+          const staffName = (req as any).authUser?.name || userKey;
+          emitToManager(String(updatedEvent.managerId), 'invitation:responded', {
+            messageId: String(chatMsg._id),
+            conversationId: String(chatMsg.conversationId),
+            status: responseVal === 'accept' ? 'accepted' : 'declined',
+            respondedAt: respondedAt.toISOString(),
+            userId: userKey,
+            userName: staffName,
+            eventId,
+            roleId: roleVal,
+          });
+        }
+        // eslint-disable-next-line no-console
+        console.log('[respond] chat message synced', { eventId, userKey, chatMsgFound: !!chatMsg });
+      } catch (chatSyncError) {
+        // Non-fatal: event response already succeeded
+        // eslint-disable-next-line no-console
+        console.error('[respond] chat message sync failed (non-fatal)', chatSyncError);
       }
 
       return res.json(mapped);

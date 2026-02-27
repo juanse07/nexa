@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
@@ -730,7 +731,7 @@ $currentEventContext
 
 You have access to these functions to get business context when needed:
 - **get_clients_list()** - Get list of all clients
-- **get_events_summary()** - Get upcoming and recent events (can filter by client)
+- **search_events()** - Search and filter events (scope: upcoming/past, filter by client/venue/status)
 - **get_team_members()** - Get team members list (can filter by role)
 - **get_venues_history()** - Get venues from past events
 
@@ -1095,11 +1096,22 @@ Respond in the same language the user speaks. Be concise and conversational. Use
     // Strip technical markers and JSON before showing to user
     final userFacingContent = _extractUserFriendlyMessage(content);
 
-    // Add ONLY the friendly message to conversation history (not the JSON)
-    final assistantMsg = ChatMessage(role: 'assistant', content: userFacingContent, provider: AIProvider.groq, reasoning: reasoning);
-    _conversationHistory.add(assistantMsg);
+    // Separate tool context from display content.
+    // Tool context (event IDs, publish info) must persist in conversation history
+    // so the model can reference them on subsequent turns (e.g., user says "yes" to publish).
+    String historyContent = userFacingContent;
+    final toolContextSeparator = '---TOOL_CONTEXT---';
+    if (content.contains(toolContextSeparator)) {
+      final toolContext = content.substring(content.indexOf(toolContextSeparator));
+      historyContent = '$userFacingContent\n\n$toolContext';
+    }
 
-    return assistantMsg;
+    // Store full content (with tool context) in history for model, but return clean version for UI
+    final historyMsg = ChatMessage(role: 'assistant', content: historyContent, provider: AIProvider.groq, reasoning: reasoning);
+    _conversationHistory.add(historyMsg);
+
+    // Return clean version for display
+    return ChatMessage(role: 'assistant', content: userFacingContent, provider: AIProvider.groq, reasoning: reasoning);
   }
 
   /// Extract user-friendly message by removing technical markers and JSON
@@ -1280,11 +1292,18 @@ Respond in the same language the user speaks. Be concise and conversational. Use
 
     print('Sending request to AI ($_aiProvider)...');
 
-    final response = await http.post(
-      uri,
-      headers: headers,
-      body: jsonEncode(requestBody),
-    );
+    final http.Response response;
+    try {
+      response = await http.post(
+        uri,
+        headers: headers,
+        body: jsonEncode(requestBody),
+      ).timeout(const Duration(seconds: 90));
+    } on TimeoutException {
+      throw Exception(
+        'The AI is taking too long to respond. Please try again.',
+      );
+    }
 
     if (response.statusCode >= 300) {
       if (response.statusCode == 429) {

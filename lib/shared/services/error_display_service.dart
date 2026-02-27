@@ -18,8 +18,18 @@ enum MessageSeverity {
 ///
 /// Provides consistent SnackBar styling and display logic across the app.
 /// Handles success messages, errors, warnings, and info notifications.
+///
+/// All methods clear any previous snackbar before showing a new one,
+/// preventing queue buildup that blocks the user flow.
 class ErrorDisplayService {
   ErrorDisplayService._();
+
+  /// Clear previous snackbar and show a new one (prevents stacking)
+  static void _show(BuildContext context, SnackBar snackBar) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearSnackBars();
+    messenger.showSnackBar(snackBar);
+  }
 
   /// Display a success message with green styling
   ///
@@ -27,17 +37,16 @@ class ErrorDisplayService {
   static void showSuccess(
     BuildContext context,
     String message, {
-    Duration duration = const Duration(seconds: 2),
+    Duration duration = const Duration(milliseconds: 1500),
   }) {
     if (!context.mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: AppColors.success, // Green
-        duration: duration,
-      ),
-    );
+    _show(context, SnackBar(
+      content: Text(message),
+      backgroundColor: AppColors.success,
+      duration: duration,
+      dismissDirection: DismissDirection.horizontal,
+    ));
   }
 
   /// Display an error message with red styling
@@ -46,17 +55,16 @@ class ErrorDisplayService {
   static void showError(
     BuildContext context,
     String message, {
-    Duration duration = const Duration(seconds: 4),
+    Duration duration = const Duration(milliseconds: 2500),
   }) {
     if (!context.mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        duration: duration,
-      ),
-    );
+    _show(context, SnackBar(
+      content: Text(message),
+      backgroundColor: Colors.red,
+      duration: duration,
+      dismissDirection: DismissDirection.horizontal,
+    ));
   }
 
   /// Display a warning message with orange styling
@@ -65,17 +73,16 @@ class ErrorDisplayService {
   static void showWarning(
     BuildContext context,
     String message, {
-    Duration duration = const Duration(seconds: 3),
+    Duration duration = const Duration(seconds: 2),
   }) {
     if (!context.mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.orange[700],
-        duration: duration,
-      ),
-    );
+    _show(context, SnackBar(
+      content: Text(message),
+      backgroundColor: Colors.orange[700],
+      duration: duration,
+      dismissDirection: DismissDirection.horizontal,
+    ));
   }
 
   /// Display an info message with blue styling
@@ -84,17 +91,16 @@ class ErrorDisplayService {
   static void showInfo(
     BuildContext context,
     String message, {
-    Duration duration = const Duration(seconds: 2),
+    Duration duration = const Duration(milliseconds: 1500),
   }) {
     if (!context.mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.blue[700],
-        duration: duration,
-      ),
-    );
+    _show(context, SnackBar(
+      content: Text(message),
+      backgroundColor: Colors.blue[700],
+      duration: duration,
+      dismissDirection: DismissDirection.horizontal,
+    ));
   }
 
   /// Display an error from an exception
@@ -104,7 +110,7 @@ class ErrorDisplayService {
     BuildContext context,
     dynamic error, {
     String? prefix,
-    Duration duration = const Duration(seconds: 4),
+    Duration duration = const Duration(milliseconds: 2500),
   }) {
     if (!context.mounted) return;
 
@@ -120,22 +126,21 @@ class ErrorDisplayService {
     required String message,
     required Color backgroundColor,
     Color textColor = Colors.white,
-    Duration duration = const Duration(seconds: 3),
+    Duration duration = const Duration(seconds: 2),
     SnackBarAction? action,
   }) {
     if (!context.mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: TextStyle(color: textColor),
-        ),
-        backgroundColor: backgroundColor,
-        duration: duration,
-        action: action,
+    _show(context, SnackBar(
+      content: Text(
+        message,
+        style: TextStyle(color: textColor),
       ),
-    );
+      backgroundColor: backgroundColor,
+      duration: duration,
+      dismissDirection: DismissDirection.horizontal,
+      action: action,
+    ));
   }
 
   /// Show a message with retry action
@@ -143,22 +148,21 @@ class ErrorDisplayService {
     BuildContext context,
     String message,
     VoidCallback onRetry, {
-    Duration duration = const Duration(seconds: 6),
+    Duration duration = const Duration(seconds: 4),
   }) {
     if (!context.mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        duration: duration,
-        action: SnackBarAction(
-          label: 'Retry',
-          textColor: Colors.white,
-          onPressed: onRetry,
-        ),
+    _show(context, SnackBar(
+      content: Text(message),
+      backgroundColor: Colors.red,
+      duration: duration,
+      dismissDirection: DismissDirection.horizontal,
+      action: SnackBarAction(
+        label: 'Retry',
+        textColor: Colors.white,
+        onPressed: onRetry,
       ),
-    );
+    ));
   }
 
   /// Format common exceptions into user-friendly messages

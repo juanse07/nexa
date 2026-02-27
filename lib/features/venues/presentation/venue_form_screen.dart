@@ -195,7 +195,7 @@ class _VenueFormScreenState extends State<VenueFormScreen> {
         setState(() {
           _isSearching = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text('${AppLocalizations.of(context)!.failedToGetPlaceDetails}: $e'),
             backgroundColor: Colors.red,
@@ -381,7 +381,7 @@ class _VenueFormScreenState extends State<VenueFormScreen> {
             snackMessage = l10n.venueAddedSuccessfully;
           }
 
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
             SnackBar(
               content: Text(snackMessage),
               backgroundColor: Colors.green,

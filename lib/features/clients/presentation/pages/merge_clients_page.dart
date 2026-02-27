@@ -143,7 +143,7 @@ class _MergeClientsPageState extends State<MergeClientsPage> {
     setState(() => _merging = false);
 
     if (merged > 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(
           content: Text(
               'Merged $merged client(s) into "$primaryName"'),

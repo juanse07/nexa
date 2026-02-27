@@ -112,7 +112,7 @@ class _SettingsPageState extends State<SettingsPage> {
       await _loadVenueInfo();
       if (mounted) {
         final l10n = AppLocalizations.of(context)!;
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text(l10n.venuesUpdatedSuccess),
             backgroundColor: Colors.green,
@@ -227,7 +227,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                     ? () async {
                                         await terminologyProvider.setTerminology(_selectedTerminology!);
                                         if (mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
+                                          ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                                             SnackBar(
                                               content: Text(l10n.terminologyUpdatedSuccess),
                                               backgroundColor: Colors.green,
@@ -413,7 +413,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                 );
                                 if (result == true && mounted) {
                                   _loadVenueInfo(); // Reload venue count
-                                  ScaffoldMessenger.of(context).showSnackBar(
+                                  ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                                     SnackBar(
                                       content: Text(l10n.venueAddedSuccess),
                                       backgroundColor: Colors.green,

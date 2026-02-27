@@ -357,7 +357,7 @@ class _HoursApprovalDetailScreenState extends State<HoursApprovalDetailScreen> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text('${l10n.approvedStatus}: $name — ${hours.toStringAsFixed(2)} hrs'),
             backgroundColor: AppColors.success,
@@ -411,7 +411,7 @@ class _HoursApprovalDetailScreenState extends State<HoursApprovalDetailScreen> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text('${l10n.approvedStatus}: $name — ${result.hours.toStringAsFixed(2)} hrs'),
             backgroundColor: AppColors.success,
@@ -477,7 +477,7 @@ class _HoursApprovalDetailScreenState extends State<HoursApprovalDetailScreen> {
           _isBulkApproving = false;
         });
 
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text(l10n.hoursApprovedSuccess(result.approvedCount)),
             backgroundColor: AppColors.success,
@@ -577,7 +577,7 @@ class _HoursApprovalDetailScreenState extends State<HoursApprovalDetailScreen> {
         // Refresh event data to show updated attendance
         // For now, show success and let user see the changes
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
             SnackBar(
               content: Text(
                 '${result.staffHours.length} staff hours extracted from sheet',

@@ -798,7 +798,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       });
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(content: Text(AppLocalizations.of(context)!.staffRemovedSuccess)),
       );
 
@@ -1196,7 +1196,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final eventId = event['_id']?.toString() ?? '';
     if (eventId.isEmpty) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
       SnackBar(content: Text(AppLocalizations.of(context)!.clockingInStaff(staffName))),
     );
 
@@ -1209,7 +1209,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
     if (result == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(content: Text(AppLocalizations.of(context)!.clockInFailed)),
       );
       return;
@@ -1220,18 +1220,18 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       final first = results.first as Map<String, dynamic>;
       final status = first['status'] as String?;
       if (status == 'already_clocked_in') {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(content: Text(AppLocalizations.of(context)!.alreadyClockedInName(staffName))),
         );
       } else if (status == 'success') {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text(AppLocalizations.of(context)!.clockedInSuccess(staffName)),
             backgroundColor: AppColors.success,
           ),
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(content: Text(first['message']?.toString() ?? AppLocalizations.of(context)!.clockInFailed)),
         );
       }
@@ -1315,7 +1315,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       if (!mounted) return;
 
       // Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(
           content: Text(AppLocalizations.of(context)!.eventMovedToDrafts(clientName)),
           backgroundColor: AppColors.success,
@@ -1329,7 +1329,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     } catch (e) {
       setState(() => _isRemoving = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(
           content: Text('${AppLocalizations.of(context)!.failedToMoveToDrafts}: ${e.toString()}'),
           backgroundColor: Colors.red,
@@ -1359,7 +1359,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       });
 
       // Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(
           content: Text(
             newValue
@@ -1376,7 +1376,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     } catch (e) {
       setState(() => _isUpdatingKeepOpen = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(
           content: Text('${AppLocalizations.of(context)!.failedToUpdate}: ${e.toString()}'),
           backgroundColor: Colors.red,
@@ -1433,7 +1433,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         }
       } else {
         final errMsg = jsonDecode(response.body)['message'] ?? AppLocalizations.of(context)!.unknownError;
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(content: Text('${AppLocalizations.of(context)!.failedToGenerate}: $errMsg')),
         );
       }
@@ -1490,7 +1490,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       if (!mounted) return;
 
       // Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(
           content: Text(AppLocalizations.of(context)!.eventNowOpenToAll(clientName)),
           backgroundColor: AppColors.info,
@@ -1510,7 +1510,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     } catch (e) {
       setState(() => _isRemoving = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(
           content: Text('${AppLocalizations.of(context)!.failedToMakePublic}: ${e.toString()}'),
           backgroundColor: Colors.red,

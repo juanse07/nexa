@@ -167,19 +167,22 @@ extension ContextExtensions on BuildContext {
   /// Checks if the navigator can pop
   bool get canPop => Navigator.of(this).canPop();
 
-  // Snackbar helpers
+  // Snackbar helpers — clear previous snackbar to prevent queue buildup
 
   /// Shows a snackbar with a message
   void showSnackBar(
     String message, {
-    Duration duration = const Duration(seconds: 3),
+    Duration duration = const Duration(milliseconds: 1500),
     SnackBarAction? action,
   }) {
-    ScaffoldMessenger.of(this).showSnackBar(
+    final messenger = ScaffoldMessenger.of(this);
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
       SnackBar(
         content: Text(message),
         duration: duration,
         action: action,
+        dismissDirection: DismissDirection.horizontal,
       ),
     );
   }
@@ -187,13 +190,16 @@ extension ContextExtensions on BuildContext {
   /// Shows an error snackbar
   void showErrorSnackBar(
     String message, {
-    Duration duration = const Duration(seconds: 4),
+    Duration duration = const Duration(milliseconds: 2500),
   }) {
-    ScaffoldMessenger.of(this).showSnackBar(
+    final messenger = ScaffoldMessenger.of(this);
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
       SnackBar(
         content: Text(message),
         duration: duration,
         backgroundColor: colorScheme.error,
+        dismissDirection: DismissDirection.horizontal,
       ),
     );
   }
@@ -201,13 +207,16 @@ extension ContextExtensions on BuildContext {
   /// Shows a success snackbar
   void showSuccessSnackBar(
     String message, {
-    Duration duration = const Duration(seconds: 3),
+    Duration duration = const Duration(milliseconds: 1500),
   }) {
-    ScaffoldMessenger.of(this).showSnackBar(
+    final messenger = ScaffoldMessenger.of(this);
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
       SnackBar(
         content: Text(message),
         duration: duration,
         backgroundColor: Colors.green,
+        dismissDirection: DismissDirection.horizontal,
       ),
     );
   }

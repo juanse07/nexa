@@ -42,7 +42,7 @@ mixin EventDataMixin<T extends StatefulWidget> on State<T> {
   /// Show success message with consistent styling
   void showSuccessSnackBar(String message, {Color? backgroundColor}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: backgroundColor ?? AppColors.success,
@@ -53,7 +53,7 @@ mixin EventDataMixin<T extends StatefulWidget> on State<T> {
   /// Show error message with consistent styling
   void showErrorSnackBar(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: AppColors.error,

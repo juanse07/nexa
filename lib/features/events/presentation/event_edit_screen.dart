@@ -182,7 +182,7 @@ class _EventEditScreenState extends State<EventEditScreen> {
 
       if (eventId.isEmpty || eventId == 'null') {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(content: Text('Error: Event ID is missing. Available keys: ${widget.event.keys.join(", ")}')),
         );
         setState(() => _isSaving = false);

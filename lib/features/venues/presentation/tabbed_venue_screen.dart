@@ -265,7 +265,7 @@ class _TabbedVenueScreenState extends State<TabbedVenueScreen>
   }
 
   void _showSnackBar(String message, Color backgroundColor) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: backgroundColor,

@@ -191,7 +191,7 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
 
       if (!mounted) return;
       Navigator.of(context).pop(true);
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(
           content: Text(widget.draft['status'] == 'draft' ? 'Draft updated' : 'Event updated'),
           backgroundColor: AppColors.success,
@@ -199,7 +199,7 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(
           content: Text('Failed to save: $e'),
           backgroundColor: AppColors.errorDark,
@@ -1035,7 +1035,7 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
   void _confirmRemoveRole(int index, String roleName) {
     // If it's the last role, show a different message
     if (_roles.length == 1) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         const SnackBar(
           content: Text('Cannot remove the last position. At least one is required.'),
           backgroundColor: AppColors.warning,
@@ -1190,7 +1190,7 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
                 final count = int.tryParse(countController.text) ?? 1;
 
                 if (name.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                     const SnackBar(
                       content: Text('Please enter a position name'),
                       backgroundColor: AppColors.warning,
@@ -1201,7 +1201,7 @@ class _PendingEditScreenState extends State<PendingEditScreen> {
 
                 // Check if position already exists
                 if (existingRoles.contains(name.toLowerCase())) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                     SnackBar(
                       content: Text('"$name" already exists. Update the count instead.'),
                       backgroundColor: AppColors.warning,

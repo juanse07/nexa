@@ -53,7 +53,7 @@ class _FlaggedAttendanceScreenState extends State<FlaggedAttendanceScreen> {
       );
 
       if (success && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text(status == 'approved' ? l10n.approved : l10n.dismissed),
             backgroundColor: Colors.green,
@@ -61,7 +61,7 @@ class _FlaggedAttendanceScreenState extends State<FlaggedAttendanceScreen> {
         );
         await _loadFlaggedAttendance();
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text(l10n.failedToUpdateFlag),
             backgroundColor: Colors.red,

@@ -583,7 +583,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       // Reload all catalog data
       await Future.wait([_loadClients(), _loadRoles(), _loadTariffs()]);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(
           content: Text('Merged ${sourceIds.length + 1} items successfully'),
           backgroundColor: ExColors.successDark,
@@ -591,7 +591,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(
           content: Text('Merge failed: $e'),
           backgroundColor: ExColors.errorDark,
@@ -1068,7 +1068,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   void _submitManualEntry() {
     // Custom validation for date picker
     if (_selectedDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(
           content: Text(AppLocalizations.of(context)!.pleaseSelectDate),
           backgroundColor: ExColors.error,
@@ -1119,7 +1119,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       // Save draft for cross-tab persistence
       _draftService.saveDraft(manualData);
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         const SnackBar(
           content: Text("Details captured. Tap 'Save to Database' to persist."),
           backgroundColor: ExColors.successDark,
@@ -1132,7 +1132,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   Map<String, dynamic>? _buildManualEntryData() {
     // Custom validation for date picker
     if (_selectedDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(
           content: Text(AppLocalizations.of(context)!.pleaseSelectDate),
           backgroundColor: ExColors.error,
@@ -1216,7 +1216,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(
           content: Text('Failed to save: $e'),
           backgroundColor: Colors.red,
@@ -1287,7 +1287,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     } catch (e) {
       print('[ExtractionScreen] ✗ Failed to create batch events: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text('Failed to create recurring events: $e'),
             backgroundColor: Colors.red,
@@ -1600,7 +1600,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         await _loadEvents();
                       } catch (e) {
                         if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                           SnackBar(
                             content: Text('Failed to save draft: $e'),
                             backgroundColor: Colors.red,
@@ -1609,7 +1609,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         return;
                       }
 
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                         SnackBar(
                           content: Text(AppLocalizations.of(context)!.jobSavedToPending),
                           backgroundColor: ExColors.successDark,
@@ -3573,7 +3573,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         ? 'You don\'t have any team members yet. Create an invite link to add members to your team!'
         : 'Failed to load contacts: $e';
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(
           content: Text(errorMsg),
           backgroundColor: e.toString().contains('don\'t have any team members')
@@ -4505,7 +4505,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         final createdEvent = await _eventService.createEvent(payload);
                         if (!mounted) return;
 
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                           const SnackBar(
                             content: Text('Saved to Pending'),
                             backgroundColor: ExColors.successDark,
@@ -4520,7 +4520,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                         });
                       } catch (e) {
                         if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                           SnackBar(
                             content: Text('Failed to save: $e'),
                             backgroundColor: Colors.red,
@@ -5802,7 +5802,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         _showCreateTariffDialog();
         return;
       case 3: // Staff tab — staff are added via team invites, not catalog
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           const SnackBar(
             content: Text('Staff members are added through team invites'),
             backgroundColor: ExColors.techBlue,
@@ -5819,7 +5819,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           _clientsService.createClient(name).then((_) {
             _loadClients();
             if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
+            ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
               const SnackBar(
                 content: Text('Client created'),
                 backgroundColor: ExColors.successDark,
@@ -5827,7 +5827,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             );
           }).catchError((e) {
             if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
+            ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
               SnackBar(
                 content: Text('Error creating client: $e'),
                 backgroundColor: ExColors.errorDark,
@@ -5839,7 +5839,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           _rolesService.createRole(name).then((_) {
             _loadRoles();
             if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
+            ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
               const SnackBar(
                 content: Text('Role created'),
                 backgroundColor: ExColors.successDark,
@@ -5847,7 +5847,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             );
           }).catchError((e) {
             if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
+            ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
               SnackBar(
                 content: Text('Error creating role: $e'),
                 backgroundColor: ExColors.errorDark,
@@ -6451,7 +6451,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           await _loadPendingDrafts();
                         } catch (e) {
                           if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                             SnackBar(
                               content: Text('Failed to delete: $e'),
                               backgroundColor: Colors.red,
@@ -6519,7 +6519,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       await _clientsService.createClient(name);
                       await _loadClients();
                       if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                         const SnackBar(
                           content: Text('Client created'),
                           backgroundColor: ExColors.successDark,
@@ -6527,7 +6527,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       );
                     } catch (e) {
                       if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                         SnackBar(
                           content: Text('Failed to create client: $e'),
                           backgroundColor: ExColors.errorDark,
@@ -7876,7 +7876,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final roles = _roles ?? const [];
 
     if (clients.isEmpty || roles.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         const SnackBar(
           content: Text('Please add clients and roles first'),
           backgroundColor: ExColors.errorDark,
@@ -8042,7 +8042,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         );
         await _loadTariffs();
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           const SnackBar(
             content: Text('Tariff created successfully'),
             backgroundColor: ExColors.successDark,
@@ -8050,7 +8050,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         );
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text('Failed to create tariff: $e'),
             backgroundColor: ExColors.errorDark,
@@ -8242,7 +8242,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         );
         await _loadTariffs();
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           const SnackBar(
             content: Text('Tariff updated successfully'),
             backgroundColor: ExColors.successDark,
@@ -8250,7 +8250,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         );
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text('Failed to update tariff: $e'),
             backgroundColor: ExColors.errorDark,
@@ -8313,7 +8313,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         await _tariffsService.deleteTariff(tariffId);
         await _loadTariffs();
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           const SnackBar(
             content: Text('Tariff deleted successfully'),
             backgroundColor: ExColors.successDark,
@@ -8321,7 +8321,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         );
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text('Failed to delete tariff: $e'),
             backgroundColor: ExColors.errorDark,
@@ -8422,7 +8422,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     await _loadRoles();
                   } catch (e) {
                     if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                       SnackBar(
                         content: Text('Failed to create role: $e'),
                         backgroundColor: ExColors.errorDark,
@@ -8497,7 +8497,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       await _loadRoles();
                     } catch (e) {
                       if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                         SnackBar(
                           content: Text('Failed to rename: $e'),
                           backgroundColor: ExColors.errorDark,
@@ -8512,7 +8512,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       await _loadRoles();
                     } catch (e) {
                       if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                         SnackBar(
                           content: Text('Failed to delete: $e'),
                           backgroundColor: ExColors.errorDark,
@@ -8599,7 +8599,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       await _loadClients();
                     } catch (e) {
                       if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                         SnackBar(
                           content: Text('Failed to rename: $e'),
                           backgroundColor: ExColors.errorDark,
@@ -8614,7 +8614,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       await _loadClients();
                     } catch (e) {
                       if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                         SnackBar(
                           content: Text('Failed to delete: $e'),
                           backgroundColor: ExColors.errorDark,
@@ -8711,7 +8711,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       await launchUrl(url, mode: LaunchMode.externalApplication);
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           const SnackBar(content: Text('Could not open Google Maps')),
         );
       }
@@ -8731,7 +8731,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
     await Clipboard.setData(ClipboardData(text: shareText));
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(content: Text(AppLocalizations.of(context)!.jobDetailsCopied)),
       );
     }
@@ -8770,7 +8770,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
     try {
       // Show loading indicator
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         const SnackBar(
           content: Row(
             children: [
@@ -8794,7 +8794,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
       // Show success message
       ScaffoldMessenger.of(context).clearSnackBars();
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(
           content: Text('$clientName is now public!'),
           backgroundColor: ExColors.successDark,
@@ -8807,7 +8807,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).clearSnackBars();
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(
           content: Text('Failed to publish job: ${e.toString()}'),
           backgroundColor: Colors.red,
@@ -9322,12 +9322,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           await _eventService.deleteEvent(eventId);
                           await _loadEvents();
                           if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                             const SnackBar(content: Text('Event deleted')),
                           );
                         } catch (e) {
                           if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                             SnackBar(
                               content: Text('Failed to delete: $e'),
                               backgroundColor: Colors.red,
@@ -9534,7 +9534,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     }
                   });
 
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                     SnackBar(
                       content: Row(
                         children: [
@@ -9831,7 +9831,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           // Optionally create the client in backend
           _clientsService.createClient(name).then((_) {
             _loadClients();
-            ScaffoldMessenger.of(context).showSnackBar(
+            ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
               SnackBar(
                 content: Text('Client "$name" created'),
                 backgroundColor: ExColors.successDark,
@@ -10003,7 +10003,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                       setState(() {
                                         _aiChatService.startNewConversation();
                                       });
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                                         const SnackBar(
                                           content: Text('Chat cleared'),
                                           duration: Duration(seconds: 2),
@@ -10382,7 +10382,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               }
             } catch (e) {
               if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
+              ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                 SnackBar(
                   content: Text('Error: ${e.toString()}'),
                   backgroundColor: Colors.red,
@@ -10531,7 +10531,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                             await _aiChatService.applyUpdate(update);
                             if (mounted) {
                               setState(() {});
-                              ScaffoldMessenger.of(context).showSnackBar(
+                              ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                                 SnackBar(
                                   content: Text('Updated $eventName successfully!'),
                                   backgroundColor: Colors.green,
@@ -10540,7 +10540,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                             }
                           } catch (e) {
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
+                              ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                                 SnackBar(
                                   content: Text('Failed to update: ${e.toString()}'),
                                   backgroundColor: Colors.red,
@@ -10827,7 +10827,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         final RegExp emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
         if (!emailRegex.hasMatch(email)) {
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
             const SnackBar(
               content: Text('Please enter a valid email address'),
               backgroundColor: ExColors.errorDark,
@@ -10846,7 +10846,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       setState(() {
         _selectedIndex = 1; // Navigate to Events tab
       });
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         const SnackBar(
           content: Text('Event saved to database'),
           backgroundColor: ExColors.successDark,
@@ -10856,7 +10856,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       await _draftService.clearDraft();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(
           content: Text('Failed to save: $e'),
           backgroundColor: ExColors.errorDark,
@@ -10928,7 +10928,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       Navigator.of(ctx).pop(name);
                     } catch (e) {
                       if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                         SnackBar(
                           content: Text('Failed to create client: $e'),
                           backgroundColor: ExColors.errorDark,
@@ -11254,7 +11254,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     } catch (e) {
       print('[ExtractionScreen] ✗ Failed to create batch events: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text('Failed to create recurring events: $e'),
             backgroundColor: Colors.red,
@@ -11540,13 +11540,13 @@ class _ExpiredEventsSheetState extends State<_ExpiredEventsSheet> {
       widget.onCountChanged(0);
       if (!mounted) return;
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(content: Text('$deletedCount expired event${deletedCount == 1 ? '' : 's'} deleted')),
       );
     } catch (e) {
       if (!mounted) return;
       setState(() => _isDeleting = false);
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(content: Text('Failed to delete: $e'), backgroundColor: Colors.red),
       );
     }
@@ -11712,7 +11712,7 @@ class _ExpiredEventsSheetState extends State<_ExpiredEventsSheet> {
                                     }
                                   } catch (e) {
                                     if (!mounted) return;
-                                    ScaffoldMessenger.of(context).showSnackBar(
+                                    ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                                       SnackBar(
                                         content: Text('Failed to delete: $e'),
                                         backgroundColor: Colors.red,

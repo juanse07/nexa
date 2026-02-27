@@ -109,7 +109,7 @@ class _ManualHoursEntryScreenState extends State<ManualHoursEntryScreen> {
 
     if (validEntries.isEmpty) {
       final l10n = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(
           content: Text(l10n.pleaseEnterTimesForAllStaff),
           backgroundColor: Colors.orange,
@@ -153,7 +153,7 @@ class _ManualHoursEntryScreenState extends State<ManualHoursEntryScreen> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text(
               result.processedCount > 0

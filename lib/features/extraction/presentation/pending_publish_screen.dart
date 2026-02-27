@@ -219,7 +219,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
 
   Future<void> _sendDirectInvitations() async {
     if (_selectedKeys.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         const SnackBar(content: Text('Select at least one person to invite')),
       );
       return;
@@ -270,7 +270,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
         roleDefs = _countsToRoles(counts);
         if (roleDefs.isEmpty) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
+            ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
               const SnackBar(content: Text('Add at least one role with a positive headcount')),
             );
           }
@@ -313,7 +313,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
       final failureCount = (response['failureCount'] as num?)?.toInt() ?? 0;
 
       Navigator.of(context).pop(true);
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(
           content: Text(
             'Invitations sent: $successCount successful${failureCount > 0 ? ", $failureCount failed" : ""}. Event published privately - only invited staff can see it.',
@@ -331,13 +331,13 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
 
   Future<void> _publish() async {
     if (!_visibleToEntireTeam && _selectedKeys.isEmpty && _selectedTeamIds.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         const SnackBar(content: Text('Select at least one user or team')),
       );
       return;
     }
     if (_visibleToEntireTeam && _selectedVisibilityTeamId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         const SnackBar(content: Text('Select a team for visibility')),
       );
       return;
@@ -393,7 +393,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
         roleDefs = _countsToRoles(counts);
         if (roleDefs.isEmpty) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
+            ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
               const SnackBar(
                 content: Text('Add at least one role with a positive headcount'),
               ),
@@ -1529,14 +1529,14 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                               newRoleCtrl.clear();
                               setStateDialog(() {});
                               if (!mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
+                              ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                                 SnackBar(
                                   content: Text('Role "$newName" created'),
                                 ),
                               );
                             } catch (e) {
                               if (!mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
+                              ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                                 SnackBar(
                                   content: Text('Failed to create role: $e'),
                                 ),
@@ -1568,7 +1568,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                     final hasPositive = counts.values.any((value) => value > 0);
                     if (!hasPositive) {
                       if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                           const SnackBar(
                             content: Text(
                               'Add at least one role with a positive headcount',
@@ -1885,7 +1885,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                                 );
                               } catch (e) {
                                 if (!mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
+                                ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                                   SnackBar(
                                     content: Text(
                                       'Failed to save tariff for $roleName: $e',
@@ -1896,7 +1896,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                             }
 
                             if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
+                            ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                               const SnackBar(content: Text('Tariffs saved')),
                             );
                             // Reload tariffs to refresh the UI with updated data

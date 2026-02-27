@@ -7,9 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/services/chat_service.dart';
 import '../domain/entities/chat_message.dart';
-import 'widgets/event_invitation_card.dart';
 import 'dialogs/send_event_invitation_dialog.dart';
-import '../../../features/extraction/services/event_service.dart';
 import '../../../features/extraction/services/roles_service.dart';
 import '../../../features/users/presentation/pages/user_events_screen.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
@@ -34,9 +32,6 @@ class ChatScreen extends StatefulWidget {
   @override
   State<ChatScreen> createState() => _ChatScreenState();
 }
-
-// Global cache to persist event data across widget rebuilds
-final Map<String, Map<String, dynamic>> _globalEventCache = {};
 
 class _ChatScreenState extends State<ChatScreen> {
   final ChatService _chatService = ChatService();
@@ -195,7 +190,7 @@ class _ChatScreenState extends State<ChatScreen> {
           final targetUserName = widget.targetName;
           final accepted = status == 'accepted';
           final l10n = AppLocalizations.of(context)!;
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
             SnackBar(
               content: Text(
                 accepted
@@ -420,7 +415,7 @@ class _ChatScreenState extends State<ChatScreen> {
     // In a real app, you would fetch the user's phone number from the API
     // For now, we'll show a message
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(
           content: Text('Calling ${widget.targetName}...'),
           backgroundColor: Colors.green,
@@ -492,7 +487,7 @@ class _ChatScreenState extends State<ChatScreen> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text(AppLocalizations.of(context)!.jobInvitationSent),
             backgroundColor: Colors.green,
@@ -913,9 +908,9 @@ class _ChatScreenState extends State<ChatScreen> {
             return Column(
               key: ValueKey(message.id), // Prevent unnecessary rebuilds
               children: <Widget>[
-                // Check if it's an invitation card or regular message
+                // Check if it's an invitation stamp or regular message
                 message.messageType == 'eventInvitation'
-                    ? _buildInvitationCard(message)
+                    ? _buildInvitationStamp(message)
                     : _MessageBubble(
                         key: ValueKey('bubble_${message.id}'),
                         message: message,
@@ -1011,152 +1006,75 @@ class _ChatScreenState extends State<ChatScreen> {
     return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
-  Widget _buildInvitationCard(ChatMessage message) {
+  Widget _buildInvitationStamp(ChatMessage message) {
     final metadata = message.metadata ?? {};
-    final eventId = metadata['eventId'] as String?;
-    final roleId = metadata['roleId'] as String?;
     final status = metadata['status'] as String?;
     final respondedAt = metadata['respondedAt'] != null
-        ? DateTime.parse(metadata['respondedAt'] as String)
+        ? DateTime.tryParse(metadata['respondedAt'] as String)
         : null;
+    final invitationText = message.message;
+    final sentDate = DateFormat('MMM d').format(message.createdAt);
 
-    if (eventId == null || roleId == null) {
-      return const SizedBox.shrink();
-    }
-
-    // Check cache first
-    if (_globalEventCache.containsKey(eventId)) {
-      return _buildInvitationCardWidget(
-        _globalEventCache[eventId]!,
-        roleId,
-        status,
-        respondedAt,
-        message.id,
-      );
-    }
-
-    // Fetch event data from the service only if not cached
-    return FutureBuilder<Map<String, dynamic>>(
-      future: EventService().fetchEvents().then((events) {
-        try {
-          final eventData = events.firstWhere(
-            (e) => (e['_id'] ?? e['id']) == eventId,
-            orElse: () => <String, dynamic>{},
-          );
-          // Cache the result
-          if (eventData.isNotEmpty) {
-            _globalEventCache[eventId] = eventData;
-          }
-          return eventData;
-        } catch (e) {
-          return <String, dynamic>{};
-        }
-      }),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(16),
-              child: CircularProgressIndicator(),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        children: <Widget>[
+          // Invitation stamp
+          Row(
+            children: <Widget>[
+              Expanded(child: Divider(color: Colors.grey[300])),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Text(
+                  '\u{1F4E9} $invitationText \u00B7 $sentDate',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[500],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              Expanded(child: Divider(color: Colors.grey[300])),
+            ],
+          ),
+          // Response stamp
+          if (status == 'accepted' || status == 'declined')
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                status == 'accepted'
+                    ? '\u2705 ${widget.targetName} accepted \u00B7 ${_formatStampTime(respondedAt)}'
+                    : '\u274C ${widget.targetName} declined \u00B7 ${_formatStampTime(respondedAt)}',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: status == 'accepted' ? Colors.green[600] : Colors.grey[500],
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                '\u23F3 Waiting for response...',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey[400],
+                  fontWeight: FontWeight.w400,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
             ),
-          );
-        }
-
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(AppLocalizations.of(context)!.jobNotFound),
-          );
-        }
-
-        return _buildInvitationCardWidget(
-          snapshot.data!,
-          roleId,
-          status,
-          respondedAt,
-          message.id,
-        );
-      },
+        ],
+      ),
     );
   }
 
-  Widget _buildInvitationCardWidget(
-    Map<String, dynamic> eventData,
-    String roleId,
-    String? status,
-    DateTime? respondedAt,
-    String messageId,
-  ) {
-    final roles = eventData['roles'] as List<dynamic>? ?? [];
-    final role = roles.cast<Map<String, dynamic>>().firstWhere(
-      (r) {
-        final id = r['_id'] ?? r['role_id'];
-        final name = r['role'] ?? r['name'] ?? r['role_name'];
-        return id == roleId || name == roleId;
-      },
-      orElse: () => <String, dynamic>{},
-    );
-
-    // If role not found, use roleId as the role name for display
-    final eventName = eventData['title'] as String? ?? eventData['shift_name'] as String? ?? 'Event';
-    final roleName = role.isNotEmpty
-        ? (role['role_name'] as String? ?? role['role'] as String? ?? role['name'] as String? ?? roleId)
-        : roleId;
-    final clientName = eventData['client_name'] as String? ?? 'Client';
-    final venueName = eventData['venue_name'] as String?;
-    final rate = role.isNotEmpty
-        ? (role['rate'] as num? ?? (role['tariff'] as Map<String, dynamic>?)?['rate'] as num?)
-        : null;
-
-    // Parse event date and times
-    final dateStr = eventData['start_date'] as String? ?? eventData['date'] as String?;
-    final startTimeStr = eventData['start_time'] as String?;
-    final endTimeStr = eventData['end_time'] as String?;
-
-    DateTime startDate;
-    DateTime endDate;
-
-    if (dateStr != null && startTimeStr != null && startTimeStr.isNotEmpty) {
-      // Combine date with start_time (e.g., "2025-10-31" + "09:00")
-      final datePart = dateStr.contains('T') ? dateStr.split('T')[0] : dateStr;
-      startDate = DateTime.parse('${datePart}T$startTimeStr:00.000Z');
-    } else if (dateStr != null) {
-      startDate = DateTime.parse(dateStr);
-    } else {
-      startDate = DateTime.now();
-    }
-
-    if (dateStr != null && endTimeStr != null && endTimeStr.isNotEmpty) {
-      // Combine date with end_time (e.g., "2025-10-31" + "16:00")
-      final datePart = dateStr.contains('T') ? dateStr.split('T')[0] : dateStr;
-      endDate = DateTime.parse('${datePart}T$endTimeStr:00.000Z');
-    } else if (eventData['end_date'] != null) {
-      endDate = DateTime.parse(eventData['end_date'] as String);
-    } else {
-      endDate = startDate.add(const Duration(hours: 4));
-    }
-
-    return Align(
-      alignment: Alignment.center,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width > 900 ? 600 : MediaQuery.of(context).size.width * 0.85,
-        ),
-        child: EventInvitationCard(
-          key: ValueKey('invitation_$messageId'),
-          eventName: eventName,
-          roleName: roleName,
-          clientName: clientName,
-          startDate: startDate,
-          endDate: endDate,
-          venueName: venueName,
-          rate: rate?.toDouble(),
-          status: status,
-          respondedAt: respondedAt,
-          isManager: true, // Manager view - can't respond
-        ),
-      ),
-    );
+  String _formatStampTime(DateTime? dateTime) {
+    if (dateTime == null) return '';
+    final date = DateFormat('MMM d').format(dateTime);
+    final time = DateFormat('h:mm a').format(dateTime);
+    return '$date at $time';
   }
 
   Widget _buildMessageInput() {

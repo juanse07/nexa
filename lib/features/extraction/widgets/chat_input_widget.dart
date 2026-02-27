@@ -109,7 +109,7 @@ class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProv
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: const Text('Please allow microphone access when prompted by your browser'),
             duration: const Duration(seconds: 4),
@@ -180,7 +180,7 @@ class _ChatInputWidgetState extends State<ChatInputWidget> with SingleTickerProv
     } catch (e) {
       print('[ChatInputWidget] Transcription error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text('Voice input failed: $e'),
             backgroundColor: Colors.red,

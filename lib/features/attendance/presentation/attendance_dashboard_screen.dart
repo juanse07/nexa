@@ -181,7 +181,7 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
         onViewDetails: () {
           // TODO: Navigate to staff detail screen
           final l10n = AppLocalizations.of(context)!;
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
             SnackBar(content: Text(l10n.viewingDetailsFor(staff.name))),
           );
         },
@@ -223,7 +223,7 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
 
       if (mounted) {
         if (success) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
             SnackBar(
               content: Text(l10n.staffClockedOutSuccessfully(staff.name)),
               backgroundColor: Colors.green,
@@ -231,7 +231,7 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
           );
           _refresh();
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
             SnackBar(
               content: Text(l10n.failedToClockOutStaff),
               backgroundColor: Colors.red,
@@ -276,7 +276,7 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
 
     if (mounted) {
       if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text(l10n.staffClockedOutSuccessfully(record.staffName)),
             backgroundColor: Colors.green,
@@ -284,7 +284,7 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
         );
         _refresh();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text(l10n.failedToClockOutStaff),
             backgroundColor: Colors.red,
@@ -615,7 +615,7 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
                       onViewHistory: () {
                         // TODO: Navigate to history screen
                         final l10n = AppLocalizations.of(context)!;
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                           SnackBar(
                             content: Text(l10n.viewingHistoryFor(record.staffName)),
                           ),

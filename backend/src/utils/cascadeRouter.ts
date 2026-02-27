@@ -84,11 +84,49 @@ export function isComplexQuery(userMessage: string): boolean {
 }
 
 /**
+ * Detect if the conversation is in an active event workflow (create → publish).
+ * These multi-step flows require the 120B model for reliable state tracking.
+ */
+function isInEventWorkflow(messages: { role: string; content: any }[]): boolean {
+  // Check recent assistant messages for event workflow signals
+  const recentCount = 6; // look at last 6 messages (3 turns)
+  const recent = messages.slice(-recentCount);
+
+  for (const msg of recent) {
+    if (!msg || typeof msg.content !== 'string') continue;
+    const lower = msg.content.toLowerCase();
+
+    if (msg.role === 'assistant') {
+      // Assistant just created an event, asked about publishing, or asked which team
+      if (
+        lower.includes('publicar') || lower.includes('publish') ||
+        lower.includes('equipo') || lower.includes('which team') ||
+        lower.includes('creado') || lower.includes('created') ||
+        lower.includes('draft')
+      ) return true;
+    }
+  }
+
+  // Also check if the user's recent context has event-creation keywords
+  const context = extractRecentUserMessages(messages, 3).toLowerCase();
+  const eventKeywords = [
+    'create', 'crear', 'schedule', 'agendar', 'new event', 'nuevo evento',
+    'new shift', 'nuevo turno', 'publish', 'publicar',
+  ];
+  if (eventKeywords.some((kw) => context.includes(kw))) return true;
+
+  return false;
+}
+
+/**
  * Select model + provider based on query complexity.
  *
  * Classify the latest user message:
  *   complex → groq  / openai/gpt-oss-120b
  *   simple  → together / openai/gpt-oss-20b
+ *
+ * Also escalates to 120B when an active event workflow is detected,
+ * since the 20B model cannot reliably track multi-step create→publish flows.
  */
 export function selectModelForQuery(
   messages: { role: string; content: any }[],
@@ -96,7 +134,7 @@ export function selectModelForQuery(
   const lastMessage = extractLastUserMessage(messages);
   const complex = isComplexQuery(lastMessage);
 
-  if (complex) {
+  if (complex || isInEventWorkflow(messages)) {
     return { provider: 'groq', model: 'openai/gpt-oss-120b', tier: 'complex' };
   }
 
@@ -163,14 +201,14 @@ export interface ToolSelectionConfig {
 /** Manager tool selection config (39 tools). */
 export const MANAGER_TOOL_CONFIG: ToolSelectionConfig = {
   coreTools: new Set([
-    'search_shifts', 'get_clients_list', 'get_roles_list',
-    'get_team_members', 'get_events_summary', 'search_addresses',
+    'search_events', 'get_clients_list', 'get_roles_list',
+    'get_team_members', 'search_addresses',
   ]),
   categories: {
     EVENT_CRUD: [
       'create_event', 'create_events_bulk', 'publish_event',
       'publish_events_bulk', 'update_event', 'invite_staff_to_event',
-      'check_availability', 'get_tariffs_list',
+      'check_availability', 'get_tariffs_list', 'get_teams',
     ],
     CLIENT_MGMT: [
       'get_client_info', 'create_client', 'delete_client',
@@ -299,12 +337,14 @@ function matchCategories(text: string, config: ToolSelectionConfig): Set<string>
  * 1. Match the last user message against keyword categories
  * 2. If no match, try recent conversation context (last 3 user messages combined)
  * 3. Falls back to ALL tools only if neither matches (pure greetings, ambiguous)
+ * 4. Force-include EVENT_CRUD when an active event workflow is detected
  */
 export function selectToolsForQuery<T extends { name: string }>(
   userMessage: string,
   allTools: T[],
   config: ToolSelectionConfig = MANAGER_TOOL_CONFIG,
   conversationContext?: string,
+  messages?: { role: string; content: any }[],
 ): T[] {
   if (!userMessage || userMessage.trim().length === 0) return allTools;
 
@@ -315,6 +355,12 @@ export function selectToolsForQuery<T extends { name: string }>(
   // (catches short follow-ups like "Bartenders", "Yes", "Next Friday")
   if (matchedCategories.size === 0 && conversationContext) {
     matchedCategories = matchCategories(conversationContext, config);
+  }
+
+  // Force EVENT_CRUD tools when in an active event workflow
+  // (create → publish flow requires get_teams, publish_event, etc.)
+  if (messages && isInEventWorkflow(messages)) {
+    matchedCategories.add('EVENT_CRUD');
   }
 
   // Fallback: no categories matched → send everything

@@ -66,7 +66,7 @@ class _BatchEventDialogState extends State<BatchEventDialog> {
 
   Future<void> _handleCreate() async {
     if (_selectedDates.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         const SnackBar(
           content: Text('Please select at least one date'),
           backgroundColor: Colors.orange,
@@ -89,7 +89,7 @@ class _BatchEventDialogState extends State<BatchEventDialog> {
         setState(() {
           _isCreating = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text('Failed to create events: $e'),
             backgroundColor: Colors.red,

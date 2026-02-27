@@ -75,7 +75,7 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
   Future<void> _performBulkClockIn() async {
     final l10n = AppLocalizations.of(context)!;
     if (_selectedUserKeys.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(content: Text(l10n.pleaseSelectAtLeastOneStaff)),
       );
       return;
@@ -94,7 +94,7 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
         final successful = response['successful'] as int? ?? 0;
         final total = response['total'] as int? ?? 0;
 
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text(l10n.successfullyClockedIn(successful, total)),
             backgroundColor: Colors.green,
@@ -104,7 +104,7 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
         // Show results dialog
         _showResultsDialog(response);
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text(l10n.failedBulkClockIn),
             backgroundColor: Colors.red,

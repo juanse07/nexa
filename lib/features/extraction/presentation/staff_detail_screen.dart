@@ -116,7 +116,7 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
         rating: _rating,
       );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           const SnackBar(
             content: Text('Profile updated'),
             backgroundColor: ExColors.successDark,
@@ -125,7 +125,7 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text('Error saving: $e'),
             backgroundColor: ExColors.errorDark,

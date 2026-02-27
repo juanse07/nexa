@@ -128,7 +128,7 @@ class _ModernAddressFieldState extends State<ModernAddressField> {
       });
       _removeOverlay();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text('Address search failed: ${e.toString()}'),
             backgroundColor: AppColors.errorDark,

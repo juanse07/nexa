@@ -58,7 +58,7 @@ class _CitiesListScreenState extends State<CitiesListScreen> {
     // Check if city already exists
     if (_cities.any((c) => c.name.toLowerCase() == cityString.toLowerCase())) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text(AppLocalizations.of(context)!.cityAlreadyInList),
             backgroundColor: Colors.orange,
@@ -86,7 +86,7 @@ class _CitiesListScreenState extends State<CitiesListScreen> {
         _cities = updatedCities;
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text(AppLocalizations.of(context)!.addedCity(cityString)),
             backgroundColor: Colors.green,
@@ -95,7 +95,7 @@ class _CitiesListScreenState extends State<CitiesListScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text('${AppLocalizations.of(context)!.failedToAddCity}: ${e.toString()}'),
             backgroundColor: Colors.red,
@@ -116,7 +116,7 @@ class _CitiesListScreenState extends State<CitiesListScreen> {
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text('${AppLocalizations.of(context)!.failedToUpdateCity}: ${e.toString()}'),
             backgroundColor: Colors.red,
@@ -160,7 +160,7 @@ class _CitiesListScreenState extends State<CitiesListScreen> {
         _cities = result.cities;
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text(AppLocalizations.of(context)!.deletedCity(city.name)),
             backgroundColor: Colors.green,
@@ -169,7 +169,7 @@ class _CitiesListScreenState extends State<CitiesListScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text('${AppLocalizations.of(context)!.failedToDeleteCity}: ${e.toString()}'),
             backgroundColor: Colors.red,
@@ -211,7 +211,7 @@ class _CitiesListScreenState extends State<CitiesListScreen> {
     try {
       final result = await _cityService.discoverVenues(city);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text(AppLocalizations.of(context)!.discoveredVenuesCount(result.venueCount, city.name)),
             backgroundColor: Colors.green,
@@ -220,7 +220,7 @@ class _CitiesListScreenState extends State<CitiesListScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text('${AppLocalizations.of(context)!.failedToDiscoverVenues}: ${e.toString()}'),
             backgroundColor: Colors.red,

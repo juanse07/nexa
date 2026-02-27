@@ -445,18 +445,26 @@ const AI_TOOLS = [
     }
   },
   {
-    name: 'search_shifts',
-    description: 'Find shifts by various criteria from the database. Returns details including pay, contact info, setup time, and staffing. Use when users ask about specific shifts, dates, or want to see shift lists.',
+    name: 'search_events',
+    description: 'Search and filter events/shifts. Use scope "upcoming" for active/future jobs, "past" for completed, or omit for all. Returns IDs (needed for update_event), pay, staffing, contacts, and details.',
     parameters: {
       type: 'object',
       properties: {
+        scope: {
+          type: ['string', 'null'],
+          description: '"upcoming" = future + not completed/cancelled, "past" = completed or past date, omit for all'
+        },
+        status: {
+          type: ['string', 'null'],
+          description: 'Filter by specific status: draft, published, confirmed, fulfilled, in_progress, completed, cancelled'
+        },
         client_name: {
           type: ['string', 'null'],
           description: 'Filter by client name'
         },
         date: {
           type: ['string', 'null'],
-          description: 'ISO date (YYYY-MM-DD) or month filter (e.g., "2024-03")'
+          description: 'ISO date (YYYY-MM-DD) or month (YYYY-MM). Overrides scope date range.'
         },
         venue_name: {
           type: ['string', 'null'],
@@ -464,7 +472,27 @@ const AI_TOOLS = [
         },
         event_name: {
           type: ['string', 'null'],
-          description: 'Search by event name'
+          description: 'Search by event/shift name'
+        },
+        days_past: {
+          type: ['number', 'null'],
+          description: 'Days in the past to include (default: 30, only when no scope/date)'
+        },
+        days_future: {
+          type: ['number', 'null'],
+          description: 'Days in the future to include (default: 60, only when no scope/date)'
+        },
+        visibility: {
+          type: ['string', 'null'],
+          description: 'Filter by visibility: public, private'
+        },
+        hours_status: {
+          type: ['string', 'null'],
+          description: 'Filter by hours approval: pending, sheet_submitted, approved, paid'
+        },
+        limit: {
+          type: ['number', 'null'],
+          description: 'Max results (default: 50)'
         }
       }
     }
@@ -1021,6 +1049,11 @@ const AI_TOOLS = [
           type: 'array',
           items: { type: 'string' },
           description: 'Names of specific staff to share with. Required if visibility is private. Use get_team_members first to find names.'
+        },
+        target_team_ids: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'IDs of specific teams to publish to. Provided in PUBLISH INFO from create_event response. If omitted, publishes to ALL teams.'
         }
       },
       required: ['event_id']
@@ -1049,6 +1082,11 @@ const AI_TOOLS = [
           type: 'array',
           description: 'Array of event IDs to publish',
           items: { type: 'string' }
+        },
+        target_team_ids: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'IDs of specific teams to publish to. Provided in PUBLISH INFO from create_events_bulk response. If omitted, publishes to ALL teams.'
         }
       },
       required: ['event_ids']
@@ -1094,28 +1132,7 @@ const AI_TOOLS = [
       required: []
     }
   },
-  {
-    name: 'get_events_summary',
-    description: 'Get summary of recent and upcoming events with pay rates and staffing info. Use when user asks about events, schedule, "what\'s happening", or "what are we paying". Returns events from the past 30 days and future 60 days.',
-    parameters: {
-      type: 'object',
-      properties: {
-        client_name: {
-          type: ['string', 'null'],
-          description: 'Optional: Filter events by specific client name'
-        },
-        days_past: {
-          type: ['number', 'null'],
-          description: 'Optional: How many days in the past to include (default: 30)'
-        },
-        days_future: {
-          type: ['number', 'null'],
-          description: 'Optional: How many days in the future to include (default: 60)'
-        }
-      },
-      required: []
-    }
-  },
+  // get_events_summary removed — merged into search_events
   {
     name: 'get_team_members',
     description: 'Get list of all active team members/staff with their names and emails. Use this when user asks about team, staff, who is on the team, or needs to find a specific member.',
@@ -1178,13 +1195,13 @@ const AI_TOOLS = [
   },
   {
     name: 'update_event',
-    description: 'Update an existing event/shift. Use when user wants to modify event details (venue, date, time, roles, notes, etc.). REQUIRES event_id - get it from search_shifts first. Only include fields that need to change.',
+    description: 'Update an existing event/shift. Use when user wants to modify event details (venue, date, time, roles, notes, etc.). REQUIRES event_id - get it from search_events first. Only include fields that need to change.',
     parameters: {
       type: 'object',
       properties: {
         event_id: {
           type: 'string',
-          description: 'The event ID (from search_shifts results). Required to identify which event to update.'
+          description: 'The event ID (from search_events results). Required to identify which event to update.'
         },
         client_name: {
           type: ['string', 'null'],
@@ -1627,12 +1644,57 @@ async function executeFunctionCall(
         }
       }
 
-      case 'search_shifts': {
-        const { client_name, date, venue_name, event_name } = functionArgs;
-        const filter: any = { managerId };
+      case 'search_events': {
+        const {
+          scope, status, client_name, date, venue_name, event_name,
+          days_past = 30, days_future = 60, visibility, hours_status,
+          limit: resultLimit = 50
+        } = functionArgs;
 
-        // Cross-field name search: any provided name term is searched across ALL name fields
-        // This handles cases where the model puts a venue name in client_name or vice versa
+        const filter: any = { managerId };
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // Scope shortcuts (date + status combos)
+        if (scope === 'upcoming') {
+          filter.date = { $gte: today };
+          filter.status = { $nin: ['completed', 'cancelled'] };
+        } else if (scope === 'past') {
+          filter.$or = [
+            { date: { $lt: today } },
+            { status: { $in: ['completed', 'cancelled'] } }
+          ];
+        } else if (!date) {
+          // Default: date range window (only when no explicit date/scope)
+          const pastDate = new Date(today);
+          pastDate.setDate(pastDate.getDate() - days_past);
+          const futureDate = new Date(today);
+          futureDate.setDate(futureDate.getDate() + days_future);
+          filter.date = { $gte: pastDate, $lte: futureDate };
+        }
+
+        // Explicit date overrides scope's date filter
+        if (date) {
+          if (date.length === 7) {
+            const startDate = new Date(`${date}-01`);
+            const endDate = new Date(startDate);
+            endDate.setMonth(endDate.getMonth() + 1);
+            filter.date = { $gte: startDate, $lt: endDate };
+          } else {
+            filter.date = new Date(date);
+          }
+        }
+
+        // Explicit status overrides scope's status filter
+        if (status) {
+          filter.status = status;
+        }
+
+        // Optional filters
+        if (visibility) filter.visibilityType = visibility;
+        if (hours_status) filter.hoursStatus = hours_status;
+
+        // Cross-field name search (from search_shifts)
         const nameTerms: string[] = [];
         if (client_name) nameTerms.push(client_name);
         if (venue_name) nameTerms.push(venue_name);
@@ -1649,47 +1711,52 @@ async function executeFunctionCall(
               { shift_name: regex }
             );
           }
-          filter.$or = orConditions;
-        }
-
-        if (date) {
-          if (date.length === 7) {
-            // Month filter: YYYY-MM
-            const startDate = new Date(`${date}-01`);
-            const endDate = new Date(startDate);
-            endDate.setMonth(endDate.getMonth() + 1);
-            filter.date = { $gte: startDate, $lt: endDate };
+          // Combine with existing $or (from scope=past) using $and
+          if (filter.$or) {
+            const existingOr = filter.$or;
+            delete filter.$or;
+            filter.$and = [{ $or: existingOr }, { $or: orConditions }];
           } else {
-            // Exact date: YYYY-MM-DD
-            filter.date = new Date(date);
+            filter.$or = orConditions;
           }
         }
 
+        // Log the final filter for debugging
+        console.log(`[search_events] Filter:`, JSON.stringify(filter));
+
         const events = await EventModel.find(filter)
-          .sort({ date: -1 })
-          .limit(20)
-          .select('_id event_name shift_name client_name date start_time end_time venue_name venue_address status accepted_staff roles contact_name contact_phone setup_time uniform notes visibilityType')
+          .select('_id event_name shift_name client_name date venue_name venue_address city start_time end_time roles pay_rate_info status accepted_staff declined_staff contact_name contact_phone setup_time uniform notes visibilityType hoursStatus role_stats keepOpen')
+          .sort({ date: scope === 'past' ? -1 : 1 })
+          .limit(Math.min(resultLimit, 50))
           .lean();
 
         if (events.length === 0) {
-          return 'No shifts found matching the criteria';
+          return `No events found matching the criteria.`;
         }
 
-        const results = events.map(e => {
+        const results = events.map((e: any) => {
+          const dateStr = e.date ? new Date(e.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : 'No date';
+          const timeStr = e.start_time ? `${e.start_time} - ${e.end_time || '?'}` : '';
           const staffCount = e.accepted_staff?.length || 0;
           const totalNeeded = e.roles?.reduce((sum: number, r: any) => sum + (r.count || r.quantity || 0), 0) || 0;
           const payInfo = e.roles?.map((r: any) => `${r.role || r.role_name}: ${r.pay_rate_info || 'no rate'}`).join(', ');
-          let line = `[ID: ${e._id}] ${e.event_name || e.shift_name || 'Unnamed'} - Client: ${e.client_name}, Date: ${e.date}, Time: ${e.start_time || '?'}-${e.end_time || '?'}, Venue: ${e.venue_name || 'TBD'}, Status: ${e.status || 'pending'}, Staff: ${staffCount}/${totalNeeded}`;
+
+          let line = `[ID: ${e._id}] ${dateStr}: ${e.event_name || e.shift_name || 'Unnamed'} (${e.client_name || 'No client'}) at ${e.venue_name || 'TBD'}`;
+          if (timeStr) line += `, ${timeStr}`;
+          line += `, Status: ${e.status || 'draft'}, Staff: ${staffCount}/${totalNeeded}`;
+          if (e.visibilityType) line += `, Visibility: ${e.visibilityType}`;
           if (payInfo) line += `, Pay: ${payInfo}`;
           if (e.contact_name) line += `, Contact: ${e.contact_name}${e.contact_phone ? ` (${e.contact_phone})` : ''}`;
           if (e.setup_time) line += `, Setup: ${e.setup_time}`;
-          if ((e as any).uniform) line += `, Uniform: ${(e as any).uniform}`;
-          if ((e as any).notes) line += `, Notes: ${(e as any).notes}`;
-          if ((e as any).venue_address) line += `, Address: ${(e as any).venue_address}`;
+          if (e.uniform) line += `, Uniform: ${e.uniform}`;
+          if (e.notes) line += `, Notes: ${e.notes}`;
+          if (e.venue_address) line += `, Address: ${e.venue_address}`;
+          if (e.hoursStatus && e.hoursStatus !== 'pending') line += `, Hours: ${e.hoursStatus}`;
+          if (e.keepOpen) line += ` [kept open]`;
           return line;
         }).join('\n');
 
-        return `Found ${events.length} shift(s):\n${results}`;
+        return `Found ${events.length} event(s):\n${results}`;
       }
 
       case 'check_availability': {
@@ -1889,7 +1956,9 @@ async function executeFunctionCall(
         }).lean();
 
         if (!client) {
-          return `❌ Client "${client_name}" not found. Please create the client first using create_client.`;
+          const availableClients = await ClientModel.find({ managerId }).select('name').lean();
+          const clientNames = availableClients.map(c => c.name).join(', ');
+          return `❌ Client "${client_name}" not found. Available clients: ${clientNames || 'none'}. Would you like me to create "${client_name}" first?`;
         }
 
         // Find role
@@ -1899,7 +1968,9 @@ async function executeFunctionCall(
         }).lean();
 
         if (!role) {
-          return `❌ Role "${role_name}" not found. Please create the role first using create_role.`;
+          const availableRoles = await RoleModel.find({ managerId }).select('name').lean();
+          const roleNames = availableRoles.map(r => r.name).join(', ');
+          return `❌ Role "${role_name}" not found. Available roles: ${roleNames || 'none'}. Would you like me to create "${role_name}" first?`;
         }
 
         // Create or update tariff
@@ -3004,6 +3075,34 @@ ${topStaff ? `Most Flagged: ${topStaff}` : ''}`;
           return `❌ Cannot create events in the past. The date ${date} has already passed.`;
         }
 
+        // Dedup guard: if an identical event was created in the last 5 minutes, return it
+        const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+        const existingDup = await EventModel.findOne({
+          managerId,
+          client_name,
+          date: eventDate,
+          start_time: call_time,
+          end_time,
+          createdAt: { $gte: fiveMinAgo },
+        }).lean();
+
+        if (existingDup) {
+          // Pre-fetch teams for the response (same as normal create path)
+          const dupTeams = await TeamModel.find({ managerId }).select('name _id').sort({ name: 1 }).lean();
+          let dupSummary = `⚠️ This event already exists (created moments ago). Event ID: ${existingDup._id}\n`;
+          dupSummary += `👥 Client: ${existingDup.client_name} | 📅 Date: ${date} | Status: ${existingDup.status}\n`;
+          dupSummary += `Use this event ID instead of creating a new one.`;
+          if (existingDup.status === 'draft' && dupTeams.length > 0) {
+            if (dupTeams.length === 1) {
+              dupSummary += `\n\n📤 PUBLISH INFO: Event is DRAFT. Manager has 1 team: "${dupTeams[0]!.name}" (team_id: ${dupTeams[0]!._id}). Ask if they want to publish. Call publish_event with event_id: "${existingDup._id}" and target_team_ids: ["${dupTeams[0]!._id}"].`;
+            } else {
+              const teamList = dupTeams.map(t => `"${t.name}" (team_id: ${t._id})`).join(', ');
+              dupSummary += `\n\n📤 PUBLISH INFO: Event is DRAFT. Manager has ${dupTeams.length} teams: ${teamList}. Ask which team to publish to.`;
+            }
+          }
+          return dupSummary;
+        }
+
         // Auto-generate shift name from client and date
         const shiftName = `${client_name} - ${eventDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
 
@@ -3060,7 +3159,19 @@ ${topStaff ? `Most Flagged: ${topStaff}` : ''}`;
         }
         if (uniform) summary += `👕 Uniform: ${uniform}\n`;
         if (headcount_total) summary += `👥 Guest count: ${headcount_total}\n`;
-        summary += `\n📝 Status: DRAFT — ask the user if they want to publish it to staff right away.`;
+        summary += `\n📝 Status: DRAFT`;
+
+        // Pre-fetch teams so the AI can present publish options immediately
+        // (avoids a separate get_teams call that the model often fails to make)
+        const teams = await TeamModel.find({ managerId }).select('name _id').sort({ name: 1 }).lean();
+        if (teams.length === 1) {
+          summary += `\n\n📤 PUBLISH INFO: Manager has 1 team: "${teams[0]!.name}" (team_id: ${teams[0]!._id}). Ask if they want to publish to this team. If yes, call publish_event with target_team_ids: ["${teams[0]!._id}"].`;
+        } else if (teams.length > 1) {
+          const teamList = teams.map(t => `"${t.name}" (team_id: ${t._id})`).join(', ');
+          summary += `\n\n📤 PUBLISH INFO: Manager has ${teams.length} teams: ${teamList}. Ask which team to publish to (or all). Use the team_id(s) in publish_event's target_team_ids. Do NOT call get_teams — you already have the info.`;
+        } else {
+          summary += `\n\n📤 PUBLISH INFO: Manager has no teams. They can still publish as open shift (call publish_event without target_team_ids).`;
+        }
 
         return summary;
       }
@@ -3088,6 +3199,55 @@ ${topStaff ? `Most Flagged: ${topStaff}` : ''}`;
           }
           if (new Date(ev.date) < todayBulk) {
             return `❌ Event #${i + 1} has a past date (${ev.date}). All events must be in the future.`;
+          }
+        }
+
+        // Dedup guard: check each event against recently created ones (last 5 min)
+        const bulkFiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+        const recentEvents = await EventModel.find({
+          managerId,
+          createdAt: { $gte: bulkFiveMinAgo },
+        }).select('_id client_name date start_time status').lean();
+
+        if (recentEvents.length > 0) {
+          // Check each incoming event against recent ones
+          const matchedDups: any[] = [];
+          for (const ev of events) {
+            const evDate = new Date(ev.date).toISOString().slice(0, 10);
+            const match = recentEvents.find((r: any) => {
+              const rDate = new Date(r.date).toISOString().slice(0, 10);
+              return r.client_name === ev.client_name && rDate === evDate && r.start_time === ev.call_time;
+            });
+            if (match) matchedDups.push(match);
+          }
+
+          // If most events already exist, block the creation
+          if (matchedDups.length >= Math.ceil(events.length / 2)) {
+            // Get ALL recent events for this client to show complete picture
+            const allRecent = recentEvents.filter((r: any) =>
+              events.some((ev: any) => r.client_name === ev.client_name)
+            );
+            const bulkDupTeams = await TeamModel.find({ managerId }).select('name _id').sort({ name: 1 }).lean();
+            let dupMsg = `⚠️ These events already exist (created moments ago). Found ${allRecent.length} matching events:\n`;
+            allRecent.forEach((d: any, i: number) => {
+              const dt = new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+              dupMsg += `  ${i + 1}. ${d.client_name} — ${dt} — ID: ${d._id} (${d.status})\n`;
+            });
+            dupMsg += `\nDo NOT create new events. Use these existing event IDs.`;
+
+            const draftDups = allRecent.filter((d: any) => d.status === 'draft');
+            if (draftDups.length > 0) {
+              const draftIds = draftDups.map((d: any) => `"${d._id}"`).join(', ');
+              if (bulkDupTeams.length === 1) {
+                dupMsg += `\n\n📤 PUBLISH INFO: ${draftDups.length} are DRAFT. Manager has 1 team: "${bulkDupTeams[0]!.name}" (team_id: ${bulkDupTeams[0]!._id}). To publish, call publish_events_bulk with event_ids: [${draftIds}] and target_team_ids: ["${bulkDupTeams[0]!._id}"].`;
+              } else if (bulkDupTeams.length > 1) {
+                const teamList = bulkDupTeams.map(t => `"${t.name}" (team_id: ${t._id})`).join(', ');
+                dupMsg += `\n\n📤 PUBLISH INFO: ${draftDups.length} are DRAFT. Manager has ${bulkDupTeams.length} teams: ${teamList}. To publish, call publish_events_bulk with event_ids: [${draftIds}] and target_team_ids.`;
+              } else {
+                dupMsg += `\n\n📤 PUBLISH INFO: ${draftDups.length} are DRAFT. No teams. To publish, call publish_events_bulk with event_ids: [${draftIds}].`;
+              }
+            }
+            return dupMsg;
           }
         }
 
@@ -3147,6 +3307,17 @@ ${topStaff ? `Most Flagged: ${topStaff}` : ''}`;
           summary += `\nEvent IDs: ${ids.join(', ')}\n`;
           summary += `📝 All are DRAFT — ask the user if they want to publish all of them.`;
 
+          // Pre-fetch teams for publish flow (fat response pattern)
+          const bulkTeams = await TeamModel.find({ managerId }).select('name _id').sort({ name: 1 }).lean();
+          if (bulkTeams.length === 1) {
+            summary += `\n\n📤 PUBLISH INFO: Manager has 1 team: "${bulkTeams[0]!.name}" (team_id: ${bulkTeams[0]!._id}). Ask if they want to publish all to this team. If yes, call publish_events_bulk with event_ids: [${ids.map(id => `"${id}"`).join(', ')}] and target_team_ids: ["${bulkTeams[0]!._id}"].`;
+          } else if (bulkTeams.length > 1) {
+            const bulkTeamList = bulkTeams.map(t => `"${t.name}" (team_id: ${t._id})`).join(', ');
+            summary += `\n\n📤 PUBLISH INFO: Manager has ${bulkTeams.length} teams: ${bulkTeamList}. Ask which team to publish to (or all). Use publish_events_bulk with event_ids: [${ids.map(id => `"${id}"`).join(', ')}] and target_team_ids.`;
+          } else {
+            summary += `\n\n📤 PUBLISH INFO: No teams found. Call publish_events_bulk with event_ids: [${ids.map(id => `"${id}"`).join(', ')}] (publishes as open shift).`;
+          }
+
           return summary;
         } catch (txErr: any) {
           await session.abortTransaction();
@@ -3158,7 +3329,7 @@ ${topStaff ? `Most Flagged: ${topStaff}` : ''}`;
       }
 
       case 'publish_event': {
-        const { event_id, visibility, target_staff } = functionArgs;
+        const { event_id, visibility, target_staff, target_team_ids } = functionArgs;
 
         if (!event_id || !mongoose.Types.ObjectId.isValid(event_id)) {
           return '❌ Invalid event_id. Please provide the event ID from create_event.';
@@ -3218,11 +3389,11 @@ ${topStaff ? `Most Flagged: ${topStaff}` : ''}`;
           return response;
         }
 
-        // Default: public publish to all teams
+        // Public publish — optionally scoped to specific teams
         const result = await shareEventPublic({
           managerId,
           eventId: event_id,
-          targetTeamIds: null,
+          targetTeamIds: target_team_ids?.length ? target_team_ids : null,
           managerName: mgrName,
           managerEmail: mgrEmail,
         });
@@ -3282,7 +3453,7 @@ ${topStaff ? `Most Flagged: ${topStaff}` : ''}`;
       }
 
       case 'publish_events_bulk': {
-        const { event_ids = [] } = functionArgs;
+        const { event_ids = [], target_team_ids } = functionArgs;
 
         if (!Array.isArray(event_ids) || event_ids.length === 0) {
           return '❌ No event IDs provided.';
@@ -3293,7 +3464,7 @@ ${topStaff ? `Most Flagged: ${topStaff}` : ''}`;
 
         for (const eid of event_ids) {
           try {
-            const result = await executeFunctionCall('publish_event', { event_id: eid }, managerId);
+            const result = await executeFunctionCall('publish_event', { event_id: eid, target_team_ids }, managerId);
             if (result.startsWith('✅')) {
               successCount++;
               results.push(`  ✅ ${eid}: Published`);
@@ -3336,47 +3507,7 @@ ${topStaff ? `Most Flagged: ${topStaff}` : ''}`;
         return `You have ${clients.length} client(s): ${clientList}`;
       }
 
-      case 'get_events_summary': {
-        const { client_name, days_past = 30, days_future = 60 } = functionArgs;
-
-        const filter: any = { managerId };
-        if (client_name) {
-          filter.client_name = new RegExp(client_name, 'i');
-        }
-
-        const today = new Date();
-        const pastDate = new Date(today);
-        pastDate.setDate(pastDate.getDate() - days_past);
-        const futureDate = new Date(today);
-        futureDate.setDate(futureDate.getDate() + days_future);
-
-        filter.date = { $gte: pastDate, $lte: futureDate };
-
-        const events = await EventModel.find(filter)
-          .select('event_name client_name date venue_name city start_time end_time roles pay_rate_info status accepted_staff contact_name setup_time')
-          .sort({ date: 1 })
-          .limit(50)
-          .lean();
-
-        if (events.length === 0) {
-          return `No events found${client_name ? ` for client ${client_name}` : ''} in the specified date range.`;
-        }
-
-        const results = events.map((e: any) => {
-          const dateStr = e.date ? new Date(e.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No date';
-          const timeStr = e.start_time ? `${e.start_time} - ${e.end_time || '?'}` : '';
-          const staffCount = e.accepted_staff?.length || 0;
-          const totalNeeded = e.roles?.reduce((sum: number, r: any) => sum + (r.count || r.quantity || 0), 0) || 0;
-          const payInfo = e.roles?.map((r: any) => `${r.role || r.role_name}: ${r.pay_rate_info || 'no rate'}`).join(', ');
-          let line = `${dateStr}: ${e.event_name || 'Unnamed'} (${e.client_name || 'No client'}) at ${e.venue_name || 'TBD'}${timeStr ? `, ${timeStr}` : ''}, Status: ${e.status || 'draft'}, Staff: ${staffCount}/${totalNeeded}`;
-          if (payInfo) line += `, Pay: ${payInfo}`;
-          if (e.contact_name) line += `, Contact: ${e.contact_name}`;
-          if (e.setup_time) line += `, Setup: ${e.setup_time}`;
-          return line;
-        }).join('\n');
-
-        return `Found ${events.length} event(s):\n${results}`;
-      }
+      // get_events_summary handler removed — merged into search_events
 
       case 'get_team_members': {
         // Sanitize: Groq sometimes leaks tool_call metadata into args
@@ -3440,12 +3571,12 @@ ${topStaff ? `Most Flagged: ${topStaff}` : ''}`;
         const { event_id, ...updates } = functionArgs;
 
         if (!event_id) {
-          return `❌ Missing event_id. Use search_shifts first to find the event, then use the [ID: ...] value.`;
+          return `❌ Missing event_id. Use search_events first to find the event, then use the [ID: ...] value.`;
         }
 
         // Validate event_id is a valid ObjectId
         if (!mongoose.Types.ObjectId.isValid(event_id)) {
-          return `❌ Invalid event ID "${event_id}". Use search_shifts to find the correct event ID.`;
+          return `❌ Invalid event ID "${event_id}". Use search_events to find the correct event ID.`;
         }
 
         // Find the event first
@@ -3508,7 +3639,20 @@ ${topStaff ? `Most Flagged: ${topStaff}` : ''}`;
         if (updates.contact_phone) changedFields.push(`📞 Phone → ${updates.contact_phone}`);
         if (updates.headcount_total) changedFields.push(`👥 Headcount → ${updates.headcount_total}`);
 
-        return `✅ Successfully updated event (ID: ${event_id})\n${changedFields.join('\n')}`;
+        let updateResponse = `✅ Successfully updated event (ID: ${event_id})\n${changedFields.join('\n')}`;
+
+        // If event is still draft, offer publish with pre-fetched team info
+        if (existingEvent.status === 'draft') {
+          const updateTeams = await TeamModel.find({ managerId }).select('name _id').sort({ name: 1 }).lean();
+          if (updateTeams.length === 1) {
+            updateResponse += `\n\n📤 PUBLISH INFO: Event is still DRAFT. Manager has 1 team: "${updateTeams[0]!.name}" (team_id: ${updateTeams[0]!._id}). Ask if they want to publish now.`;
+          } else if (updateTeams.length > 1) {
+            const updateTeamList = updateTeams.map(t => `"${t.name}" (team_id: ${t._id})`).join(', ');
+            updateResponse += `\n\n📤 PUBLISH INFO: Event is still DRAFT. Manager has ${updateTeams.length} teams: ${updateTeamList}. Ask which team to publish to.`;
+          }
+        }
+
+        return updateResponse;
       }
 
       case 'send_message_to_staff': {
@@ -3918,6 +4062,12 @@ async function handleGroqRequest(
 5. **NEVER mention YYYY-MM-DD, ISO format, or any technical format** to the user
 6. **NEVER create events in the past** - ALL event dates MUST be today or in the future
 
+🔄 CONVERSATIONAL FOLLOW-UP (CRITICAL):
+When you just asked the user a question (e.g., "Which team should I publish to?", "Would you like to publish?", "Should I use this client?"), their NEXT message is the ANSWER to your question. Do NOT interpret it as a new unrelated request. For example:
+- You asked "Which team?" → user says "Rivera" → that means the team named Rivera, NOT "create a client called Rivera"
+- You asked "Want to publish?" → user says "Si" → that means YES to publish, NOT a new query
+Always check your last message before interpreting a short user reply.
+
 🎯 CONFIRMATION STYLE - ALWAYS USE NATURAL LANGUAGE:
 When you CREATE, UPDATE, or DELETE something:
 ✅ GOOD: "Done! I've created the event for **Saturday, January 25th** at **The Grand Ballroom**."
@@ -3953,8 +4103,11 @@ ALWAYS respond in the SAME LANGUAGE the user is speaking.
 - Required: client_name, date, call_time (start_time), end_time, at least 1 role
 - Before creating: present a summary and ask user to confirm
 - Once confirmed: use create_event tool (creates as DRAFT)
-- After creating: ALWAYS ask "Would you like me to publish this to your staff right away?"
-- If user says yes: use publish_event tool with the event_id from create_event result
+- After creating: The create_event response includes PUBLISH INFO with the manager's teams and their IDs.
+- Use this info to ask "Would you like me to publish this to [team name]?" (or list teams if multiple).
+- If user says yes (or picks a team): call publish_event immediately with the target_team_ids from the PUBLISH INFO. Do NOT call get_teams — you already have the IDs.
+- If user says "all" / "todos": call publish_event without target_team_ids.
+- NEVER show team IDs to the user — only show team names.
 
 📤 SHARING EVENTS WITH STAFF:
 After you create an event, it is a DRAFT. You must share it to make it visible. You have three ways:
@@ -3963,14 +4116,18 @@ After you create an event, it is a DRAFT. You must share it to make it visible. 
 3. **Direct Invitation (1-on-1)**: To invite one person to a specific role, use invite_staff_to_event. This sends a direct chat message they can accept or decline. Use when the manager says "Invite Jane to the bartender role."
 
 Default behavior:
-- If manager says "publish" / "yes" / "send to everyone" → use publish_event (defaults to public)
+- If manager says "publish" / "yes" / "send to everyone" → use publish_event with target_team_ids from the PUBLISH INFO (do NOT call get_teams)
+- If manager says "all teams" / "todos los equipos" → use publish_event without target_team_ids (publishes to all)
 - If manager says "share with Maria and Juan only" → use publish_event with visibility: 'private' + target_staff
 - If manager says "invite Jane as bartender" → use invite_staff_to_event
 
 📦 BULK CREATION:
 - For recurring patterns ("every Saturday in March", "3 shifts next week"): use create_events_bulk
 - Present full list summary before creating, ask for confirmation
-- After bulk creation: offer to publish all with publish_events_bulk
+- After bulk creation: The response includes PUBLISH INFO with event IDs and team IDs.
+- Ask "Would you like me to publish all of these to [team name]?"
+- If user says yes: call publish_events_bulk with event_ids and target_team_ids from the PUBLISH INFO. Do NOT call create_events_bulk again — the events already exist.
+- ⚠️ CRITICAL: When user says "yes"/"si"/"publish" after bulk creation, that means PUBLISH the existing drafts. NEVER re-create them. Use publish_events_bulk with the IDs from the previous response.
 
 💬 MESSAGING STAFF:
 - Individual: Use send_message_to_staff with staff_name and message
@@ -3982,12 +4139,14 @@ Default behavior:
 - Messages are delivered as real chat messages with push notifications
 
 🔧 ENRICHED TOOL DATA — AVOID REDUNDANT CALLS:
-- search_shifts returns pay rates, contact info, setup time, and staffing counts per event.
-  → When user asks "who's the contact?" or "what's the pay?" after a search, the data is already there. Do NOT call the tool again.
+- search_events returns IDs, pay rates, contact info, setup time, staffing counts, visibility, hours status, and notes.
+  → Use scope "upcoming" when user asks about upcoming/active/next/pending jobs.
+  → Use scope "past" for completed/finished events.
+  → No scope = date range window (default 30 past, 60 future).
+  → Can also filter by specific status, visibility, hours_status, client, venue, event name.
+  → When user asks "who's the contact?" or "what's the pay?" after viewing events, data is already there — do NOT call again.
 - get_staff_stats returns a monthly breakdown (byMonth) with events and hours per month.
   → When user asks "how did she do in February vs March?", use the PREVIOUS get_staff_stats result. Do NOT call the tool again.
-- get_events_summary returns pay rates, staffing counts, contact info, and setup time per event.
-  → When user asks "what are we paying?" or "how many staff are assigned?" after viewing events, the data is already there.
 
 🚫 DO NOT output EVENT_COMPLETE, EVENT_UPDATE, or other markers. Use the create_event / update_event tools instead.
 `;
@@ -4039,7 +4198,7 @@ Default behavior:
   // Uses conversation context as fallback for short follow-ups ("Bartenders", "Yes", etc.)
   const lastUserMsg = extractLastUserMessage(messages);
   const conversationContext = extractRecentUserMessages(messages, 3);
-  const selectedTools = selectToolsForQuery(lastUserMsg, AI_TOOLS, undefined, conversationContext);
+  const selectedTools = selectToolsForQuery(lastUserMsg, AI_TOOLS, undefined, conversationContext, messages);
   console.log(`[AI:${config.name}] Tool selection: ${selectedTools.length}/${AI_TOOLS.length} tools for query: "${lastUserMsg.substring(0, 80)}"`);
 
   const groqTools = selectedTools.map(tool => ({
@@ -4404,6 +4563,37 @@ Default behavior:
 
         if (!finalContent) {
           throw new Error('No content after tool call processing');
+        }
+
+        // Persist key tool context (event IDs, PUBLISH INFO) across conversation turns.
+        // The model's text response omits IDs (per prompt rules), but subsequent turns need them.
+        // Append a hidden TOOL_CONTEXT block that the frontend stores in history but strips from display.
+        const toolContextParts: string[] = [];
+        for (const msg of currentMessages) {
+          if (msg.role === 'tool' && typeof msg.content === 'string') {
+            // Extract lines with actionable data (IDs, publish info)
+            const lines = msg.content.split('\n');
+            for (const line of lines) {
+              if (line.includes('PUBLISH INFO') || line.includes('Event ID') || line.includes('event_ids:')) {
+                toolContextParts.push(line.trim());
+              }
+            }
+            // Also capture event ID lines from create responses (e.g., "✅ Event created! Event ID: xxx")
+            const idMatch = msg.content.match(/Event ID:\s*([a-f0-9]{24})/i);
+            if (idMatch) {
+              toolContextParts.push(`Event ID: ${idMatch[1]}`);
+            }
+            // Capture bulk event ID lists
+            const bulkIdsMatch = msg.content.match(/Event IDs:\s*(.+)/);
+            if (bulkIdsMatch) {
+              toolContextParts.push(`Event IDs: ${bulkIdsMatch[1]}`);
+            }
+          }
+        }
+        if (toolContextParts.length > 0) {
+          const uniqueContext = [...new Set(toolContextParts)];
+          finalContent += `\n\n---TOOL_CONTEXT---\n${uniqueContext.join('\n')}`;
+          console.log(`[AI:${synthesisConfig.name}] Appended ${uniqueContext.length} tool context lines for cross-turn persistence`);
         }
 
         console.log(`[AI:${synthesisConfig.name}] Total usage - prompt: ${totalUsage.prompt_tokens}, completion: ${totalUsage.completion_tokens}, reasoning: ${totalUsage.reasoning_tokens}, total: ${totalUsage.total_tokens}`);

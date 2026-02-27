@@ -136,7 +136,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
         _originalPicture = updated.originalPicture;
         _caricatureHistory = me.caricatureHistory;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(content: Text(AppLocalizations.of(context)!.newLookSaved)),
       );
     } catch (e) {
@@ -166,7 +166,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
       setState(() {
         _originalPicture = updated.originalPicture;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(content: Text(AppLocalizations.of(context)!.profilePictureUpdated)),
       );
     } catch (e) {
@@ -199,7 +199,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
       final updated = await _service.deleteCaricature(index);
       if (!mounted) return;
       setState(() => _caricatureHistory = updated);
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(content: Text(l10n.creationDeleted)),
       );
     } catch (e) {
@@ -224,7 +224,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
         _pictureCtrl.text = result.picture ?? _originalPicture!;
         _originalPicture = null;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(content: Text(AppLocalizations.of(context)!.revertedToOriginal)),
       );
     } catch (e) {
@@ -247,7 +247,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
         picture: _pictureCtrl.text.trim().isEmpty ? null : _pictureCtrl.text.trim(),
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(content: Text(AppLocalizations.of(context)!.profileUpdated)),
       );
       // Close the profile page and return to onboarding after successful save
@@ -587,7 +587,7 @@ class _ManagerProfilePageState extends State<ManagerProfilePage> {
       await _load();
       setState(() => _linkingPhone = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(content: Text(AppLocalizations.of(context)!.phoneLinkedSuccessfully)),
         );
       }

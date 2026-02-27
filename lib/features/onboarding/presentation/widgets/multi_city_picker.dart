@@ -38,7 +38,7 @@ class _MultiCityPickerState extends State<MultiCityPicker> {
       // Check if city already exists
       if (_selectedCities.any((c) => c.name.toLowerCase() == cityString.toLowerCase())) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
             SnackBar(
               content: Text(AppLocalizations.of(context)!.cityAlreadyInList),
               backgroundColor: Colors.orange,

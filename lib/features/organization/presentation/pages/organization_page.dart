@@ -114,7 +114,7 @@ class _OrganizationPageState extends State<OrganizationPage> {
           await _loadStaffPool();
         }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           const SnackBar(
             content: Text('Failed to update staff policy'),
             backgroundColor: Colors.red,
@@ -141,7 +141,7 @@ class _OrganizationPageState extends State<OrganizationPage> {
     if (mounted) {
       setState(() => _actionLoading = false);
       if (entry != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           const SnackBar(
             content: Text('Staff added to approved pool'),
             backgroundColor: Colors.green,
@@ -153,7 +153,7 @@ class _OrganizationPageState extends State<OrganizationPage> {
               (_org!['approvedStaffCount'] as int? ?? 0) + 1;
         });
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           const SnackBar(
             content: Text('Failed to add staff (may already exist)'),
             backgroundColor: Colors.red,
@@ -267,7 +267,7 @@ class _OrganizationPageState extends State<OrganizationPage> {
     if (mounted) {
       setState(() => _actionLoading = false);
       if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           const SnackBar(
             content: Text('Staff removed from approved pool'),
             backgroundColor: Colors.green,
@@ -291,7 +291,7 @@ class _OrganizationPageState extends State<OrganizationPage> {
     if (mounted) {
       setState(() => _actionLoading = false);
       if (result != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           const SnackBar(
             content: Text('Organization created'),
             backgroundColor: Colors.green,
@@ -299,7 +299,7 @@ class _OrganizationPageState extends State<OrganizationPage> {
         );
         await _loadOrg();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           const SnackBar(
             content: Text('Failed to create organization'),
             backgroundColor: Colors.red,
@@ -350,7 +350,7 @@ class _OrganizationPageState extends State<OrganizationPage> {
     if (mounted) {
       setState(() => _actionLoading = false);
       if (result != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text('Invite sent to $email'),
             backgroundColor: Colors.green,
@@ -358,7 +358,7 @@ class _OrganizationPageState extends State<OrganizationPage> {
         );
         await _loadOrg();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           const SnackBar(
             content: Text('Failed to send invite'),
             backgroundColor: Colors.red,
@@ -433,7 +433,7 @@ class _OrganizationPageState extends State<OrganizationPage> {
     if (mounted) {
       setState(() => _actionLoading = false);
       if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text('Ownership transferred to $memberName'),
             backgroundColor: Colors.green,
@@ -441,7 +441,7 @@ class _OrganizationPageState extends State<OrganizationPage> {
         );
         await _loadOrg();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           const SnackBar(
             content: Text('Failed to transfer ownership'),
             backgroundColor: Colors.red,
@@ -474,7 +474,7 @@ class _OrganizationPageState extends State<OrganizationPage> {
           await launchUrl(uri, mode: LaunchMode.externalApplication);
         }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           const SnackBar(
             content: Text('Failed to open billing portal'),
             backgroundColor: Colors.red,
@@ -500,7 +500,7 @@ class _OrganizationPageState extends State<OrganizationPage> {
           await launchUrl(uri, mode: LaunchMode.externalApplication);
         }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           const SnackBar(
             content: Text('Failed to start checkout'),
             backgroundColor: Colors.red,

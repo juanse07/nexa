@@ -68,7 +68,7 @@ class _CreateInviteLinkDialogState extends State<CreateInviteLinkDialog> {
 
   void _copyToClipboard(String text, String label) {
     Clipboard.setData(ClipboardData(text: text));
-    ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
       SnackBar(content: Text('$label copied to clipboard!')),
     );
   }

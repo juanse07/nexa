@@ -180,7 +180,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
 
     if (sent == true) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(content: Text(l10n.inviteSentTo(emailCtrl.text.trim()))),
       );
       await _loadData();
@@ -237,7 +237,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
     try {
       await _teamsService.revokeInviteLink(widget.teamId, inviteId);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(content: Text(l10n.inviteLinkRevoked)),
         );
         await _loadData();
@@ -338,7 +338,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
                         icon: const Icon(Icons.copy, size: 18),
                         onPressed: () {
                           Clipboard.setData(ClipboardData(text: deepLink));
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                             SnackBar(content: Text(l10n.linkCopied)),
                           );
                         },
@@ -368,7 +368,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
                         icon: const Icon(Icons.copy, size: 18),
                         onPressed: () {
                           Clipboard.setData(ClipboardData(text: shortCode));
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
                             SnackBar(content: Text(l10n.codeCopied)),
                           );
                         },
@@ -411,7 +411,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
     try {
       await _teamsService.approveApplicant(widget.teamId, applicantId);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(content: Text(l10n.applicantApproved)),
       );
       await _loadData();
@@ -445,7 +445,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
     try {
       await _teamsService.denyApplicant(widget.teamId, applicantId);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(content: Text(l10n.applicantDenied)),
       );
       await _loadData();
@@ -518,7 +518,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
 
     if (added == true) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(content: Text(l10n.coManagerAdded)),
       );
       await _loadData();
@@ -553,7 +553,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
         coManagerId: coManagerId,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(content: Text(l10n.coManagerRemoved)),
       );
       await _loadData();
@@ -796,7 +796,7 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
         provider.isEmpty ||
         subject == null ||
         subject.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         SnackBar(
           content: Text(l10n.userMissingProviderError),
         ),

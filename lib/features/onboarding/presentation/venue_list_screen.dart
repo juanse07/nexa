@@ -205,7 +205,7 @@ class _VenueListScreenState extends State<VenueListScreen> {
   }
 
   void _showSnackBar(String message, Color backgroundColor) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: backgroundColor,

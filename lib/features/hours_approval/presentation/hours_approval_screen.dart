@@ -537,7 +537,7 @@ class _HoursApprovalScreenState extends State<HoursApprovalScreen> {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
           SnackBar(
             content: Text(approveResult.message),
             backgroundColor: approveResult.approvedCount > 0 ? Colors.green : Colors.orange,
