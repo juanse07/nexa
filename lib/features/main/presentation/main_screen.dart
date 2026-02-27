@@ -13,6 +13,9 @@ import '../../chat/presentation/conversations_screen.dart';
 import '../../attendance/presentation/attendance_dashboard_screen.dart';
 import '../../statistics/presentation/statistics_dashboard_screen.dart';
 import '../../users/presentation/pages/settings_page.dart';
+import '../../users/presentation/pages/manager_profile_page.dart';
+import '../../auth/data/services/auth_service.dart';
+import '../../auth/presentation/pages/login_page.dart';
 import '../../extraction/presentation/ai_chat_screen.dart';
 import '../../users/data/services/manager_service.dart';
 import '../../../core/network/api_client.dart';
@@ -526,39 +529,56 @@ class _MainScreenState extends State<MainScreen>
                 ),
               ),
 
-              // Profile header
+              // Profile header — tappable to open profile page
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Row(
                   children: [
-                    InitialsAvatar(
-                      imageUrl: _profilePictureUrl,
-                      firstName: _profileFirstName ?? '',
-                      lastName: _profileLastName ?? '',
-                      radius: 28,
-                    ),
-                    const SizedBox(width: 16),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            fullName.isNotEmpty ? fullName : 'Manager',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.navySpaceCadet,
+                      child: GestureDetector(
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const ManagerProfilePage()),
+                          );
+                        },
+                        behavior: HitTestBehavior.opaque,
+                        child: Row(
+                          children: [
+                            InitialsAvatar(
+                              imageUrl: _profilePictureUrl,
+                              firstName: _profileFirstName ?? '',
+                              lastName: _profileLastName ?? '',
+                              radius: 28,
                             ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'FlowShift Manager',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.grey[500],
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    fullName.isNotEmpty ? fullName : 'Manager',
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.navySpaceCadet,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'FlowShift Manager',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.grey[500],
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                            Icon(Icons.chevron_right_rounded,
+                                size: 20, color: Colors.grey[400]),
+                          ],
+                        ),
                       ),
                     ),
                     IconButton(
@@ -608,6 +628,24 @@ class _MainScreenState extends State<MainScreen>
                         Navigator.pop(ctx);
                         Navigator.of(context).push(
                           MaterialPageRoute(builder: (_) => const SettingsPage()),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    Divider(height: 1, color: AppColors.borderLight),
+                    const SizedBox(height: 8),
+                    _buildSheetActionTile(
+                      ctx: ctx,
+                      icon: Icons.logout_rounded,
+                      label: l10n.logout,
+                      color: Colors.red[600],
+                      onTap: () async {
+                        Navigator.pop(ctx);
+                        await AuthService.signOut();
+                        if (!mounted) return;
+                        Navigator.of(context).pushAndRemoveUntil(
+                          MaterialPageRoute(builder: (_) => const LoginPage()),
+                          (_) => false,
                         );
                       },
                     ),
@@ -671,7 +709,10 @@ class _MainScreenState extends State<MainScreen>
     required IconData icon,
     required String label,
     required VoidCallback onTap,
+    Color? color,
   }) {
+    final iconColor = color ?? Colors.grey[600];
+    final textColor = color ?? AppColors.textSecondary;
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -683,14 +724,14 @@ class _MainScreenState extends State<MainScreen>
         ),
         child: Row(
           children: [
-            Icon(icon, size: 22, color: Colors.grey[600]),
+            Icon(icon, size: 22, color: iconColor),
             const SizedBox(width: 16),
             Text(
               label,
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w500,
-                color: AppColors.textSecondary,
+                color: textColor,
               ),
             ),
             const Spacer(),
