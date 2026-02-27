@@ -1093,14 +1093,20 @@ Respond in the same language the user speaks. Be concise and conversational. Use
       _extractFieldsFromConversation(userMessage, content);
     }
 
-    // Strip technical markers and JSON before showing to user
-    final userFacingContent = _extractUserFriendlyMessage(content);
-
-    // Separate tool context from display content.
+    // Strip tool context BEFORE extracting user-friendly message
     // Tool context (event IDs, publish info) must persist in conversation history
     // so the model can reference them on subsequent turns (e.g., user says "yes" to publish).
-    String historyContent = userFacingContent;
+    String contentForDisplay = content;
     final toolContextSeparator = '---TOOL_CONTEXT---';
+    if (content.contains(toolContextSeparator)) {
+      contentForDisplay = content.substring(0, content.indexOf(toolContextSeparator)).trim();
+    }
+
+    // Strip technical markers and JSON before showing to user
+    final userFacingContent = _extractUserFriendlyMessage(contentForDisplay);
+
+    // Re-attach tool context to history so the model retains event IDs for follow-up turns
+    String historyContent = userFacingContent;
     if (content.contains(toolContextSeparator)) {
       final toolContext = content.substring(content.indexOf(toolContextSeparator));
       historyContent = '$userFacingContent\n\n$toolContext';
