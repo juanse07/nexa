@@ -39,11 +39,12 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
   /// Strips JSON command blocks from message content for display
   /// These blocks are used by the backend but shouldn't be shown to users
   String _stripJsonBlocks(String content) {
-    // Pattern to match command blocks like:
-    // EVENT_COMPLETE { ... }
-    // TARIFF_CREATE { ... }
-    // CLIENT_CREATE { ... }
-    // EVENT_UPDATE { ... }
+    // Strip tool context block (MongoDB IDs, PUBLISH INFO) — kept in history for model, hidden from UI
+    const toolContextSeparator = '---TOOL_CONTEXT---';
+    if (content.contains(toolContextSeparator)) {
+      content = content.substring(0, content.indexOf(toolContextSeparator)).trim();
+    }
+
     final commandPattern = RegExp(
       r'\n*(EVENT_COMPLETE|TARIFF_CREATE|CLIENT_CREATE|EVENT_UPDATE)\s*\{[\s\S]*?\}(?:\s*\})*',
       multiLine: true,
@@ -183,7 +184,7 @@ class _AnimatedChatMessageWidgetState extends State<AnimatedChatMessageWidget>
   }
 
   void _startTypewriterEffect() {
-    final text = widget.message.content;
+    final text = _stripJsonBlocks(widget.message.content);
 
     // Adaptive batch size: always complete in ~75 ticks × 20ms ≈ 1.5 seconds,
     // regardless of response length. Short answers feel like real-time typing;

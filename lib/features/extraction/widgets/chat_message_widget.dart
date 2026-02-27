@@ -53,6 +53,12 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
   /// Strips JSON command blocks from message content for display
   /// These blocks are used by the backend but shouldn't be shown to users
   String _stripJsonBlocks(String content) {
+    // Strip tool context block (MongoDB IDs, PUBLISH INFO) — kept in history for model, hidden from UI
+    const toolContextSeparator = '---TOOL_CONTEXT---';
+    if (content.contains(toolContextSeparator)) {
+      content = content.substring(0, content.indexOf(toolContextSeparator)).trim();
+    }
+
     final commandPattern = RegExp(
       r'\n*(EVENT_COMPLETE|TARIFF_CREATE|CLIENT_CREATE|EVENT_UPDATE)\s*\{[\s\S]*?\}(?:\s*\})*',
       multiLine: true,
