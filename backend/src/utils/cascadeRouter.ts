@@ -97,12 +97,22 @@ function isInEventWorkflow(messages: { role: string; content: any }[]): boolean 
     const lower = msg.content.toLowerCase();
 
     if (msg.role === 'assistant') {
-      // Assistant just created an event, asked about publishing, or asked which team
+      // Assistant proposed/created/asked about an event
       if (
         lower.includes('publicar') || lower.includes('publish') ||
         lower.includes('equipo') || lower.includes('which team') ||
         lower.includes('creado') || lower.includes('created') ||
-        lower.includes('draft')
+        lower.includes('draft') ||
+        // Confirmation questions about event creation (any conjugation)
+        lower.includes('crearé') || lower.includes('lo creo') ||
+        lower.includes('correcto') || lower.includes('correct') ||
+        lower.includes('te parece') || lower.includes('look good') ||
+        lower.includes('shall i') || lower.includes('want me to') ||
+        // Event summary signals (assistant just proposed an event)
+        lower.includes('roles:') || lower.includes('hora de llegada') ||
+        lower.includes('call time') || lower.includes('start time') ||
+        lower.includes('fecha:') || lower.includes('date:') ||
+        lower.includes('lugar:') || lower.includes('venue:')
       ) return true;
     }
   }
@@ -110,8 +120,9 @@ function isInEventWorkflow(messages: { role: string; content: any }[]): boolean 
   // Also check if the user's recent context has event-creation keywords
   const context = extractRecentUserMessages(messages, 3).toLowerCase();
   const eventKeywords = [
-    'create', 'crear', 'schedule', 'agendar', 'new event', 'nuevo evento',
-    'new shift', 'nuevo turno', 'publish', 'publicar',
+    'create', 'crear', 'crea ', 'cre ', 'creame', 'schedule', 'agendar',
+    'new event', 'nuevo evento', 'new shift', 'nuevo turno',
+    'publish', 'publicar', 'evento', 'event', 'job for', 'trabajo para',
   ];
   if (eventKeywords.some((kw) => context.includes(kw))) return true;
 
@@ -241,7 +252,7 @@ export const MANAGER_TOOL_CONFIG: ToolSelectionConfig = {
       'next week', 'next friday', 'next saturday', 'next sunday',
       'this weekend', 'tomorrow', 'tonight',
       'event for', 'shift for', 'gig for',
-      'crear', 'agendar', 'publicar', 'modificar evento', 'invitar',
+      'crear', 'crea ', 'creame', 'agendar', 'publicar', 'modificar evento', 'invitar',
       'nuevo evento', 'mismo que', 'evento anterior',
     ],
     CLIENT_MGMT: [

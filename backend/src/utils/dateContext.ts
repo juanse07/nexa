@@ -158,8 +158,11 @@ export function getFullSystemContext(timezone?: string): string {
     timeZone: tz
   });
   const nextYear = String(parseInt(currentYear) + 1);
-  const dateTimeContext = getDateTimeContext(tz);
   const isoDate = getISODate(tz);
+
+  // Day of week + date (no time — keeps this stable all day for prompt caching)
+  const dayOfWeek = now.toLocaleDateString('en-US', { weekday: 'long', timeZone: tz });
+  const fullDate = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: tz });
 
   // Get current month for date inference
   const currentMonth = now.toLocaleDateString('en-US', {
@@ -168,7 +171,7 @@ export function getFullSystemContext(timezone?: string): string {
   });
   const currentMonthNum = now.getMonth() + 1; // 1-12
 
-  return `Current system date/time: ${dateTimeContext}
+  return `Current date: ${dayOfWeek}, ${fullDate}
 Current year: ${currentYear}
 Next year: ${nextYear}
 Current month: ${currentMonth} (month ${currentMonthNum})

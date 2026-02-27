@@ -10,7 +10,7 @@ import FormData from 'form-data';
 import fs from 'fs';
 import { getDateTimeContext, getWelcomeDateContext, getFullSystemContext } from '../utils/dateContext';
 import { getProviderConfig } from '../utils/aiProvider';
-import { selectModelForQuery, shouldEscalateFromTools, selectToolsForQuery, extractLastUserMessage, extractRecentUserMessages, STAFF_TOOL_CONFIG, ESCALATION_MODEL, ESCALATION_PROVIDER } from '../utils/cascadeRouter';
+import { extractLastUserMessage } from '../utils/cascadeRouter';
 import { EventModel } from '../models/event';
 import { UserModel } from '../models/user';
 import { AvailabilityModel } from '../models/availability';
@@ -2222,14 +2222,15 @@ router.post('/ai/staff/chat/message', requireAuth, requireActiveSubscription, as
     const validated = chatMessageSchema.parse(req.body);
     const { messages, temperature, maxTokens, model } = validated;
 
-    // Cascade routing: classify query complexity → pick model + provider
-    const { provider: selectedProvider, model: selectedModel, tier } = selectModelForQuery(messages);
+    // Always use 120B with high reasoning — no cascade, no keyword routing.
+    const selectedProvider = 'groq' as const;
+    const selectedModel = 'openai/gpt-oss-120b';
 
-    console.log(`[ai/staff/chat/message] Cascade tier=${tier}, provider=${selectedProvider}, model=${selectedModel} for user ${userId}, subscription: ${subscriptionTier}`);
+    console.log(`[ai/staff/chat/message] provider=${selectedProvider}, model=${selectedModel} for user ${userId}, subscription: ${subscriptionTier}`);
 
     const timezone = getTimezoneFromRequest(req);
 
-    return await handleStaffGroqRequest(messages, temperature, maxTokens, res, timezone, userId, userKey, subscriptionTier, selectedModel, selectedProvider, tier);
+    return await handleStaffGroqRequest(messages, temperature, maxTokens, res, timezone, userId, userKey, subscriptionTier, selectedModel, selectedProvider, 'complex');
   } catch (err: any) {
     console.error('[ai/staff/chat/message] Error:', err);
     if (err instanceof z.ZodError) {
@@ -2263,7 +2264,7 @@ async function handleStaffGroqRequest(
   cascadeTier: 'simple' | 'complex' = 'simple'
 ) {
   const requestStartTime = Date.now();
-  const groqModel = model || 'openai/gpt-oss-20b';
+  const groqModel = model || 'openai/gpt-oss-120b';
   const config = getProviderConfig(provider, groqModel);
 
   if (!config.apiKey) {
@@ -2403,13 +2404,11 @@ When showing schedule information, use this friendly format:
     });
   }
 
-  // Dynamic tool selection: send only relevant tools based on user's query
+  // Send all tools — with only 10 staff tools, pre-filtering adds fragility for no benefit.
   const lastUserMsg = extractLastUserMessage(messages);
-  const conversationContext = extractRecentUserMessages(messages, 3);
-  const selectedTools = selectToolsForQuery(lastUserMsg, STAFF_AI_TOOLS, STAFF_TOOL_CONFIG, conversationContext);
-  console.log(`[AI:${config.name}] Staff tool selection: ${selectedTools.length}/${STAFF_AI_TOOLS.length} tools for query: "${lastUserMsg.substring(0, 80)}"`);
+  console.log(`[AI:${config.name}] Sending all ${STAFF_AI_TOOLS.length} staff tools for query: "${lastUserMsg.substring(0, 80)}"`);
 
-  const groqTools = selectedTools.map(tool => ({
+  const groqTools = STAFF_AI_TOOLS.map(tool => ({
     type: 'function',
     function: {
       name: tool.name,
@@ -2418,12 +2417,11 @@ When showing schedule information, use this friendly format:
     }
   }));
 
-  // Graduated reasoning: both tiers use medium effort
-  let reasoningEffort = 'medium';
-  let maxOutputTokens = 1500;
-  if (cascadeTier === 'complex') {
-    maxOutputTokens = 3000;
-  }
+  // Medium reasoning on 120B is the sweet spot: fast + capable.
+  // Reasoning only applies to the first call (Groq rejects it on follow-ups with tool results).
+  // Since the first call is just tool selection, medium effort is sufficient.
+  const reasoningEffort = 'medium';
+  const maxOutputTokens = 3000;
 
   // Build request body with model-specific optimizations
   const requestBody: any = {
@@ -2574,23 +2572,22 @@ When showing schedule information, use this friendly format:
         );
 
         // Multi-step tool calling loop (supports chaining e.g. get_schedule → check_availability)
+        // CRITICAL: Strip `reasoning` from assistant message before sending in follow-up.
+        // Groq returns { role, content, tool_calls, reasoning } when reasoning is enabled,
+        // but rejects follow-up requests that contain `reasoning` in message history (tool_use_failed 400).
+        const sanitizedAssistant: any = { role: assistantMessage.role, content: assistantMessage.content };
+        if (assistantMessage.tool_calls) sanitizedAssistant.tool_calls = assistantMessage.tool_calls;
+
         let currentMessages = [
           ...processedMessages,
-          assistantMessage,
+          sanitizedAssistant,
           ...toolResults
         ];
         const allToolsUsed = [...assistantMessage.tool_calls.map((tc: any) => tc.function.name)];
-        const maxToolSteps = 3;
 
-        // Method 2: Tool-based escalation — if initial tier was simple but
-        // the AI picked complex tools, switch to 120B for the synthesis step.
+        // Same model for synthesis — always 120B, no escalation needed.
         let synthesisConfig = config;
         let synthesisModel = requestBody.model;
-        if (cascadeTier === 'simple' && shouldEscalateFromTools(assistantMessage.tool_calls)) {
-          synthesisConfig = getProviderConfig(ESCALATION_PROVIDER, ESCALATION_MODEL);
-          synthesisModel = ESCALATION_MODEL;
-          console.log(`[AI:${config.name}] Tool-based escalation → ${ESCALATION_MODEL} @ ${ESCALATION_PROVIDER} (tools: ${allToolsUsed.join(', ')})`);
-        }
 
         const synthesisHeaders = {
           'Authorization': `Bearer ${synthesisConfig.apiKey}`,
@@ -2598,11 +2595,26 @@ When showing schedule information, use this friendly format:
         };
         const secondTimeout = (synthesisConfig.supportsReasoning && synthesisModel.includes('gpt-oss')) ? 120000 : 60000;
 
+        // --- finish_reason-driven tool call loop (industry standard) ---
+        // Instead of a fixed step count, let the model signal when it's done
+        // via finish_reason. Safety cap prevents infinite loops.
+        const SAFETY_CAP = 15;
+        const TOKEN_BUDGET = 100000; // Stay under Groq's ~128K context window
+
         let finalContent = '';
         let finalReasoning: string | null = null;
+        let step = 0;
 
-        for (let step = 0; step < maxToolSteps; step++) {
-          console.log(`[AI:${synthesisConfig.name}] Follow-up request step ${step + 1}/${maxToolSteps}...`);
+        while (step < SAFETY_CAP) {
+          step++;
+
+          // Token budget guard — stop before hitting context window limits
+          if (totalUsage.prompt_tokens > TOKEN_BUDGET) {
+            console.warn(`[AI:${synthesisConfig.name}] Token budget exceeded (${totalUsage.prompt_tokens}/${TOKEN_BUDGET}), forcing synthesis`);
+            break;
+          }
+
+          console.log(`[AI:${synthesisConfig.name}] Follow-up step ${step}/${SAFETY_CAP}...`);
 
           const response = await axios.post(
             synthesisConfig.baseUrl,
@@ -2614,7 +2626,7 @@ When showing schedule information, use this friendly format:
               tools: groqTools,
               tool_choice: 'auto',
               // NOTE: Omit reasoning params on follow-up requests with tool results
-              // to avoid tool_use_failed errors
+              // to avoid tool_use_failed errors from Groq
             },
             { headers: synthesisHeaders, validateStatus: () => true, timeout: secondTimeout }
           );
@@ -2627,6 +2639,10 @@ When showing schedule information, use this friendly format:
             totalUsage.reasoning_tokens += followUpUsage.completion_tokens_details?.reasoning_tokens || 0;
             totalUsage.total_tokens += followUpUsage.total_tokens || 0;
           }
+
+          const finishReason = response.data.choices?.[0]?.finish_reason;
+          const message = response.data.choices?.[0]?.message;
+          console.log(`[AI:${synthesisConfig.name}] Step ${step} finish_reason=${finishReason}`);
 
           // Handle tool_use_failed - use context-aware fallback
           if (response.status === 400 && response.data?.error?.code === 'tool_use_failed') {
@@ -2643,20 +2659,25 @@ When showing schedule information, use this friendly format:
                 }
               }).join('\n\n');
 
-            const originalUserMessage = processedMessages
-              .filter((m: any) => m.role === 'user')
-              .slice(-1)[0]?.content || '';
+            // Include recent conversation context (not just last user msg)
+            // so short confirmations like "Si"/"yes" have the assistant question they're answering.
+            // CRITICAL: Strip tool_calls from assistant messages — if the model sees prior tool_calls
+            // in history but no tools array, it tries to call tools anyway → Groq 400 "tool choice is none"
+            const nonSystemMessages = processedMessages.filter((m: any) => m.role !== 'system');
+            const recentContext = nonSystemMessages.slice(-6)
+              .filter((m: any) => m.role === 'user' || (m.role === 'assistant' && m.content))
+              .map((m: any) => ({ role: m.role, content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) }));
 
             const fallbackMessages = [
               ...processedMessages.filter((m: any) => m.role === 'system'),
-              ...processedMessages.filter((m: any) => m.role === 'user').slice(-1),
+              ...recentContext,
               {
                 role: 'assistant',
                 content: `I looked up the relevant data:\n\n${allToolResultsSummary}`
               },
               {
                 role: 'user',
-                content: `Based on that data, please complete my original request. My request was: "${originalUserMessage}". If I asked about my schedule, shifts, or availability, present the information clearly. Do NOT just summarize the data - actually respond to what I asked for.`
+                content: `Based on that data and our conversation above, please complete what I asked for. If I gave a short confirmation like "si", "yes", or "do it", look at what you previously proposed and proceed. If I asked about my schedule, shifts, or availability, present the information clearly. Do NOT just summarize the data - actually respond to what I asked for.`
               }
             ];
 
@@ -2693,11 +2714,28 @@ When showing schedule information, use this friendly format:
             throw new Error(`Follow-up API call failed: ${response.statusText}`);
           }
 
-          const message = response.data.choices?.[0]?.message;
+          // --- finish_reason-driven exit conditions ---
 
-          // Check for additional tool calls - execute and loop
+          // Model says it's done — extract content and stop
+          if (finishReason === 'stop' || finishReason === 'end_turn') {
+            finalContent = message?.content || '';
+            finalReasoning = message?.reasoning || null;
+            console.log(`[AI:${synthesisConfig.name}] Model done (${finishReason}), content length: ${finalContent.length}`);
+            if (finalReasoning) console.log(`[AI:${synthesisConfig.name}] Reasoning length: ${finalReasoning.length}`);
+            break;
+          }
+
+          // Model hit max_tokens — take partial content + warning
+          if (finishReason === 'length') {
+            finalContent = (message?.content || '') + '\n\n*(Response truncated due to length)*';
+            finalReasoning = message?.reasoning || null;
+            console.warn(`[AI:${synthesisConfig.name}] Response truncated (finish_reason=length)`);
+            break;
+          }
+
+          // Model wants to call more tools
           if (message?.tool_calls && message.tool_calls.length > 0) {
-            console.log(`[AI:${synthesisConfig.name}] Step ${step + 2}: ${message.tool_calls.length} additional tool call(s)`);
+            console.log(`[AI:${synthesisConfig.name}] Step ${step}: ${message.tool_calls.length} tool call(s) [${message.tool_calls.map((tc: any) => tc.function.name).join(', ')}]`);
 
             const additionalResults = await Promise.all(
               message.tool_calls.map(async (toolCall: any) => {
@@ -2740,24 +2778,84 @@ When showing schedule information, use this friendly format:
               })
             );
 
+            // Strip reasoning from assistant message to prevent tool_use_failed on next iteration
+            const sanitizedMsg: any = { role: message.role, content: message.content };
+            if (message.tool_calls) sanitizedMsg.tool_calls = message.tool_calls;
+
             currentMessages = [
               ...currentMessages,
-              message,
+              sanitizedMsg,
               ...additionalResults
             ];
-            continue;
+            continue; // Loop for next tool call round
           }
 
-          // No more tool calls - we have final content
+          // Unexpected finish_reason or no tool calls and no 'stop' — take whatever content exists
+          console.warn(`[AI:${synthesisConfig.name}] Unexpected state: finish_reason=${finishReason}, has_content=${!!message?.content}, has_tools=${!!message?.tool_calls}`);
           finalContent = message?.content || '';
           finalReasoning = message?.reasoning || null;
-          console.log(`[AI:${synthesisConfig.name}] Final content length:`, finalContent.length);
-          if (finalReasoning) console.log(`[AI:${synthesisConfig.name}] Final reasoning length:`, finalReasoning.length);
           break;
         }
 
-        if (!finalContent) {
-          throw new Error('No content after tool call processing');
+        // Safety cap or token budget exhausted — synthesize instead of dumping raw JSON
+        if (!finalContent && (step >= SAFETY_CAP || totalUsage.prompt_tokens > TOKEN_BUDGET)) {
+          console.warn(`[AI:${synthesisConfig.name}] Loop exhausted (step=${step}, tokens=${totalUsage.prompt_tokens}), attempting synthesis...`);
+
+          const allToolResultsSummary = currentMessages
+            .filter((m: any) => m.role === 'tool')
+            .map((tr: any) => {
+              try {
+                const parsed = typeof tr.content === 'string' ? JSON.parse(tr.content) : tr.content;
+                return JSON.stringify(parsed, null, 2);
+              } catch {
+                return tr.content;
+              }
+            }).join('\n\n');
+
+          const nonSystemMsgs = processedMessages.filter((m: any) => m.role !== 'system');
+          const recentCtx = nonSystemMsgs.slice(-6)
+            .filter((m: any) => m.role === 'user' || (m.role === 'assistant' && m.content))
+            .map((m: any) => ({ role: m.role, content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) }));
+
+          try {
+            const synthesisResponse = await axios.post(
+              synthesisConfig.baseUrl,
+              {
+                model: synthesisModel,
+                messages: [
+                  ...processedMessages.filter((m: any) => m.role === 'system'),
+                  ...recentCtx,
+                  {
+                    role: 'assistant',
+                    content: `I completed the requested actions. Here are the results:\n\n${allToolResultsSummary}`
+                  },
+                  {
+                    role: 'user',
+                    content: `Based on our conversation above and these results, summarize what you did. Be concise.`
+                  }
+                ],
+                temperature: requestBody.temperature,
+                max_tokens: requestBody.max_tokens,
+              },
+              { headers: synthesisHeaders, validateStatus: () => true, timeout: secondTimeout }
+            );
+
+            if (synthesisResponse.status < 300) {
+              const sm = synthesisResponse.data.choices?.[0]?.message;
+              finalContent = sm?.content || '';
+              finalReasoning = sm?.reasoning || null;
+              console.log(`[AI:${synthesisConfig.name}] Synthesis fallback succeeded, content length: ${finalContent.length}`);
+            }
+          } catch (synthError: any) {
+            console.error(`[AI:${synthesisConfig.name}] Synthesis fallback failed:`, synthError.message);
+          }
+
+          // Last resort: raw summary
+          if (!finalContent) {
+            finalContent = allToolResultsSummary || 'Done! The requested actions have been completed.';
+          }
+        } else if (!finalContent) {
+          finalContent = 'Done! The requested actions have been completed.';
         }
 
         console.log(`[AI:${synthesisConfig.name}] Total usage - prompt: ${totalUsage.prompt_tokens}, completion: ${totalUsage.completion_tokens}, reasoning: ${totalUsage.reasoning_tokens}, total: ${totalUsage.total_tokens}`);
@@ -2773,7 +2871,7 @@ When showing schedule information, use this friendly format:
           totalTokens: totalUsage.total_tokens,
           durationMs: Date.now() - requestStartTime,
           toolCallCount: allToolsUsed.length,
-          toolsSelected: selectedTools.length,
+          toolsSelected: STAFF_AI_TOOLS.length,
           tier: cascadeTier,
         }).catch(() => {});
         return res.json({
@@ -2809,7 +2907,7 @@ When showing schedule information, use this friendly format:
         totalTokens: totalUsage.total_tokens,
         durationMs: Date.now() - requestStartTime,
         toolCallCount: 0,
-        toolsSelected: selectedTools.length,
+        toolsSelected: STAFF_AI_TOOLS.length,
         tier: cascadeTier,
       }).catch(() => {});
       return res.json({
