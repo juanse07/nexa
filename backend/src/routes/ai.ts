@@ -17,7 +17,6 @@ import { AvailabilityModel } from '../models/availability';
 import { ManagerModel } from '../models/manager';
 import { RoleModel } from '../models/role';
 import { TariffModel } from '../models/tariff';
-import { VenueModel } from '../models/venue';
 import { AIChatSummaryModel } from '../models/aiChatSummary';
 import { ConversationModel } from '../models/conversation';
 import { ChatMessageModel } from '../models/chatMessage';
@@ -211,14 +210,6 @@ router.get('/ai/manager/context', requireAuth, async (req, res) => {
         name: manager.name || 'Manager',
         preferredCity: (manager as any).preferredCity
       },
-      venues: (await VenueModel.find({ managerId }).lean()).map((venue: any) => ({
-        id: String(venue._id),
-        name: venue.name,
-        address: venue.address,
-        city: venue.city,
-        state: venue.state,
-        source: venue.source || 'ai'
-      })),
       clients: clients.map((client: any) => ({
         id: client._id,
         name: client.name,
@@ -256,7 +247,6 @@ router.get('/ai/manager/context', requireAuth, async (req, res) => {
         totalClients: clients.length,
         totalEvents: events.length,
         totalTeamMembers: teamMembers.length,
-        totalVenues: await VenueModel.countDocuments({ managerId }),
         upcomingEvents: events.filter((e: any) => new Date(e.date) >= new Date()).length,
         pastEvents: events.filter((e: any) => new Date(e.date) < new Date()).length
       }
@@ -3963,13 +3953,12 @@ async function getCompactManagerContext(managerId: mongoose.Types.ObjectId): Pro
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const [recentClients, totalClients, upcomingEvents, totalEvents, activeTeam, venueCount] = await Promise.all([
+  const [recentClients, totalClients, upcomingEvents, totalEvents, activeTeam] = await Promise.all([
     ClientModel.find({ managerId }).select('name').sort({ created_at: -1 }).limit(5).lean(),
     ClientModel.countDocuments({ managerId }),
     EventModel.countDocuments({ managerId, date: { $gte: today } }),
     EventModel.countDocuments({ managerId }),
     TeamMemberModel.countDocuments({ managerId, status: 'active' }),
-    VenueModel.countDocuments({ managerId }),
   ]);
 
   const recentNames = recentClients.map((c: any) => c.name).join(', ');
@@ -3979,7 +3968,6 @@ async function getCompactManagerContext(managerId: mongoose.Types.ObjectId): Pro
 - ${totalClients} clients${recentNames ? ` (recent: ${recentNames})` : ''}
 - ${totalEvents} events (${upcomingEvents} upcoming, ${pastEvents} past)
 - ${activeTeam} active team members
-- ${venueCount} venues
 Use your tools to look up specific details — do not guess from this summary.`;
 }
 
@@ -4822,351 +4810,6 @@ async function callOpenAIWithRetries(
   throw new Error('Max retry attempts reached');
 }
 
-/**
- * POST /api/ai/discover-venues
- * Discover popular event venues in a city using Groq Compound AI with automatic web search
- * Saves personalized venue list to manager's profile
- */
-router.post('/ai/discover-venues', requireAuth, async (req, res) => {
-  const venueStartTime = Date.now();
-  try {
-    const { city, isTourist } = req.body;
-
-    if (!city || typeof city !== 'string') {
-      return res.status(400).json({ message: 'City is required' });
-    }
-
-    const isTouristCity = isTourist === true; // Default to false if not provided
-
-    const groqKey = process.env.GROQ_API_KEY;
-    if (!groqKey) {
-      console.error('[discover-venues] GROQ_API_KEY not configured');
-      return res.status(500).json({ message: 'Groq API key not configured on server' });
-    }
-
-    // Get manager from auth
-    if (!(req as any).authUser?.provider || !(req as any).authUser?.sub) {
-      return res.status(401).json({ message: 'Unauthorized' });
-    }
-
-    const manager = await ManagerModel.findOne({
-      provider: (req as any).authUser.provider,
-      subject: (req as any).authUser.sub,
-    });
-
-    if (!manager) {
-      return res.status(404).json({ message: 'Manager not found' });
-    }
-
-    console.log(`[discover-venues] Researching venues for ${isTouristCity ? 'tourist city' : 'metro area'}: ${city} using Groq Compound AI`);
-
-    // Extract city name and state from "City, State, Country" format
-    const metroArea = city.includes(',') ? (city.split(',')[0] || city).trim() : city;
-    const state = city.includes(',') ? (city.split(',')[1] || '').trim() : '';
-
-    // Determine venue capacity and search strategy based on city type
-    const venueCapacity = isTouristCity ? 30 : 80;
-    const minVenues = isTouristCity ? 10 : 70;
-
-    // Create prompt based on city type
-    let prompt: string;
-
-    if (isTouristCity) {
-      // Tourist city: Search ONLY within the specific city limits
-      prompt = `Find event venues located specifically IN ${metroArea}${state ? ', ' + state : ''}.
-
-CRITICAL: Only include venues that are PHYSICALLY LOCATED in ${metroArea} itself, not in nearby cities or the surrounding metro area.
-
-Find ${minVenues}-${venueCapacity} venues including:
-1. **HOTELS** - Hotels, resorts, lodges with event spaces, ballrooms, or meeting rooms in ${metroArea}
-2. **WEDDING VENUES** - Wedding venues, reception halls, banquet facilities in ${metroArea}
-3. **RESTAURANTS & BARS** - Restaurants, breweries, wineries with private event rooms or buyout options in ${metroArea}
-4. **EVENT CENTERS** - Conference centers, community centers, event halls in ${metroArea}
-5. **UNIQUE VENUES** - Historic buildings, museums, theaters, galleries with event spaces in ${metroArea}
-6. **OUTDOOR VENUES** - Parks, gardens, ranches, ski resorts (if applicable) in ${metroArea}
-
-CRITICAL: DO NOT include venues from nearby cities. For example, if searching for ${metroArea}, do NOT include venues from other cities even if they are close by.
-
-For EACH venue, provide:
-- Exact official name
-- Complete address (street number, street, city, state, ZIP)
-- City name (must be ${metroArea})
-
-Return ONLY this JSON format (no markdown, no explanations):
-{
-  "venues": [
-    {"name": "Example Hotel & Resort", "address": "123 Main St, ${metroArea}, ${state} 12345", "city": "${metroArea}"}
-  ]
-}
-
-Return ${minVenues}-${venueCapacity} venues that are all located in ${metroArea}.`;
-    } else {
-      // Metro city: Search ENTIRE metropolitan area (current behavior)
-      prompt = `Find the ${minVenues}-${venueCapacity} MOST POPULAR and LARGEST event venues in the ${city} metropolitan area and surrounding region.
-
-CRITICAL INSTRUCTIONS:
-1. PRIORITIZE THE BIGGEST AND MOST WELL-KNOWN VENUES FIRST
-2. Include venues from the ENTIRE metro area (downtown, suburbs, all cities in the region)
-3. Focus on venues that host MAJOR events (thousands of people, large weddings, big conferences)
-4. Do NOT focus only on small local venues in one specific suburb
-
-MUST INCLUDE these types of major venues (search the entire metro area):
-1. **STADIUMS & ARENAS** - Sports venues, amphitheaters (like Ball Arena, stadiums, major concert venues)
-2. **CONVENTION CENTERS** - Major convention centers and conference facilities
-3. **MAJOR HOTELS** - Large hotels with ballrooms and event spaces (Marriott, Hilton, Hyatt, etc.)
-4. **POPULAR WEDDING VENUES** - Well-known wedding venues and reception halls across the metro
-5. **CONCERT HALLS & THEATERS** - Major performance venues and concert halls
-6. **MUSEUMS & CULTURAL CENTERS** - Major museums and cultural venues
-7. **COUNTRY CLUBS & GOLF COURSES** - Upscale venues with event spaces
-8. **UNIQUE POPULAR VENUES** - Well-known breweries, wineries, historic buildings, specialty venues
-
-Search across ALL cities in the ${metroArea} metro area, not just one suburb. Include downtown venues, suburban venues, and everything in between.
-
-For EACH venue, provide:
-- Exact official name
-- Complete address (street number, street, city, state, ZIP)
-- City name
-
-Return ONLY this JSON format (no markdown, no explanations):
-{
-  "venues": [
-    {"name": "Ball Arena", "address": "1000 Chopper Cir, Denver, CO 80204", "city": "Denver"},
-    {"name": "Colorado Convention Center", "address": "700 14th St, Denver, CO 80202", "city": "Denver"}
-  ]
-}
-
-YOU MUST RETURN AT LEAST ${minVenues} VENUES. Prioritize the most popular and largest venues first.`;
-    }
-
-    const headers = {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${groqKey}`,
-    };
-
-    const requestBody = {
-      model: 'groq/compound', // Groq Compound AI with built-in web search (temporarily replacing Perplexity sonar-pro)
-      messages: [
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.3,
-      max_tokens: 4000,
-    };
-
-    console.log('[discover-venues] Calling Groq Compound API...');
-
-    const response = await axios.post(
-      'https://api.groq.com/openai/v1/chat/completions',
-      requestBody,
-      { headers, validateStatus: () => true, timeout: 180000 } // 180s timeout for web search
-    );
-
-    if (response.status !== 200) {
-      console.error('[discover-venues] Groq Compound API error:', response.status, response.data);
-      return res.status(response.status).json({
-        message: 'Failed to discover venues',
-        error: response.data
-      });
-    }
-
-    // Groq Compound returns standard OpenAI format with content in message.content
-    const content = response.data.choices?.[0]?.message?.content;
-
-    if (!content) {
-      console.error('[discover-venues] No content in response. Response:', JSON.stringify(response.data, null, 2).substring(0, 500));
-      return res.status(500).json({ message: 'No venue data returned' });
-    }
-
-    // Log executed tools if available (Groq Compound provides this)
-    const executedTools = response.data.choices?.[0]?.message?.executed_tools;
-    if (executedTools) {
-      console.log('[discover-venues] Groq Compound executed tools:', JSON.stringify(executedTools));
-    }
-
-    const venueUsage = response.data?.usage;
-    logAIUsage({
-      managerId: String(manager._id),
-      userType: 'manager',
-      endpoint: 'discover-venues',
-      provider: 'groq',
-      model: 'groq/compound',
-      inputTokens: venueUsage?.prompt_tokens || 0,
-      outputTokens: venueUsage?.completion_tokens || 0,
-      totalTokens: venueUsage?.total_tokens || 0,
-      durationMs: Date.now() - venueStartTime,
-    }).catch(() => {});
-
-    console.log('[discover-venues] Response length:', content.length, 'chars');
-    console.log('[discover-venues] Full response:', content);
-
-    // Parse JSON response
-    let venueData;
-    try {
-      // Try to parse directly first (Groq Compound should return clean JSON)
-      let cleanedContent = content.trim();
-
-      // Remove markdown code blocks if present
-      if (cleanedContent.startsWith('```')) {
-        cleanedContent = cleanedContent
-          .replace(/```json\n?/g, '')
-          .replace(/```\n?/g, '')
-          .trim();
-      }
-
-      // Try direct parsing first
-      try {
-        venueData = JSON.parse(cleanedContent);
-      } catch (directParseError) {
-        // If that fails, extract JSON object from text using brace counting
-        const jsonStartPattern = /\{\s*"venues"\s*:\s*\[/;
-        const startMatch = cleanedContent.match(jsonStartPattern);
-
-        if (!startMatch) {
-          throw new Error('Could not find JSON start pattern in response');
-        }
-
-        const startIndex = cleanedContent.indexOf(startMatch[0]);
-        let braceCount = 0;
-        let endIndex = -1;
-
-        for (let i = startIndex; i < cleanedContent.length; i++) {
-          if (cleanedContent[i] === '{') braceCount++;
-          else if (cleanedContent[i] === '}') {
-            braceCount--;
-            if (braceCount === 0) {
-              endIndex = i + 1;
-              break;
-            }
-          }
-        }
-
-        if (endIndex === -1) {
-          throw new Error('Could not find matching closing brace');
-        }
-
-        const jsonString = cleanedContent.substring(startIndex, endIndex);
-        venueData = JSON.parse(jsonString);
-      }
-
-      console.log('[discover-venues] Successfully parsed JSON');
-    } catch (parseError) {
-      console.error('[discover-venues] Failed to parse JSON:', parseError);
-      console.error('[discover-venues] Content sample:', content.substring(0, 1000));
-      return res.status(500).json({ message: 'Failed to parse venue data' });
-    }
-
-    const venues = venueData.venues;
-    if (!Array.isArray(venues) || venues.length === 0) {
-      console.error('[discover-venues] No venues in response');
-      return res.status(500).json({ message: 'No venues found' });
-    }
-
-    // Validate and clean venue data
-    const rawVenues = venues
-      .filter(v => v.name && v.address && v.city)
-      .map(v => ({
-        name: String(v.name).trim(),
-        address: String(v.address).trim(),
-        city: String(v.city).trim(),
-        cityName: city, // Link venue to city from request
-      }));
-
-    // Remove duplicates within AI results (case-insensitive name match)
-    const seenNames = new Set<string>();
-    const validatedVenues = rawVenues
-      .filter(v => {
-        const normalizedName = v.name.toLowerCase().trim();
-        if (seenNames.has(normalizedName)) {
-          return false; // Skip duplicate
-        }
-        seenNames.add(normalizedName);
-        return true;
-      })
-      .slice(0, venueCapacity); // Cap at capacity (30 for tourist cities, 80 for metro)
-
-    if (validatedVenues.length === 0) {
-      return res.status(500).json({ message: 'No valid venues found' });
-    }
-
-    const duplicatesRemoved = rawVenues.length - validatedVenues.length;
-    console.log(`[discover-venues] Found ${validatedVenues.length} unique AI venues (removed ${duplicatesRemoved} duplicates from AI response)`);
-
-    // Save to new venues collection instead of embedded venueList
-    try {
-      // 1. Get existing manual/places venues for this city (to avoid duplicates)
-      const existingManualVenues = await VenueModel.find({
-        managerId: manager._id,
-        city: { $regex: new RegExp(`^${metroArea}$`, 'i') },
-        source: { $in: ['manual', 'places'] }
-      }).lean();
-
-      const manualNames = new Set(existingManualVenues.map(v => v.name.toLowerCase().trim()));
-      console.log(`[discover-venues] Found ${existingManualVenues.length} existing manual/places venues for ${metroArea}`);
-
-      // 2. Delete existing AI venues for this city (will be replaced)
-      const deleteResult = await VenueModel.deleteMany({
-        managerId: manager._id,
-        city: { $regex: new RegExp(`^${metroArea}$`, 'i') },
-        source: 'ai'
-      });
-      console.log(`[discover-venues] Deleted ${deleteResult.deletedCount} existing AI venues for ${metroArea}`);
-
-      // 3. Filter out AI venues that duplicate existing manual venues
-      const uniqueAIVenues = validatedVenues.filter(v =>
-        !manualNames.has(v.name.toLowerCase().trim())
-      );
-      console.log(`[discover-venues] Adding ${uniqueAIVenues.length} unique AI venues (${validatedVenues.length - uniqueAIVenues.length} duplicates of manual venues skipped)`);
-
-      // 4. Bulk insert new AI venues
-      if (uniqueAIVenues.length > 0) {
-        const venueDocs = uniqueAIVenues.map(v => ({
-          managerId: manager._id,
-          name: v.name,
-          normalizedName: v.name.toLowerCase().trim(),
-          address: v.address,
-          city: v.city || metroArea,
-          state: state || undefined,
-          source: 'ai' as const,
-        }));
-
-        await VenueModel.insertMany(venueDocs, { ordered: false });
-        console.log(`[discover-venues] Successfully inserted ${uniqueAIVenues.length} AI venues to collection`);
-      }
-
-      // 5. Get total venue count for this manager
-      const totalVenueCount = await VenueModel.countDocuments({ managerId: manager._id });
-      console.log(`[discover-venues] Total venues in collection for manager: ${totalVenueCount}`);
-
-      return res.json({
-        success: true,
-        city,
-        venueCount: uniqueAIVenues.length,
-        venues: uniqueAIVenues.map(v => ({
-          name: v.name,
-          address: v.address,
-          city: v.city || metroArea,
-          source: 'ai'
-        })),
-        updatedAt: new Date(),
-      });
-
-    } catch (saveError: any) {
-      console.error('[discover-venues] Failed to save venues:', saveError);
-      return res.status(500).json({
-        message: 'Failed to save venues to database',
-        error: saveError?.message
-      });
-    }
-
-  } catch (error: any) {
-    console.error('[discover-venues] Error:', error);
-    return res.status(500).json({
-      message: 'Failed to discover venues',
-      error: error.message
-    });
-  }
-});
-
 // ============================================================================
 // AI CHAT SUMMARY ENDPOINTS - For learning and analytics
 // ============================================================================
@@ -5554,6 +5197,201 @@ router.get('/ai/chat/analytics', requireAuth, async (req, res) => {
       error: 'Failed to fetch analytics',
       message: error.message,
     });
+  }
+});
+
+/**
+ * POST /api/ai/manager/compose-broadcast
+ * AI-powered message composition for manager broadcast messages.
+ * Supports compose (from instructions) and polish (rewrite existing draft).
+ */
+router.post('/ai/manager/compose-broadcast', requireAuth, async (req, res) => {
+  const composeStartTime = Date.now();
+  try {
+    const { managerId } = (req as any).authUser;
+    if (!managerId) {
+      return res.status(403).json({ message: 'Only managers can compose broadcasts' });
+    }
+
+    const groqKey = process.env.GROQ_API_KEY;
+    if (!groqKey) {
+      return res.status(500).json({ message: 'AI service not configured' });
+    }
+
+    const schema = z.object({
+      message: z.string().min(1).max(5000),
+      scenario: z.enum(['compose', 'polish']),
+      eventContext: z.object({
+        eventName: z.string().nullish(),
+        date: z.string().nullish(),
+        startTime: z.string().nullish(),
+        endTime: z.string().nullish(),
+        location: z.string().nullish(),
+        clientName: z.string().nullish(),
+      }).nullish(),
+    });
+
+    const validated = schema.parse(req.body);
+    const { message, scenario, eventContext } = validated;
+
+    console.log(`[ai/manager/compose-broadcast] Scenario: ${scenario}, Input length: ${message.length}, Event: ${eventContext?.eventName || 'none'}`);
+
+    // Build event context string for the prompt
+    let eventInfo = '';
+    if (eventContext) {
+      const parts: string[] = [];
+      if (eventContext.eventName) parts.push(`Event: ${eventContext.eventName}`);
+      if (eventContext.date) parts.push(`Date: ${eventContext.date}`);
+      if (eventContext.startTime && eventContext.endTime) parts.push(`Time: ${eventContext.startTime} – ${eventContext.endTime}`);
+      else if (eventContext.startTime) parts.push(`Time: ${eventContext.startTime}`);
+      if (eventContext.location) parts.push(`Location: ${eventContext.location}`);
+      if (eventContext.clientName) parts.push(`Client: ${eventContext.clientName}`);
+      if (parts.length > 0) eventInfo = `\n\nEVENT CONTEXT (use these details naturally in the message):\n${parts.join('\n')}`;
+    }
+
+    const userPrompt = scenario === 'compose'
+      ? `Based on these instructions, compose a professional broadcast message from a manager to their event staff team:\n\n${message}${eventInfo}`
+      : `Polish and professionalize this broadcast message from a manager to their staff team:\n\n${message}${eventInfo}`;
+
+    const systemPrompt = `You are a professional communication assistant for event and hospitality managers.
+
+TONE & STYLE:
+- Authoritative but warm and approachable
+- Clear and direct — staff should know exactly what's expected
+- Concise (2-4 sentences for most messages, up to 6 for detailed instructions)
+- Professional yet conversational — avoid corporate jargon
+
+COMPOSE MODE (instructions → message):
+- Transform manager's casual instructions into a polished staff-facing message
+- Include all relevant details (times, dress code, locations, etc.)
+- When event context is provided, weave in relevant event details naturally (name, time, location)
+- Address staff collectively ("Hi team," or "Hello everyone,")
+- End with an encouraging or appreciative note when appropriate
+
+POLISH MODE (draft → improved):
+- Maintain the original intent and information
+- Improve clarity, tone, and professionalism
+- Fix grammar and awkward phrasing
+- Keep the manager's voice — don't over-formalize
+- If event context is provided, you may incorporate missing details that are relevant
+
+OUTPUT RULES - CRITICAL:
+- Return ONLY the message text itself
+- NO explanations, meta-commentary, or preambles
+- NO quotes around the message
+- NO "Here's your message" or similar phrases
+- The output should be ready to send as-is`;
+
+    const response = await axios.post(
+      'https://api.groq.com/openai/v1/chat/completions',
+      {
+        model: 'openai/gpt-oss-20b',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.7,
+        max_tokens: 300,
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${groqKey}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000,
+      }
+    );
+
+    let composedMessage = response.data.choices?.[0]?.message?.content?.trim();
+    if (!composedMessage) {
+      return res.status(500).json({ message: 'Failed to compose message' });
+    }
+
+    // Accumulate usage
+    const primaryUsage = response.data.usage;
+    let composeInputTokens = primaryUsage?.prompt_tokens || 0;
+    let composeOutputTokens = primaryUsage?.completion_tokens || 0;
+    let composeTotalTokens = primaryUsage?.total_tokens || 0;
+
+    // Clean up AI fluff — inline version of cleanAIResponse
+    const fluffPhrases = [
+      /^Here's your message:?\s*/i,
+      /^Here's the broadcast:?\s*/i,
+      /^Here is the message:?\s*/i,
+      /^I'd be happy to help\.?\s*/i,
+      /^Sure!?\s*/i,
+      /^Of course!?\s*/i,
+    ];
+    for (const phrase of fluffPhrases) {
+      composedMessage = composedMessage.replace(phrase, '');
+    }
+    composedMessage = composedMessage.replace(/^["'](.*)["']$/s, '$1').trim();
+
+    // Detect language and provide translation if needed
+    const isSpanish = /[áéíóúñ¿¡]/i.test(composedMessage);
+
+    let translation = null;
+    if (isSpanish) {
+      const translationResponse = await axios.post(
+        'https://api.groq.com/openai/v1/chat/completions',
+        {
+          model: 'openai/gpt-oss-20b',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a professional translator. Translate the following message to natural, professional English. Return ONLY the translated text, nothing else.',
+            },
+            { role: 'user', content: composedMessage },
+          ],
+          temperature: 0.3,
+          max_tokens: 300,
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${groqKey}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 10000,
+        }
+      );
+
+      translation = translationResponse.data.choices?.[0]?.message?.content?.trim();
+      if (translation) {
+        translation = translation.replace(/^["'](.*)["']$/s, '$1').trim();
+      }
+
+      const translationUsage = translationResponse.data.usage;
+      if (translationUsage) {
+        composeInputTokens += translationUsage.prompt_tokens || 0;
+        composeOutputTokens += translationUsage.completion_tokens || 0;
+        composeTotalTokens += translationUsage.total_tokens || 0;
+      }
+    }
+
+    console.log(`[ai/manager/compose-broadcast] Success. Length: ${composedMessage.length}, Translation: ${!!translation}`);
+
+    logAIUsage({
+      userType: 'manager',
+      endpoint: 'compose-broadcast',
+      provider: 'groq',
+      model: 'openai/gpt-oss-20b',
+      inputTokens: composeInputTokens,
+      outputTokens: composeOutputTokens,
+      totalTokens: composeTotalTokens,
+      durationMs: Date.now() - composeStartTime,
+    }).catch(() => {});
+
+    return res.json({
+      original: composedMessage,
+      translation: translation,
+      language: isSpanish ? 'es' : 'en',
+    });
+  } catch (err: any) {
+    console.error('[ai/manager/compose-broadcast] Error:', err);
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ message: 'Invalid request data', errors: err.issues });
+    }
+    return res.status(500).json({ message: err.message || 'Failed to compose broadcast' });
   }
 });
 

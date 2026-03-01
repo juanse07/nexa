@@ -57,25 +57,17 @@ class ChatService {
     });
   }
 
+  http.Client get _http => AuthService.httpClient;
+
   Future<List<Conversation>> fetchConversations() async {
     print('[ChatService] fetchConversations called');
-    final token = await AuthService.getJwt();
-    if (token == null) {
-      print('[ChatService] ERROR: No token found');
-      throw Exception('Not authenticated');
-    }
-
-    print('[ChatService] Token obtained (length: ${token.length})');
     final baseUrl = AppConfig.instance.baseUrl;
     final url = Uri.parse('$baseUrl/chat/conversations');
     print('[ChatService] Fetching from: $url');
 
-    final response = await http.get(
+    final response = await _http.get(
       url,
-      headers: <String, String>{
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
+      headers: <String, String>{'Content-Type': 'application/json'},
     );
 
     print('[ChatService] Response status: ${response.statusCode}');
@@ -98,11 +90,6 @@ class ChatService {
     DateTime? before,
     int limit = 50,
   }) async {
-    final token = await AuthService.getJwt();
-    if (token == null) {
-      throw Exception('Not authenticated');
-    }
-
     final baseUrl = AppConfig.instance.baseUrl;
     final queryParams = <String, String>{
       'limit': limit.toString(),
@@ -113,12 +100,9 @@ class ChatService {
       '$baseUrl/chat/conversations/$conversationId/messages',
     ).replace(queryParameters: queryParams);
 
-    final response = await http.get(
+    final response = await _http.get(
       url,
-      headers: <String, String>{
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
+      headers: <String, String>{'Content-Type': 'application/json'},
     );
 
     if (response.statusCode == 200) {
@@ -135,24 +119,15 @@ class ChatService {
   Future<ChatMessage> sendMessage(String targetId, String message) async {
     print('[ChatService] sendMessage called. targetId: $targetId');
 
-    final token = await AuthService.getJwt();
-    if (token == null) {
-      print('[ChatService] ERROR: Not authenticated');
-      throw Exception('Not authenticated');
-    }
-
     final baseUrl = AppConfig.instance.baseUrl;
     final url = Uri.parse('$baseUrl/chat/conversations/$targetId/messages');
 
     print('[ChatService] POST to: $url');
     print('[ChatService] Message: ${message.substring(0, message.length > 50 ? 50 : message.length)}...');
 
-    final response = await http.post(
+    final response = await _http.post(
       url,
-      headers: <String, String>{
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
+      headers: <String, String>{'Content-Type': 'application/json'},
       body: json.encode(<String, dynamic>{
         'message': message,
       }),
@@ -170,20 +145,12 @@ class ChatService {
   }
 
   Future<void> markAsRead(String conversationId) async {
-    final token = await AuthService.getJwt();
-    if (token == null) {
-      throw Exception('Not authenticated');
-    }
-
     final baseUrl = AppConfig.instance.baseUrl;
     final url = Uri.parse('$baseUrl/chat/conversations/$conversationId/read');
 
-    final response = await http.patch(
+    final response = await _http.patch(
       url,
-      headers: <String, String>{
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
+      headers: <String, String>{'Content-Type': 'application/json'},
     );
 
     if (response.statusCode != 200) {
@@ -192,20 +159,12 @@ class ChatService {
   }
 
   Future<List<Map<String, dynamic>>> fetchManagers() async {
-    final token = await AuthService.getJwt();
-    if (token == null) {
-      throw Exception('Not authenticated');
-    }
-
     final baseUrl = AppConfig.instance.baseUrl;
     final url = Uri.parse('$baseUrl/chat/managers');
 
-    final response = await http.get(
+    final response = await _http.get(
       url,
-      headers: <String, String>{
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
+      headers: <String, String>{'Content-Type': 'application/json'},
     );
 
     if (response.statusCode == 200) {
@@ -222,11 +181,6 @@ class ChatService {
   /// Returns team members with conversation status
   Future<List<Map<String, dynamic>>> fetchContacts({String? searchQuery}) async {
     print('[ChatService] fetchContacts called with query: $searchQuery');
-    final token = await AuthService.getJwt();
-    if (token == null) {
-      print('[ChatService] ERROR: No token found');
-      throw Exception('Not authenticated');
-    }
 
     final baseUrl = AppConfig.instance.baseUrl;
     final queryParams = searchQuery != null && searchQuery.isNotEmpty
@@ -239,12 +193,9 @@ class ChatService {
 
     print('[ChatService] Fetching from: $url');
 
-    final response = await http.get(
+    final response = await _http.get(
       url,
-      headers: <String, String>{
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
+      headers: <String, String>{'Content-Type': 'application/json'},
     );
 
     print('[ChatService] Response status: ${response.statusCode}');
@@ -267,20 +218,12 @@ class ChatService {
 
   /// Fetch peer managers (other managers) for the contact picker
   Future<List<Map<String, dynamic>>> fetchPeerManagers() async {
-    final token = await AuthService.getJwt();
-    if (token == null) {
-      throw Exception('Not authenticated');
-    }
-
     final baseUrl = AppConfig.instance.baseUrl;
     final url = Uri.parse('$baseUrl/chat/peer-managers');
 
-    final response = await http.get(
+    final response = await _http.get(
       url,
-      headers: <String, String>{
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
+      headers: <String, String>{'Content-Type': 'application/json'},
     );
 
     if (response.statusCode == 200) {
@@ -303,12 +246,6 @@ class ChatService {
   }) async {
     print('[ChatService] sendEventInvitation called. targetId: $targetId, eventId: $eventId');
 
-    final token = await AuthService.getJwt();
-    if (token == null) {
-      print('[ChatService] ERROR: Not authenticated');
-      throw Exception('Not authenticated');
-    }
-
     final baseUrl = AppConfig.instance.baseUrl;
     final url = Uri.parse('$baseUrl/chat/conversations/$targetId/messages');
 
@@ -325,12 +262,9 @@ class ChatService {
 
     print('[ChatService] POST to: $url');
 
-    final response = await http.post(
+    final response = await _http.post(
       url,
-      headers: <String, String>{
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
+      headers: <String, String>{'Content-Type': 'application/json'},
       body: json.encode(<String, dynamic>{
         'message': message,
         'messageType': 'eventInvitation',
@@ -362,20 +296,12 @@ class ChatService {
     print('[ChatService] sendBulkInvitations called for event: $eventId');
     print('[ChatService] Sending to ${userRoleAssignments.length} users');
 
-    final token = await AuthService.getJwt();
-    if (token == null) {
-      throw Exception('Not authenticated');
-    }
-
     final baseUrl = AppConfig.instance.baseUrl;
     final url = Uri.parse('$baseUrl/chat/invitations/send-bulk');
 
-    final response = await http.post(
+    final response = await _http.post(
       url,
-      headers: <String, String>{
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
+      headers: <String, String>{'Content-Type': 'application/json'},
       body: json.encode(<String, dynamic>{
         'eventId': eventId,
         'userRoleAssignments': userRoleAssignments,
@@ -403,20 +329,12 @@ class ChatService {
   }) async {
     print('[ChatService] respondToInvitation called. messageId: $messageId, accept: $accept');
 
-    final token = await AuthService.getJwt();
-    if (token == null) {
-      throw Exception('Not authenticated');
-    }
-
     final baseUrl = AppConfig.instance.baseUrl;
     final url = Uri.parse('$baseUrl/chat/invitations/$messageId/respond');
 
-    final response = await http.post(
+    final response = await _http.post(
       url,
-      headers: <String, String>{
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
+      headers: <String, String>{'Content-Type': 'application/json'},
       body: json.encode(<String, dynamic>{
         'accept': accept,
         'eventId': eventId,
@@ -428,6 +346,63 @@ class ChatService {
 
     if (response.statusCode != 200) {
       throw Exception('Failed to respond to invitation: ${response.body}');
+    }
+  }
+
+  /// Send a broadcast message to multiple staff members
+  Future<Map<String, dynamic>> sendBroadcast({
+    required String message,
+    required String broadcastType,
+    String? eventId,
+  }) async {
+    final baseUrl = AppConfig.instance.baseUrl;
+    final url = Uri.parse('$baseUrl/chat/broadcast');
+
+    final body = <String, dynamic>{
+      'message': message,
+      'broadcastType': broadcastType,
+    };
+    if (eventId != null) body['eventId'] = eventId;
+
+    final response = await _http.post(
+      url,
+      headers: <String, String>{'Content-Type': 'application/json'},
+      body: json.encode(body),
+    );
+
+    if (response.statusCode == 200) {
+      return json.decode(response.body) as Map<String, dynamic>;
+    } else {
+      final error = json.decode(response.body);
+      throw Exception(error['error'] ?? 'Failed to send broadcast');
+    }
+  }
+
+  /// AI compose/polish for broadcast messages
+  Future<Map<String, dynamic>> composeBroadcast({
+    required String message,
+    required String scenario,
+    Map<String, dynamic>? eventContext,
+  }) async {
+    final baseUrl = AppConfig.instance.baseUrl;
+    final url = Uri.parse('$baseUrl/ai/manager/compose-broadcast');
+
+    final body = <String, dynamic>{
+      'message': message,
+      'scenario': scenario,
+    };
+    if (eventContext != null) body['eventContext'] = eventContext;
+
+    final response = await _http.post(
+      url,
+      headers: <String, String>{'Content-Type': 'application/json'},
+      body: json.encode(body),
+    );
+
+    if (response.statusCode == 200) {
+      return json.decode(response.body) as Map<String, dynamic>;
+    } else {
+      throw Exception('Failed to compose broadcast');
     }
   }
 

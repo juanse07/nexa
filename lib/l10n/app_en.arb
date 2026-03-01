@@ -1630,5 +1630,54 @@
     "placeholders": {
       "hours": {"type": "String"}
     }
-  }
+  },
+  "unavailable": "Unavailable",
+  "unavailableToday": "Unavailable today",
+
+  "publicEventLink": "Public Event Link",
+  "generatePublicLink": "Generate Public Link",
+  "showContactName": "Show contact name",
+  "showPhoneNumber": "Show phone number",
+  "showEmail": "Show email",
+  "showYourPhoto": "Show your photo",
+  "linkCopied": "Link copied to clipboard",
+  "revokeLink": "Revoke Link",
+  "revokeLinkConfirmation": "Anyone with this link will no longer be able to view event details. You can generate a new link later.",
+  "linkRevoked": "Public link revoked",
+  "anyoneWithLink": "Anyone with this link can see event staffing progress",
+  "privacySettings": "Privacy Settings",
+  "shareLink": "Share Link",
+  "copyLink": "Copy Link",
+
+  "broadcastToAcceptedStaff": "Message all accepted staff",
+  "broadcastToAllStaff": "Message all staff",
+  "broadcastDialogTitleEvent": "Message {count} accepted staff",
+  "@broadcastDialogTitleEvent": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "broadcastDialogTitleTeam": "Message all {count} team members",
+  "@broadcastDialogTitleTeam": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "broadcastHint": "Type your message or describe what to say...",
+  "broadcastSending": "Sending to everyone...",
+  "broadcastSuccess": "Sent to {successCount} of {totalCount} staff",
+  "@broadcastSuccess": {
+    "placeholders": {
+      "successCount": { "type": "int" },
+      "totalCount": { "type": "int" }
+    }
+  },
+  "broadcastFailed": "Failed to send broadcast",
+  "broadcastSentToAllEvent": "Sent to all · {eventName}",
+  "@broadcastSentToAllEvent": {
+    "placeholders": { "eventName": { "type": "String" } }
+  },
+  "broadcastTeamMessage": "Team broadcast",
+  "broadcastAiPolishing": "AI is writing...",
+  "broadcastUseThis": "Use this",
+  "broadcastEdit": "Edit",
+  "allTeams": "All teams",
+  "broadcastEmptyMessage": "Please enter a message",
+  "broadcastSendToAll": "Send to all"
 }

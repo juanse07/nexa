@@ -6,6 +6,8 @@ import 'package:nexa/features/teams/data/services/teams_service.dart';
 import 'package:nexa/features/teams/presentation/pages/team_detail_page.dart';
 import 'package:nexa/l10n/app_localizations.dart';
 import 'package:nexa/shared/services/error_display_service.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
+import 'package:nexa/features/chat/presentation/widgets/broadcast_compose_sheet.dart';
 
 class TeamsManagementPage extends StatefulWidget {
   const TeamsManagementPage({super.key});
@@ -196,6 +198,27 @@ class _TeamsManagementPageState extends State<TeamsManagementPage> {
               )
             : null,
         title: Text(l10n.teams),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.campaign_outlined, color: AppColors.techBlue),
+            tooltip: l10n.broadcastToAllStaff,
+            onPressed: _teams.isEmpty
+                ? null
+                : () {
+                    // Count total unique members across all teams
+                    int totalMembers = 0;
+                    for (final team in _teams) {
+                      totalMembers += (team['memberCount'] as int?) ?? 0;
+                    }
+                    showBroadcastSheet(
+                      context,
+                      broadcastType: 'team',
+                      recipientCount: totalMembers,
+                      scopeLabel: l10n.allTeams,
+                    );
+                  },
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _createTeam,

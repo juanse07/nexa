@@ -12,8 +12,8 @@ export type AIEndpoint =
   | 'staff/transcribe'
   | 'analyze-sheet'
   | 'extract-colors'
-  | 'discover-venues'
-  | 'compose-message';
+  | 'compose-message'
+  | 'compose-broadcast';
 
 export type AIProvider = 'groq' | 'together' | 'openai';
 
@@ -62,7 +62,7 @@ const AIUsageSchema = new Schema<AIUsageDocument>(
         'chat/message', 'staff/chat/message',
         'transcribe', 'staff/transcribe',
         'analyze-sheet', 'extract-colors',
-        'discover-venues', 'compose-message',
+        'compose-message',
       ],
       required: true,
     },

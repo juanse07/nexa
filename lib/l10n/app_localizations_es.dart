@@ -1527,7 +1527,7 @@ class AppLocalizationsEs extends AppLocalizations {
       'Comparte este enlace en redes sociales para reclutar nuevos miembros del equipo. Todos los solicitantes requerirán tu aprobación.';
 
   @override
-  String get linkCopied => '¡Enlace copiado!';
+  String get linkCopied => 'Enlace copiado al portapapeles';
 
   @override
   String get codeLabel => 'Código:';
@@ -3245,4 +3245,108 @@ class AppLocalizationsEs extends AppLocalizations {
   String estHours(String hours) {
     return 'Est: $hours hrs';
   }
+
+  @override
+  String get unavailable => 'No disponible';
+
+  @override
+  String get unavailableToday => 'No disponible hoy';
+
+  @override
+  String get publicEventLink => 'Enlace Público del Evento';
+
+  @override
+  String get generatePublicLink => 'Generar Enlace Público';
+
+  @override
+  String get showContactName => 'Mostrar nombre de contacto';
+
+  @override
+  String get showPhoneNumber => 'Mostrar número de teléfono';
+
+  @override
+  String get showEmail => 'Mostrar correo electrónico';
+
+  @override
+  String get showYourPhoto => 'Mostrar tu foto';
+
+  @override
+  String get revokeLink => 'Revocar Enlace';
+
+  @override
+  String get revokeLinkConfirmation =>
+      'Cualquier persona con este enlace ya no podrá ver los detalles del evento. Puedes generar un nuevo enlace después.';
+
+  @override
+  String get linkRevoked => 'Enlace público revocado';
+
+  @override
+  String get anyoneWithLink =>
+      'Cualquier persona con este enlace puede ver el progreso de personal del evento';
+
+  @override
+  String get privacySettings => 'Configuración de Privacidad';
+
+  @override
+  String get shareLink => 'Compartir Enlace';
+
+  @override
+  String get copyLink => 'Copiar Enlace';
+
+  @override
+  String get broadcastToAcceptedStaff => 'Mensaje a todo el personal aceptado';
+
+  @override
+  String get broadcastToAllStaff => 'Mensaje a todo el personal';
+
+  @override
+  String broadcastDialogTitleEvent(int count) {
+    return 'Mensaje a $count personal aceptado';
+  }
+
+  @override
+  String broadcastDialogTitleTeam(int count) {
+    return 'Mensaje a los $count miembros del equipo';
+  }
+
+  @override
+  String get broadcastHint =>
+      'Escribe tu mensaje o describe qué quieres decir...';
+
+  @override
+  String get broadcastSending => 'Enviando a todos...';
+
+  @override
+  String broadcastSuccess(int successCount, int totalCount) {
+    return 'Enviado a $successCount de $totalCount personal';
+  }
+
+  @override
+  String get broadcastFailed => 'Error al enviar el mensaje grupal';
+
+  @override
+  String broadcastSentToAllEvent(String eventName) {
+    return 'Enviado a todos · $eventName';
+  }
+
+  @override
+  String get broadcastTeamMessage => 'Mensaje grupal al equipo';
+
+  @override
+  String get broadcastAiPolishing => 'IA escribiendo...';
+
+  @override
+  String get broadcastUseThis => 'Usar este';
+
+  @override
+  String get broadcastEdit => 'Editar';
+
+  @override
+  String get allTeams => 'Todos los equipos';
+
+  @override
+  String get broadcastEmptyMessage => 'Por favor ingresa un mensaje';
+
+  @override
+  String get broadcastSendToAll => 'Enviar a todos';
 }

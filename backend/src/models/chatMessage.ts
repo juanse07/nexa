@@ -10,7 +10,7 @@ export interface ChatMessageDocument extends Document {
   senderName?: string; // sender's display name
   senderPicture?: string; // sender's profile picture
   message: string;
-  messageType?: string; // 'text' | 'eventInvitation'
+  messageType?: string; // 'text' | 'eventInvitation' | 'broadcast'
   metadata?: {
     eventId?: string;
     roleId?: string;
@@ -58,7 +58,7 @@ const ChatMessageSchema = new Schema<ChatMessageDocument>(
     },
     messageType: {
       type: String,
-      enum: ['text', 'eventInvitation'],
+      enum: ['text', 'eventInvitation', 'broadcast'],
       default: 'text'
     },
     metadata: {

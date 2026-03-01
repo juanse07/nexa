@@ -1047,5 +1047,54 @@
   "noteOptional": "Nota (opcional)",
   "staffCount": "Personal: {count}",
   "clockedOutCount": "Salidas: {count}",
-  "estHours": "Est: {hours} hrs"
+  "estHours": "Est: {hours} hrs",
+  "unavailable": "No disponible",
+  "unavailableToday": "No disponible hoy",
+
+  "publicEventLink": "Enlace Público del Evento",
+  "generatePublicLink": "Generar Enlace Público",
+  "showContactName": "Mostrar nombre de contacto",
+  "showPhoneNumber": "Mostrar número de teléfono",
+  "showEmail": "Mostrar correo electrónico",
+  "showYourPhoto": "Mostrar tu foto",
+  "linkCopied": "Enlace copiado al portapapeles",
+  "revokeLink": "Revocar Enlace",
+  "revokeLinkConfirmation": "Cualquier persona con este enlace ya no podrá ver los detalles del evento. Puedes generar un nuevo enlace después.",
+  "linkRevoked": "Enlace público revocado",
+  "anyoneWithLink": "Cualquier persona con este enlace puede ver el progreso de personal del evento",
+  "privacySettings": "Configuración de Privacidad",
+  "shareLink": "Compartir Enlace",
+  "copyLink": "Copiar Enlace",
+
+  "broadcastToAcceptedStaff": "Mensaje a todo el personal aceptado",
+  "broadcastToAllStaff": "Mensaje a todo el personal",
+  "broadcastDialogTitleEvent": "Mensaje a {count} personal aceptado",
+  "@broadcastDialogTitleEvent": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "broadcastDialogTitleTeam": "Mensaje a los {count} miembros del equipo",
+  "@broadcastDialogTitleTeam": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "broadcastHint": "Escribe tu mensaje o describe qué quieres decir...",
+  "broadcastSending": "Enviando a todos...",
+  "broadcastSuccess": "Enviado a {successCount} de {totalCount} personal",
+  "@broadcastSuccess": {
+    "placeholders": {
+      "successCount": { "type": "int" },
+      "totalCount": { "type": "int" }
+    }
+  },
+  "broadcastFailed": "Error al enviar el mensaje grupal",
+  "broadcastSentToAllEvent": "Enviado a todos · {eventName}",
+  "@broadcastSentToAllEvent": {
+    "placeholders": { "eventName": { "type": "String" } }
+  },
+  "broadcastTeamMessage": "Mensaje grupal al equipo",
+  "broadcastAiPolishing": "IA escribiendo...",
+  "broadcastUseThis": "Usar este",
+  "broadcastEdit": "Editar",
+  "allTeams": "Todos los equipos",
+  "broadcastEmptyMessage": "Por favor ingresa un mensaje",
+  "broadcastSendToAll": "Enviar a todos"
 }

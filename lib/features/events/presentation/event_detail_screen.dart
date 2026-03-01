@@ -1,15 +1,14 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:http/http.dart' as http;
 import 'package:nexa/l10n/app_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../../core/config/environment.dart';
-import '../../../core/constants/storage_keys.dart';
+import '../../../core/config/app_config.dart';
+import '../../auth/data/services/auth_service.dart';
 import '../../brand/data/providers/brand_provider.dart';
 import '../../extraction/services/event_service.dart';
+import 'widgets/public_event_link_sheet.dart';
 import '../../extraction/presentation/pending_publish_screen.dart';
 import '../../extraction/presentation/pending_edit_screen.dart';
 import '../../extraction/presentation/ai_chat_screen.dart';
@@ -18,6 +17,7 @@ import 'package:nexa/shared/services/error_display_service.dart';
 import '../../attendance/presentation/bulk_clock_in_screen.dart';
 import '../../attendance/services/attendance_service.dart';
 import '../../hours_approval/presentation/hours_approval_detail_screen.dart';
+import '../../chat/presentation/widgets/broadcast_compose_sheet.dart';
 
 class EventDetailScreen extends StatefulWidget {
   final Map<String, dynamic> event;
@@ -93,6 +93,22 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         backgroundColor: AppColors.navySpaceCadet,
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.share_outlined),
+            onPressed: () {
+              final eventId = (event['_id'] ?? event['id'] ?? '').toString();
+              if (eventId.isEmpty) return;
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (_) => PublicEventLinkSheet(
+                  eventId: eventId,
+                  eventService: EventService(),
+                ),
+              );
+            },
+          ),
           if (isUpcoming)
             IconButton(
               icon: const Icon(Icons.edit_rounded),
@@ -494,6 +510,34 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         color: AppColors.textDark,
                       ),
                     ),
+                  ),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.campaign_outlined,
+                      color: AppColors.techBlue,
+                      size: 22,
+                    ),
+                    tooltip: AppLocalizations.of(context)!.broadcastToAcceptedStaff,
+                    onPressed: acceptedStaff.isEmpty
+                        ? null
+                        : () => showBroadcastSheet(
+                              context,
+                              broadcastType: 'event',
+                              recipientCount: acceptedStaff.length,
+                              scopeLabel: event['title'] as String? ??
+                                  event['event_name'] as String? ??
+                                  'Event',
+                              eventId: event['id'] as String? ??
+                                  event['_id'] as String?,
+                              eventContext: <String, dynamic>{
+                                'eventName': event['title'] ?? event['event_name'],
+                                'date': event['date'],
+                                'startTime': event['start_time'],
+                                'endTime': event['end_time'],
+                                'location': event['venue_name'] ?? event['location'],
+                                'clientName': event['client_name'],
+                              },
+                            ),
                   ),
                   if (_isGeneratingSheet)
                     const SizedBox(
@@ -1399,23 +1443,16 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     } catch (_) {}
 
     try {
-      const storage = FlutterSecureStorage();
-      final token = await storage.read(key: StorageKeys.accessToken);
-      final baseUrl = Environment.instance.getOrDefault(
-        'API_BASE_URL', 'https://api.nexapymesoft.com',
-      );
+      final baseUrl = AppConfig.instance.baseUrl;
 
       final bodyMap = <String, String>{'format': format};
       if (templateDesign != null) {
         bodyMap['template_design'] = templateDesign;
       }
 
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/events/$eventId/working-hours-sheet'),
-        headers: {
-          'Content-Type': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
-        },
+      final response = await AuthService.httpClient.post(
+        Uri.parse('$baseUrl/events/$eventId/working-hours-sheet'),
+        headers: {'Content-Type': 'application/json'},
         body: jsonEncode(bodyMap),
       ).timeout(const Duration(seconds: 30));
 

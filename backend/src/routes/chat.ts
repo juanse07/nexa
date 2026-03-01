@@ -9,6 +9,7 @@ import { TeamMemberModel } from '../models/teamMember';
 import { TeamModel } from '../models/team';
 import { emitToManager, emitToUser } from '../socket/server';
 import { notificationService } from '../services/notificationService';
+import { AvailabilityModel } from '../models/availability';
 import mongoose from 'mongoose';
 
 const router = Router();
@@ -65,6 +66,38 @@ router.get('/conversations', requireAuth, async (req, res) => {
         users.map(u => [`${u.provider}:${u.subject}`, u])
       );
 
+      // Check today's availability for staff — look ahead 90 days to capture consecutive blocks
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const lookAheadDate = new Date();
+      lookAheadDate.setDate(lookAheadDate.getDate() + 90);
+      const lookAheadStr = lookAheadDate.toISOString().slice(0, 10);
+
+      const unavailableRecords = await AvailabilityModel.find({
+        userKey: { $in: staffUserKeys },
+        date: { $gte: todayStr, $lte: lookAheadStr },
+        status: 'unavailable',
+      }).sort({ userKey: 1, date: 1 }).lean();
+
+      // Group sorted dates by userKey
+      const unavailDateMap = new Map<string, string[]>();
+      for (const rec of unavailableRecords) {
+        if (!unavailDateMap.has(rec.userKey)) unavailDateMap.set(rec.userKey, []);
+        unavailDateMap.get(rec.userKey)!.push(rec.date);
+      }
+
+      // Find the last date of the consecutive block starting from today (null if not unavailable today)
+      const getUnavailUntil = (dates: string[], today: string): string | null => {
+        if (!dates.includes(today)) return null;
+        let end = today;
+        for (const d of dates) {
+          if (d <= end) continue;
+          const next = new Date(end);
+          next.setDate(next.getDate() + 1);
+          if (d === next.toISOString().slice(0, 10)) { end = d; } else { break; }
+        }
+        return end;
+      };
+
       const staffConvResult = conversations.map(conv => {
         const user = userMap.get(conv.userKey);
         let displayName = 'User';
@@ -79,6 +112,8 @@ router.get('/conversations', requireAuth, async (req, res) => {
           displayName = user.name;
         }
 
+        const unavailUntil = getUnavailUntil(unavailDateMap.get(conv.userKey) ?? [], todayStr);
+
         return {
           _id: conv._id.toString(),
           id: conv._id.toString(),
@@ -92,6 +127,8 @@ router.get('/conversations', requireAuth, async (req, res) => {
           lastMessagePreview: conv.lastMessagePreview,
           unreadCount: conv.unreadCountManager,
           updatedAt: conv.updatedAt,
+          isUnavailableToday: unavailUntil !== null,
+          unavailableUntil: unavailUntil,
         };
       });
 
@@ -275,7 +312,15 @@ router.get('/conversations', requireAuth, async (req, res) => {
           };
         });
 
-      return res.json({ conversations: result });
+      // Check if staff marked themselves unavailable today
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const selfUnavailable = await AvailabilityModel.findOne({
+        userKey,
+        date: todayStr,
+        status: 'unavailable',
+      });
+
+      return res.json({ conversations: result, selfUnavailableToday: !!selfUnavailable });
     }
   } catch (error) {
     console.error('Error fetching conversations:', error);
@@ -1937,6 +1982,199 @@ router.post('/invitations/send-bulk', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Error sending bulk invitations:', error);
     return res.status(500).json({ error: 'Failed to send bulk invitations' });
+  }
+});
+
+/**
+ * POST /chat/broadcast
+ * Send a broadcast message to multiple staff members at once.
+ * Lands in each staff member's existing 1-to-1 chat.
+ */
+router.post('/broadcast', requireAuth, async (req, res) => {
+  try {
+    const { managerId, provider, sub, name } = (req as AuthenticatedRequest).authUser;
+
+    if (!managerId) {
+      return res.status(403).json({ error: 'Only managers can send broadcasts' });
+    }
+
+    const { message, broadcastType, eventId } = req.body;
+
+    // Validate message
+    if (!message || typeof message !== 'string' || message.trim().length === 0) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+    if (message.length > 5000) {
+      return res.status(400).json({ error: 'Message must be 5000 characters or less' });
+    }
+    if (!broadcastType || !['event', 'team'].includes(broadcastType)) {
+      return res.status(400).json({ error: 'broadcastType must be "event" or "team"' });
+    }
+
+    const managerObjectId = new mongoose.Types.ObjectId(managerId);
+    let recipientUserKeys: string[] = [];
+    let eventName: string | undefined;
+
+    if (broadcastType === 'event') {
+      // Resolve recipients from event's accepted_staff
+      if (!eventId || !mongoose.Types.ObjectId.isValid(eventId)) {
+        return res.status(400).json({ error: 'Valid eventId is required for event broadcasts' });
+      }
+
+      const { EventModel } = await import('../models/event');
+      const event = await EventModel.findOne({
+        _id: new mongoose.Types.ObjectId(eventId),
+        managerId: managerObjectId,
+      });
+
+      if (!event) {
+        return res.status(404).json({ error: 'Event not found or not owned by you' });
+      }
+
+      eventName = (event as any).title || event.event_name || 'Event';
+
+      const acceptedStaff = (event as any).accepted_staff || [];
+      recipientUserKeys = acceptedStaff
+        .map((s: any) => s.userKey)
+        .filter((uk: string) => !!uk);
+
+      if (recipientUserKeys.length === 0) {
+        return res.status(400).json({ error: 'No accepted staff on this event' });
+      }
+    } else {
+      // Resolve recipients from all team members (same pattern as conversations query)
+      const myTeamIds = await TeamModel.find({
+        $or: [{ managerId: managerObjectId }, { coManagerIds: managerObjectId }],
+      }).distinct('_id');
+
+      const teamMembers = await TeamMemberModel.find({
+        teamId: { $in: myTeamIds },
+        status: 'active',
+      }, { provider: 1, subject: 1 }).lean();
+
+      // Deduplicate (staff can be in multiple teams)
+      const uniqueKeys = new Set(teamMembers.map((tm: any) => `${tm.provider}:${tm.subject}`));
+      recipientUserKeys = Array.from(uniqueKeys);
+
+      if (recipientUserKeys.length === 0) {
+        return res.status(400).json({ error: 'No active team members found' });
+      }
+    }
+
+    console.log(`[BROADCAST] Sending to ${recipientUserKeys.length} recipients (${broadcastType})`);
+
+    const results: Array<{ userKey: string; success: boolean; error?: string }> = [];
+    const trimmedMessage = message.trim();
+
+    // Get manager info for push notifications
+    const manager = await ManagerModel.findById(managerId);
+    const managerName = manager?.first_name && manager?.last_name
+      ? `${manager.first_name} ${manager.last_name}`
+      : manager?.name || 'Your manager';
+
+    const broadcastMetadata = {
+      broadcastType,
+      eventId: eventId || undefined,
+      eventName: eventName || undefined,
+      recipientCount: recipientUserKeys.length,
+    };
+
+    for (const userKey of recipientUserKeys) {
+      try {
+        // Find or create conversation
+        const conversation = await ConversationModel.findOneAndUpdate(
+          { managerId: managerObjectId, userKey },
+          { $setOnInsert: { managerId: managerObjectId, userKey } },
+          { upsert: true, new: true }
+        );
+
+        // Create broadcast message
+        const chatMessage = await ChatMessageModel.create({
+          conversationId: conversation._id,
+          managerId: managerObjectId,
+          userKey,
+          senderType: 'manager',
+          senderName: name,
+          message: trimmedMessage,
+          messageType: 'broadcast',
+          metadata: broadcastMetadata,
+          readByManager: true,
+          readByUser: false,
+        });
+
+        // Update conversation
+        await ConversationModel.findByIdAndUpdate(conversation._id, {
+          lastMessageAt: chatMessage.createdAt,
+          lastMessagePreview: trimmedMessage.substring(0, 200),
+          $inc: { unreadCountUser: 1 },
+        });
+
+        // Emit socket event to user
+        const messagePayload = {
+          id: String(chatMessage._id),
+          conversationId: String(conversation._id),
+          senderType: chatMessage.senderType,
+          senderName: chatMessage.senderName,
+          message: chatMessage.message,
+          messageType: chatMessage.messageType,
+          metadata: chatMessage.metadata,
+          readByManager: chatMessage.readByManager,
+          readByUser: chatMessage.readByUser,
+          createdAt: chatMessage.createdAt,
+        };
+
+        emitToUser(userKey, 'chat:message', messagePayload);
+
+        // Send push notification
+        const [userProvider, userSubject] = userKey.split(':');
+        const user = await UserModel.findOne({ provider: userProvider, subject: userSubject });
+        if (user) {
+          const pushTitle = `\u{1F4E2} ${managerName}`;
+          const pushBody = trimmedMessage.length > 100
+            ? trimmedMessage.substring(0, 100) + '...'
+            : trimmedMessage;
+
+          await notificationService.sendToUser(
+            String(user._id),
+            pushTitle,
+            pushBody,
+            {
+              type: 'chat',
+              conversationId: String(conversation._id),
+              messageId: String(chatMessage._id),
+              senderName: managerName,
+              managerId: managerId,
+            },
+            'user'
+          );
+        }
+
+        results.push({ userKey, success: true });
+      } catch (error) {
+        console.error('[BROADCAST] Error sending to', userKey, error);
+        results.push({
+          userKey,
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+
+    const successCount = results.filter(r => r.success).length;
+    const failureCount = results.filter(r => !r.success).length;
+
+    console.log(`[BROADCAST] Complete: ${successCount} sent, ${failureCount} failed`);
+
+    return res.json({
+      message: `Broadcast sent to ${successCount} of ${recipientUserKeys.length} staff`,
+      successCount,
+      failureCount,
+      totalCount: recipientUserKeys.length,
+      results,
+    });
+  } catch (error) {
+    console.error('Error sending broadcast:', error);
+    return res.status(500).json({ error: 'Failed to send broadcast' });
   }
 });
 

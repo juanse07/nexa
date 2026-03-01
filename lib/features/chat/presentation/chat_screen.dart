@@ -21,6 +21,8 @@ class ChatScreen extends StatefulWidget {
     required this.targetName,
     this.targetPicture,
     this.conversationId,
+    this.isUnavailableToday = false,
+    this.unavailableUntil,
     super.key,
   });
 
@@ -28,6 +30,8 @@ class ChatScreen extends StatefulWidget {
   final String targetName;
   final String? targetPicture;
   final String? conversationId;
+  final bool isUnavailableToday;
+  final DateTime? unavailableUntil;
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -277,7 +281,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
         // Set initial visible date to the latest message's date
         if (_messages.isNotEmpty) {
-          _visibleDate = DateFormat('MMM d, yyyy').format(_messages.last.createdAt);
+          _visibleDate = DateFormat('MMM d, yyyy').format(_messages.last.createdAt.toLocal());
         }
       });
 
@@ -330,7 +334,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (targetIndex < _messages.length) {
       // Reverse the index since ListView has reverse: true
       final message = _messages[_messages.length - 1 - targetIndex];
-      final newDate = DateFormat('MMM d, yyyy').format(message.createdAt);
+      final newDate = DateFormat('MMM d, yyyy').format(message.createdAt.toLocal());
 
       if (_visibleDate != newDate) {
         setState(() {
@@ -666,7 +670,28 @@ class _ChatScreenState extends State<ChatScreen> {
                                   ),
                                 ),
                               ],
-                            ),
+                            )
+                          else if (widget.isUnavailableToday)
+                            Builder(builder: (context) {
+                              final fmt = DateFormat('MMM d');
+                              final today = DateTime.now();
+                              final until = widget.unavailableUntil;
+                              final String label;
+                              if (until == null || (until.year == today.year && until.month == today.month && until.day == today.day)) {
+                                label = AppLocalizations.of(context)!.unavailableToday;
+                              } else {
+                                label = '${AppLocalizations.of(context)!.unavailableToday} – ${fmt.format(until)}';
+                              }
+                              return Text(
+                                label,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.amber.shade200,
+                                  fontWeight: FontWeight.w500,
+                                  letterSpacing: 0.3,
+                                ),
+                              );
+                            }),
                         ],
                       ),
                     ),
@@ -911,7 +936,9 @@ class _ChatScreenState extends State<ChatScreen> {
                 // Check if it's an invitation stamp or regular message
                 message.messageType == 'eventInvitation'
                     ? _buildInvitationStamp(message)
-                    : _MessageBubble(
+                    : message.messageType == 'broadcast'
+                        ? _buildBroadcastStamp(message)
+                        : _MessageBubble(
                         key: ValueKey('bubble_${message.id}'),
                         message: message,
                         isMe: isMe,
@@ -966,10 +993,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildDateDivider(DateTime date) {
     final l10n = AppLocalizations.of(context)!;
+    final localDate = date.toLocal();
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final yesterday = today.subtract(const Duration(days: 1));
-    final messageDate = DateTime(date.year, date.month, date.day);
+    final messageDate = DateTime(localDate.year, localDate.month, localDate.day);
 
     String label;
     if (messageDate == today) {
@@ -977,7 +1005,7 @@ class _ChatScreenState extends State<ChatScreen> {
     } else if (messageDate == yesterday) {
       label = l10n.yesterday;
     } else {
-      label = DateFormat('MMM d, yyyy').format(date);
+      label = DateFormat('MMM d, yyyy').format(localDate);
     }
 
     return Padding(
@@ -1013,7 +1041,7 @@ class _ChatScreenState extends State<ChatScreen> {
         ? DateTime.tryParse(metadata['respondedAt'] as String)
         : null;
     final invitationText = message.message;
-    final sentDate = DateFormat('MMM d').format(message.createdAt);
+    final sentDate = DateFormat('MMM d').format(message.createdAt.toLocal());
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1065,6 +1093,59 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBroadcastStamp(ChatMessage message) {
+    final l10n = AppLocalizations.of(context)!;
+    final metadata = message.metadata ?? {};
+    final broadcastType = metadata['broadcastType'] as String?;
+    final eventName = metadata['eventName'] as String?;
+    final sentDate = DateFormat('MMM d').format(message.createdAt.toLocal());
+
+    final tagLine = broadcastType == 'event' && eventName != null
+        ? '\u{1F4E2} ${l10n.broadcastSentToAllEvent(eventName)} \u00B7 $sentDate'
+        : '\u{1F4E2} ${l10n.broadcastTeamMessage} \u00B7 $sentDate';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        children: <Widget>[
+          // Tag line divider
+          Row(
+            children: <Widget>[
+              Expanded(child: Divider(color: AppColors.techBlue.withOpacity(0.3))),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Text(
+                  tagLine,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.techBlue,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              Expanded(child: Divider(color: AppColors.techBlue.withOpacity(0.3))),
+            ],
+          ),
+          const SizedBox(height: 6),
+          // Message body in blue-tinted container
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.techBlue.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.techBlue.withOpacity(0.15)),
+            ),
+            child: Text(
+              message.message,
+              style: const TextStyle(fontSize: 14, height: 1.4),
+            ),
+          ),
         ],
       ),
     );
@@ -1328,7 +1409,7 @@ class _MessageBubble extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          DateFormat('h:mm a').format(message.createdAt),
+                          DateFormat('h:mm a').format(message.createdAt.toLocal()),
                           style: TextStyle(
                             fontSize: 11,
                             color: isMe ? Colors.white70 : Colors.grey[600],

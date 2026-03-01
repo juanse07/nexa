@@ -1512,7 +1512,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Share this link on social media to recruit new team members. All applicants will require your approval.';
 
   @override
-  String get linkCopied => 'Link copied!';
+  String get linkCopied => 'Link copied to clipboard';
 
   @override
   String get codeLabel => 'Code:';
@@ -3203,4 +3203,107 @@ class AppLocalizationsEn extends AppLocalizations {
   String estHours(String hours) {
     return 'Est: $hours hrs';
   }
+
+  @override
+  String get unavailable => 'Unavailable';
+
+  @override
+  String get unavailableToday => 'Unavailable today';
+
+  @override
+  String get publicEventLink => 'Public Event Link';
+
+  @override
+  String get generatePublicLink => 'Generate Public Link';
+
+  @override
+  String get showContactName => 'Show contact name';
+
+  @override
+  String get showPhoneNumber => 'Show phone number';
+
+  @override
+  String get showEmail => 'Show email';
+
+  @override
+  String get showYourPhoto => 'Show your photo';
+
+  @override
+  String get revokeLink => 'Revoke Link';
+
+  @override
+  String get revokeLinkConfirmation =>
+      'Anyone with this link will no longer be able to view event details. You can generate a new link later.';
+
+  @override
+  String get linkRevoked => 'Public link revoked';
+
+  @override
+  String get anyoneWithLink =>
+      'Anyone with this link can see event staffing progress';
+
+  @override
+  String get privacySettings => 'Privacy Settings';
+
+  @override
+  String get shareLink => 'Share Link';
+
+  @override
+  String get copyLink => 'Copy Link';
+
+  @override
+  String get broadcastToAcceptedStaff => 'Message all accepted staff';
+
+  @override
+  String get broadcastToAllStaff => 'Message all staff';
+
+  @override
+  String broadcastDialogTitleEvent(int count) {
+    return 'Message $count accepted staff';
+  }
+
+  @override
+  String broadcastDialogTitleTeam(int count) {
+    return 'Message all $count team members';
+  }
+
+  @override
+  String get broadcastHint => 'Type your message or describe what to say...';
+
+  @override
+  String get broadcastSending => 'Sending to everyone...';
+
+  @override
+  String broadcastSuccess(int successCount, int totalCount) {
+    return 'Sent to $successCount of $totalCount staff';
+  }
+
+  @override
+  String get broadcastFailed => 'Failed to send broadcast';
+
+  @override
+  String broadcastSentToAllEvent(String eventName) {
+    return 'Sent to all · $eventName';
+  }
+
+  @override
+  String get broadcastTeamMessage => 'Team broadcast';
+
+  @override
+  String get broadcastAiPolishing => 'AI is writing...';
+
+  @override
+  String get broadcastUseThis => 'Use this';
+
+  @override
+  String get broadcastEdit => 'Edit';
+
+  @override
+  String get allTeams => 'All teams';
+
+  @override
+  String get broadcastEmptyMessage => 'Please enter a message';
+
+  @override
+  String get broadcastSendToAll => 'Send to all';
 }

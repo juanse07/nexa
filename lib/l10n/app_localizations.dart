@@ -2793,7 +2793,7 @@ abstract class AppLocalizations {
   /// No description provided for @linkCopied.
   ///
   /// In en, this message translates to:
-  /// **'Link copied!'**
+  /// **'Link copied to clipboard'**
   String get linkCopied;
 
   /// No description provided for @codeLabel.
@@ -5813,6 +5813,192 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Est: {hours} hrs'**
   String estHours(String hours);
+
+  /// No description provided for @unavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Unavailable'**
+  String get unavailable;
+
+  /// No description provided for @unavailableToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Unavailable today'**
+  String get unavailableToday;
+
+  /// No description provided for @publicEventLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Public Event Link'**
+  String get publicEventLink;
+
+  /// No description provided for @generatePublicLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate Public Link'**
+  String get generatePublicLink;
+
+  /// No description provided for @showContactName.
+  ///
+  /// In en, this message translates to:
+  /// **'Show contact name'**
+  String get showContactName;
+
+  /// No description provided for @showPhoneNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Show phone number'**
+  String get showPhoneNumber;
+
+  /// No description provided for @showEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Show email'**
+  String get showEmail;
+
+  /// No description provided for @showYourPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Show your photo'**
+  String get showYourPhoto;
+
+  /// No description provided for @revokeLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoke Link'**
+  String get revokeLink;
+
+  /// No description provided for @revokeLinkConfirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Anyone with this link will no longer be able to view event details. You can generate a new link later.'**
+  String get revokeLinkConfirmation;
+
+  /// No description provided for @linkRevoked.
+  ///
+  /// In en, this message translates to:
+  /// **'Public link revoked'**
+  String get linkRevoked;
+
+  /// No description provided for @anyoneWithLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Anyone with this link can see event staffing progress'**
+  String get anyoneWithLink;
+
+  /// No description provided for @privacySettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy Settings'**
+  String get privacySettings;
+
+  /// No description provided for @shareLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Share Link'**
+  String get shareLink;
+
+  /// No description provided for @copyLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy Link'**
+  String get copyLink;
+
+  /// No description provided for @broadcastToAcceptedStaff.
+  ///
+  /// In en, this message translates to:
+  /// **'Message all accepted staff'**
+  String get broadcastToAcceptedStaff;
+
+  /// No description provided for @broadcastToAllStaff.
+  ///
+  /// In en, this message translates to:
+  /// **'Message all staff'**
+  String get broadcastToAllStaff;
+
+  /// No description provided for @broadcastDialogTitleEvent.
+  ///
+  /// In en, this message translates to:
+  /// **'Message {count} accepted staff'**
+  String broadcastDialogTitleEvent(int count);
+
+  /// No description provided for @broadcastDialogTitleTeam.
+  ///
+  /// In en, this message translates to:
+  /// **'Message all {count} team members'**
+  String broadcastDialogTitleTeam(int count);
+
+  /// No description provided for @broadcastHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Type your message or describe what to say...'**
+  String get broadcastHint;
+
+  /// No description provided for @broadcastSending.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending to everyone...'**
+  String get broadcastSending;
+
+  /// No description provided for @broadcastSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent to {successCount} of {totalCount} staff'**
+  String broadcastSuccess(int successCount, int totalCount);
+
+  /// No description provided for @broadcastFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to send broadcast'**
+  String get broadcastFailed;
+
+  /// No description provided for @broadcastSentToAllEvent.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent to all · {eventName}'**
+  String broadcastSentToAllEvent(String eventName);
+
+  /// No description provided for @broadcastTeamMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Team broadcast'**
+  String get broadcastTeamMessage;
+
+  /// No description provided for @broadcastAiPolishing.
+  ///
+  /// In en, this message translates to:
+  /// **'AI is writing...'**
+  String get broadcastAiPolishing;
+
+  /// No description provided for @broadcastUseThis.
+  ///
+  /// In en, this message translates to:
+  /// **'Use this'**
+  String get broadcastUseThis;
+
+  /// No description provided for @broadcastEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get broadcastEdit;
+
+  /// No description provided for @allTeams.
+  ///
+  /// In en, this message translates to:
+  /// **'All teams'**
+  String get allTeams;
+
+  /// No description provided for @broadcastEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Please enter a message'**
+  String get broadcastEmptyMessage;
+
+  /// No description provided for @broadcastSendToAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Send to all'**
+  String get broadcastSendToAll;
 }
 
 class _AppLocalizationsDelegate
