@@ -12,6 +12,7 @@ class StaffService {
     bool? favorite,
     String? cursor,
     String? groupId,
+    String? role,
     int limit = 50,
   }) async {
     final params = <String, String>{'limit': '$limit'};
@@ -19,6 +20,7 @@ class StaffService {
     if (favorite == true) params['favorite'] = 'true';
     if (cursor != null && cursor.isNotEmpty) params['cursor'] = cursor;
     if (groupId != null && groupId.isNotEmpty) params['groupId'] = groupId;
+    if (role != null && role.trim().isNotEmpty) params['role'] = role.trim();
 
     try {
       final response = await _apiClient.get<Map<String, dynamic>>(

@@ -1679,5 +1679,20 @@
   "broadcastEdit": "Edit",
   "allTeams": "All teams",
   "broadcastEmptyMessage": "Please enter a message",
-  "broadcastSendToAll": "Send to all"
+  "broadcastSendToAll": "Send to all",
+
+  "deactivateMember": "Deactivate",
+  "reactivateMember": "Reactivate",
+  "memberDeactivatedSuccess": "Member deactivated",
+  "memberReactivatedSuccess": "Member reactivated",
+  "failedToDeactivateMember": "Failed to deactivate member",
+  "failedToReactivateMember": "Failed to reactivate member",
+  "memberStatusInactive": "Paused",
+  "filterStaff": "Filter",
+  "allRoles": "All roles",
+  "starredFilter": "Starred",
+  "sendDirectInvitations": "Send Direct Invitations",
+  "publishToTeam": "Publish to Team",
+  "eventStaysPrivate": "Event stays private — only invited people can see it",
+  "eventBecomesVisible": "Event becomes visible to selected teams / members"
 }

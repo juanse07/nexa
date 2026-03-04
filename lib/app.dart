@@ -27,7 +27,7 @@ class NexaApp extends StatefulWidget {
   State<NexaApp> createState() => _NexaAppState();
 }
 
-class _NexaAppState extends State<NexaApp> {
+class _NexaAppState extends State<NexaApp> with WidgetsBindingObserver {
   bool _splashComplete = false;
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   StreamSubscription<void>? _logoutSubscription;
@@ -35,6 +35,7 @@ class _NexaAppState extends State<NexaApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _logoutSubscription = AuthService.onForcedLogout.listen((_) {
       _navigatorKey.currentState?.pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const LoginPage()),
@@ -45,8 +46,18 @@ class _NexaAppState extends State<NexaApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _logoutSubscription?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Proactively refresh the access token when the app returns to foreground.
+      // Fire-and-forget — don't block the UI.
+      unawaited(AuthService.refreshAccessToken());
+    }
   }
 
   static Future<String?> _validateAndGetToken() async {

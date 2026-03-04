@@ -451,6 +451,40 @@ class TeamsService {
     }
   }
 
+  Future<void> deactivateMember({
+    required String teamId,
+    required String memberId,
+  }) async {
+    try {
+      final response = await _apiClient.patch(
+        '/teams/$teamId/members/$memberId/deactivate',
+        data: {},
+      );
+      if (!_isSuccess(response.statusCode)) {
+        throw Exception('Failed to deactivate member (${response.statusCode})');
+      }
+    } on DioException catch (e) {
+      throw Exception('Failed to deactivate member: ${e.message}');
+    }
+  }
+
+  Future<void> reactivateMember({
+    required String teamId,
+    required String memberId,
+  }) async {
+    try {
+      final response = await _apiClient.patch(
+        '/teams/$teamId/members/$memberId/reactivate',
+        data: {},
+      );
+      if (!_isSuccess(response.statusCode)) {
+        throw Exception('Failed to reactivate member (${response.statusCode})');
+      }
+    } on DioException catch (e) {
+      throw Exception('Failed to reactivate member: ${e.message}');
+    }
+  }
+
   bool _isSuccess(int? statusCode) {
     if (statusCode == null) return false;
     return statusCode >= 200 && statusCode < 300;

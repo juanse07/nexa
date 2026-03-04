@@ -17,7 +17,6 @@ import 'package:nexa/features/teams/data/services/teams_service.dart';
 import 'package:nexa/core/network/socket_manager.dart';
 import 'package:nexa/services/notification_service.dart';
 import 'package:nexa/features/subscription/data/services/subscription_service.dart';
-import 'package:nexa/features/onboarding/presentation/venue_onboarding_gate.dart';
 import 'package:nexa/features/onboarding/presentation/widgets/step_progress_indicator.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
 
@@ -443,8 +442,8 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
     }
 
     if (snapshot.isComplete) {
-      // Business onboarding complete, now check venue onboarding
-      return const VenueOnboardingGate();
+      // Business onboarding complete, go directly to main screen
+      return const MainScreen();
     }
 
     return Scaffold(

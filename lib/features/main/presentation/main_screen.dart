@@ -13,6 +13,7 @@ import '../../chat/presentation/conversations_screen.dart';
 import '../../attendance/presentation/attendance_dashboard_screen.dart';
 import '../../statistics/presentation/statistics_dashboard_screen.dart';
 import '../../users/presentation/pages/settings_page.dart';
+import '../../teams/presentation/pages/teams_management_page.dart';
 import '../../users/presentation/pages/manager_profile_page.dart';
 import '../../auth/data/services/auth_service.dart';
 import '../../auth/presentation/pages/login_page.dart';
@@ -222,6 +223,12 @@ class _MainScreenState extends State<MainScreen>
 
     // Always show bars when switching tabs
     _showBars();
+
+    // Refresh conversations when the chat tab is re-selected so availability
+    // badges (and unread counts) stay current without a manual pull-to-refresh.
+    if (index == 2) {
+      ConversationsScreen.triggerRefresh();
+    }
 
     setState(() {
       _selectedIndex = index;
@@ -616,6 +623,17 @@ class _MainScreenState extends State<MainScreen>
                       icon: Icons.bar_chart,
                       label: l10n.navStats,
                       index: 5,
+                    ),
+                    _buildSheetActionTile(
+                      ctx: ctx,
+                      icon: Icons.groups_outlined,
+                      label: l10n.teams,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const TeamsManagementPage()),
+                        );
+                      },
                     ),
                     const SizedBox(height: 8),
                     Divider(height: 1, color: AppColors.borderLight),

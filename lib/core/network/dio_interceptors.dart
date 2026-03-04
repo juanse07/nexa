@@ -74,29 +74,44 @@ class AuthInterceptor extends Interceptor {
 
 /// Error interceptor for handling common errors.
 ///
-/// On 401: checks if the JWT is genuinely expired before forcing logout.
-/// Transient 401s (server restart, network glitch) won't kill the session.
+/// On 401: attempts a token refresh before forcing logout.
+/// The Completer mutex in [AuthService.refreshAccessToken] handles concurrent 401s.
 class ErrorInterceptor extends Interceptor {
-  /// Creates an [ErrorInterceptor] with a logger
-  ErrorInterceptor(this._logger);
+  /// Creates an [ErrorInterceptor] with a logger and a Dio instance for retries.
+  ErrorInterceptor(this._logger, {Dio? dio}) : _dio = dio;
 
   final Logger _logger;
+  Dio? _dio;
+
+  /// Allow setting Dio after construction (needed because Dio is created before
+  /// interceptors are attached).
+  set dio(Dio value) => _dio = value;
 
   @override
   void onResponse(
     Response<dynamic> response,
     ResponseInterceptorHandler handler,
-  ) {
+  ) async {
     // validateStatus accepts < 500 so 401 arrives here, not in onError.
     if (response.statusCode == ApiConstants.statusUnauthorized) {
       _logger.w('401 response on ${response.requestOptions.path}');
-      _handleUnauthorized(response.data);
+
+      if (_isTokenExpired()) {
+        final retryResponse = await _attemptRefreshAndRetry(response.requestOptions);
+        if (retryResponse != null) {
+          return handler.resolve(retryResponse);
+        }
+        // Refresh failed — force logout.
+        AuthService.forceLogout();
+      } else {
+        _logger.w('401 but token not expired — ignoring (transient server error)');
+      }
     }
     super.onResponse(response, handler);
   }
 
   @override
-  void onError(DioException err, ErrorInterceptorHandler handler) {
+  void onError(DioException err, ErrorInterceptorHandler handler) async {
     _logger.e(
       'Error occurred: ${err.type}\n'
       'Status code: ${err.response?.statusCode}\n'
@@ -115,7 +130,15 @@ class ErrorInterceptor extends Interceptor {
         final statusCode = err.response?.statusCode;
         if (statusCode == ApiConstants.statusUnauthorized) {
           _logger.w('401 error on ${err.requestOptions.path}');
-          _handleUnauthorized(err.response?.data);
+          if (_isTokenExpired()) {
+            final retryResponse = await _attemptRefreshAndRetry(err.requestOptions);
+            if (retryResponse != null) {
+              return handler.resolve(retryResponse);
+            }
+            AuthService.forceLogout();
+          } else {
+            _logger.w('401 but token not expired — ignoring (transient)');
+          }
         } else if (statusCode == ApiConstants.statusForbidden) {
           _logger.w('Forbidden error - insufficient permissions');
         } else if (statusCode == ApiConstants.statusNotFound) {
@@ -143,39 +166,35 @@ class ErrorInterceptor extends Interceptor {
     super.onError(err, handler);
   }
 
-  /// Only force logout when the token is genuinely expired or invalid.
-  /// Transient server errors that happen to return 401 won't nuke the session.
-  void _handleUnauthorized(dynamic responseData) {
-    // Check if backend explicitly says "expired" or "sign in again"
-    final message = _extractMessage(responseData);
-    final isExpiredMessage = message.contains('expired') ||
-        message.contains('sign in again') ||
-        message.contains('Authentication required');
-
-    if (isExpiredMessage && _isTokenExpired()) {
-      _logger.w('Token confirmed expired — forcing logout');
-      AuthService.forceLogout();
-    } else if (_isTokenExpired()) {
-      _logger.w('Token exp claim is past — forcing logout');
-      AuthService.forceLogout();
-    } else {
-      _logger.w('401 but token not expired — ignoring (transient server error)');
+  /// Try to refresh the token and retry the original request.
+  /// Returns the new Response on success, or null on failure.
+  Future<Response<dynamic>?> _attemptRefreshAndRetry(RequestOptions options) async {
+    _logger.w('Token expired — attempting refresh');
+    final refreshed = await AuthService.refreshAccessToken();
+    if (!refreshed) {
+      _logger.w('Token refresh failed');
+      return null;
     }
-  }
 
-  String _extractMessage(dynamic data) {
-    if (data is Map<String, dynamic>) {
-      return ((data['message'] ?? data['error'] ?? '') as Object).toString().toLowerCase();
+    // Retry with the new token.
+    final newToken = AuthService.lastKnownToken;
+    if (newToken == null || _dio == null) return null;
+
+    _logger.w('Token refreshed — retrying ${options.path}');
+    options.headers[ApiConstants.authorization] =
+        '${ApiConstants.bearerPrefix} $newToken';
+
+    try {
+      return await _dio!.fetch(options);
+    } catch (e) {
+      _logger.e('Retry after refresh failed: $e');
+      return null;
     }
-    return '';
   }
 
   /// Decode the stored JWT and check if the exp claim is in the past.
   bool _isTokenExpired() {
     try {
-      // Read token synchronously from the auth header we already attached.
-      // Since we can't await in interceptor, decode from the stored constant.
-      // Actually, we'll check the last-known token via a sync helper.
       final token = AuthService.lastKnownToken;
       if (token == null || token.isEmpty) return true;
 

@@ -36,6 +36,8 @@ import {
   sendDirectInvitation,
 } from '../services/eventShareService';
 import { logAIUsage } from '../utils/logAIUsage';
+import { EventShareLinkModel } from '../models/eventShareLink';
+import { generateUniqueShortCode, isValidShortCodeFormat } from '../utils/inviteCodeGenerator';
 
 const router = Router();
 
@@ -164,6 +166,8 @@ const roleSchema = z.object({
   role: z.string().min(1, 'role is required'),
   count: z.number().int().min(1, 'count must be at least 1'),
   call_time: z.string().nullish(),
+  start_time: z.string().nullish(),
+  end_time: z.string().nullish(),
 });
 
 const acceptedStaffSchema = z.object({
@@ -423,6 +427,17 @@ router.post('/events', requireAuth, async (req, res) => {
       // Status defaults to 'draft' from schema, but can be overridden
       status: normalized.status || 'draft',
     });
+
+    // Auto-populate manager's cities array from event city
+    const eventCity = (created as any).city;
+    if (eventCity && typeof eventCity === 'string') {
+      const mgr = await ManagerModel.findById(managerId);
+      if (mgr && !mgr.cities?.some(c => c.name.toLowerCase().includes(eventCity.toLowerCase()))) {
+        mgr.cities = [...(mgr.cities || []), { name: eventCity, isTourist: false }];
+        await mgr.save();
+      }
+    }
+
     const createdObj = created.toObject();
     const responsePayload = {
       ...createdObj,
@@ -2325,6 +2340,115 @@ router.get('/events/expired', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[GET /events/expired] Error:', err);
     return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Get public event data by short code (unauthenticated)
+// MUST be registered before /events/:id to prevent Express matching "public" as an :id
+router.get('/events/public/:shortCode', async (req, res) => {
+  try {
+    const { shortCode } = req.params;
+
+    if (!isValidShortCodeFormat(shortCode)) {
+      return res.status(404).json({ valid: false, message: 'Invalid link' });
+    }
+
+    const link = await EventShareLinkModel.findOne({
+      shortCode: shortCode.toUpperCase(),
+      active: true,
+    }).lean();
+
+    if (!link) {
+      return res.status(404).json({ valid: false, message: 'Link expired or not found' });
+    }
+
+    const event = await EventModel.findById(link.eventId).lean();
+    if (!event) {
+      return res.status(404).json({ valid: false, message: 'Event not found' });
+    }
+
+    // Build role_stats from accepted_staff and roles
+    const acceptedStaff = (event.accepted_staff || []).filter(
+      (s: any) => s.response === 'accept' || s.response === 'accepted'
+    );
+    const roleStats = (event.roles || []).map((role: any) => {
+      const taken = acceptedStaff.filter((s: any) => s.role === role.role).length;
+      return {
+        role: role.role,
+        capacity: role.count,
+        taken,
+        remaining: Math.max(0, role.count - taken),
+      };
+    });
+
+    // Build public response
+    const publicEvent: Record<string, any> = {
+      shift_name: event.shift_name || event.event_name || '',
+      client_name: event.client_name || '',
+      date: event.date || '',
+      start_time: event.start_time || '',
+      end_time: event.end_time || '',
+      venue_name: event.venue_name || '',
+      city: event.city || '',
+      state: event.state || '',
+      status: event.status || 'draft',
+      role_stats: roleStats,
+    };
+
+    // Manager photo in header
+    if (link.showManagerPhoto) {
+      const manager = await ManagerModel.findById(link.managerId, 'picture').lean();
+      if (manager?.picture) {
+        publicEvent.manager_photo = manager.picture;
+      }
+    }
+
+    // Accepted staff details — resolve from User/StaffProfile for photo, phone, email
+    const staffList: Array<Record<string, any>> = [];
+    for (const s of acceptedStaff) {
+      const entry: Record<string, any> = { role: s.role || '' };
+
+      if (link.showContactName) {
+        entry.name = s.name || `${s.first_name || ''} ${s.last_name || ''}`.trim() || '';
+      }
+
+      // Look up User record for picture, phone, email
+      let user: any = null;
+      if (s.userKey) {
+        const [provider, ...subjectParts] = s.userKey.split(':');
+        const subject = subjectParts.join(':');
+        user = await UserModel.findOne({ provider, subject }, 'picture email auth_phone_number phone_number').lean();
+      }
+
+      // Photo — try accepted_staff.picture → User.picture → StaffProfile.picture
+      if (link.showManagerPhoto) {
+        if (s.picture) {
+          entry.picture = s.picture;
+        } else if (user?.picture) {
+          entry.picture = user.picture;
+        } else if (s.userKey) {
+          const profile = await StaffProfileModel.findOne({ userKey: s.userKey }, 'picture').lean();
+          if (profile?.picture) entry.picture = profile.picture;
+        }
+      }
+
+      if (link.showContactPhone) {
+        const phone = user?.auth_phone_number || user?.phone_number || '';
+        if (phone) entry.phone = phone;
+      }
+      if (link.showContactEmail) {
+        const email = user?.email || s.email || '';
+        if (email) entry.email = email;
+      }
+
+      staffList.push(entry);
+    }
+    publicEvent.accepted_staff = staffList;
+
+    return res.json({ valid: true, event: publicEvent });
+  } catch (err) {
+    console.error('[GET /events/public/:shortCode] Error:', err);
+    return res.status(500).json({ valid: false, message: 'Internal server error' });
   }
 });
 
@@ -4481,6 +4605,185 @@ router.post('/events/:id/force-clock-out/:userKey', requireAuth, async (req, res
   } catch (err) {
     console.error('[force-clock-out] POST failed:', err);
     return res.status(500).json({ message: 'Failed to force clock-out' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// Public Event Link Management (authenticated)
+// ═══════════════════════════════════════════════════════════
+
+// Generate a public link for an event
+router.post('/events/:id/public-link', requireAuth, async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    if (!eventId || !mongoose.Types.ObjectId.isValid(eventId)) {
+      return res.status(400).json({ message: 'Invalid event ID' });
+    }
+
+    const manager = await resolveManagerForRequest(req as any);
+    if (!manager) {
+      return res.status(403).json({ message: 'Unauthorized: Manager access required' });
+    }
+
+    // Check event ownership
+    const event = await EventModel.findOne({ _id: eventId, managerId: manager._id }).lean();
+    if (!event) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    // Check if an active link already exists
+    const existing = await EventShareLinkModel.findOne({ eventId, active: true }).lean();
+    if (existing) {
+      return res.json({
+        shortCode: existing.shortCode,
+        url: `https://flowshift.work/e/${existing.shortCode}`,
+        showContactName: existing.showContactName,
+        showContactPhone: existing.showContactPhone,
+        showContactEmail: existing.showContactEmail,
+        showManagerPhoto: existing.showManagerPhoto,
+      });
+    }
+
+    const { showContactName, showContactPhone, showContactEmail, showManagerPhoto } = req.body || {};
+
+    const shortCode = await generateUniqueShortCode(EventShareLinkModel);
+
+    const link = await EventShareLinkModel.create({
+      eventId,
+      managerId: manager._id,
+      shortCode,
+      showContactName: showContactName !== false,
+      showContactPhone: showContactPhone === true,
+      showContactEmail: showContactEmail === true,
+      showManagerPhoto: showManagerPhoto === true,
+    });
+
+    return res.status(201).json({
+      shortCode: link.shortCode,
+      url: `https://flowshift.work/e/${link.shortCode}`,
+      showContactName: link.showContactName,
+      showContactPhone: link.showContactPhone,
+      showContactEmail: link.showContactEmail,
+      showManagerPhoto: link.showManagerPhoto,
+    });
+  } catch (err) {
+    console.error('[POST /events/:id/public-link] Error:', err);
+    return res.status(500).json({ message: 'Failed to generate public link' });
+  }
+});
+
+// Check if event has an active public link
+router.get('/events/:id/public-link', requireAuth, async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    if (!eventId || !mongoose.Types.ObjectId.isValid(eventId)) {
+      return res.status(400).json({ message: 'Invalid event ID' });
+    }
+
+    const manager = await resolveManagerForRequest(req as any);
+    if (!manager) {
+      return res.status(403).json({ message: 'Unauthorized: Manager access required' });
+    }
+
+    const link = await EventShareLinkModel.findOne({
+      eventId,
+      managerId: manager._id,
+      active: true,
+    }).lean();
+
+    if (!link) {
+      return res.json({ exists: false });
+    }
+
+    return res.json({
+      exists: true,
+      shortCode: link.shortCode,
+      url: `https://flowshift.work/e/${link.shortCode}`,
+      showContactName: link.showContactName,
+      showContactPhone: link.showContactPhone,
+      showContactEmail: link.showContactEmail,
+      showManagerPhoto: link.showManagerPhoto,
+    });
+  } catch (err) {
+    console.error('[GET /events/:id/public-link] Error:', err);
+    return res.status(500).json({ message: 'Failed to check public link' });
+  }
+});
+
+// Update privacy settings on an active public link
+router.patch('/events/:id/public-link', requireAuth, async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    if (!eventId || !mongoose.Types.ObjectId.isValid(eventId)) {
+      return res.status(400).json({ message: 'Invalid event ID' });
+    }
+
+    const manager = await resolveManagerForRequest(req as any);
+    if (!manager) {
+      return res.status(403).json({ message: 'Unauthorized: Manager access required' });
+    }
+
+    const updates: Record<string, boolean> = {};
+    const { showContactName, showContactPhone, showContactEmail, showManagerPhoto } = req.body || {};
+    if (typeof showContactName === 'boolean') updates.showContactName = showContactName;
+    if (typeof showContactPhone === 'boolean') updates.showContactPhone = showContactPhone;
+    if (typeof showContactEmail === 'boolean') updates.showContactEmail = showContactEmail;
+    if (typeof showManagerPhoto === 'boolean') updates.showManagerPhoto = showManagerPhoto;
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ message: 'No valid fields to update' });
+    }
+
+    const link = await EventShareLinkModel.findOneAndUpdate(
+      { eventId, managerId: manager._id, active: true },
+      { $set: updates },
+      { new: true }
+    ).lean();
+
+    if (!link) {
+      return res.status(404).json({ message: 'No active public link found for this event' });
+    }
+
+    return res.json({
+      shortCode: link.shortCode,
+      url: `https://flowshift.work/e/${link.shortCode}`,
+      showContactName: link.showContactName,
+      showContactPhone: link.showContactPhone,
+      showContactEmail: link.showContactEmail,
+      showManagerPhoto: link.showManagerPhoto,
+    });
+  } catch (err) {
+    console.error('[PATCH /events/:id/public-link] Error:', err);
+    return res.status(500).json({ message: 'Failed to update public link' });
+  }
+});
+
+// Revoke (deactivate) a public link
+router.delete('/events/:id/public-link', requireAuth, async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    if (!eventId || !mongoose.Types.ObjectId.isValid(eventId)) {
+      return res.status(400).json({ message: 'Invalid event ID' });
+    }
+
+    const manager = await resolveManagerForRequest(req as any);
+    if (!manager) {
+      return res.status(403).json({ message: 'Unauthorized: Manager access required' });
+    }
+
+    const result = await EventShareLinkModel.updateOne(
+      { eventId, managerId: manager._id, active: true },
+      { $set: { active: false } }
+    );
+
+    if (result.modifiedCount === 0) {
+      return res.status(404).json({ message: 'No active public link found' });
+    }
+
+    return res.json({ message: 'Public link revoked' });
+  } catch (err) {
+    console.error('[DELETE /events/:id/public-link] Error:', err);
+    return res.status(500).json({ message: 'Failed to revoke public link' });
   }
 });
 

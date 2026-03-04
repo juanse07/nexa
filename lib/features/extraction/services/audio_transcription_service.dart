@@ -147,11 +147,6 @@ class AudioTranscriptionService {
   /// [terminology] Optional terminology preference (jobs, shifts, events) for better transcription context
   Future<String?> transcribeAudio(String audioPathOrUrl, {String? terminology}) async {
     try {
-      final token = await AuthService.getJwt();
-      if (token == null) {
-        throw Exception('Not authenticated');
-      }
-
       final baseUrl = AppConfig.instance.baseUrl;
       final uri = Uri.parse('$baseUrl/ai/transcribe');
 
@@ -160,9 +155,8 @@ class AudioTranscriptionService {
         print('[AudioTranscriptionService] Using terminology: $terminology');
       }
 
-      // Create multipart request
+      // Create multipart request — AuthService.httpClient.send() auto-attaches Bearer
       final request = http.MultipartRequest('POST', uri);
-      request.headers['Authorization'] = 'Bearer $token';
 
       // Add terminology if provided
       if (terminology != null) {
@@ -208,8 +202,8 @@ class AudioTranscriptionService {
         );
       }
 
-      // Send request
-      final streamedResponse = await request.send();
+      // Send request via authenticated client (auto-attaches Bearer + 401 refresh)
+      final streamedResponse = await AuthService.httpClient.send(request);
       final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 200) {

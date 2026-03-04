@@ -9,6 +9,7 @@ import '../data/services/chat_service.dart';
 import '../domain/entities/chat_message.dart';
 import 'dialogs/send_event_invitation_dialog.dart';
 import '../../../features/extraction/services/roles_service.dart';
+import '../../../features/extraction/services/group_service.dart';
 import '../../../features/users/presentation/pages/user_events_screen.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
 import 'package:nexa/shared/services/error_display_service.dart';
@@ -43,6 +44,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final ScrollController _scrollController = ScrollController();
   final List<ChatMessage> _messages = <ChatMessage>[];
   final RolesService _rolesService = RolesService();
+  final GroupService _groupService = GroupService();
 
   bool _loading = true;
   String? _error;
@@ -58,6 +60,7 @@ class _ChatScreenState extends State<ChatScreen> {
   // Favorites functionality
   Set<String> _favoriteUsers = {};
   List<Map<String, dynamic>>? _roles;
+  List<Map<String, dynamic>> _staffGroups = [];
   String? _visibleDate; // Tracks the currently visible date section
 
   @override
@@ -86,9 +89,10 @@ class _ChatScreenState extends State<ChatScreen> {
     _markAsRead();
     _scrollController.addListener(_updateVisibleDate);
 
-    // Load favorites and roles for menu
+    // Load favorites, roles, and groups for menu
     _loadFavorites();
     _loadRoles();
+    _loadStaffGroups();
   }
 
   void _listenToNewMessages() {
@@ -1051,14 +1055,18 @@ class _ChatScreenState extends State<ChatScreen> {
           Row(
             children: <Widget>[
               Expanded(child: Divider(color: Colors.grey[300])),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Text(
-                  '\u{1F4E9} $invitationText \u00B7 $sentDate',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[500],
-                    fontWeight: FontWeight.w500,
+              Flexible(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    '\u{1F4E9} $invitationText \u00B7 $sentDate',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[500],
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ),
@@ -1280,14 +1288,47 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _toggleFavorite(String userId, String role) async {
     final key = '$userId:$role';
+    final adding = !_favoriteUsers.contains(key);
     setState(() {
-      if (_favoriteUsers.contains(key)) {
-        _favoriteUsers.remove(key);
-      } else {
+      if (adding) {
         _favoriteUsers.add(key);
+      } else {
+        _favoriteUsers.remove(key);
       }
     });
     await _saveFavorites();
+
+    // Persist to backend Staff Group (find or create group by role name)
+    try {
+      String? groupId = _findGroupIdByName(role);
+      if (groupId == null && adding) {
+        // Create the group on the fly
+        final created = await _groupService.createGroup(role);
+        groupId = (created['id'] ?? created['_id'] ?? '').toString();
+        await _loadStaffGroups(); // refresh local cache
+      }
+      if (groupId != null && groupId.isNotEmpty) {
+        if (adding) {
+          await _groupService.addMembers(groupId, [userId]);
+        } else {
+          await _groupService.removeMember(groupId, userId);
+        }
+      }
+    } catch (e) {
+      // Group sync failed — local favorite still saved, backend will be out of sync
+      print('[CHAT SCREEN] Group sync error: $e');
+    }
+  }
+
+  /// Find a staff group ID whose name matches the given role (case-insensitive).
+  String? _findGroupIdByName(String roleName) {
+    final target = roleName.toLowerCase();
+    for (final g in _staffGroups) {
+      if ((g['name'] ?? '').toString().toLowerCase() == target) {
+        return (g['id'] ?? g['_id'] ?? '').toString();
+      }
+    }
+    return null;
   }
 
   bool _isFavorite(String userId, String? role) {
@@ -1303,6 +1344,15 @@ class _ChatScreenState extends State<ChatScreen> {
       });
     } catch (e) {
       print('[CHAT SCREEN] Error loading roles: $e');
+    }
+  }
+
+  Future<void> _loadStaffGroups() async {
+    try {
+      final groups = await _groupService.fetchGroups();
+      if (mounted) setState(() => _staffGroups = groups);
+    } catch (e) {
+      print('[CHAT SCREEN] Error loading groups: $e');
     }
   }
 

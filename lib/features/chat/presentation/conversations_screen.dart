@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:nexa/l10n/app_localizations.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
@@ -14,11 +15,16 @@ import 'package:nexa/shared/widgets/web_content_wrapper.dart';
 class ConversationsScreen extends StatefulWidget {
   const ConversationsScreen({super.key});
 
+  /// Called by MainScreen when the chat tab is re-selected so the list stays fresh.
+  static void triggerRefresh() => _activeState?._loadConversations();
+  static _ConversationsScreenState? _activeState;
+
   @override
   State<ConversationsScreen> createState() => _ConversationsScreenState();
 }
 
-class _ConversationsScreenState extends State<ConversationsScreen> {
+class _ConversationsScreenState extends State<ConversationsScreen>
+    with WidgetsBindingObserver {
   final ChatService _chatService = ChatService();
   final TextEditingController _searchController = TextEditingController();
   List<Conversation> _conversations = <Conversation>[];
@@ -29,6 +35,8 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
   @override
   void initState() {
     super.initState();
+    ConversationsScreen._activeState = this;
+    WidgetsBinding.instance.addObserver(this);
     _loadConversations();
     _listenToNewMessages();
     _searchController.addListener(_filterConversations);
@@ -36,8 +44,19 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
 
   @override
   void dispose() {
+    if (ConversationsScreen._activeState == this) {
+      ConversationsScreen._activeState = null;
+    }
+    WidgetsBinding.instance.removeObserver(this);
     _searchController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _loadConversations();
+    }
   }
 
   void _filterConversations() {
@@ -307,6 +326,8 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
           targetName: conversation.displayName,
           targetPicture: conversation.displayPicture,
           conversationId: conversation.id,
+          isUnavailableToday: conversation.isUnavailableToday,
+          unavailableUntil: conversation.unavailableUntil,
         ),
       ),
     ).then((_) => _loadConversations());
@@ -419,6 +440,39 @@ class _ConversationTile extends StatelessWidget {
                                   ),
                                 ),
                               ),
+                            ],
+                            if (conversation.isUnavailableToday) ...[
+                              const SizedBox(width: 6),
+                              Builder(builder: (context) {
+                                final fmt = DateFormat('MMM d');
+                                final today = DateTime.now();
+                                final until = conversation.unavailableUntil;
+                                final String label;
+                                if (until == null) {
+                                  label = l10n.unavailable;
+                                } else if (until.year == today.year &&
+                                    until.month == today.month &&
+                                    until.day == today.day) {
+                                  label = fmt.format(until); // "Feb 28"
+                                } else {
+                                  label = '${fmt.format(today)}–${fmt.format(until)}'; // "Feb 28–Mar 3"
+                                }
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange.shade50,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    label,
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.orange.shade700,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                );
+                              }),
                             ],
                           ],
                         ),

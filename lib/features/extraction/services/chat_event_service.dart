@@ -429,18 +429,10 @@ Be conversational and friendly. If the user provides multiple pieces of informat
     try {
       print('[ChatEventService] Fetching manager venue list from backend...');
       final startTime = DateTime.now();
-      final token = await AuthService.getJwt();
-      if (token == null) {
-        print('[ChatEventService] Not authenticated');
-        return;
-      }
 
-      final response = await http.get(
+      final response = await AuthService.httpClient.get(
         Uri.parse('${AppConfig.instance.baseUrl}/managers/me'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
       ).timeout(
         const Duration(seconds: 5),
         onTimeout: () {
@@ -1275,12 +1267,6 @@ Respond in the same language the user speaks. Be concise and conversational. Use
     int? maxTokensOverride,
     double? temperatureOverride,
   }) async {
-    // Get auth token
-    final token = await AuthService.getJwt();
-    if (token == null) {
-      throw Exception('Not authenticated');
-    }
-
     final String baseUrl = AppConfig.instance.baseUrl;
     final Uri uri = Uri.parse('$baseUrl/ai/chat/message');
 
@@ -1291,18 +1277,13 @@ Respond in the same language the user speaks. Be concise and conversational. Use
       'provider': _aiProvider,
     };
 
-    final headers = {
-      'Authorization': 'Bearer $token',
-      'Content-Type': 'application/json',
-    };
-
     print('Sending request to AI ($_aiProvider)...');
 
     final http.Response response;
     try {
-      response = await http.post(
+      response = await AuthService.httpClient.post(
         uri,
-        headers: headers,
+        headers: {'Content-Type': 'application/json'},
         body: jsonEncode(requestBody),
       ).timeout(const Duration(seconds: 90));
     } on TimeoutException {

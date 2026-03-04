@@ -1,17 +1,13 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+import '../../../core/config/app_config.dart';
+import '../../auth/data/services/auth_service.dart';
 
 /// Service for managing attendance data and bulk operations
 class AttendanceService {
-  static const _storage = FlutterSecureStorage();
-  static final String _apiBaseUrl = dotenv.env['API_BASE_URL'] ?? '';
-
-  /// Get JWT token from storage
-  static Future<String?> _getToken() async {
-    return await _storage.read(key: 'jwt');
-  }
+  static http.Client get _http => AuthService.httpClient;
+  static String get _apiBaseUrl => AppConfig.instance.baseUrl;
 
   /// Fetch attendance report for manager's events
   ///
@@ -23,9 +19,6 @@ class AttendanceService {
     DateTime? endDate,
     String? eventId,
   }) async {
-    final token = await _getToken();
-    if (token == null) return [];
-
     try {
       final queryParams = <String, String>{};
       if (startDate != null) {
@@ -38,13 +31,10 @@ class AttendanceService {
         queryParams['eventId'] = eventId;
       }
 
-      final uri = Uri.parse('$_apiBaseUrl/api/events/attendance-report')
+      final uri = Uri.parse('$_apiBaseUrl/events/attendance-report')
           .replace(queryParameters: queryParams.isEmpty ? null : queryParams);
 
-      final response = await http.get(
-        uri,
-        headers: {'Authorization': 'Bearer $token'},
-      ).timeout(const Duration(seconds: 30));
+      final response = await _http.get(uri).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body) as Map<String, dynamic>;
@@ -70,9 +60,6 @@ class AttendanceService {
     String? note,
     DateTime? timestamp,
   }) async {
-    final token = await _getToken();
-    if (token == null) return null;
-
     try {
       final body = <String, dynamic>{
         'userKeys': userKeys,
@@ -84,13 +71,10 @@ class AttendanceService {
         body['timestamp'] = timestamp.toIso8601String();
       }
 
-      final response = await http
+      final response = await _http
           .post(
-            Uri.parse('$_apiBaseUrl/api/events/$eventId/bulk-clock-in'),
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $token',
-            },
+            Uri.parse('$_apiBaseUrl/events/$eventId/bulk-clock-in'),
+            headers: {'Content-Type': 'application/json'},
             body: json.encode(body),
           )
           .timeout(const Duration(seconds: 30));
@@ -111,20 +95,14 @@ class AttendanceService {
   static Future<List<Map<String, dynamic>>> getFlaggedAttendance({
     String? status,
   }) async {
-    final token = await _getToken();
-    if (token == null) return [];
-
     try {
       final queryParams = <String, String>{};
       if (status != null) queryParams['status'] = status;
 
-      final uri = Uri.parse('$_apiBaseUrl/api/events/flagged-attendance')
+      final uri = Uri.parse('$_apiBaseUrl/events/flagged-attendance')
           .replace(queryParameters: queryParams.isEmpty ? null : queryParams);
 
-      final response = await http.get(
-        uri,
-        headers: {'Authorization': 'Bearer $token'},
-      ).timeout(const Duration(seconds: 30));
+      final response = await _http.get(uri).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body) as Map<String, dynamic>;
@@ -148,9 +126,6 @@ class AttendanceService {
     required String status,
     String? reviewNotes,
   }) async {
-    final token = await _getToken();
-    if (token == null) return false;
-
     try {
       final body = <String, dynamic>{
         'status': status,
@@ -159,13 +134,10 @@ class AttendanceService {
         body['reviewNotes'] = reviewNotes;
       }
 
-      final response = await http
+      final response = await _http
           .patch(
-            Uri.parse('$_apiBaseUrl/api/events/flagged-attendance/$flagId'),
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $token',
-            },
+            Uri.parse('$_apiBaseUrl/events/flagged-attendance/$flagId'),
+            headers: {'Content-Type': 'application/json'},
             body: json.encode(body),
           )
           .timeout(const Duration(seconds: 30));
@@ -180,13 +152,9 @@ class AttendanceService {
   /// Get attendance for a specific event
   static Future<List<Map<String, dynamic>>> getEventAttendance(
       String eventId) async {
-    final token = await _getToken();
-    if (token == null) return [];
-
     try {
-      final response = await http.get(
-        Uri.parse('$_apiBaseUrl/api/events/$eventId'),
-        headers: {'Authorization': 'Bearer $token'},
+      final response = await _http.get(
+        Uri.parse('$_apiBaseUrl/events/$eventId'),
       ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {

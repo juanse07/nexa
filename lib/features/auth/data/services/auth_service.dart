@@ -34,6 +34,7 @@ class InvalidTokenException extends AuthException {
 /// Service for handling authentication and API requests
 class AuthService {
   static const _jwtStorageKey = 'auth_jwt';
+  static const _refreshTokenKey = 'auth_refresh_token';
   static const _storage = FlutterSecureStorage();
   static const _requestTimeout = Duration(seconds: 30);
 
@@ -47,6 +48,28 @@ class AuthService {
 
   /// Cached token for synchronous access by interceptors (avoids async reads).
   static String? _cachedToken;
+
+  /// Cached refresh token (avoids hitting secure storage on every refresh).
+  static String? _cachedRefreshToken;
+
+  /// Completer mutex: ensures only one refresh is in-flight at a time.
+  static Completer<bool>? _refreshCompleter;
+
+  /// Lazy singleton HTTP client with auto-Bearer and 401 refresh+retry.
+  /// Import `authenticated_client.dart` for the class.
+  static http.Client? _httpClient;
+  static http.Client get httpClient {
+    // Late import to avoid circular dependency — AuthenticatedClient
+    // lives in core/network and depends on AuthService.
+    return _httpClient ??= _createHttpClient();
+  }
+
+  static http.Client _createHttpClient() {
+    // We inline a lightweight BaseClient here so that AuthService has no
+    // import-time dependency on authenticated_client.dart (avoids circularity).
+    // The full AuthenticatedClient in core/network/ delegates to this same logic.
+    return _AuthServiceHttpClient();
+  }
 
   /// Synchronous accessor for the last-known JWT. Used by ErrorInterceptor
   /// to check token expiry without awaiting secure storage.
@@ -123,11 +146,12 @@ class AuthService {
   static Future<void> signOut() async {
     _log('Signing out user');
     _cachedToken = null;
-    await _storage.delete(key: _jwtStorageKey);
-    // Also delete the mirrored access_token key
-    try {
-      await _storage.delete(key: 'access_token');
-    } catch (_) {}
+    _cachedRefreshToken = null;
+    await Future.wait([
+      _storage.delete(key: _jwtStorageKey),
+      _storage.delete(key: 'access_token'),
+      _storage.delete(key: _refreshTokenKey),
+    ].map((f) => f.catchError((_) {})));
     try {
       await _googleSignIn().signOut();
     } catch (e) {
@@ -135,8 +159,13 @@ class AuthService {
     }
   }
 
-  /// Retrieves the stored JWT token
+  /// Retrieves the stored JWT token (cache-first for performance).
   static Future<String?> getJwt() async {
+    // Return cached token immediately if available
+    if (_cachedToken != null && _cachedToken!.isNotEmpty) {
+      return _cachedToken;
+    }
+
     final token = await _storage.read(key: _jwtStorageKey);
 
     // Validate token has managerId field (for manager app)
@@ -171,6 +200,80 @@ class AuthService {
     try {
       await _storage.write(key: 'access_token', value: token);
     } catch (_) {}
+  }
+
+  /// Save both access token and refresh token atomically.
+  /// Called by all sign-in methods after a successful backend response.
+  static Future<void> saveTokenPair(String token, String refreshToken) async {
+    _cachedToken = token;
+    _cachedRefreshToken = refreshToken;
+    await Future.wait([
+      _storage.write(key: _jwtStorageKey, value: token),
+      _storage.write(key: 'access_token', value: token),
+      _storage.write(key: _refreshTokenKey, value: refreshToken),
+    ]);
+    _log('Token pair saved');
+  }
+
+  /// Read refresh token (cache-first).
+  static Future<String?> _getRefreshToken() async {
+    if (_cachedRefreshToken != null) return _cachedRefreshToken;
+    final rt = await _storage.read(key: _refreshTokenKey);
+    _cachedRefreshToken = rt;
+    return rt;
+  }
+
+  /// Attempt to refresh the access token using the stored refresh token.
+  /// Returns true on success. Uses a Completer mutex so concurrent 401s
+  /// only trigger a single refresh call.
+  static Future<bool> refreshAccessToken() async {
+    // If a refresh is already in-flight, piggyback on it.
+    if (_refreshCompleter != null) {
+      _log('Refresh already in-flight — waiting');
+      return _refreshCompleter!.future;
+    }
+
+    _refreshCompleter = Completer<bool>();
+
+    try {
+      final refreshToken = await _getRefreshToken();
+      if (refreshToken == null || refreshToken.isEmpty) {
+        _log('No refresh token available', isError: true);
+        _refreshCompleter!.complete(false);
+        return false;
+      }
+
+      _log('Refreshing access token via /auth/refresh');
+      final resp = await http.post(
+        Uri.parse('$_apiBaseUrl/auth/refresh'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'refreshToken': refreshToken}),
+      ).timeout(_requestTimeout);
+
+      if (resp.statusCode == 200) {
+        final body = json.decode(resp.body) as Map<String, dynamic>;
+        final newToken = body['token']?.toString();
+        final newRefreshToken = body['refreshToken']?.toString();
+
+        if (newToken != null && newToken.isNotEmpty &&
+            newRefreshToken != null && newRefreshToken.isNotEmpty) {
+          await saveTokenPair(newToken, newRefreshToken);
+          _log('Token refresh successful');
+          _refreshCompleter!.complete(true);
+          return true;
+        }
+      }
+
+      _log('Token refresh failed: ${resp.statusCode}', isError: true);
+      _refreshCompleter!.complete(false);
+      return false;
+    } catch (e) {
+      _log('Token refresh error: $e', isError: true);
+      _refreshCompleter!.complete(false);
+      return false;
+    } finally {
+      _refreshCompleter = null;
+    }
   }
 
   /// Signs in a user with Google OAuth
@@ -243,8 +346,13 @@ class AuthService {
       if (resp.statusCode == 200) {
         final body = json.decode(resp.body) as Map<String, dynamic>;
         final token = body['token']?.toString();
+        final refreshToken = body['refreshToken']?.toString();
         if (token != null && token.isNotEmpty) {
-          await _saveJwt(token);
+          if (refreshToken != null && refreshToken.isNotEmpty) {
+            await saveTokenPair(token, refreshToken);
+          } else {
+            await _saveJwt(token);
+          }
           _log('Google sign in successful');
           return true;
         }
@@ -333,8 +441,13 @@ class AuthService {
       if (resp.statusCode == 200) {
         final body = json.decode(resp.body) as Map<String, dynamic>;
         final token = body['token']?.toString();
+        final refreshToken = body['refreshToken']?.toString();
         if (token != null && token.isNotEmpty) {
-          await _saveJwt(token);
+          if (refreshToken != null && refreshToken.isNotEmpty) {
+            await saveTokenPair(token, refreshToken);
+          } else {
+            await _saveJwt(token);
+          }
           _log('Email sign in successful');
           return true;
         }
@@ -428,8 +541,13 @@ class AuthService {
       if (resp.statusCode == 200) {
         final body = json.decode(resp.body) as Map<String, dynamic>;
         final token = body['token']?.toString();
+        final refreshToken = body['refreshToken']?.toString();
         if (token != null && token.isNotEmpty) {
-          await _saveJwt(token);
+          if (refreshToken != null && refreshToken.isNotEmpty) {
+            await saveTokenPair(token, refreshToken);
+          } else {
+            await _saveJwt(token);
+          }
           _log('Apple sign in successful');
           return true;
         }
@@ -445,5 +563,66 @@ class AuthService {
       onError?.call('Apple sign-in request failed: $e');
       return false;
     }
+  }
+}
+
+/// Lightweight authenticated HTTP client used by [AuthService.httpClient].
+/// Auto-attaches Bearer token and handles 401 with refresh+retry.
+class _AuthServiceHttpClient extends http.BaseClient {
+  final http.Client _inner = http.Client();
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    // Attach Bearer token.
+    final token = await AuthService.getJwt();
+    if (token != null) {
+      request.headers['Authorization'] = 'Bearer $token';
+    }
+
+    final response = await _inner.send(request).timeout(
+      const Duration(seconds: 30),
+    );
+
+    if (response.statusCode == 401) {
+      final refreshed = await AuthService.refreshAccessToken();
+      if (refreshed) {
+        final newToken = await AuthService.getJwt();
+        final retry = _cloneRequest(request, newToken);
+        if (retry != null) {
+          return _inner.send(retry).timeout(const Duration(seconds: 30));
+        }
+      }
+      // Refresh failed — force logout.
+      await AuthService.forceLogout();
+    }
+
+    return response;
+  }
+
+  http.BaseRequest? _cloneRequest(http.BaseRequest original, String? token) {
+    final http.BaseRequest clone;
+    if (original is http.Request) {
+      clone = http.Request(original.method, original.url)
+        ..headers.addAll(original.headers)
+        ..bodyBytes = original.bodyBytes
+        ..encoding = original.encoding;
+    } else if (original is http.MultipartRequest) {
+      clone = http.MultipartRequest(original.method, original.url)
+        ..headers.addAll(original.headers)
+        ..fields.addAll(original.fields)
+        ..files.addAll(original.files);
+    } else {
+      return null;
+    }
+    if (token != null) {
+      clone.headers['Authorization'] = 'Bearer $token';
+    }
+    return clone;
+  }
+
+  @override
+  void close() {
+    _inner.close();
+    super.close();
   }
 }

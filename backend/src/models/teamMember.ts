@@ -1,6 +1,6 @@
 import mongoose, { Document, Model, Schema } from 'mongoose';
 
-export type TeamMemberStatus = 'pending' | 'active' | 'left';
+export type TeamMemberStatus = 'pending' | 'active' | 'inactive' | 'left';
 
 export interface TeamMemberDocument extends Document {
   teamId: mongoose.Types.ObjectId;
@@ -28,7 +28,7 @@ const TeamMemberSchema = new Schema<TeamMemberDocument>(
     joinedAt: { type: Date, default: Date.now },
     status: {
       type: String,
-      enum: ['pending', 'active', 'left'],
+      enum: ['pending', 'active', 'inactive', 'left'],
       default: 'pending',
     },
   },

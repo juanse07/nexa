@@ -1,34 +1,20 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
-import '../../../core/config/environment.dart';
-import '../../../core/constants/storage_keys.dart';
+import '../../../core/config/app_config.dart';
+import '../../auth/data/services/auth_service.dart';
 import '../models/attendance_dashboard_models.dart';
 
 /// Service for attendance dashboard API calls
 class AttendanceDashboardService {
-  static final _storage = const FlutterSecureStorage();
-  static String get _baseUrl => Environment.instance.getOrDefault('API_BASE_URL', 'https://api.nexapymesoft.com');
-  static String get _apiUrl => '$_baseUrl/api';  // All API routes are under /api prefix
-
-  /// Get auth headers for API requests
-  static Future<Map<String, String>> _getHeaders() async {
-    final token = await _storage.read(key: StorageKeys.accessToken);
-    debugPrint('[AttendanceDashboardService] Token found: ${token != null ? 'YES (${token.length} chars)' : 'NO'}');
-    return {
-      'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token',
-    };
-  }
+  static http.Client get _http => AuthService.httpClient;
+  static String get _apiUrl => AppConfig.instance.baseUrl;
 
   /// Get all staff currently clocked in across all events
   static Future<List<ClockedInStaff>> getCurrentlyClockedIn() async {
     try {
-      final headers = await _getHeaders();
-      final response = await http.get(
+      final response = await _http.get(
         Uri.parse('$_apiUrl/events/currently-clocked-in'),
-        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -54,11 +40,6 @@ class AttendanceDashboardService {
   }) async {
     try {
       debugPrint('[AttendanceDashboardService] getAnalytics called');
-      debugPrint('[AttendanceDashboardService] API_BASE_URL: $_baseUrl');
-      debugPrint('[AttendanceDashboardService] Full API URL: $_apiUrl');
-
-      final headers = await _getHeaders();
-      debugPrint('[AttendanceDashboardService] Headers: $headers');
 
       final queryParams = <String, String>{};
 
@@ -74,7 +55,7 @@ class AttendanceDashboardService {
 
       debugPrint('[AttendanceDashboardService] Requesting: $uri');
 
-      final response = await http.get(uri, headers: headers);
+      final response = await _http.get(uri);
 
       debugPrint('[AttendanceDashboardService] Response status: ${response.statusCode}');
       debugPrint('[AttendanceDashboardService] Response body: ${response.body.substring(0, response.body.length.clamp(0, 500))}');
@@ -102,7 +83,6 @@ class AttendanceDashboardService {
     String? eventId,
   }) async {
     try {
-      final headers = await _getHeaders();
       final queryParams = <String, String>{};
 
       if (startDate != null) {
@@ -118,7 +98,7 @@ class AttendanceDashboardService {
       final uri = Uri.parse('$_apiUrl/events/attendance-report')
           .replace(queryParameters: queryParams.isEmpty ? null : queryParams);
 
-      final response = await http.get(uri, headers: headers);
+      final response = await _http.get(uri);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -143,10 +123,9 @@ class AttendanceDashboardService {
     String? note,
   }) async {
     try {
-      final headers = await _getHeaders();
-      final response = await http.post(
+      final response = await _http.post(
         Uri.parse('$_apiUrl/events/$eventId/force-clock-out/$userKey'),
-        headers: headers,
+        headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'note': note}),
       );
 
@@ -167,7 +146,6 @@ class AttendanceDashboardService {
     String? status,
   }) async {
     try {
-      final headers = await _getHeaders();
       final queryParams = <String, String>{};
 
       if (status != null) {
@@ -177,7 +155,7 @@ class AttendanceDashboardService {
       final uri = Uri.parse('$_apiUrl/events/flagged-attendance')
           .replace(queryParameters: queryParams.isEmpty ? null : queryParams);
 
-      final response = await http.get(uri, headers: headers);
+      final response = await _http.get(uri);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;

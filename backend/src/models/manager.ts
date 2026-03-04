@@ -15,6 +15,13 @@ export interface ManagerDocument extends Document {
   app_id?: string; // optional 9-digit app id
   passwordHash?: string; // for email/password auth (demo accounts)
 
+  // Refresh tokens (hashed, max 10 per manager for multi-device support)
+  refresh_tokens?: Array<{
+    token: string; // SHA-256 hash
+    expires_at: Date;
+    created_at: Date;
+  }>;
+
   // Linked authentication methods (for account linking)
   linked_providers?: Array<{
     provider: 'google' | 'apple' | 'phone' | 'email';
@@ -58,20 +65,12 @@ export interface ManagerDocument extends Document {
     createdAt: Date;
   }>;
 
-  // Personalized venue discovery
-  preferredCity?: string; // DEPRECATED: Use cities array instead. Kept for backward compatibility
+  // City preferences (auto-populated from event creation, used by AI context)
+  preferredCity?: string;
   cities?: Array<{
     name: string; // e.g., "Denver, CO, USA"
-    isTourist: boolean; // true = tourist city (strict search), false = metro area (broad search)
+    isTourist: boolean;
   }>;
-  venueList?: Array<{
-    name: string;
-    address: string;
-    city: string;
-    cityName?: string; // Links venue to cities array entry
-    source?: 'ai' | 'manual'; // Track if venue was AI-discovered or manually added
-  }>;
-  venueListUpdatedAt?: Date;
 
   // AI provider usage tracking
   groq_messages_used_this_month?: number;
@@ -115,6 +114,13 @@ const ManagerSchema = new Schema<ManagerDocument>(
     // Organization (B2B multi-tenant)
     organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', sparse: true },
     orgRole: { type: String, enum: ['owner', 'admin', 'member'] },
+
+    // Refresh tokens (hashed, capped at 10 per manager)
+    refresh_tokens: [{
+      token: { type: String, required: true },
+      expires_at: { type: Date, required: true },
+      created_at: { type: Date, default: Date.now },
+    }],
 
     // Linked authentication methods
     linked_providers: [{
@@ -167,20 +173,12 @@ const ManagerSchema = new Schema<ManagerDocument>(
       createdAt: { type: Date, default: Date.now },
     }],
 
-    // Personalized venue discovery
-    preferredCity: { type: String, trim: true }, // DEPRECATED: kept for backward compatibility
+    // City preferences (auto-populated from event creation, used by AI context)
+    preferredCity: { type: String, trim: true },
     cities: [{
       name: { type: String, required: true, trim: true },
       isTourist: { type: Boolean, required: true, default: false },
     }],
-    venueList: [{
-      name: { type: String, required: true },
-      address: { type: String, required: true },
-      city: { type: String, required: true },
-      cityName: { type: String, trim: true }, // Links to cities array entry
-      source: { type: String, enum: ['ai', 'manual'], default: 'ai' },
-    }],
-    venueListUpdatedAt: { type: Date },
 
     // Brand customization (Pro tier)
     brandProfile: {

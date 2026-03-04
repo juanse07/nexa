@@ -16,7 +16,7 @@ export async function countOrgUniqueStaff(orgId: string): Promise<number> {
   if (managerIds.length === 0) return 0;
 
   const result = await TeamMemberModel.aggregate([
-    { $match: { managerId: { $in: managerIds }, status: { $ne: 'left' } } },
+    { $match: { managerId: { $in: managerIds }, status: 'active' } },
     { $group: { _id: { provider: '$provider', subject: '$subject' } } },
     { $count: 'total' },
   ]);

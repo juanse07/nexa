@@ -5999,6 +5999,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Send to all'**
   String get broadcastSendToAll;
+
+  /// No description provided for @deactivateMember.
+  ///
+  /// In en, this message translates to:
+  /// **'Deactivate'**
+  String get deactivateMember;
+
+  /// No description provided for @reactivateMember.
+  ///
+  /// In en, this message translates to:
+  /// **'Reactivate'**
+  String get reactivateMember;
+
+  /// No description provided for @memberDeactivatedSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Member deactivated'**
+  String get memberDeactivatedSuccess;
+
+  /// No description provided for @memberReactivatedSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Member reactivated'**
+  String get memberReactivatedSuccess;
+
+  /// No description provided for @failedToDeactivateMember.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to deactivate member'**
+  String get failedToDeactivateMember;
+
+  /// No description provided for @failedToReactivateMember.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to reactivate member'**
+  String get failedToReactivateMember;
+
+  /// No description provided for @memberStatusInactive.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused'**
+  String get memberStatusInactive;
+
+  /// No description provided for @filterStaff.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter'**
+  String get filterStaff;
+
+  /// No description provided for @allRoles.
+  ///
+  /// In en, this message translates to:
+  /// **'All roles'**
+  String get allRoles;
+
+  /// No description provided for @starredFilter.
+  ///
+  /// In en, this message translates to:
+  /// **'Starred'**
+  String get starredFilter;
+
+  /// No description provided for @sendDirectInvitations.
+  ///
+  /// In en, this message translates to:
+  /// **'Send Direct Invitations'**
+  String get sendDirectInvitations;
+
+  /// No description provided for @publishToTeam.
+  ///
+  /// In en, this message translates to:
+  /// **'Publish to Team'**
+  String get publishToTeam;
+
+  /// No description provided for @eventStaysPrivate.
+  ///
+  /// In en, this message translates to:
+  /// **'Event stays private — only invited people can see it'**
+  String get eventStaysPrivate;
+
+  /// No description provided for @eventBecomesVisible.
+  ///
+  /// In en, this message translates to:
+  /// **'Event becomes visible to selected teams / members'**
+  String get eventBecomesVisible;
 }
 
 class _AppLocalizationsDelegate

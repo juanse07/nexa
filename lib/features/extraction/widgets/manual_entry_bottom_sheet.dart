@@ -35,9 +35,7 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
   final _addressFieldKey = GlobalKey();
 
   // Form state
-  DateTime? _selectedDate;
-  TimeOfDay? _startTime;
-  TimeOfDay? _endTime;
+  final List<DateTime> _selectedDates = [];
   List<Map<String, dynamic>> _roles = [];
 
   // Google Places data
@@ -128,7 +126,7 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
 
   bool get _isValid {
     return _clientNameCtrl.text.trim().isNotEmpty &&
-           _selectedDate != null &&
+           _selectedDates.isNotEmpty &&
            _roles.isNotEmpty &&
            _roles.any((r) => (r['count'] as int? ?? 0) > 0);
   }
@@ -148,7 +146,7 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
-      initialDate: _selectedDate ?? now,
+      initialDate: _selectedDates.isNotEmpty ? _selectedDates.last : now,
       firstDate: now.subtract(const Duration(days: 1)),
       lastDate: now.add(const Duration(days: 365 * 2)),
       builder: (context, child) {
@@ -166,36 +164,15 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
       },
     );
     if (picked != null) {
-      setState(() => _selectedDate = picked);
-    }
-  }
-
-  Future<void> _pickTime({required bool isStart}) async {
-    HapticFeedback.selectionClick();
-    final initial = isStart ? _startTime : _endTime;
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: initial ?? const TimeOfDay(hour: 18, minute: 0),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: AppColors.techBlue,
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: AppColors.textDark,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) {
+      final normalized = DateTime(picked.year, picked.month, picked.day);
       setState(() {
-        if (isStart) {
-          _startTime = picked;
-        } else {
-          _endTime = picked;
+        final alreadyAdded = _selectedDates.any((d) =>
+            d.year == normalized.year &&
+            d.month == normalized.month &&
+            d.day == normalized.day);
+        if (!alreadyAdded) {
+          _selectedDates.add(normalized);
+          _selectedDates.sort();
         }
       });
     }
@@ -252,6 +229,262 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
     });
   }
 
+  int get _totalEventsToCreate => _selectedDates.length;
+
+  Future<void> _updateRoleTime(int index, {required bool isStart}) async {
+    HapticFeedback.selectionClick();
+    final role = _roles[index];
+    final current = (isStart ? role['role_start_time'] : role['role_end_time']) as TimeOfDay?;
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: current ?? const TimeOfDay(hour: 18, minute: 0),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: AppColors.techBlue,
+            onPrimary: Colors.white,
+            surface: Colors.white,
+            onSurface: AppColors.textDark,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) {
+      setState(() {
+        _roles[index] = {
+          ..._roles[index],
+          if (isStart) 'role_start_time': picked else 'role_end_time': picked,
+        };
+      });
+    }
+  }
+
+  Future<void> _setAllRoleTimes() async {
+    HapticFeedback.selectionClick();
+    final firstStart = _roles.isNotEmpty ? _roles.first['role_start_time'] as TimeOfDay? : null;
+    final firstEnd   = _roles.isNotEmpty ? _roles.first['role_end_time']   as TimeOfDay? : null;
+    final pickedStart = await showTimePicker(
+      context: context,
+      initialTime: firstStart ?? const TimeOfDay(hour: 18, minute: 0),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: AppColors.techBlue,
+            onPrimary: Colors.white,
+            surface: Colors.white,
+            onSurface: AppColors.textDark,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (pickedStart == null || !mounted) return;
+    final pickedEnd = await showTimePicker(
+      context: context,
+      initialTime: firstEnd ?? const TimeOfDay(hour: 23, minute: 0),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: AppColors.techBlue,
+            onPrimary: Colors.white,
+            surface: Colors.white,
+            onSurface: AppColors.textDark,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (pickedEnd == null || !mounted) return;
+    setState(() {
+      _roles = _roles.map((r) => {...r, 'role_start_time': pickedStart, 'role_end_time': pickedEnd}).toList();
+    });
+  }
+
+  Widget _buildRoleTimeTile({
+    required String label,
+    required TimeOfDay? time,
+    required TimeOfDay? fallback,
+    required VoidCallback onTap,
+    required bool isStart,
+  }) {
+    final effective = time ?? fallback;
+    final hasOwn = time != null;
+    final color = isStart ? AppColors.success : AppColors.warning;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: hasOwn ? color.withValues(alpha: 0.06) : Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: hasOwn ? color.withValues(alpha: 0.35) : Colors.grey.shade300,
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              isStart ? Icons.schedule_outlined : Icons.schedule_send_outlined,
+              size: 13,
+              color: hasOwn ? color : Colors.grey.shade400,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey.shade500,
+                    ),
+                  ),
+                  Text(
+                    effective != null
+                        ? '${effective.format(context)}${!hasOwn ? ' ↑' : ''}'
+                        : 'Tap to set',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: effective != null
+                          ? (hasOwn ? AppColors.textDark : Colors.grey.shade500)
+                          : Colors.grey.shade400,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showCreateClientDialog() async {
+    final ctrl = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('New Client'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          decoration: InputDecoration(
+            hintText: 'Client or company name',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          onSubmitted: (v) => Navigator.of(ctx).pop(v.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.techBlue,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+    if (name == null || name.isEmpty || !mounted) return;
+    try {
+      final result = await _clientsService.createClient(name);
+      final created = (result['name'] ?? name).toString();
+      setState(() {
+        if (!_clientNames.any((c) => c.toLowerCase() == created.toLowerCase())) {
+          _clientNames.add(created);
+        }
+        _clientNameCtrl.text = created;
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(
+          content: Text('"$created" added to catalog'),
+          backgroundColor: AppColors.success,
+        ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(
+          content: Text('Failed to create client: $e'),
+          backgroundColor: AppColors.errorDark,
+        ));
+    }
+  }
+
+  Future<void> _showCreateRoleDialog() async {
+    final ctrl = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('New Position'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          decoration: InputDecoration(
+            hintText: 'e.g., Bartender, Chef, Security',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          onSubmitted: (v) => Navigator.of(ctx).pop(v.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.techBlue,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+    if (name == null || name.isEmpty || !mounted) return;
+    try {
+      await _rolesService.createRole(name);
+      setState(() {
+        if (!_availableRoles.any((r) => r.toLowerCase() == name.toLowerCase())) {
+          _availableRoles.add(name);
+        }
+        _toggleRole(name);
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(
+          content: Text('"$name" added to catalog'),
+          backgroundColor: AppColors.success,
+        ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(
+          content: Text('Failed to create position: $e'),
+          backgroundColor: AppColors.errorDark,
+        ));
+    }
+  }
+
   Future<void> _save() async {
     if (!_isValid) {
       ErrorDisplayService.showError(
@@ -265,60 +498,61 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
     HapticFeedback.mediumImpact();
 
     try {
-      final payload = <String, dynamic>{
-        'client_name': _clientNameCtrl.text.trim(),
-        'date': _formatDateForSave(_selectedDate),
-        'status': 'draft',
-        'roles': _roles.where((r) =>
-          r['role']?.toString().isNotEmpty == true &&
-          (r['count'] as int? ?? 0) > 0
-        ).map((r) => {
+      final validRoles = _roles.where((r) =>
+        r['role']?.toString().isNotEmpty == true &&
+        (r['count'] as int? ?? 0) > 0
+      ).toList();
+
+      // Location / contact fields — shared across all events
+      final locationFields = <String, dynamic>{};
+      if (_venueAddressCtrl.text.trim().isNotEmpty) locationFields['venue_address'] = _venueAddressCtrl.text.trim();
+      if (_venueLatitude != null) locationFields['venue_latitude'] = _venueLatitude;
+      if (_venueLongitude != null) locationFields['venue_longitude'] = _venueLongitude;
+      if (_googleMapsUrl != null) locationFields['google_maps_url'] = _googleMapsUrl;
+      if (_city != null) locationFields['city'] = _city;
+      if (_state != null) locationFields['state'] = _state;
+      if (_venueNameCtrl.text.trim().isNotEmpty) locationFields['venue_name'] = _venueNameCtrl.text.trim();
+      if (_contactPhoneCtrl.text.trim().isNotEmpty) locationFields['contact_phone'] = _contactPhoneCtrl.text.trim();
+      if (_notesCtrl.text.trim().isNotEmpty) locationFields['notes'] = _notesCtrl.text.trim();
+
+      // Always include per-role times
+      final rolesPayload = validRoles.map((r) {
+        final rs = r['role_start_time'] as TimeOfDay?;
+        final re = r['role_end_time']   as TimeOfDay?;
+        return <String, dynamic>{
           'role': r['role'],
           'count': r['count'],
-        }).toList(),
-      };
+          if (rs != null) 'start_time': _formatTimeForSave(rs),
+          if (re != null) 'end_time':   _formatTimeForSave(re),
+        };
+      }).toList();
 
-      // Add optional fields
-      if (_startTime != null) {
-        payload['start_time'] = _formatTimeForSave(_startTime);
-      }
-      if (_endTime != null) {
-        payload['end_time'] = _formatTimeForSave(_endTime);
-      }
-      if (_venueAddressCtrl.text.trim().isNotEmpty) {
-        payload['venue_address'] = _venueAddressCtrl.text.trim();
-      }
-      if (_venueLatitude != null) {
-        payload['venue_latitude'] = _venueLatitude;
-      }
-      if (_venueLongitude != null) {
-        payload['venue_longitude'] = _venueLongitude;
-      }
-      if (_googleMapsUrl != null) {
-        payload['google_maps_url'] = _googleMapsUrl;
-      }
-      if (_city != null) {
-        payload['city'] = _city;
-      }
-      if (_state != null) {
-        payload['state'] = _state;
-      }
-      if (_venueNameCtrl.text.trim().isNotEmpty) {
-        payload['venue_name'] = _venueNameCtrl.text.trim();
-      }
-      if (_contactPhoneCtrl.text.trim().isNotEmpty) {
-        payload['contact_phone'] = _contactPhoneCtrl.text.trim();
-      }
-      if (_notesCtrl.text.trim().isNotEmpty) {
-        payload['notes'] = _notesCtrl.text.trim();
+      // Derive event-level times for backward compat (staff app sorting)
+      TimeOfDay? derivedStart, derivedEnd;
+      for (final r in validRoles) {
+        final rs = r['role_start_time'] as TimeOfDay?;
+        final re = r['role_end_time']   as TimeOfDay?;
+        if (rs != null && (derivedStart == null || rs.hour * 60 + rs.minute < derivedStart.hour * 60 + derivedStart.minute)) derivedStart = rs;
+        if (re != null && (derivedEnd == null || re.hour * 60 + re.minute > derivedEnd.hour * 60 + derivedEnd.minute)) derivedEnd = re;
       }
 
-      await _eventService.createEvent(payload);
+      // One event per date
+      for (final date in _selectedDates) {
+        await _eventService.createEvent(<String, dynamic>{
+          'client_name': _clientNameCtrl.text.trim(),
+          'date': _formatDateForSave(date),
+          'status': 'draft',
+          'roles': rolesPayload,
+          if (derivedStart != null) 'start_time': _formatTimeForSave(derivedStart),
+          if (derivedEnd != null)   'end_time':   _formatTimeForSave(derivedEnd),
+          ...locationFields,
+        });
+      }
 
       if (!mounted) return;
 
       HapticFeedback.heavyImpact();
-      Navigator.of(context).pop(true); // Return true to indicate success
+      Navigator.of(context).pop(true);
 
     } on SubscriptionLimitException catch (e) {
       if (!mounted) return;
@@ -428,16 +662,6 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
                     _buildDatePicker(),
                     const SizedBox(height: 20),
 
-                    // Time Range
-                    Row(
-                      children: [
-                        Expanded(child: _buildTimePicker(isStart: true)),
-                        const SizedBox(width: 12),
-                        Expanded(child: _buildTimePicker(isStart: false)),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-
                     // Venue Address - with key for scroll targeting
                     Container(
                       key: _addressFieldKey,
@@ -464,7 +688,8 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
                     const SizedBox(height: 24),
 
                     // Roles Section (Required)
-                    _buildSectionLabel('Positions Needed', Icons.people_outline, isRequired: true),
+                    _buildSectionLabel('Positions Needed', Icons.people_outline,
+                        isRequired: true, onAdd: _showCreateRoleDialog),
                     const SizedBox(height: 12),
                     _buildRolesChips(),
                     const SizedBox(height: 12),
@@ -540,7 +765,8 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionLabel('Client Name', Icons.business_outlined, isRequired: true),
+        _buildSectionLabel('Client Name', Icons.business_outlined,
+            isRequired: true, onAdd: _showCreateClientDialog),
         const SizedBox(height: 8),
         Autocomplete<String>(
           optionsBuilder: (TextEditingValue textEditingValue) {
@@ -663,7 +889,8 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
     );
   }
 
-  Widget _buildSectionLabel(String label, IconData icon, {bool isRequired = false}) {
+  Widget _buildSectionLabel(String label, IconData icon,
+      {bool isRequired = false, VoidCallback? onAdd}) {
     return Row(
       children: [
         Icon(icon, size: 16, color: Colors.grey.shade600),
@@ -684,6 +911,38 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
               fontSize: 14,
               fontWeight: FontWeight.w600,
               color: AppColors.errorDark,
+            ),
+          ),
+        ],
+        if (onAdd != null) ...[
+          const Spacer(),
+          GestureDetector(
+            onTap: onAdd,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: AppColors.techBlue.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: AppColors.techBlue.withValues(alpha: 0.25),
+                  width: 1,
+                ),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.add, size: 13, color: AppColors.techBlue),
+                  SizedBox(width: 3),
+                  Text(
+                    'New',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.techBlue,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -749,26 +1008,56 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
   }
 
   Widget _buildDatePicker() {
-    final hasDate = _selectedDate != null;
-    final displayText = hasDate
-        ? DateFormat('EEE, MMM d, yyyy').format(_selectedDate!)
-        : 'Select date';
+    final hasDates = _selectedDates.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionLabel('Event Date', Icons.calendar_today_outlined, isRequired: true),
+        _buildSectionLabel('Event Date(s)', Icons.calendar_today_outlined, isRequired: true),
         const SizedBox(height: 8),
+
+        // Selected date chips
+        if (hasDates) ...[
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: _selectedDates.map((date) {
+              return Chip(
+                label: Text(DateFormat('EEE, MMM d').format(date)),
+                deleteIcon: const Icon(Icons.close, size: 15),
+                onDeleted: () => setState(() => _selectedDates.remove(date)),
+                backgroundColor: AppColors.techBlue.withValues(alpha: 0.08),
+                side: BorderSide(
+                  color: AppColors.techBlue.withValues(alpha: 0.3),
+                  width: 1.2,
+                ),
+                labelStyle: const TextStyle(
+                  color: AppColors.techBlue,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+                deleteIconColor: AppColors.techBlue,
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                visualDensity: VisualDensity.compact,
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 8),
+        ],
+
+        // Add date button
         InkWell(
           onTap: _pickDate,
           borderRadius: BorderRadius.circular(16),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: hasDate ? Colors.grey.shade300 : AppColors.warning.withValues(alpha: 0.5),
+                color: hasDates
+                    ? Colors.grey.shade300
+                    : AppColors.warning.withValues(alpha: 0.5),
                 width: 1.5,
               ),
             ),
@@ -780,8 +1069,10 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
                     color: AppColors.techBlue.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(
-                    Icons.calendar_today_outlined,
+                  child: Icon(
+                    hasDates
+                        ? Icons.add_circle_outline_rounded
+                        : Icons.calendar_today_outlined,
                     size: 20,
                     color: AppColors.techBlue,
                   ),
@@ -789,11 +1080,13 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
                 const SizedBox(width: 16),
                 Expanded(
                   child: Text(
-                    displayText,
+                    hasDates ? 'Add another date' : 'Select date',
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 15,
                       fontWeight: FontWeight.w500,
-                      color: hasDate ? AppColors.textDark : Colors.grey.shade500,
+                      color: hasDates
+                          ? Colors.grey.shade600
+                          : Colors.grey.shade500,
                     ),
                   ),
                 ),
@@ -801,76 +1094,6 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
                   Icons.arrow_drop_down_rounded,
                   color: Colors.grey.shade600,
                   size: 28,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTimePicker({required bool isStart}) {
-    final time = isStart ? _startTime : _endTime;
-    final hasTime = time != null;
-    final displayText = hasTime ? time.format(context) : 'Select';
-    final label = isStart ? 'Start Time' : 'End Time';
-    final icon = isStart ? Icons.schedule_outlined : Icons.schedule_send_outlined;
-    final color = isStart ? AppColors.success : AppColors.warning;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, size: 14, color: Colors.grey.shade600),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey.shade700,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        InkWell(
-          onTap: () => _pickTime(isStart: isStart),
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.grey.shade300, width: 1.5),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Icon(icon, size: 16, color: color),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    displayText,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: hasTime ? AppColors.textDark : Colors.grey.shade500,
-                    ),
-                  ),
-                ),
-                Icon(
-                  Icons.arrow_drop_down_rounded,
-                  color: Colors.grey.shade500,
-                  size: 22,
                 ),
               ],
             ),
@@ -955,6 +1178,28 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
       ),
       child: Column(
         children: [
+          // "Set same time for all" shorthand row
+          InkWell(
+            onTap: _setAllRoleTimes,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                children: [
+                  Icon(Icons.schedule_outlined, size: 16, color: AppColors.techBlue),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Set same time for all positions',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.techBlue),
+                    ),
+                  ),
+                  Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.techBlue),
+                ],
+              ),
+            ),
+          ),
+          Divider(height: 1, color: Colors.grey.shade200),
           for (int i = 0; i < _roles.length; i++) ...[
             if (i > 0) Divider(height: 1, color: Colors.grey.shade200),
             _buildRoleRow(i),
@@ -968,79 +1213,107 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
     final role = _roles[index];
     final roleName = role['role']?.toString() ?? 'Position';
     final count = (role['count'] as int?) ?? 1;
+    final roleStart = role['role_start_time'] as TimeOfDay?;
+    final roleEnd = role['role_end_time'] as TimeOfDay?;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      child: Row(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: AppColors.techBlue.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(
-              Icons.person_outline,
-              size: 18,
-              color: AppColors.techBlue,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              roleName,
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textDark,
+          // Main row: icon + name + count controls
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: AppColors.techBlue.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.person_outline,
+                  size: 18,
+                  color: AppColors.techBlue,
+                ),
               ),
-            ),
-          ),
-          // Count controls
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  onPressed: () => _updateRoleCount(index, -1),
-                  icon: Icon(
-                    Icons.remove,
-                    size: 18,
-                    color: count > 1 ? AppColors.errorDark : Colors.grey.shade400,
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  roleName,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textDark,
                   ),
-                  padding: const EdgeInsets.all(6),
-                  constraints: const BoxConstraints(),
-                  splashRadius: 18,
                 ),
-                Container(
-                  constraints: const BoxConstraints(minWidth: 32),
-                  alignment: Alignment.center,
-                  child: Text(
-                    count.toString(),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textDark,
+              ),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      onPressed: () => _updateRoleCount(index, -1),
+                      icon: Icon(
+                        Icons.remove,
+                        size: 18,
+                        color: count > 1 ? AppColors.errorDark : Colors.grey.shade400,
+                      ),
+                      padding: const EdgeInsets.all(6),
+                      constraints: const BoxConstraints(),
+                      splashRadius: 18,
                     ),
-                  ),
+                    Container(
+                      constraints: const BoxConstraints(minWidth: 32),
+                      alignment: Alignment.center,
+                      child: Text(
+                        count.toString(),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textDark,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => _updateRoleCount(index, 1),
+                      icon: const Icon(Icons.add, size: 18, color: AppColors.success),
+                      padding: const EdgeInsets.all(6),
+                      constraints: const BoxConstraints(),
+                      splashRadius: 18,
+                    ),
+                  ],
                 ),
-                IconButton(
-                  onPressed: () => _updateRoleCount(index, 1),
-                  icon: const Icon(
-                    Icons.add,
-                    size: 18,
-                    color: AppColors.success,
-                  ),
-                  padding: const EdgeInsets.all(6),
-                  constraints: const BoxConstraints(),
-                  splashRadius: 18,
+              ),
+            ],
+          ),
+          // Per-role time pickers — always visible
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _buildRoleTimeTile(
+                  label: 'Start',
+                  time: roleStart,
+                  fallback: null,
+                  isStart: true,
+                  onTap: () => _updateRoleTime(index, isStart: true),
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildRoleTimeTile(
+                  label: 'End',
+                  time: roleEnd,
+                  fallback: null,
+                  isStart: false,
+                  onTap: () => _updateRoleTime(index, isStart: false),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1079,7 +1352,13 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
                 ),
               )
             : const Icon(Icons.add_task_rounded),
-        label: Text(_isSaving ? 'Creating...' : 'Save to Pending'),
+        label: Text(
+          _isSaving
+              ? 'Creating...'
+              : _totalEventsToCreate > 1
+                  ? 'Create $_totalEventsToCreate Events'
+                  : 'Save to Pending',
+        ),
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent,
           foregroundColor: Colors.white,

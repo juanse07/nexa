@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { Model } from 'mongoose';
 import { TeamInviteModel } from '../models/teamInvite';
 
 // Use characters that are unambiguous (exclude I, O, 0, 1 to avoid confusion)
@@ -6,20 +7,26 @@ const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 6;
 
 /**
- * Generates a unique 6-character invite code.
+ * Generates a unique 6-character short code.
  * Codes use uppercase letters and numbers, excluding confusing characters (I, O, 0, 1).
  *
+ * @param checkModel Mongoose model to check uniqueness against (defaults to TeamInviteModel)
+ * @param fieldName  Field name to check on the model (defaults to 'shortCode')
  * @returns Promise<string> Unique 6-character code like "ABC123"
  * @throws Error if unable to generate unique code after max attempts
  */
-export async function generateUniqueShortCode(): Promise<string> {
+export async function generateUniqueShortCode(
+  checkModel?: Model<any>,
+  fieldName = 'shortCode'
+): Promise<string> {
+  const model: Model<any> = checkModel || TeamInviteModel;
   const maxAttempts = 10;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const code = generateRandomCode();
 
     // Check if code already exists in database
-    const existing = await TeamInviteModel.findOne({ shortCode: code }).lean();
+    const existing = await model.findOne({ [fieldName]: code }).lean();
 
     if (!existing) {
       return code;
@@ -28,7 +35,7 @@ export async function generateUniqueShortCode(): Promise<string> {
     // Code collision, try again
   }
 
-  throw new Error('Failed to generate unique invite code after ' + maxAttempts + ' attempts');
+  throw new Error('Failed to generate unique short code after ' + maxAttempts + ' attempts');
 }
 
 /**

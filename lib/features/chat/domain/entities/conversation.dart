@@ -14,6 +14,8 @@ class Conversation {
     this.lastMessagePreview,
     this.unreadCount = 0,
     this.role,
+    this.isUnavailableToday = false,
+    this.unavailableUntil,
   });
 
   factory Conversation.fromJson(Map<String, dynamic> json) {
@@ -34,6 +36,10 @@ class Conversation {
       unreadCount: json['unreadCount'] as int? ?? 0,
       updatedAt: DateTime.parse(json['updatedAt'] as String),
       role: json['role'] as String?,
+      isUnavailableToday: json['isUnavailableToday'] as bool? ?? false,
+      unavailableUntil: json['unavailableUntil'] != null
+          ? DateTime.tryParse(json['unavailableUntil'] as String)
+          : null,
     );
   }
 
@@ -51,6 +57,8 @@ class Conversation {
   final int unreadCount;
   final DateTime updatedAt;
   final String? role;
+  final bool isUnavailableToday;
+  final DateTime? unavailableUntil;
 
   bool get isManagerPeer => role == 'Manager';
 
@@ -74,6 +82,7 @@ class Conversation {
       'unreadCount': unreadCount,
       'updatedAt': updatedAt.toIso8601String(),
       'role': role,
+      'isUnavailableToday': isUnavailableToday,
     };
   }
 }

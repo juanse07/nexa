@@ -26,6 +26,13 @@ export interface UserDocument extends Document {
     createdAt: Date;
   }>;
 
+  // Refresh tokens (hashed, max 10 per user for multi-device support)
+  refresh_tokens?: Array<{
+    token: string; // SHA-256 hash
+    expires_at: Date;
+    created_at: Date;
+  }>;
+
   // Linked authentication methods (for account linking)
   linked_providers?: Array<{
     provider: 'google' | 'apple' | 'phone' | 'email';
@@ -117,6 +124,13 @@ const UserSchema = new Schema<UserDocument>(
       cacheKey: { type: String, index: true },
       cached: { type: Boolean, default: false },
       createdAt: { type: Date, default: Date.now },
+    }],
+
+    // Refresh tokens (hashed, capped at 10 per user)
+    refresh_tokens: [{
+      token: { type: String, required: true },
+      expires_at: { type: Date, required: true },
+      created_at: { type: Date, default: Date.now },
     }],
 
     // Linked authentication methods

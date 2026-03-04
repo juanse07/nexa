@@ -3306,4 +3306,48 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get broadcastSendToAll => 'Send to all';
+
+  @override
+  String get deactivateMember => 'Deactivate';
+
+  @override
+  String get reactivateMember => 'Reactivate';
+
+  @override
+  String get memberDeactivatedSuccess => 'Member deactivated';
+
+  @override
+  String get memberReactivatedSuccess => 'Member reactivated';
+
+  @override
+  String get failedToDeactivateMember => 'Failed to deactivate member';
+
+  @override
+  String get failedToReactivateMember => 'Failed to reactivate member';
+
+  @override
+  String get memberStatusInactive => 'Paused';
+
+  @override
+  String get filterStaff => 'Filter';
+
+  @override
+  String get allRoles => 'All roles';
+
+  @override
+  String get starredFilter => 'Starred';
+
+  @override
+  String get sendDirectInvitations => 'Send Direct Invitations';
+
+  @override
+  String get publishToTeam => 'Publish to Team';
+
+  @override
+  String get eventStaysPrivate =>
+      'Event stays private — only invited people can see it';
+
+  @override
+  String get eventBecomesVisible =>
+      'Event becomes visible to selected teams / members';
 }

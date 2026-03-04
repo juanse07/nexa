@@ -121,6 +121,7 @@ platform :ios do
 
     # Upload to TestFlight
     upload_to_testflight(
+      app_identifier: "com.pymesoft.nexa",
       skip_waiting_for_build_processing: false,
       skip_submission: true,
       distribute_external: false,
@@ -145,6 +146,7 @@ platform :ios do
 
     # Upload to TestFlight with external distribution
     upload_to_testflight(
+      app_identifier: "com.pymesoft.nexa",
       skip_waiting_for_build_processing: false,
       skip_submission: false,
       distribute_external: true,
@@ -349,6 +351,19 @@ platform :ios do
   lane :clean do
     sh("cd ../.. && flutter clean")
     clear_derived_data
+  end
+
+  desc "Upload existing IPA to TestFlight (skip build)"
+  lane :upload_only do
+    upload_to_testflight(
+      app_identifier: "com.pymesoft.nexa",
+      ipa: "./build/ios/ipa/flowshift-manager.ipa",
+      skip_waiting_for_build_processing: false,
+      skip_submission: true,
+      distribute_external: false,
+      notify_external_testers: false,
+      changelog: "Bug fixes and improvements"
+    )
   end
 
   desc "Register new device for development"

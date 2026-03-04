@@ -8,27 +8,20 @@ import '../../auth/data/services/auth_service.dart';
 /// Service for saving AI chat conversation summaries
 /// Used for learning/analytics and context injection
 class ChatSummaryService {
+  http.Client get _http => AuthService.httpClient;
+
   /// Save a conversation summary to the database
   /// This is called fire-and-forget style (non-blocking)
   Future<void> saveSummary(Map<String, dynamic> summaryData) async {
     try {
-      final token = await AuthService.getJwt();
-      if (token == null) {
-        print('[ChatSummaryService] Not authenticated - skipping save');
-        return;
-      }
-
       final baseUrl = AppConfig.instance.baseUrl;
       final url = '$baseUrl/ai/chat/summary';
       print('[ChatSummaryService] Saving summary to: $url');
       print('[ChatSummaryService] Payload keys: ${summaryData.keys.toList()}');
 
-      final response = await http.post(
+      final response = await _http.post(
         Uri.parse(url),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
         body: jsonEncode(summaryData),
       );
 
@@ -50,19 +43,10 @@ class ChatSummaryService {
   /// Fetch context examples for AI prompt injection
   Future<List<Map<String, dynamic>>> getContextExamples({int limit = 3}) async {
     try {
-      final token = await AuthService.getJwt();
-      if (token == null) {
-        print('[ChatSummaryService] Not authenticated');
-        return [];
-      }
-
       final baseUrl = AppConfig.instance.baseUrl;
-      final response = await http.get(
+      final response = await _http.get(
         Uri.parse('$baseUrl/ai/chat/context-examples?limit=$limit'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
       );
 
       if (response.statusCode == 200) {
@@ -87,9 +71,6 @@ class ChatSummaryService {
     String groupBy = 'day',
   }) async {
     try {
-      final token = await AuthService.getJwt();
-      if (token == null) return null;
-
       final baseUrl = AppConfig.instance.baseUrl;
       final queryParams = <String, String>{
         'groupBy': groupBy,
@@ -98,12 +79,9 @@ class ChatSummaryService {
       if (endDate != null) queryParams['endDate'] = endDate;
 
       final uri = Uri.parse('$baseUrl/ai/chat/analytics').replace(queryParameters: queryParams);
-      final response = await http.get(
+      final response = await _http.get(
         uri,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
       );
 
       if (response.statusCode == 200) {

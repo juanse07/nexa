@@ -129,7 +129,7 @@ router.get('/teams', requireAuth, async (req, res) => {
     const teamIds = teams.map((team) => team._id);
 
     const memberCounts = await TeamMemberModel.aggregate([
-      { $match: { teamId: { $in: teamIds }, status: { $ne: 'left' } } },
+      { $match: { teamId: { $in: teamIds }, status: { $nin: ['left', 'inactive'] } } },
       { $group: { _id: '$teamId', count: { $sum: 1 } } },
     ]);
 
@@ -811,6 +811,130 @@ router.delete('/teams/:teamId/members/:memberId', requireAuth, async (req, res) 
     return res.json({ message: 'Member removed' });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to remove member' });
+  }
+});
+
+router.patch('/teams/:teamId/members/:memberId/deactivate', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const teamIdParam = req.params.teamId ?? '';
+    const memberIdParam = req.params.memberId ?? '';
+    if (!mongoose.Types.ObjectId.isValid(teamIdParam) || !mongoose.Types.ObjectId.isValid(memberIdParam)) {
+      return res.status(400).json({ message: 'Invalid identifiers' });
+    }
+    const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
+    const memberObjectId = new mongoose.Types.ObjectId(memberIdParam);
+
+    const team = await findTeamWithAccess(teamObjectId, managerId);
+    if (!team) {
+      return res.status(404).json({ message: 'Team not found' });
+    }
+
+    const result = await TeamMemberModel.findOneAndUpdate(
+      {
+        _id: memberObjectId,
+        teamId: teamObjectId,
+        status: 'active',
+      },
+      { $set: { status: 'inactive', updatedAt: new Date() } },
+      { new: true }
+    ).lean();
+
+    if (!result) {
+      return res.status(404).json({ message: 'Active membership not found' });
+    }
+
+    await TeamMessageModel.create({
+      teamId: result.teamId,
+      managerId: team.managerId,
+      messageType: 'text',
+      body: `${result.name ?? buildUserKey(result.provider, result.subject)} was deactivated`,
+    });
+
+    const payload = {
+      teamId: String(result.teamId),
+      memberId: String(result._id),
+      provider: result.provider,
+      subject: result.subject,
+    };
+
+    emitToManager(String(managerId), 'team:memberDeactivated', payload);
+    emitToTeams([String(result.teamId)], 'team:memberDeactivated', payload);
+    emitToUser(buildUserKey(result.provider, result.subject), 'team:memberDeactivated', payload);
+
+    const mgr = await ManagerModel.findById(managerId).select('organizationId').lean();
+    if (mgr?.organizationId) {
+      syncStaffSeatsToStripe(String(mgr.organizationId)).catch((err) =>
+        console.error('[seat-sync] Error:', err),
+      );
+    }
+
+    return res.json({ message: 'Member deactivated' });
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to deactivate member' });
+  }
+});
+
+router.patch('/teams/:teamId/members/:memberId/reactivate', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const teamIdParam = req.params.teamId ?? '';
+    const memberIdParam = req.params.memberId ?? '';
+    if (!mongoose.Types.ObjectId.isValid(teamIdParam) || !mongoose.Types.ObjectId.isValid(memberIdParam)) {
+      return res.status(400).json({ message: 'Invalid identifiers' });
+    }
+    const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
+    const memberObjectId = new mongoose.Types.ObjectId(memberIdParam);
+
+    const team = await findTeamWithAccess(teamObjectId, managerId);
+    if (!team) {
+      return res.status(404).json({ message: 'Team not found' });
+    }
+
+    const result = await TeamMemberModel.findOneAndUpdate(
+      {
+        _id: memberObjectId,
+        teamId: teamObjectId,
+        status: 'inactive',
+      },
+      { $set: { status: 'active', updatedAt: new Date() } },
+      { new: true }
+    ).lean();
+
+    if (!result) {
+      return res.status(404).json({ message: 'Inactive membership not found' });
+    }
+
+    await TeamMessageModel.create({
+      teamId: result.teamId,
+      managerId: team.managerId,
+      messageType: 'text',
+      body: `${result.name ?? buildUserKey(result.provider, result.subject)} was reactivated`,
+    });
+
+    const payload = {
+      teamId: String(result.teamId),
+      memberId: String(result._id),
+      provider: result.provider,
+      subject: result.subject,
+    };
+
+    emitToManager(String(managerId), 'team:memberReactivated', payload);
+    emitToTeams([String(result.teamId)], 'team:memberReactivated', payload);
+    emitToUser(buildUserKey(result.provider, result.subject), 'team:memberReactivated', payload);
+
+    const mgr = await ManagerModel.findById(managerId).select('organizationId').lean();
+    if (mgr?.organizationId) {
+      syncStaffSeatsToStripe(String(mgr.organizationId)).catch((err) =>
+        console.error('[seat-sync] Error:', err),
+      );
+    }
+
+    return res.json({ message: 'Member reactivated' });
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to reactivate member' });
   }
 });
 

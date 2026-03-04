@@ -33,7 +33,6 @@ import invitesRouter from './routes/invites';
 import notificationsRouter from './routes/notifications';
 import eventChatRouter from './routes/eventChat';
 import privacyRouter from './routes/privacy';
-import venuesRouter from './routes/venues';
 import statisticsRouter from './routes/statistics';
 import staffRouter from './routes/staff';
 import groupsRouter from './routes/groups';
@@ -127,7 +126,6 @@ export async function createServer() {
   app.use('/api', staffAiRouter);
   app.use('/api', subscriptionRouter);
   app.use('/api', placesRouter);
-  app.use('/api', venuesRouter);
   app.use('/api', statisticsRouter); // Statistics and export endpoints
   app.use('/api', staffRouter); // Staff management endpoints
   app.use('/api', groupsRouter); // Staff group management

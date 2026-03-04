@@ -4,6 +4,8 @@ export interface RoleRequirement {
   role: string;
   count: number;
   call_time?: string;
+  start_time?: string;
+  end_time?: string;
 }
 
 export interface ClockLocation {
@@ -161,6 +163,8 @@ const RoleRequirementSchema = new Schema<RoleRequirement>(
     role: { type: String, required: true, trim: true },
     count: { type: Number, required: true, min: 1 },
     call_time: { type: String },
+    start_time: { type: String, trim: true },
+    end_time: { type: String, trim: true },
   },
   { _id: false }
 );

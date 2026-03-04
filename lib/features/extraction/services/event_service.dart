@@ -544,4 +544,93 @@ class EventService {
       throw Exception('Failed to load user events: ${e.message}');
     }
   }
+
+  // ═══════════════════════════════════════════════════════════
+  // Public Event Link
+  // ═══════════════════════════════════════════════════════════
+
+  Future<Map<String, dynamic>> getPublicLink(String eventId) async {
+    try {
+      final response = await _apiClient.get('/events/$eventId/public-link');
+      if (response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300) {
+        return response.data as Map<String, dynamic>;
+      }
+      throw Exception('Failed to check public link (${response.statusCode})');
+    } on DioException catch (e) {
+      throw Exception('Failed to check public link: ${e.message}');
+    }
+  }
+
+  Future<Map<String, dynamic>> createPublicLink(
+    String eventId, {
+    bool showContactName = true,
+    bool showContactPhone = false,
+    bool showContactEmail = false,
+    bool showManagerPhoto = false,
+  }) async {
+    try {
+      final response = await _apiClient.post(
+        '/events/$eventId/public-link',
+        data: {
+          'showContactName': showContactName,
+          'showContactPhone': showContactPhone,
+          'showContactEmail': showContactEmail,
+          'showManagerPhoto': showManagerPhoto,
+        },
+      );
+      if (response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300) {
+        return response.data as Map<String, dynamic>;
+      }
+      throw Exception('Failed to create public link (${response.statusCode})');
+    } on DioException catch (e) {
+      throw Exception('Failed to create public link: ${e.message}');
+    }
+  }
+
+  Future<Map<String, dynamic>> updatePublicLink(
+    String eventId, {
+    bool? showContactName,
+    bool? showContactPhone,
+    bool? showContactEmail,
+    bool? showManagerPhoto,
+  }) async {
+    try {
+      final data = <String, dynamic>{};
+      if (showContactName != null) data['showContactName'] = showContactName;
+      if (showContactPhone != null) data['showContactPhone'] = showContactPhone;
+      if (showContactEmail != null) data['showContactEmail'] = showContactEmail;
+      if (showManagerPhoto != null) data['showManagerPhoto'] = showManagerPhoto;
+
+      final response = await _apiClient.patch(
+        '/events/$eventId/public-link',
+        data: data,
+      );
+      if (response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300) {
+        return response.data as Map<String, dynamic>;
+      }
+      throw Exception('Failed to update public link (${response.statusCode})');
+    } on DioException catch (e) {
+      throw Exception('Failed to update public link: ${e.message}');
+    }
+  }
+
+  Future<void> revokePublicLink(String eventId) async {
+    try {
+      final response = await _apiClient.delete('/events/$eventId/public-link');
+      if (response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300) {
+        return;
+      }
+      throw Exception('Failed to revoke public link (${response.statusCode})');
+    } on DioException catch (e) {
+      throw Exception('Failed to revoke public link: ${e.message}');
+    }
+  }
 }

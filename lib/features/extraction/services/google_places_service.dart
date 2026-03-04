@@ -8,6 +8,7 @@ import '../../auth/data/services/auth_service.dart';
 
 class GooglePlacesService {
   static String get _baseUrl => AppConfig.instance.baseUrl;
+  static http.Client get _http => AuthService.httpClient;
 
   /// Get place predictions for autocomplete
   /// [userLat] and [userLng] are optional - if provided, results will be biased to user's location
@@ -17,12 +18,6 @@ class GooglePlacesService {
     double? userLng,
   }) async {
     if (input.isEmpty) return [];
-
-    // Get auth token
-    final token = await AuthService.getJwt();
-    if (token == null) {
-      throw Exception('Not authenticated');
-    }
 
     // Optional geo bias - use user location if provided, otherwise defaults (Colorado, USA)
     final biasLat = userLat ??
@@ -49,12 +44,9 @@ class GooglePlacesService {
 
     try {
       // Call backend proxy instead of Google directly
-      final response = await http.post(
+      final response = await _http.post(
         url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'input': input,
           'biasLat': biasLat,
@@ -90,22 +82,13 @@ class GooglePlacesService {
 
   /// Get place details including formatted address and coordinates
   static Future<PlaceDetails?> getPlaceDetails(String placeId) async {
-    // Get auth token
-    final token = await AuthService.getJwt();
-    if (token == null) {
-      throw Exception('Not authenticated');
-    }
-
     final url = Uri.parse('$_baseUrl/places/details');
 
     try {
       // Call backend proxy instead of Google directly
-      final response = await http.post(
+      final response = await _http.post(
         url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
         body: json.encode({'placeId': placeId}),
       );
 
@@ -134,22 +117,13 @@ class GooglePlacesService {
     final input = address.trim();
     if (input.isEmpty) return null;
 
-    // Get auth token
-    final token = await AuthService.getJwt();
-    if (token == null) {
-      throw Exception('Not authenticated');
-    }
-
     final url = Uri.parse('$_baseUrl/places/resolve-address');
 
     try {
       // Use backend convenience endpoint that combines autocomplete + details
-      final response = await http.post(
+      final response = await _http.post(
         url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
         body: json.encode({'address': address}),
       );
 

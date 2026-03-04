@@ -3349,4 +3349,48 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get broadcastSendToAll => 'Enviar a todos';
+
+  @override
+  String get deactivateMember => 'Desactivar';
+
+  @override
+  String get reactivateMember => 'Reactivar';
+
+  @override
+  String get memberDeactivatedSuccess => 'Miembro desactivado';
+
+  @override
+  String get memberReactivatedSuccess => 'Miembro reactivado';
+
+  @override
+  String get failedToDeactivateMember => 'Error al desactivar miembro';
+
+  @override
+  String get failedToReactivateMember => 'Error al reactivar miembro';
+
+  @override
+  String get memberStatusInactive => 'Pausado';
+
+  @override
+  String get filterStaff => 'Filtrar';
+
+  @override
+  String get allRoles => 'Todos los roles';
+
+  @override
+  String get starredFilter => 'Destacados';
+
+  @override
+  String get sendDirectInvitations => 'Enviar Invitaciones Directas';
+
+  @override
+  String get publishToTeam => 'Publicar al Equipo';
+
+  @override
+  String get eventStaysPrivate =>
+      'El evento se mantiene privado — solo los invitados pueden verlo';
+
+  @override
+  String get eventBecomesVisible =>
+      'El evento será visible para los equipos / miembros seleccionados';
 }

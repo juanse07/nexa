@@ -57,6 +57,7 @@ import 'staff_detail_screen.dart';
 import '../../users/presentation/pages/manager_profile_page.dart';
 import '../../users/presentation/pages/user_events_screen.dart';
 import '../../events/presentation/event_detail_screen.dart';
+import '../../events/presentation/widgets/public_event_link_sheet.dart';
 import '../../teams/presentation/pages/teams_management_page.dart';
 import 'package:nexa/core/network/socket_manager.dart';
 import '../../users/presentation/pages/settings_page.dart';
@@ -69,6 +70,7 @@ import '../../chat/data/services/chat_service.dart';
 import '../../chat/domain/entities/conversation.dart';
 import '../../chat/presentation/chat_screen.dart';
 import 'ai_chat_screen.dart';
+import '../widgets/event_quick_chat_sheet.dart';
 import '../../../core/widgets/section_navigation_dropdown.dart';
 import '../../../core/widgets/web_tab_navigation.dart';
 import '../../main/presentation/main_screen.dart';
@@ -8824,6 +8826,13 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final String venueAddress = (e['venue_address'] ?? '').toString();
     final String googleMapsUrl = (e['google_maps_url'] ?? '').toString();
     final String status = (e['status'] ?? 'draft').toString();
+    final String tab = (e['tab'] ?? 'pending').toString();
+    final Color tabAccentColor = switch (tab) {
+      'posted'    => ExColors.techBlue,
+      'full'      => ExColors.success,
+      'completed' => ExColors.slateGray,
+      _           => ExColors.warning,
+    };
 
     // Determine if venue is missing
     final localizations = AppLocalizations.of(context);
@@ -8918,11 +8927,19 @@ class _ExtractionScreenState extends State<ExtractionScreen>
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.grey.shade200, width: 1),
         ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(15),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(width: 3, color: tabAccentColor),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(11, 10, 8, 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
               // Header row: Client name + action buttons
               Row(
                 children: [
@@ -8991,7 +9008,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           ),
                         ),
                       ),
-                      // Copy button
+                      // Quick copy event details
                       GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTap: () {
@@ -9006,15 +9023,41 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                           ),
                         ),
                       ),
+                      // Share public link button
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          final eventId = (e['_id'] ?? e['id'] ?? '').toString();
+                          if (eventId.isEmpty) return;
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (_) => PublicEventLinkSheet(
+                              eventId: eventId,
+                              eventService: _eventService,
+                            ),
+                          );
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.all(6),
+                          child: Icon(
+                            Icons.share_outlined,
+                            size: 16,
+                            color: Colors.grey.shade500,
+                          ),
+                        ),
+                      ),
                       // AI assistant button
                       GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTap: () async {
                           if (!mounted) return;
-                          await Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => AIChatScreen(eventData: e),
-                            ),
+                          await showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (_) => EventQuickChatSheet(event: e),
                           );
                           await _loadEvents();
                         },
@@ -9340,6 +9383,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                 ),
               ],
             ],
+          ),
+        ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

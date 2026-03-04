@@ -106,6 +106,40 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
     }
   }
 
+  Future<void> _deactivateMember(String memberId) async {
+    final l10n = AppLocalizations.of(context)!;
+    try {
+      await _teamsService.deactivateMember(
+        teamId: widget.teamId,
+        memberId: memberId,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.memberDeactivatedSuccess)));
+      await _loadData();
+    } catch (e) {
+      ErrorDisplayService.showErrorFromException(context, e, prefix: l10n.failedToDeactivateMember);
+    }
+  }
+
+  Future<void> _reactivateMember(String memberId) async {
+    final l10n = AppLocalizations.of(context)!;
+    try {
+      await _teamsService.reactivateMember(
+        teamId: widget.teamId,
+        memberId: memberId,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.memberReactivatedSuccess)));
+      await _loadData();
+    } catch (e) {
+      ErrorDisplayService.showErrorFromException(context, e, prefix: l10n.failedToReactivateMember);
+    }
+  }
+
   Future<void> _sendInvite() async {
     final l10n = AppLocalizations.of(context)!;
     final emailCtrl = TextEditingController();
@@ -947,6 +981,8 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
             final provider = (member['provider'] ?? '').toString();
             final subject = (member['subject'] ?? '').toString();
             final memberId = (member['id'] ?? '').toString();
+            final status = (member['status'] ?? 'active').toString();
+            final isInactive = status == 'inactive';
             final subtitle = [
               if (email.isNotEmpty) email,
               if (provider.isNotEmpty && subject.isNotEmpty)
@@ -955,51 +991,80 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
             final userKey = provider.isNotEmpty && subject.isNotEmpty
                 ? '$provider:$subject'
                 : null;
-            return Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: ListTile(
-                leading: const CircleAvatar(child: Icon(Icons.person_outline)),
-                title: Text(name.isEmpty ? 'Pending member' : name),
-                subtitle: subtitle.isEmpty ? null : Text(subtitle),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (userKey != null)
-                      IconButton(
-                        onPressed: () {
-                          print('[TEAM DETAIL] Chat button pressed for userKey: $userKey');
-                          print('[TEAM DETAIL] targetName: ${name.isNotEmpty ? name : email}');
-                          print('[TEAM DETAIL] About to navigate to ChatScreen...');
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) {
-                                print('[TEAM DETAIL] Building ChatScreen widget...');
-                                return ChatScreen(
+            return Opacity(
+              opacity: isInactive ? 0.5 : 1.0,
+              child: Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                child: ListTile(
+                  leading: const CircleAvatar(child: Icon(Icons.person_outline)),
+                  title: Row(
+                    children: [
+                      Flexible(child: Text(name.isEmpty ? 'Pending member' : name)),
+                      if (isInactive) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade100,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            l10n.memberStatusInactive,
+                            style: TextStyle(fontSize: 11, color: Colors.amber.shade800, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  subtitle: subtitle.isEmpty ? null : Text(subtitle),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!isInactive && userKey != null)
+                        IconButton(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => ChatScreen(
                                   targetId: userKey,
                                   targetName: name.isNotEmpty ? name : email,
                                   targetPicture: member['picture']?.toString(),
-                                );
-                              },
-                            ),
-                          ).then((value) {
-                            print('[TEAM DETAIL] Navigation to ChatScreen completed');
-                          }).catchError((error) {
-                            print('[TEAM DETAIL ERROR] Failed to navigate to ChatScreen: $error');
-                          });
-                        },
-                        icon: const Icon(Icons.chat_bubble_outline),
-                        color: Colors.blue,
-                        tooltip: l10n.message,
+                                ),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.chat_bubble_outline),
+                          color: Colors.blue,
+                          tooltip: l10n.message,
+                        ),
+                      if (isInactive)
+                        IconButton(
+                          onPressed: memberId.isEmpty
+                              ? null
+                              : () => _reactivateMember(memberId),
+                          icon: const Icon(Icons.play_circle_outline),
+                          color: Colors.green,
+                          tooltip: l10n.reactivateMember,
+                        )
+                      else
+                        IconButton(
+                          onPressed: memberId.isEmpty
+                              ? null
+                              : () => _deactivateMember(memberId),
+                          icon: const Icon(Icons.pause_circle_outline),
+                          color: Colors.amber,
+                          tooltip: l10n.deactivateMember,
+                        ),
+                      IconButton(
+                        onPressed: memberId.isEmpty
+                            ? null
+                            : () => _removeMember(memberId),
+                        icon: const Icon(Icons.remove_circle_outline),
+                        color: Colors.redAccent,
+                        tooltip: l10n.remove,
                       ),
-                    IconButton(
-                      onPressed: memberId.isEmpty
-                          ? null
-                          : () => _removeMember(memberId),
-                      icon: const Icon(Icons.remove_circle_outline),
-                      color: Colors.redAccent,
-                      tooltip: l10n.remove,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             );

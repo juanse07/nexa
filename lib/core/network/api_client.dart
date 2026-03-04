@@ -43,13 +43,14 @@ class ApiClient {
       },
     );
 
-    // Add interceptors
+    // Add interceptors (ErrorInterceptor needs Dio ref for retry-after-refresh)
+    final errorInterceptor = ErrorInterceptor(_logger, dio: _dio);
     _dio.interceptors.addAll([
       ContentTypeInterceptor(),
       AuthInterceptor(_secureStorage),
       RequestIdInterceptor(),
       if (config.isDebugMode) LoggingInterceptor(_logger),
-      ErrorInterceptor(_logger),
+      errorInterceptor,
     ]);
   }
 

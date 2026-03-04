@@ -81,6 +81,7 @@ router.get('/staff', requireAuth, async (req: Request, res: Response) => {
     const q = (req.query.q ?? '').toString().trim();
     const favorite = req.query.favorite;
     const groupId = (req.query.groupId ?? '').toString().trim();
+    const role = (req.query.role ?? '').toString().trim();
     const cursor = (req.query.cursor ?? '').toString();
     const limit = Math.min(parseInt((req.query.limit ?? '50').toString(), 10) || 50, 100);
 
@@ -229,6 +230,15 @@ router.get('/staff', requireAuth, async (req: Request, res: Response) => {
         roles: (stat.roles || []).filter(Boolean),
         shiftCount: stat.shiftCount || 0,
       };
+    }
+
+    // Filter by role if requested (post-aggregation since roles come from event stats)
+    if (role) {
+      const roleLower = role.toLowerCase();
+      members = members.filter((m: any) => {
+        const stats = statsMap[m.userKey];
+        return stats?.roles?.some((r: string) => r.toLowerCase() === roleLower);
+      });
     }
 
     // Determine pagination

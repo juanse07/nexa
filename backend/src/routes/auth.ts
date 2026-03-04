@@ -9,6 +9,7 @@ import { UserModel } from '../models/user';
 import { ManagerModel } from '../models/manager';
 import { requireAuth, AuthenticatedUser } from '../middleware/requireAuth';
 import { authAttemptsTotal, usersRegisteredTotal } from '../metrics/metrics';
+import { generateRefreshToken, hashRefreshToken } from '../utils/refreshToken';
 
 type VerifiedProfile = {
   provider: 'google' | 'apple' | 'phone' | 'email';
@@ -53,6 +54,7 @@ if (APPLE_AUDIENCE_IDS.length === 0) {
   );
 }
 
+/** Short-lived access token (1 day). */
 function issueAppJwt(
   profile: VerifiedProfile,
   managerId?: string,
@@ -68,7 +70,33 @@ function issueAppJwt(
     ...(managerId && { managerId }),
     ...(orgInfo && { organizationId: orgInfo.organizationId, orgRole: orgInfo.orgRole }),
   } as const;
-  return jwt.sign(payload, JWT_SECRET, { algorithm: 'HS256', expiresIn: '90d' });
+  return jwt.sign(payload, JWT_SECRET, { algorithm: 'HS256', expiresIn: '1d' });
+}
+
+/** Issue a token pair: 1-day access token + 90-day refresh token. */
+async function issueTokenPair(
+  profile: VerifiedProfile,
+  model: typeof UserModel | typeof ManagerModel,
+  findQuery: Record<string, unknown>,
+  managerId?: string,
+  orgInfo?: { organizationId: string; orgRole: string },
+): Promise<{ token: string; refreshToken: string; expiresIn: number }> {
+  const token = issueAppJwt(profile, managerId, orgInfo);
+  const refreshToken = generateRefreshToken();
+  const hashedToken = hashRefreshToken(refreshToken);
+  const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 90 days
+
+  // Store hashed refresh token, cap at 10 per user (multi-device)
+  await model.updateOne(findQuery, {
+    $push: {
+      refresh_tokens: {
+        $each: [{ token: hashedToken, expires_at: expiresAt, created_at: new Date() }],
+        $slice: -10,
+      },
+    },
+  });
+
+  return { token, refreshToken, expiresIn: 86400 }; // 86400s = 1 day
 }
 
 async function upsertUser(profile: VerifiedProfile): Promise<VerifiedProfile> {
@@ -431,9 +459,13 @@ router.post('/google', async (req, res) => {
     }
 
     const primaryProfile = await upsertUser(profile);
-    const token = issueAppJwt(primaryProfile);
+    const { token, refreshToken, expiresIn } = await issueTokenPair(
+      primaryProfile,
+      UserModel,
+      { provider: primaryProfile.provider, subject: primaryProfile.subject },
+    );
     authAttemptsTotal.inc({ provider: 'google', role: 'staff', result: 'success' });
-    res.json({ token, user: primaryProfile });
+    res.json({ token, refreshToken, expiresIn, user: primaryProfile });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[auth] Google verification failed:', err);
@@ -449,9 +481,13 @@ router.post('/apple', async (req, res) => {
     if (!identityToken) return res.status(400).json({ message: 'identityToken is required' });
     const profile = await verifyAppleIdentityToken(identityToken);
     const primaryProfile = await upsertUser(profile);
-    const token = issueAppJwt(primaryProfile);
+    const { token, refreshToken, expiresIn } = await issueTokenPair(
+      primaryProfile,
+      UserModel,
+      { provider: primaryProfile.provider, subject: primaryProfile.subject },
+    );
     authAttemptsTotal.inc({ provider: 'apple', role: 'staff', result: 'success' });
-    res.json({ token, user: primaryProfile });
+    res.json({ token, refreshToken, expiresIn, user: primaryProfile });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[auth] Apple verification failed:', err);
@@ -483,9 +519,15 @@ router.post('/manager/google', async (req, res) => {
     // Ensure manager document exists and get managerId (with account linking)
     const { primaryProfile, managerId, orgInfo } = await ensureManagerDocument(profile);
 
-    const token = issueAppJwt(primaryProfile, managerId, orgInfo);
+    const { token, refreshToken, expiresIn } = await issueTokenPair(
+      primaryProfile,
+      ManagerModel,
+      { provider: primaryProfile.provider, subject: primaryProfile.subject },
+      managerId,
+      orgInfo,
+    );
     authAttemptsTotal.inc({ provider: 'google', role: 'manager', result: 'success' });
-    res.json({ token, user: primaryProfile });
+    res.json({ token, refreshToken, expiresIn, user: primaryProfile });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[auth] Manager Google verification failed:', err);
@@ -505,9 +547,15 @@ router.post('/manager/apple', async (req, res) => {
     // Ensure manager document exists and get managerId (with account linking)
     const { primaryProfile, managerId, orgInfo } = await ensureManagerDocument(profile);
 
-    const token = issueAppJwt(primaryProfile, managerId, orgInfo);
+    const { token, refreshToken, expiresIn } = await issueTokenPair(
+      primaryProfile,
+      ManagerModel,
+      { provider: primaryProfile.provider, subject: primaryProfile.subject },
+      managerId,
+      orgInfo,
+    );
     authAttemptsTotal.inc({ provider: 'apple', role: 'manager', result: 'success' });
-    res.json({ token, user: primaryProfile });
+    res.json({ token, refreshToken, expiresIn, user: primaryProfile });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[auth] Manager Apple verification failed:', err);
@@ -550,9 +598,13 @@ router.post('/email', async (req, res) => {
       picture: user.picture,
     };
 
-    const token = issueAppJwt(profile);
+    const { token, refreshToken, expiresIn } = await issueTokenPair(
+      profile,
+      UserModel,
+      { provider: profile.provider, subject: profile.subject },
+    );
     authAttemptsTotal.inc({ provider: 'email', role: 'staff', result: 'success' });
-    res.json({ token, user: profile });
+    res.json({ token, refreshToken, expiresIn, user: profile });
   } catch (err) {
     console.warn('[auth] Email login failed:', err);
     authAttemptsTotal.inc({ provider: 'email', role: 'staff', result: 'failure' });
@@ -593,9 +645,15 @@ router.post('/manager/email', async (req, res) => {
     const emailOrgInfo = manager.organizationId && manager.orgRole
       ? { organizationId: String(manager.organizationId), orgRole: manager.orgRole }
       : undefined;
-    const token = issueAppJwt(profile, String(manager._id), emailOrgInfo);
+    const { token, refreshToken, expiresIn } = await issueTokenPair(
+      profile,
+      ManagerModel,
+      { provider: profile.provider, subject: profile.subject },
+      String(manager._id),
+      emailOrgInfo,
+    );
     authAttemptsTotal.inc({ provider: 'email', role: 'manager', result: 'success' });
-    res.json({ token, user: profile });
+    res.json({ token, refreshToken, expiresIn, user: profile });
   } catch (err) {
     console.warn('[auth] Manager email login failed:', err);
     authAttemptsTotal.inc({ provider: 'email', role: 'manager', result: 'failure' });
@@ -666,18 +724,23 @@ router.post('/phone', async (req, res) => {
       }
     }
 
-    // Issue JWT using the user's original provider/subject (for linked accounts)
-    const token = issueAppJwt({
+    // Issue token pair using the user's original provider/subject (for linked accounts)
+    const userProfile: VerifiedProfile = {
       provider: user.provider,
       subject: user.subject,
       email: user.email,
       name: user.name,
       picture: user.picture,
       phoneNumber: profile.phoneNumber,
-    });
+    };
+    const { token, refreshToken, expiresIn } = await issueTokenPair(
+      userProfile,
+      UserModel,
+      { provider: user.provider, subject: user.subject },
+    );
 
     authAttemptsTotal.inc({ provider: 'phone', role: 'staff', result: 'success' });
-    res.json({ token, user: profile });
+    res.json({ token, refreshToken, expiresIn, user: profile });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[auth] Phone verification failed:', err);
@@ -724,25 +787,28 @@ router.post('/manager/phone', async (req, res) => {
       }
     }
 
-    // Issue JWT with managerId and org info
+    // Issue token pair with managerId and org info
     const phoneOrgInfo = manager.organizationId && manager.orgRole
       ? { organizationId: String(manager.organizationId), orgRole: manager.orgRole }
       : undefined;
-    const token = issueAppJwt(
-      {
-        provider: manager.provider,
-        subject: manager.subject,
-        email: manager.email,
-        name: manager.name,
-        picture: manager.picture,
-        phoneNumber: profile.phoneNumber,
-      },
+    const managerProfile: VerifiedProfile = {
+      provider: manager.provider,
+      subject: manager.subject,
+      email: manager.email,
+      name: manager.name,
+      picture: manager.picture,
+      phoneNumber: profile.phoneNumber,
+    };
+    const { token, refreshToken, expiresIn } = await issueTokenPair(
+      managerProfile,
+      ManagerModel,
+      { provider: manager.provider, subject: manager.subject },
       String(manager._id),
       phoneOrgInfo,
     );
 
     authAttemptsTotal.inc({ provider: 'phone', role: 'manager', result: 'success' });
-    res.json({ token, user: profile });
+    res.json({ token, refreshToken, expiresIn, user: profile });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[auth] Manager phone verification failed:', err);
@@ -950,6 +1016,101 @@ router.post('/manager/unlink-phone', requireAuth, async (req, res) => {
     // eslint-disable-next-line no-console
     console.warn('[auth] Manager unlink phone failed:', err);
     res.status(500).json({ message: 'Failed to unlink phone number' });
+  }
+});
+
+// ============================================================================
+// REFRESH TOKEN ENDPOINT
+// ============================================================================
+
+/**
+ * POST /api/auth/refresh
+ * Rotates a refresh token: validates the old one, deletes it, issues a new pair.
+ * Checks both User and Manager models (shared endpoint for both apps).
+ */
+router.post('/refresh', async (req, res) => {
+  try {
+    if (!JWT_SECRET) return res.status(500).json({ message: 'Server missing JWT secret' });
+
+    const incomingToken = (req.body?.refreshToken ?? '') as string;
+    if (!incomingToken) {
+      return res.status(400).json({ message: 'refreshToken is required' });
+    }
+
+    const hashed = hashRefreshToken(incomingToken);
+    const now = new Date();
+
+    // Try User model first
+    let user = await UserModel.findOne({
+      'refresh_tokens.token': hashed,
+      'refresh_tokens.expires_at': { $gt: now },
+    });
+
+    if (user) {
+      // Remove the used token (rotation)
+      await UserModel.updateOne(
+        { _id: user._id },
+        { $pull: { refresh_tokens: { token: hashed } } },
+      );
+
+      const profile: VerifiedProfile = {
+        provider: user.provider,
+        subject: user.subject,
+        email: user.email,
+        name: user.name,
+        picture: user.picture,
+      };
+
+      const { token, refreshToken, expiresIn } = await issueTokenPair(
+        profile,
+        UserModel,
+        { provider: user.provider, subject: user.subject },
+      );
+
+      return res.json({ token, refreshToken, expiresIn });
+    }
+
+    // Try Manager model
+    const manager = await ManagerModel.findOne({
+      'refresh_tokens.token': hashed,
+      'refresh_tokens.expires_at': { $gt: now },
+    });
+
+    if (manager) {
+      // Remove the used token (rotation)
+      await ManagerModel.updateOne(
+        { _id: manager._id },
+        { $pull: { refresh_tokens: { token: hashed } } },
+      );
+
+      const profile: VerifiedProfile = {
+        provider: manager.provider,
+        subject: manager.subject,
+        email: manager.email,
+        name: manager.name,
+        picture: manager.picture,
+      };
+
+      const orgInfo = manager.organizationId && manager.orgRole
+        ? { organizationId: String(manager.organizationId), orgRole: manager.orgRole }
+        : undefined;
+
+      const { token, refreshToken, expiresIn } = await issueTokenPair(
+        profile,
+        ManagerModel,
+        { provider: manager.provider, subject: manager.subject },
+        String(manager._id),
+        orgInfo,
+      );
+
+      return res.json({ token, refreshToken, expiresIn });
+    }
+
+    // Token not found or expired
+    return res.status(401).json({ message: 'Invalid or expired refresh token' });
+  } catch (err) {
+    console.warn('[auth] Refresh token error:', err);
+    return res.status(500).json({ message: 'Token refresh failed' });
   }
 });
 

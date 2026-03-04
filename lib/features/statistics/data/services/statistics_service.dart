@@ -1,25 +1,14 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
-import '../../../../core/config/environment.dart';
-import '../../../../core/constants/storage_keys.dart';
+import '../../../../core/config/app_config.dart';
+import '../../../auth/data/services/auth_service.dart';
 import '../models/statistics_models.dart';
 
 /// Service for statistics and export API calls
 class StatisticsService {
-  static final _storage = const FlutterSecureStorage();
-  static String get _baseUrl => Environment.instance.getOrDefault('API_BASE_URL', 'https://api.nexapymesoft.com');
-  static String get _apiUrl => '$_baseUrl/api';
-
-  /// Get auth headers for API requests
-  static Future<Map<String, String>> _getHeaders() async {
-    final token = await _storage.read(key: StorageKeys.accessToken);
-    return {
-      'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token',
-    };
-  }
+  static http.Client get _http => AuthService.httpClient;
+  static String get _apiUrl => AppConfig.instance.baseUrl;
 
   /// Get manager statistics summary
   static Future<ManagerStatistics> getManagerSummary({
@@ -30,7 +19,6 @@ class StatisticsService {
     try {
       debugPrint('[StatisticsService] getManagerSummary called, period: $period');
 
-      final headers = await _getHeaders();
       final queryParams = <String, String>{'period': period};
 
       if (period == 'custom' && startDate != null && endDate != null) {
@@ -43,7 +31,7 @@ class StatisticsService {
 
       debugPrint('[StatisticsService] Requesting: $uri');
 
-      final response = await http.get(uri, headers: headers);
+      final response = await _http.get(uri);
 
       debugPrint('[StatisticsService] Response status: ${response.statusCode}');
 
@@ -69,7 +57,6 @@ class StatisticsService {
     try {
       debugPrint('[StatisticsService] getPayrollReport called, period: $period');
 
-      final headers = await _getHeaders();
       final queryParams = <String, String>{'period': period};
 
       if (period == 'custom' && startDate != null && endDate != null) {
@@ -80,7 +67,7 @@ class StatisticsService {
       final uri = Uri.parse('$_apiUrl/statistics/manager/payroll')
           .replace(queryParameters: queryParams);
 
-      final response = await http.get(uri, headers: headers);
+      final response = await _http.get(uri);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -103,7 +90,6 @@ class StatisticsService {
     try {
       debugPrint('[StatisticsService] getTopPerformers called, period: $period');
 
-      final headers = await _getHeaders();
       final queryParams = <String, String>{
         'period': period,
         'limit': limit.toString(),
@@ -112,7 +98,7 @@ class StatisticsService {
       final uri = Uri.parse('$_apiUrl/statistics/manager/top-performers')
           .replace(queryParameters: queryParams);
 
-      final response = await http.get(uri, headers: headers);
+      final response = await _http.get(uri);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -137,7 +123,6 @@ class StatisticsService {
     try {
       debugPrint('[StatisticsService] exportTeamReportCsv called');
 
-      final headers = await _getHeaders();
       final queryParams = <String, String>{
         'format': 'csv',
         'reportType': reportType,
@@ -152,7 +137,7 @@ class StatisticsService {
       final uri = Uri.parse('$_apiUrl/exports/team-report')
           .replace(queryParameters: queryParams);
 
-      final response = await http.get(uri, headers: headers);
+      final response = await _http.get(uri);
 
       if (response.statusCode == 200) {
         return response.body; // CSV content as string
@@ -177,7 +162,6 @@ class StatisticsService {
     try {
       debugPrint('[StatisticsService] getExportDataForPdf called');
 
-      final headers = await _getHeaders();
       final queryParams = <String, String>{
         'format': 'pdf',
         'reportType': reportType,
@@ -195,7 +179,7 @@ class StatisticsService {
       final uri = Uri.parse('$_apiUrl/exports/team-report')
           .replace(queryParameters: queryParams);
 
-      final response = await http.get(uri, headers: headers);
+      final response = await _http.get(uri);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -217,8 +201,6 @@ class StatisticsService {
     required PayrollReport payroll,
     required TopPerformersReport topPerformers,
   }) async {
-    final headers = await _getHeaders();
-
     // Build a structured data summary for the AI
     final s = statistics.summary;
     final p = payroll.summary;
@@ -293,9 +275,9 @@ ${complianceInfo.isNotEmpty ? 'Flags by Type:\n$complianceInfo' : '- No flags th
 
     debugPrint('[StatisticsService] Requesting AI analysis...');
 
-    final response = await http.post(
+    final response = await _http.post(
       Uri.parse('$_apiUrl/ai/chat/message'),
-      headers: headers,
+      headers: {'Content-Type': 'application/json'},
       body: body,
     ).timeout(const Duration(seconds: 30));
 
@@ -316,7 +298,6 @@ ${complianceInfo.isNotEmpty ? 'Flags by Type:\n$complianceInfo' : '- No flags th
     String format = 'pdf',
     String? templateDesign,
   }) async {
-    final headers = await _getHeaders();
     final s = statistics.summary;
 
     final body = jsonEncode({
@@ -338,9 +319,9 @@ ${complianceInfo.isNotEmpty ? 'Flags by Type:\n$complianceInfo' : '- No flags th
 
     debugPrint('[StatisticsService] Generating AI analysis $format...');
 
-    final response = await http.post(
+    final response = await _http.post(
       Uri.parse('$_apiUrl/statistics/manager/ai-analysis-doc'),
-      headers: headers,
+      headers: {'Content-Type': 'application/json'},
       body: body,
     ).timeout(const Duration(seconds: 30));
 

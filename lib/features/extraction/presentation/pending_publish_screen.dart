@@ -3,12 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:nexa/l10n/app_localizations.dart';
 import 'package:nexa/shared/services/error_display_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/event_service.dart';
 import '../services/group_service.dart';
 import '../services/roles_service.dart';
-import '../services/users_service.dart';
+import '../services/staff_service.dart';
 import '../services/clients_service.dart';
 import '../services/tariffs_service.dart';
 import '../../teams/data/services/teams_service.dart';
@@ -32,7 +31,7 @@ class PendingPublishScreen extends StatefulWidget {
 }
 
 class _PendingPublishScreenState extends State<PendingPublishScreen> {
-  final UsersService _usersService = UsersService();
+  final StaffService _staffService = StaffService();
   final EventService _eventService = EventService();
   final RolesService _rolesService = RolesService();
   final ClientsService _clientsService = ClientsService();
@@ -42,8 +41,6 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
   final ChatService _chatService = ChatService();
   StreamSubscription<SocketEvent>? _socketSubscription;
 
-  bool _visibleToEntireTeam = false;
-  String? _selectedVisibilityTeamId; // Team for "visible to entire team" mode
   final TextEditingController _searchCtrl = TextEditingController();
   List<Map<String, dynamic>> _users = const [];
   List<Map<String, dynamic>> _roles = const [];
@@ -62,11 +59,34 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
   final Map<String, TextEditingController> _roleCountCtrls =
       <String, TextEditingController>{};
   bool _loadingTeams = false;
-  Set<String> _favoriteUsers = {};
-  String? _selectedRoleFilter; // For filtering favorites by role
-  // Visibility type is now automatically determined:
-  // - 'private' when sending direct invitations through chat
-  // - 'public' when publishing to teams
+
+  // Filter state
+  String? _activeRoleFilter; // stores role name for filtering
+  bool _starredFilterActive = false;
+  int _totalLoadedCount = 0;
+  final Set<String> _allLoadedKeys = {};
+
+  // Memoized filtered list — invalidated on setState
+  List<Map<String, dynamic>>? _filteredUsersCache;
+  String? _filterCacheKey;
+
+  /// Selected keys scoped to the currently visible (filtered) members.
+  /// When a filter is active, only members passing the filter are considered.
+  Set<String> get _effectiveSelectedKeys {
+    final visibleKeys = _filteredUsers.map((u) =>
+      (u['userKey'] ?? '${u['provider']}:${u['subject']}').toString()
+    ).toSet();
+    return _selectedKeys.intersection(visibleKeys);
+  }
+
+  /// Narrowing detection: determines smart button mode
+  bool get _isNarrowed {
+    if (_activeRoleFilter != null) return true;
+    if (_starredFilterActive) return true;
+    if (_searchCtrl.text.trim().isNotEmpty) return true;
+    if (_selectedKeys.length < _totalLoadedCount) return true;
+    return false;
+  }
 
   @override
   void initState() {
@@ -74,9 +94,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
     _loadRoles();
     _loadTeams();
     _loadGroups();
-    _loadFavorites();
-    // Load users immediately since _visibleToEntireTeam is false by default
-    _loadUsers(reset: true);
+    _loadStaff(reset: true);
     // Pre-fill role counts if draft already contains roles
     final roles =
         (widget.draft['roles'] as List?)?.whereType<Map>().toList() ?? const [];
@@ -114,23 +132,104 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
     }
   }
 
-  Future<void> _loadUsers({bool reset = false}) async {
+  /// Client-side filtered view of `_users` — memoized to avoid recomputing on every build.
+  /// Checks both event-history roles AND backend group membership by name.
+  List<Map<String, dynamic>> get _filteredUsers {
+    final cacheKey = '${_activeRoleFilter ?? ''}_${_starredFilterActive}_${_users.length}';
+    if (_filteredUsersCache != null && _filterCacheKey == cacheKey) {
+      return _filteredUsersCache!;
+    }
+    var list = _users;
+    if (_activeRoleFilter != null) {
+      final target = _activeRoleFilter!.toLowerCase();
+      list = list.where((u) {
+        // Check event-history roles (shifts they've actually worked)
+        final roles = u['roles'];
+        if (roles is List && roles.any((r) => r.toString().toLowerCase() == target)) {
+          return true;
+        }
+        // Check backend group membership (persistent manager tags)
+        final groups = u['groups'];
+        if (groups is List && groups.any((g) =>
+            (g['name'] ?? '').toString().toLowerCase() == target)) {
+          return true;
+        }
+        return false;
+      }).toList();
+    }
+    if (_starredFilterActive) {
+      list = list.where((u) => u['isFavorite'] == true).toList();
+    }
+    _filteredUsersCache = list;
+    _filterCacheKey = cacheKey;
+    return list;
+  }
+
+  /// Apply a filter chip tap: instant client-side first, server-side fallback if empty.
+  ///
+  /// [role] — set to a role name to filter, or null to clear role filter.
+  /// [starred] — set to true/false to toggle starred, or null to leave unchanged.
+  void _applyFilter({String? role, bool? starred}) {
+    setState(() {
+      _activeRoleFilter = role;
+      _starredFilterActive = starred ?? false;
+      _filteredUsersCache = null; // invalidate cache
+
+      // When clearing all filters, re-select all loaded members
+      if (role == null && !(starred ?? false)) {
+        _selectedKeys.addAll(_allLoadedKeys);
+      }
+    });
+
+    // If client-side filter yields nothing but we haven't loaded all pages,
+    // fall back to server-side filtered request to catch members beyond loaded page.
+    final clientResults = _filteredUsers;
+    final hasMorePages = _cursor != null && _cursor != 'null';
+    final hasActiveFilter = _activeRoleFilter != null || _starredFilterActive;
+    if (clientResults.isEmpty && hasMorePages && hasActiveFilter) {
+      _loadStaff(reset: true, serverFilter: true);
+    }
+  }
+
+  Future<void> _loadStaff({bool reset = false, bool serverFilter = false}) async {
     if (_loadingUsers) return;
     setState(() => _loadingUsers = true);
     try {
-      final res = await _usersService.fetchTeamMembers(
+      final res = await _staffService.fetchStaff(
         q: _searchCtrl.text.trim(),
         cursor: reset ? null : _cursor,
-        limit: 20,
+        role: serverFilter ? _activeRoleFilter : null,
+        favorite: serverFilter && _starredFilterActive ? true : null,
+        limit: 50,
       );
       final items =
           (res['items'] as List?)?.whereType<Map<String, dynamic>>().toList() ??
           const [];
       setState(() {
-        _users = reset ? items : [..._users, ...items];
-        _cursor = res['nextCursor'] as String?;
+        if (serverFilter) {
+          // Server-filtered fallback: merge results into _users without losing existing data.
+          // Add new members not already present so role chips stay stable.
+          final existingKeys = _users.map((u) =>
+            (u['userKey'] ?? '${u['provider']}:${u['subject']}').toString()
+          ).toSet();
+          for (final item in items) {
+            final key = (item['userKey'] ?? '${item['provider']}:${item['subject']}').toString();
+            if (!existingKeys.contains(key)) {
+              _users = [..._users, item];
+            }
+          }
+        } else if (reset) {
+          _users = items;
+          _selectedKeys.clear();
+        } else {
+          _users = [..._users, ...items];
+        }
+        if (!serverFilter) {
+          _cursor = res['nextCursor'] as String?;
+        }
+        _filteredUsersCache = null; // invalidate cache
         for (final u in items) {
-          final key = '${u['provider']}:${u['subject']}';
+          final key = (u['userKey'] ?? '${u['provider']}:${u['subject']}').toString();
           _keyToUser[key] = {
             'name': (u['name'] ?? '').toString(),
             'email': (u['email'] ?? '').toString(),
@@ -140,7 +239,11 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
             'first_name': (u['first_name'] ?? '').toString(),
             'last_name': (u['last_name'] ?? '').toString(),
           };
+          // Pre-select all loaded members
+          _selectedKeys.add(key);
+          _allLoadedKeys.add(key);
         }
+        _totalLoadedCount = _allLoadedKeys.length;
       });
     } finally {
       setState(() => _loadingUsers = false);
@@ -159,6 +262,11 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
       setState(() {
         _teams = teams;
         _loadingTeams = false;
+        // Auto-preselect first team if none selected
+        if (_selectedTeamIds.isEmpty && _teams.isNotEmpty) {
+          final firstId = (_teams.first['id'] ?? '').toString();
+          if (firstId.isNotEmpty) _selectedTeamIds.add(firstId);
+        }
       });
     } catch (e) {
       setState(() => _loadingTeams = false);
@@ -168,57 +276,9 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
     }
   }
 
-  Future<void> _loadFavorites() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _favoriteUsers = prefs.getStringList('favorite_users')?.toSet() ?? {};
-    });
-  }
-
-  List<Map<String, dynamic>> get _favoriteUsersList {
-    if (_users.isEmpty) return [];
-
-    // Filter users by favorites
-    final favorites = _users.where((user) {
-      final key = '${user['provider']}:${user['subject']}';
-      // Check if user is a favorite with any role OR with the selected role filter
-      if (_selectedRoleFilter != null) {
-        return _favoriteUsers.contains('$key:$_selectedRoleFilter');
-      } else {
-        // Check if user is favorite with any role
-        return _favoriteUsers.any((fav) => fav.startsWith('$key:'));
-      }
-    }).toList();
-
-    return favorites;
-  }
-
-  void _selectAllFavorites() {
-    setState(() {
-      for (final user in _favoriteUsersList) {
-        final key = '${user['provider']}:${user['subject']}';
-        _selectedKeys.add(key);
-      }
-    });
-  }
-
-  void _deselectAllFavorites() {
-    setState(() {
-      for (final user in _favoriteUsersList) {
-        final key = '${user['provider']}:${user['subject']}';
-        _selectedKeys.remove(key);
-      }
-    });
-  }
-
-  List<String> get _availableRoleFilters {
-    return _roles.map((r) => (r['name'] ?? '').toString())
-        .where((name) => name.isNotEmpty)
-        .toList();
-  }
-
   Future<void> _sendDirectInvitations() async {
-    if (_selectedKeys.isEmpty) {
+    final keysToInvite = _effectiveSelectedKeys;
+    if (keysToInvite.isEmpty) {
       ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         const SnackBar(content: Text('Select at least one person to invite')),
       );
@@ -285,10 +345,9 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
       // Update the draft with roles and client info (but DON'T publish)
       await _eventService.updateEvent(widget.draftId, payload);
 
-      // Prompt for role assignments
-      final userRoleAssignments = await _promptRoleAssignmentsForUsers(roleDefs);
+      // Prompt for role assignments (scoped to filtered selection)
+      final userRoleAssignments = await _promptRoleAssignmentsForUsers(roleDefs, keysToInvite);
       if (userRoleAssignments == null) {
-        print('[DIRECT INVITATIONS] User cancelled role assignment');
         setState(() => _publishing = false);
         return;
       }
@@ -330,15 +389,9 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
   }
 
   Future<void> _publish() async {
-    if (!_visibleToEntireTeam && _selectedKeys.isEmpty && _selectedTeamIds.isEmpty) {
+    if (_selectedKeys.isEmpty && _selectedTeamIds.isEmpty) {
       ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
         const SnackBar(content: Text('Select at least one user or team')),
-      );
-      return;
-    }
-    if (_visibleToEntireTeam && _selectedVisibilityTeamId == null) {
-      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
-        const SnackBar(content: Text('Select a team for visibility')),
       );
       return;
     }
@@ -464,23 +517,8 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
       await _eventService.updateEvent(widget.draftId, payload);
 
       // Then publish the draft using the dedicated publish endpoint
-      // This properly transitions status from 'draft' → 'published' with metadata
-      final List<String> audienceUserKeys;
-      final List<String> audienceTeamIds;
-
-      if (_visibleToEntireTeam) {
-        // When visible to entire team, send only the team ID in audience_team_ids
-        audienceUserKeys = const <String>[];
-        audienceTeamIds = [_selectedVisibilityTeamId!];
-      } else {
-        // Specific user/team selection
-        audienceUserKeys = _selectedKeys.toList();
-        audienceTeamIds = _selectedTeamIds.toList();
-      }
-
-      print('[PUBLISH] About to publish event: ${widget.draftId}');
-      print('[PUBLISH] audienceUserKeys: $audienceUserKeys');
-      print('[PUBLISH] audienceTeamIds: $audienceTeamIds');
+      final audienceUserKeys = _selectedKeys.toList();
+      final audienceTeamIds = _selectedTeamIds.toList();
 
       // Automatically set visibility to 'public' when publishing to teams
       final publishedEvent = await _eventService.publishEvent(
@@ -491,29 +529,19 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
         visibilityType: 'public',
       );
 
-      print('[PUBLISH] ✓ Event published successfully');
       final eventId = (publishedEvent['_id'] ?? publishedEvent['id'] ?? '').toString();
-      print('[PUBLISH] Event ID: $eventId');
 
       // Send individual invitations to selected users via chat
-      // IMPORTANT: Wrap invitation sending in try-catch to ensure screen closes even if this fails
-      // Only send individual invitations when NOT publishing to entire team
       String publishMessage = AppLocalizations.of(context)!.jobPosted;
-      if (!_visibleToEntireTeam && _selectedKeys.isNotEmpty && eventId.isNotEmpty) {
-        print('[PUBLISH] Will send individual invitations to ${_selectedKeys.length} users');
+      if (_selectedKeys.isNotEmpty && eventId.isNotEmpty) {
         try {
           await _sendJobInvitationsToUsers(eventId, publishedEvent, roleDefs);
           publishMessage = '${AppLocalizations.of(context)!.jobPosted} and invitations sent';
-          print('[PUBLISH] ✓ Invitations sent successfully');
         } catch (e) {
-          print('[PUBLISH] ✗ Failed to send invitations: $e');
           publishMessage = '${AppLocalizations.of(context)!.jobPosted}, but some invitations failed';
         }
-      } else {
-        print('[PUBLISH] Skipping individual invitations (visibleToEntireTeam: $_visibleToEntireTeam, selectedKeys: ${_selectedKeys.length})');
       }
 
-      print('[PUBLISH] Closing publish screen and showing success message');
       if (!mounted) return;
       Navigator.of(context).pop(true);
       ScaffoldMessenger.of(
@@ -532,51 +560,37 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
     Map<String, dynamic> eventData,
     List<Map<String, dynamic>> roles,
   ) async {
-    print('[PUBLISH] Sending job invitations to ${_selectedKeys.length} users');
-
-    if (roles.isEmpty) {
-      print('[PUBLISH] No roles defined, skipping invitations');
-      return;
-    }
+    if (roles.isEmpty) return;
 
     // Prompt user to select role for each selected user
     final userRoleAssignments = await _promptRoleAssignmentsForUsers(roles);
-    if (userRoleAssignments == null) {
-      print('[PUBLISH] User cancelled role assignment');
-      return;
-    }
+    if (userRoleAssignments == null) return;
 
     // For each selected user, send them a job invitation via chat with their assigned role
     for (final entry in userRoleAssignments.entries) {
       final userKey = entry.key;
       final roleId = entry.value;
 
-      if (roleId == null || roleId.isEmpty) {
-        print('[PUBLISH] Skipping $userKey - no role assigned');
-        continue;
-      }
+      if (roleId == null || roleId.isEmpty) continue;
 
       try {
-        print('[PUBLISH] Sending invitation to $userKey for role $roleId');
-
         await _chatService.sendEventInvitation(
           targetId: userKey,
           eventId: eventId,
           roleId: roleId,
           eventData: eventData,
         );
-
-        print('[PUBLISH] Successfully sent invitation to $userKey');
       } catch (e) {
-        print('[PUBLISH] Failed to send invitation to $userKey: $e');
         // Continue sending to other users even if one fails
       }
     }
   }
 
   Future<Map<String, String>?> _promptRoleAssignmentsForUsers(
-    List<Map<String, dynamic>> roles,
-  ) async {
+    List<Map<String, dynamic>> roles, [
+    Set<String>? scopedKeys,
+  ]) async {
+    final keys = scopedKeys ?? _effectiveSelectedKeys;
     final roleNames = roles
         .map((r) => (r['role'] ?? r['name'] ?? '').toString())
         .where((name) => name.isNotEmpty)
@@ -590,15 +604,15 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
     final Map<String, String> assignments = {};
 
     // Initialize with first role for all users
-    for (final userKey in _selectedKeys) {
+    for (final userKey in keys) {
       assignments[userKey] = roleNames.first;
     }
 
     final result = await showDialog<Map<String, String>?>(
       context: context,
-      barrierDismissible: true, // Allow dismissing by tapping outside
+      barrierDismissible: true,
       builder: (context) => _RoleAssignmentDialog(
-        users: _selectedKeys.map((key) {
+        users: keys.map((key) {
           final user = _keyToUser[key];
           return {
             'key': key,
@@ -616,6 +630,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final data = widget.draft;
     final client = (data['client_name'] ?? '').toString();
     final name = (data['event_name'] ?? data['venue_name'] ?? 'Untitled').toString();
@@ -624,7 +639,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: Text(AppLocalizations.of(context)!.postJob),
+        title: Text(l10n.postJob),
         backgroundColor: AppColors.navySpaceCadet,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -689,399 +704,449 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
 
-                  // ── Visibility toggle card ───────────────────────
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: _visibleToEntireTeam
-                            ? AppColors.navySpaceCadet.withValues(alpha: 0.25)
-                            : Colors.transparent,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: SwitchListTile(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 4,
-                      ),
-                      secondary: Container(
-                        width: 36,
-                        height: 36,
+                  _buildTeamSelector(),
+                  _buildGroupSelector(),
+                  _buildFilterSection(l10n),
+                  const SizedBox(height: 16),
+
+                  // ── Team Members ─────────────────────────────
+                  Row(
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
                         decoration: BoxDecoration(
-                          color: _visibleToEntireTeam
-                              ? AppColors.navySpaceCadet
-                              : AppColors.navySpaceCadet.withValues(alpha: 0.08),
+                          color: AppColors.navySpaceCadet.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Icon(
-                          Icons.groups_rounded,
-                          size: 18,
-                          color: _visibleToEntireTeam
-                              ? Colors.white
-                              : AppColors.navySpaceCadet,
-                        ),
-                      ),
-                      title: const Text(
-                        'Visible to entire team',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
+                        child: const Icon(
+                          Icons.person_search_rounded,
+                          size: 16,
                           color: AppColors.navySpaceCadet,
                         ),
                       ),
-                      subtitle: Text(
-                        'Broadcast this shift to all team members',
-                        style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                      const SizedBox(width: 10),
+                      const Text(
+                        'Team Members',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                          color: AppColors.navySpaceCadet,
+                        ),
                       ),
-                      value: _visibleToEntireTeam,
-                      activeColor: AppColors.navySpaceCadet,
-                      onChanged: (v) {
-                        setState(() {
-                          _visibleToEntireTeam = v;
-                          if (_visibleToEntireTeam &&
-                              _selectedVisibilityTeamId == null &&
-                              _teams.isNotEmpty) {
-                            _selectedVisibilityTeamId =
-                                (_teams.first['id'] ?? '').toString();
-                          }
-                        });
-                      },
-                    ),
-                  ),
-
-                  if (_visibleToEntireTeam) ...[
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      value: _selectedVisibilityTeamId,
-                      decoration: InputDecoration(
-                        labelText: 'Select team',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: AppColors.border),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 14,
-                        ),
-                        filled: true,
-                        fillColor: Colors.white,
-                      ),
-                      hint: const Text('Select team'),
-                      items: _teams.map((team) {
-                        final teamId = (team['id'] ?? '').toString();
-                        final name = (team['name'] ?? 'Untitled team').toString();
-                        return DropdownMenuItem(value: teamId, child: Text(name));
-                      }).toList(),
-                      onChanged: (value) =>
-                          setState(() => _selectedVisibilityTeamId = value),
-                    ),
-                  ],
-
-                  if (!_visibleToEntireTeam) ...[
-                    const SizedBox(height: 16),
-                    _buildTeamSelector(),
-                    _buildGroupSelector(),
-                    _buildFavoritesSection(),
-                    const SizedBox(height: 16),
-
-                    // ── Team Members ─────────────────────────────
-                    Row(
-                      children: [
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: AppColors.navySpaceCadet.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(
-                            Icons.person_search_rounded,
-                            size: 16,
-                            color: AppColors.navySpaceCadet,
-                          ),
+                      const Spacer(),
+                      if (_filteredUsers.isNotEmpty) ...[
+                        // Select all / Deselect all toggle
+                        GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              final allKeys = _filteredUsers.map((u) =>
+                                (u['userKey'] ?? '${u['provider']}:${u['subject']}').toString()
+                              ).toSet();
+                              final allSelected = allKeys.every(_selectedKeys.contains);
+                              if (allSelected) {
+                                _selectedKeys.removeAll(allKeys);
+                              } else {
+                                _selectedKeys.addAll(allKeys);
+                              }
+                            });
+                          },
+                          child: Builder(builder: (context) {
+                            final allKeys = _filteredUsers.map((u) =>
+                              (u['userKey'] ?? '${u['provider']}:${u['subject']}').toString()
+                            ).toSet();
+                            final allSelected = allKeys.isNotEmpty &&
+                                allKeys.every(_selectedKeys.contains);
+                            return Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  allSelected
+                                      ? Icons.check_box_rounded
+                                      : Icons.check_box_outline_blank_rounded,
+                                  size: 18,
+                                  color: AppColors.primaryIndigo,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  allSelected ? 'Deselect all' : 'Select all',
+                                  style: const TextStyle(
+                                    color: AppColors.primaryIndigo,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            );
+                          }),
                         ),
                         const SizedBox(width: 10),
-                        const Text(
-                          'Team Members',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 15,
-                            color: AppColors.navySpaceCadet,
-                          ),
-                        ),
-                        if (_selectedKeys.isNotEmpty) ...[
-                          const Spacer(),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.navySpaceCadet,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              '${_selectedKeys.length} selected',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
                       ],
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _searchCtrl,
-                      decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.search, size: 20),
-                        hintText: 'Search team members',
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
+                      if (_effectiveSelectedKeys.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.navySpaceCadet,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '${_effectiveSelectedKeys.length}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: AppColors.border),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _searchCtrl,
+                    decoration: InputDecoration(
+                      prefixIcon: const Icon(Icons.search, size: 20),
+                      hintText: 'Search team members',
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      onChanged: (_) => _loadUsers(reset: true),
-                      onSubmitted: (_) => _loadUsers(reset: true),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                     ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      height: 220,
-                      child: _users.isEmpty && !_loadingUsers
-                          ? Center(
-                              child: Text(
-                                _searchCtrl.text.trim().isEmpty
-                                    ? 'No team members yet.\nAdd members to your teams first.'
-                                    : 'No results for "${_searchCtrl.text.trim()}"',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(color: Colors.grey.shade500),
-                              ),
-                            )
-                          : Container(
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: AppColors.border),
-                              ),
-                              child: NotificationListener<ScrollNotification>(
-                                onNotification: (n) {
-                                  if (n.metrics.pixels >=
-                                          n.metrics.maxScrollExtent - 100 &&
-                                      _cursor != null &&
-                                      _cursor != 'null' &&
-                                      !_loadingUsers) {
-                                    _loadUsers();
-                                  }
-                                  return false;
-                                },
-                                child: ListView.builder(
-                                  itemCount:
-                                      _users.length + (_loadingUsers ? 1 : 0),
-                                  itemBuilder: (ctx, idx) {
-                                    if (idx >= _users.length) {
-                                      return const Center(
-                                        child: Padding(
-                                          padding: EdgeInsets.all(12),
-                                          child: CircularProgressIndicator(),
-                                        ),
-                                      );
-                                    }
-                                    final u = _users[idx];
-                                    final key =
-                                        '${u['provider']}:${u['subject']}';
-                                    final selected =
-                                        _selectedKeys.contains(key);
-                                    return CheckboxListTile(
-                                      value: selected,
-                                      activeColor: AppColors.navySpaceCadet,
-                                      dense: true,
-                                      onChanged: (_) {
-                                        setState(() {
-                                          if (selected) {
-                                            _selectedKeys.remove(key);
-                                          } else {
-                                            _selectedKeys.add(key);
-                                          }
-                                        });
-                                      },
-                                      title: Text(
-                                        (u['name'] ?? u['email'] ?? key)
-                                            .toString(),
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                      subtitle: Text(
-                                        (u['email'] ?? '').toString(),
-                                        style: const TextStyle(fontSize: 12),
+                    onChanged: (_) => _loadStaff(reset: true),
+                    onSubmitted: (_) => _loadStaff(reset: true),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 220,
+                    child: _filteredUsers.isEmpty && !_loadingUsers
+                        ? Center(
+                            child: Text(
+                              _searchCtrl.text.trim().isEmpty && _activeRoleFilter == null && !_starredFilterActive
+                                  ? 'No team members yet.\nAdd members to your teams first.'
+                                  : _activeRoleFilter != null
+                                      ? 'No members with role "$_activeRoleFilter"'
+                                      : _starredFilterActive
+                                          ? 'No starred members'
+                                          : 'No results for "${_searchCtrl.text.trim()}"',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.grey.shade500),
+                            ),
+                          )
+                        : Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: AppColors.border),
+                            ),
+                            child: NotificationListener<ScrollNotification>(
+                              onNotification: (n) {
+                                if (n.metrics.pixels >=
+                                        n.metrics.maxScrollExtent - 100 &&
+                                    _cursor != null &&
+                                    _cursor != 'null' &&
+                                    !_loadingUsers) {
+                                  _loadStaff();
+                                }
+                                return false;
+                              },
+                              child: ListView.builder(
+                                itemCount:
+                                    _filteredUsers.length + (_loadingUsers ? 1 : 0),
+                                itemBuilder: (ctx, idx) {
+                                  if (idx >= _filteredUsers.length) {
+                                    return const Center(
+                                      child: Padding(
+                                        padding: EdgeInsets.all(12),
+                                        child: CircularProgressIndicator(),
                                       ),
                                     );
-                                  },
-                                ),
+                                  }
+                                  final u = _filteredUsers[idx];
+                                  final key = (u['userKey'] ?? '${u['provider']}:${u['subject']}').toString();
+                                  final selected =
+                                      _selectedKeys.contains(key);
+                                  final isFav = u['isFavorite'] == true;
+                                  return CheckboxListTile(
+                                    value: selected,
+                                    activeColor: AppColors.navySpaceCadet,
+                                    dense: true,
+                                    onChanged: (_) {
+                                      setState(() {
+                                        if (selected) {
+                                          _selectedKeys.remove(key);
+                                        } else {
+                                          _selectedKeys.add(key);
+                                        }
+                                      });
+                                    },
+                                    title: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            (u['name'] ?? u['email'] ?? key)
+                                                .toString(),
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                        if (isFav)
+                                          const Icon(
+                                            Icons.star_rounded,
+                                            size: 16,
+                                            color: Colors.amber,
+                                          ),
+                                      ],
+                                    ),
+                                    subtitle: Text(
+                                      (u['email'] ?? '').toString(),
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  );
+                                },
                               ),
                             ),
-                    ),
-                    if (_selectedKeys.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: _selectedKeys.map((k) {
-                          final info = _keyToUser[k] ?? const {};
-                          final display = [
-                            (info['name'] ?? '').toString(),
-                            (info['email'] ?? '').toString(),
-                          ].where((s) => s.isNotEmpty).join(' — ');
-                          return Chip(
-                            label: Text(
-                              display.isNotEmpty ? display : k,
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                            backgroundColor:
-                                AppColors.navySpaceCadet.withValues(alpha: 0.08),
-                            side: BorderSide.none,
-                            deleteIcon: const Icon(Icons.close, size: 14),
-                            onDeleted: () =>
-                                setState(() => _selectedKeys.remove(k)),
-                          );
-                        }).toList(),
-                      ),
-                    ],
-                  ],
+                          ),
+                  ),
+                  // Selected count is shown in the header badge
                 ],
               ),
             ),
           ),
 
-          // ── Pinned action buttons ──────────────────────────────
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  blurRadius: 12,
-                  offset: const Offset(0, -3),
-                ),
-              ],
-            ),
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: _publishing ? null : _sendDirectInvitations,
-                        icon: const Icon(Icons.mail_outline_rounded, size: 18),
-                        label: const Text(
-                          'Send Direct Invitations',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          side: const BorderSide(
-                            color: AppColors.navySpaceCadet,
-                            width: 1.5,
-                          ),
-                          foregroundColor: AppColors.navySpaceCadet,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Event stays private — only invited people can see it',
-                      style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [
-                              Color(0xFF212C4A),
-                              Color(0xFF1E3A8A),
-                            ],
-                            begin: Alignment.centerLeft,
-                            end: Alignment.centerRight,
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: ElevatedButton.icon(
-                          onPressed: _publishing ? null : _publish,
-                          icon: const Icon(Icons.campaign_rounded, size: 18),
-                          label: Text(
-                            _publishing
-                                ? 'Publishing...'
-                                : 'Publish to Team / Public',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            backgroundColor: Colors.transparent,
-                            shadowColor: Colors.transparent,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            elevation: 0,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Event becomes visible to selected teams / members',
-                      style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
+          // ── Smart action button ──────────────────────────────
+          _buildSmartButton(l10n),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterSection(AppLocalizations l10n) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: AppColors.primaryIndigo.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.filter_list_rounded,
+                size: 16,
+                color: AppColors.primaryIndigo,
               ),
             ),
+            const SizedBox(width: 10),
+            Text(
+              l10n.filterStaff,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+                color: AppColors.navySpaceCadet,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              // "All roles" chip — clears role + starred filters
+              _filterChip(
+                label: l10n.allRoles,
+                isSelected: _activeRoleFilter == null && !_starredFilterActive,
+                onTap: () => _applyFilter(role: null, starred: false),
+              ),
+              const SizedBox(width: 6),
+              // "Starred" chip
+              _filterChip(
+                label: l10n.starredFilter,
+                isSelected: _starredFilterActive,
+                icon: Icons.star_rounded,
+                iconColor: _starredFilterActive ? Colors.white : Colors.amber,
+                onTap: () => _applyFilter(starred: !_starredFilterActive),
+              ),
+              const SizedBox(width: 6),
+              // Dynamic role chips from manager's defined roles
+              ..._roles.map((role) {
+                final roleName = (role['name'] ?? '').toString();
+                if (roleName.isEmpty) return const SizedBox.shrink();
+                final isSelected = _activeRoleFilter == roleName;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: _filterChip(
+                    label: roleName,
+                    isSelected: isSelected,
+                    onTap: () => _applyFilter(
+                      role: isSelected ? null : roleName,
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _filterChip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+    IconData? icon,
+    Color? iconColor,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.navySpaceCadet
+              : AppColors.navySpaceCadet.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 14, color: iconColor ?? Colors.white),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : AppColors.navySpaceCadet,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSmartButton(AppLocalizations l10n) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 12,
+            offset: const Offset(0, -3),
           ),
         ],
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_isNarrowed) ...[
+                // Narrowed → private invitations
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _publishing ? null : _sendDirectInvitations,
+                    icon: const Icon(Icons.mail_outline_rounded, size: 18),
+                    label: Text(
+                      _publishing ? 'Sending...' : l10n.sendDirectInvitations,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: const BorderSide(
+                        color: AppColors.navySpaceCadet,
+                        width: 1.5,
+                      ),
+                      foregroundColor: AppColors.navySpaceCadet,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  l10n.eventStaysPrivate,
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                  textAlign: TextAlign.center,
+                ),
+              ] else ...[
+                // Not narrowed → public publish
+                SizedBox(
+                  width: double.infinity,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [
+                          Color(0xFF212C4A),
+                          Color(0xFF1E3A8A),
+                        ],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: ElevatedButton.icon(
+                      onPressed: _publishing ? null : _publish,
+                      icon: const Icon(Icons.campaign_rounded, size: 18),
+                      label: Text(
+                        _publishing ? 'Publishing...' : l10n.publishToTeam,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  l10n.eventBecomesVisible,
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1118,15 +1183,15 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
             const Spacer(),
             GestureDetector(
               onTap: _openTeamsManagement,
-              child: Row(
+              child: const Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.people_alt_rounded,
                     size: 14,
                     color: AppColors.primaryIndigo,
                   ),
-                  const SizedBox(width: 4),
-                  const Text(
+                  SizedBox(width: 4),
+                  Text(
                     'Manage',
                     style: TextStyle(
                       color: AppColors.primaryIndigo,
@@ -1186,6 +1251,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
       ],
     );
   }
+
 
   Widget _buildGroupSelector() {
     if (_staffGroups.isEmpty && !_loadingGroups) return const SizedBox.shrink();
@@ -1270,163 +1336,6 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
       context,
     ).push(MaterialPageRoute(builder: (_) => const TeamsManagementPage()));
     await _loadTeams();
-  }
-
-  Widget _buildFavoritesSection() {
-    final favorites = _favoriteUsersList;
-    final allFavoritesSelected = favorites.isNotEmpty &&
-        favorites.every((user) {
-          final key = '${user['provider']}:${user['subject']}';
-          return _selectedKeys.contains(key);
-        });
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: Colors.amber.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(
-                Icons.star_rounded,
-                size: 16,
-                color: Colors.amber,
-              ),
-            ),
-            const SizedBox(width: 10),
-            const Text(
-              'Favorites',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 15,
-                color: AppColors.navySpaceCadet,
-              ),
-            ),
-            const Spacer(),
-            if (favorites.isNotEmpty)
-              GestureDetector(
-                onTap: allFavoritesSelected
-                    ? _deselectAllFavorites
-                    : _selectAllFavorites,
-                child: Text(
-                  allFavoritesSelected ? 'Deselect all' : 'Select all',
-                  style: const TextStyle(
-                    color: AppColors.primaryIndigo,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-          ],
-        ),
-        if (_availableRoleFilters.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              const Icon(
-                Icons.filter_list_rounded,
-                size: 14,
-                color: AppColors.navySpaceCadet,
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _roleFilterChip(null, 'All roles'),
-                      ..._availableRoleFilters.map(
-                        (role) => _roleFilterChip(role, role),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-        const SizedBox(height: 10),
-        if (favorites.isEmpty)
-          Text(
-            _selectedRoleFilter != null
-                ? 'No favorites for $_selectedRoleFilter'
-                : 'No favorites yet. Star users from chat to see them here.',
-            style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
-          )
-        else
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: favorites.map((user) {
-              final key = '${user['provider']}:${user['subject']}';
-              final name = (user['name'] ?? user['email'] ?? key).toString();
-              final isSelected = _selectedKeys.contains(key);
-              return FilterChip(
-                selected: isSelected,
-                selectedColor: Colors.amber.shade700,
-                checkmarkColor: Colors.white,
-                backgroundColor: Colors.white,
-                side: BorderSide(
-                  color: isSelected ? Colors.amber.shade700 : AppColors.border,
-                  width: 1.5,
-                ),
-                avatar: Icon(
-                  Icons.star_rounded,
-                  size: 14,
-                  color: isSelected ? Colors.white : Colors.amber,
-                ),
-                label: Text(name),
-                labelStyle: TextStyle(
-                  color: isSelected ? Colors.white : AppColors.navySpaceCadet,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                ),
-                showCheckmark: false,
-                onSelected: (selected) {
-                  setState(() {
-                    if (selected) {
-                      _selectedKeys.add(key);
-                    } else {
-                      _selectedKeys.remove(key);
-                    }
-                  });
-                },
-              );
-            }).toList(),
-          ),
-        const SizedBox(height: 16),
-      ],
-    );
-  }
-
-  Widget _roleFilterChip(String? value, String label) {
-    final isSelected = _selectedRoleFilter == value;
-    return GestureDetector(
-      onTap: () => setState(() => _selectedRoleFilter = value),
-      child: Container(
-        margin: const EdgeInsets.only(right: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.navySpaceCadet
-              : AppColors.navySpaceCadet.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : AppColors.navySpaceCadet,
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ),
-    );
   }
 
   @override
