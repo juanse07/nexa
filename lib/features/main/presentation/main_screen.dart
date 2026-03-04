@@ -262,6 +262,8 @@ class _MainScreenState extends State<MainScreen>
             // Main content with PageView
             PageView(
               controller: _pageController,
+              // Disable swipe-to-change-tab — navigation is tap-only.
+              physics: const NeverScrollableScrollPhysics(),
               onPageChanged: (index) {
                 // Show bars when page changes
                 _showBars();

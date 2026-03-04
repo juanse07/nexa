@@ -339,6 +339,32 @@ class EventService {
     }
   }
 
+  /// Fetches completed events (past + fully staffed) with pagination.
+  /// Returns events, total count on server, and whether more pages exist.
+  Future<({List<Map<String, dynamic>> events, int totalCount, bool hasMore})>
+      fetchCompletedEvents({int skip = 0, int limit = 10}) async {
+    try {
+      final response = await _apiClient.get(
+        '/events/completed',
+        queryParameters: {'skip': skip, 'limit': limit},
+      );
+      if (response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300) {
+        final data = response.data as Map<String, dynamic>;
+        final events = (data['events'] as List)
+            .whereType<Map<String, dynamic>>()
+            .toList();
+        final hasMore = data['hasMore'] as bool? ?? false;
+        final totalCount = data['totalCount'] as int? ?? 0;
+        return (events: events, totalCount: totalCount, hasMore: hasMore);
+      }
+      throw Exception('Failed to fetch completed events (${response.statusCode})');
+    } on DioException catch (e) {
+      throw Exception('Failed to fetch completed events: ${e.message}');
+    }
+  }
+
   /// Publishes a draft event, making it visible to staff
   ///
   /// [eventId] - The ID of the draft event to publish

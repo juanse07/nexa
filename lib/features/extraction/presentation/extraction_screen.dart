@@ -76,6 +76,7 @@ import '../../../core/widgets/web_tab_navigation.dart';
 import '../../main/presentation/main_screen.dart';
 import 'package:nexa/shared/widgets/tappable_app_title.dart';
 import 'package:nexa/shared/widgets/web_content_wrapper.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 
 enum _SortMode { dateAsc, dateDesc, lastCreated }
 
@@ -119,6 +120,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   List<Map<String, dynamic>>? _eventsAvailable;
   List<Map<String, dynamic>>? _eventsFull;
   List<Map<String, dynamic>>? _eventsCompleted;
+  // Completed tab — paginated separately from the main sync
+  int _completedTotalCount = 0;
+  int _completedSkip = 0;
+  bool _completedHasMore = true;
+  bool _isCompletedLoadingMore = false;
   int _expiredTotalCount = 0;
 
   // Search & sort state
@@ -1922,7 +1928,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                     pendingCount: _filterEvents(_eventsPending).length,
                     availableCount: _filterEvents(_eventsAvailable).length,
                     fullCount: _filterEvents(_eventsFull).length,
-                    completedCount: _filterEvents(_eventsCompleted).length,
+                    completedCount: _searchQuery.isEmpty
+                        ? _completedTotalCount
+                        : _filterEvents(_eventsCompleted).length,
                   ),
                 ),
               ),
@@ -2125,9 +2133,10 @@ class _ExtractionScreenState extends State<ExtractionScreen>
               return _eventsInner(filteredPending);
           }
         } else {
-          // For mobile, use TabBarView for swipe gestures
+          // Swipe between sub-tabs disabled — per-card Slidable uses horizontal swipe.
           return TabBarView(
             controller: _eventsTabController,
+            physics: const NeverScrollableScrollPhysics(),
             children: [
               _eventsInner(filteredPending, header: _buildExpiredEventsBanner(_expiredTotalCount), tabIndex: 0), // Pending tab
               _eventsInner(filteredAvailable, header: _buildExpiredEventsBanner(_expiredTotalCount), tabIndex: 1), // Posted tab
@@ -2597,7 +2606,9 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       final pendingCount = _filterEvents(_eventsPending).length;
       final availableCount = _filterEvents(_eventsAvailable).length;
       final fullCount = _filterEvents(_eventsFull).length;
-      final pastCount = _filterEvents(_eventsCompleted).length;
+      final pastCount = _searchQuery.isEmpty
+          ? _completedTotalCount
+          : _filterEvents(_eventsCompleted).length;
 
       return ClipRect(
         child: BackdropFilter(
@@ -5436,12 +5447,13 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         _eventsPending = pending;
         _eventsAvailable = available;
         _eventsFull = full;
-        _eventsCompleted = past;
+        // _eventsCompleted is populated separately by _loadCompletedEvents
         _isEventsLoading = false;
       });
 
-      // Fetch expired count from dedicated endpoint (non-blocking)
+      // Fetch expired count + completed events from dedicated paginated endpoints
       _loadExpiredCount();
+      _loadCompletedEvents(reset: true);
     } catch (e) {
       setState(() {
         _eventsError = e.toString();
@@ -5462,6 +5474,44 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       }
     } catch (e) {
       print('[_loadExpiredCount] Error: $e');
+    }
+  }
+
+  /// Loads completed events from the dedicated paginated endpoint.
+  /// [reset] clears the list and starts from page 0 (used on initial load / refresh).
+  Future<void> _loadCompletedEvents({bool reset = false}) async {
+    if (_isCompletedLoadingMore) return;
+    if (!reset && !_completedHasMore) return;
+
+    setState(() {
+      _isCompletedLoadingMore = true;
+      if (reset) {
+        _completedSkip = 0;
+        _completedHasMore = true;
+      }
+    });
+
+    try {
+      final result = await _eventService.fetchCompletedEvents(
+        skip: reset ? 0 : _completedSkip,
+        limit: 10,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        if (reset) {
+          _eventsCompleted = result.events;
+        } else {
+          _eventsCompleted = [...(_eventsCompleted ?? []), ...result.events];
+        }
+        _completedSkip = (reset ? 0 : _completedSkip) + result.events.length;
+        _completedTotalCount = result.totalCount;
+        _completedHasMore = result.hasMore;
+        _isCompletedLoadingMore = false;
+      });
+    } catch (e) {
+      print('[_loadCompletedEvents] Error: $e');
+      if (mounted) setState(() => _isCompletedLoadingMore = false);
     }
   }
 
@@ -5630,6 +5680,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     }
 
     final sortedEvents = _sortEvents(currentTabEvents);
+    final bool isCompletedTab = _eventsTabController.index == 3;
 
     return [
       if (showExpiredBanner && expiredCount > 0)
@@ -5639,15 +5690,54 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             child: _buildExpiredEventsBanner(expiredCount),
           ),
         ),
-      SliverList(
-        delegate: SliverChildBuilderDelegate(
-          (context, index) {
-            final event = sortedEvents[index];
-            return _buildEventCard(event);
-          },
-          childCount: sortedEvents.length,
+      SliverPadding(
+        padding: const EdgeInsets.only(top: 8, bottom: 16),
+        sliver: SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (context, index) {
+              final event = sortedEvents[index];
+              return _buildEventCard(event, showMargin: true);
+            },
+            childCount: sortedEvents.length,
+          ),
         ),
       ),
+      // ── Completed tab: Load More ─────────────────────────────────────
+      if (isCompletedTab)
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+            child: _isCompletedLoadingMore
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : _completedHasMore
+                    ? Center(
+                        child: TextButton.icon(
+                          onPressed: _loadCompletedEvents,
+                          icon: const Icon(Icons.expand_more, size: 18),
+                          label: const Text('Load more'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: ExColors.textSecondary,
+                          ),
+                        ),
+                      )
+                    : sortedEvents.isNotEmpty
+                        ? Center(
+                            child: Text(
+                              'All $_completedTotalCount completed events loaded',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade400,
+                              ),
+                            ),
+                          )
+                        : const SizedBox.shrink(),
+          ),
+        ),
     ];
   }
 
@@ -6151,7 +6241,13 @@ class _ExtractionScreenState extends State<ExtractionScreen>
             crossAxisCount = 2;
           }
 
-          if (_isEventsLoading && sortedItems.isEmpty) {
+          // Completed tab has its own loading lifecycle
+          final bool isCompletedTab = tabIndex == 3;
+          final bool showInitialLoader =
+              (_isEventsLoading || (isCompletedTab && _isCompletedLoadingMore)) &&
+              sortedItems.isEmpty;
+
+          if (showInitialLoader) {
             return ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(20),
@@ -6260,6 +6356,42 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                       .map((item) => _buildEventCard(item, showMargin: true))
                       .toList(),
                 ),
+
+              // ── Completed tab: Load More ─────────────────────────────────────
+              if (isCompletedTab) ...[
+                const SizedBox(height: 8),
+                if (_isCompletedLoadingMore)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                else if (_completedHasMore)
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: _loadCompletedEvents,
+                      icon: const Icon(Icons.expand_more, size: 18),
+                      label: const Text('Load more'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: ExColors.textSecondary,
+                      ),
+                    ),
+                  )
+                else if (sortedItems.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Center(
+                      child: Text(
+                        'All $_completedTotalCount completed events loaded',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade400,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ],
           );
         },
@@ -8819,6 +8951,92 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     }
   }
 
+  // ── Swipe action helpers ─────────────────────────────────────────────────────
+
+  Future<void> _swipeDelete(Map<String, dynamic> e) async {
+    final eventId = (e['_id'] ?? e['id'] ?? '').toString();
+    if (eventId.isEmpty || !mounted) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Event'),
+        content: Text('Delete "${e['client_name'] ?? 'this event'}"? This cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(color: ExColors.errorDark)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    try {
+      await _eventService.deleteEvent(eventId);
+      await _loadEvents();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(const SnackBar(content: Text('Event deleted')));
+    } catch (err) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(content: Text('Delete failed: $err')));
+    }
+  }
+
+  Future<void> _swipeBackToPending(Map<String, dynamic> e) async {
+    final eventId = (e['_id'] ?? e['id'] ?? '').toString();
+    if (eventId.isEmpty || !mounted) return;
+    try {
+      await _eventService.updateEvent(eventId, {'status': 'draft'});
+      await _loadEvents();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(const SnackBar(content: Text('Moved back to Pending')));
+    } catch (err) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(content: Text('Failed: $err')));
+    }
+  }
+
+  Future<void> _swipeMarkCompleted(Map<String, dynamic> e) async {
+    final eventId = (e['_id'] ?? e['id'] ?? '').toString();
+    if (eventId.isEmpty || !mounted) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Mark as Completed'),
+        content: Text('Mark "${e['client_name'] ?? 'this event'}" as completed?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Confirm', style: TextStyle(color: ExColors.success)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    try {
+      await _eventService.updateEvent(eventId, {'status': 'completed'});
+      await _loadEvents();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(const SnackBar(content: Text('Event marked as completed')));
+    } catch (err) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(content: Text('Failed: $err')));
+    }
+  }
+
   Widget _buildEventCard(Map<String, dynamic> e, {bool showMargin = false}) {
     // Extract essential data
     final String clientName = (e['client_name'] ?? 'Client').toString();
@@ -8878,9 +9096,11 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       timeDisplay = 'Time TBD';
     }
 
-    // Check if event is expired unfulfilled (past + has open positions + not draft/cancelled)
+    // Check if event is expired unfulfilled (past + has open positions + not draft/cancelled/completed)
     bool isExpiredUnfulfilled = false;
-    if (rawDate is String && rawDate.isNotEmpty && status != 'draft' && status != 'cancelled') {
+    if (rawDate is String && rawDate.isNotEmpty &&
+        status != 'draft' && status != 'cancelled' && status != 'completed' &&
+        tab != 'completed') {
       try {
         final d = DateTime.parse(rawDate);
         final eventDate = DateTime(d.year, d.month, d.day);
@@ -8906,7 +9126,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       rolesDisplay = roleStrings.join(', ');
     }
 
-    return GestureDetector(
+    final card = GestureDetector(
       onTap: () async {
         await Navigator.of(context).push(
           MaterialPageRoute(
@@ -8919,9 +9139,7 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         await _loadEvents();
       },
       child: Container(
-        margin: showMargin
-            ? const EdgeInsets.only(bottom: 10)
-            : EdgeInsets.zero,
+        margin: EdgeInsets.zero,
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -9392,6 +9610,70 @@ class _ExtractionScreenState extends State<ExtractionScreen>
         ),
       ),
     );
+
+    // ── Swipe-to-reveal actions (mobile only) ────────────────────────────────
+    EdgeInsetsGeometry outerPadding = showMargin
+        ? const EdgeInsets.fromLTRB(16, 8, 16, 14)
+        : EdgeInsets.zero;
+
+    Widget wrap(Widget w) => showMargin
+        ? Padding(padding: outerPadding, child: w)
+        : w;
+
+    if (kIsWeb || ResponsiveLayout.shouldUseDesktopLayout(context)) return wrap(card);
+
+    final ActionPane? endPane = switch (tab) {
+      'pending' => ActionPane(
+        motion: const DrawerMotion(),
+        extentRatio: 0.25,
+        children: [
+          SlidableAction(
+            onPressed: (_) => _swipeDelete(e),
+            backgroundColor: ExColors.errorDark,
+            foregroundColor: Colors.white,
+            icon: Icons.delete_outline,
+            label: 'Delete',
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ],
+      ),
+      'posted' => ActionPane(
+        motion: const DrawerMotion(),
+        extentRatio: 0.42,
+        children: [
+          SlidableAction(
+            onPressed: (_) => _swipeBackToPending(e),
+            backgroundColor: ExColors.navySpaceCadet,
+            foregroundColor: Colors.white,
+            icon: Icons.undo_rounded,
+            label: 'Back to Pending',
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ],
+      ),
+      'full' => ActionPane(
+        motion: const DrawerMotion(),
+        extentRatio: 0.35,
+        children: [
+          SlidableAction(
+            onPressed: (_) => _swipeMarkCompleted(e),
+            backgroundColor: ExColors.success,
+            foregroundColor: Colors.white,
+            icon: Icons.check_circle_outline,
+            label: 'Complete',
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ],
+      ),
+      _ => null,
+    };
+
+    if (endPane == null) return wrap(card);
+    return wrap(Slidable(
+      key: ValueKey(e['_id'] ?? e['id']),
+      endActionPane: endPane,
+      child: card,
+    ));
   }
 
   /// Helper method to build consistent info rows in event cards

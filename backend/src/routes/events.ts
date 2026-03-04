@@ -1500,7 +1500,7 @@ router.delete('/events/expired', requireAuth, async (req, res) => {
       {
         $match: {
           managerId,
-          status: { $nin: ['draft', 'cancelled', 'fulfilled'] },
+          status: { $nin: ['draft', 'cancelled', 'fulfilled', 'completed'] },
           date: { $lt: now },
         },
       },
@@ -2282,7 +2282,7 @@ router.get('/events/expired', requireAuth, async (req, res) => {
       {
         $match: {
           managerId,
-          status: { $nin: ['draft', 'cancelled', 'fulfilled'] },
+          status: { $nin: ['draft', 'cancelled', 'fulfilled', 'completed'] },
           date: { $lt: now },
         },
       },
@@ -2339,6 +2339,87 @@ router.get('/events/expired', requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error('[GET /events/expired] Error:', err);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Paginated completed events (past date + fully staffed).
+// Fetched separately from the main sync to avoid loading the entire history.
+router.get('/events/completed', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    const managerId = manager._id as mongoose.Types.ObjectId;
+
+    const skip = Math.max(0, parseInt(req.query.skip as string) || 0);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 10));
+    const now = new Date();
+    now.setUTCHours(0, 0, 0, 0);
+
+    const result = await EventModel.aggregate([
+      {
+        $match: {
+          managerId,
+          status: { $nin: ['draft', 'cancelled'] },
+          date: { $lt: now },
+        },
+      },
+      {
+        $addFields: {
+          _acceptedCount: {
+            $size: {
+              $filter: {
+                input: { $ifNull: ['$accepted_staff', []] },
+                as: 's',
+                cond: { $in: ['$$s.response', ['accept', 'accepted']] },
+              },
+            },
+          },
+          _totalNeeded: {
+            $reduce: {
+              input: { $ifNull: ['$roles', []] },
+              initialValue: 0,
+              in: { $add: ['$$value', { $ifNull: ['$$this.count', 0] }] },
+            },
+          },
+        },
+      },
+      // Keep: manually marked completed OR actually fully staffed (accepted >= needed)
+      {
+        $match: {
+          $or: [
+            { status: 'completed' },
+            {
+              $and: [
+                { _totalNeeded: { $gt: 0 } },
+                { $expr: { $gte: ['$_acceptedCount', '$_totalNeeded'] } },
+              ],
+            },
+          ],
+        },
+      },
+      {
+        $facet: {
+          totalCount: [{ $count: 'count' }],
+          events: [
+            { $sort: { date: -1 } },
+            { $skip: skip },
+            { $limit: limit },
+            { $project: { _acceptedCount: 0, _totalNeeded: 0 } },
+          ],
+        },
+      },
+    ]);
+
+    const totalCount = result[0]?.totalCount[0]?.count ?? 0;
+    const events = (result[0]?.events ?? []).map((e: any) => ({
+      ...e,
+      id: String(e._id),
+      tab: 'completed',
+    }));
+
+    return res.json({ events, totalCount, skip, limit, hasMore: skip + events.length < totalCount });
+  } catch (err) {
+    console.error('[GET /events/completed] Error:', err);
     return res.status(500).json({ error: 'Internal Server Error' });
   }
 });
@@ -2822,11 +2903,11 @@ router.get('/events', requireAuth, async (req, res) => {
         tab = 'pending';
       } else if (event.status === 'cancelled') {
         tab = 'pending';
-      } else if (isPast && isFull) {
-        // Completed = fully staffed + past date (regardless of DB status)
+      } else if (isPast && (isFull || event.status === 'completed')) {
+        // Completed = fully staffed past event, OR manager explicitly marked complete
         tab = 'completed';
       } else if (isPast && !isFull) {
-        // Expired = past date but never fully staffed (even if DB says 'completed')
+        // Expired = past date, never fully staffed, not manually completed
         tab = 'expired';
       } else if (isFull) {
         // Full = fully staffed, date still upcoming
@@ -2853,7 +2934,8 @@ router.get('/events', requireAuth, async (req, res) => {
     const tabFilter = req.query.tab as string | undefined;
     const finalEvents = tabFilter
       ? mappedEvents.filter((e: any) => e.tab === tabFilter)
-      : mappedEvents.filter((e: any) => e.tab !== 'expired');
+      // Exclude both expired (own paginated endpoint) and completed (own paginated endpoint)
+      : mappedEvents.filter((e: any) => e.tab !== 'expired' && e.tab !== 'completed');
 
     // Include current server timestamp for next sync
     if (!managerScope) {
