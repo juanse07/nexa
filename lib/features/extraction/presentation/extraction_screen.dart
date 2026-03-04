@@ -8989,6 +8989,21 @@ class _ExtractionScreenState extends State<ExtractionScreen>
   Future<void> _swipeBackToPending(Map<String, dynamic> e) async {
     final eventId = (e['_id'] ?? e['id'] ?? '').toString();
     if (eventId.isEmpty || !mounted) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Back to Pending'),
+        content: Text('Move "${e['client_name'] ?? 'this event'}" back to pending? Staff will no longer see it.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Confirm', style: TextStyle(color: ExColors.navySpaceCadet)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
     try {
       await _eventService.updateEvent(eventId, {'status': 'draft'});
       await _loadEvents();

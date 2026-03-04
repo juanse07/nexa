@@ -11,7 +11,7 @@ import '../../extraction/services/event_service.dart';
 import 'widgets/public_event_link_sheet.dart';
 import '../../extraction/presentation/pending_publish_screen.dart';
 import '../../extraction/presentation/pending_edit_screen.dart';
-import '../../extraction/presentation/ai_chat_screen.dart';
+import '../../extraction/widgets/event_quick_chat_sheet.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
 import 'package:nexa/shared/services/error_display_service.dart';
 import '../../attendance/presentation/bulk_clock_in_screen.dart';
@@ -118,13 +118,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       ),
       floatingActionButton: GestureDetector(
         onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => AIChatScreen(
-                startNewConversation: true,
-                eventData: event,
-              ),
-            ),
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (_) => EventQuickChatSheet(event: event),
           );
         },
         child: Container(

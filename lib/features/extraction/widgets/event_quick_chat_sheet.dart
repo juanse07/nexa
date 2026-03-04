@@ -392,76 +392,81 @@ Be brief and practical. Only answer based on information provided. Suggest relev
                 ),
               ),
 
-              // ── Event info block ─────────────────────────────────────────────
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceLight,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.borderLight),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Client name
-                      Text(
-                        clientName,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textDark,
+              // ── Event info block — collapses when keyboard is open ───────────
+              AnimatedSize(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOut,
+                clipBehavior: Clip.hardEdge,
+                child: keyboardHeight > 0
+                    ? const SizedBox.shrink()
+                    : Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 2),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceLight,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppColors.borderLight),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                clientName,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textDark,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 5),
+                              if (dateStr.isNotEmpty || timeStr.isNotEmpty)
+                                _InfoRow(
+                                  icon: Icons.calendar_today_outlined,
+                                  text: [dateStr, timeStr]
+                                      .where((s) => s.isNotEmpty)
+                                      .join('  ·  '),
+                                ),
+                              if (venueDisplay.isNotEmpty)
+                                _InfoRow(
+                                  icon: Icons.location_on_outlined,
+                                  text: venueDisplay,
+                                ),
+                              if (rolesList.isNotEmpty)
+                                _InfoRow(
+                                  icon: Icons.people_outline,
+                                  text: '$rolesList   ($accepted/$total filled)',
+                                ),
+                              if (notes.isNotEmpty)
+                                _InfoRow(
+                                  icon: Icons.notes_outlined,
+                                  text: notes,
+                                  maxLines: 2,
+                                ),
+                            ],
+                          ),
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 5),
-
-                      // Date & time
-                      if (dateStr.isNotEmpty || timeStr.isNotEmpty)
-                        _InfoRow(
-                          icon: Icons.calendar_today_outlined,
-                          text: [dateStr, timeStr]
-                              .where((s) => s.isNotEmpty)
-                              .join('  ·  '),
-                        ),
-
-                      // Venue
-                      if (venueDisplay.isNotEmpty)
-                        _InfoRow(
-                          icon: Icons.location_on_outlined,
-                          text: venueDisplay,
-                        ),
-
-                      // Roles & staffing
-                      if (rolesList.isNotEmpty)
-                        _InfoRow(
-                          icon: Icons.people_outline,
-                          text: '$rolesList   ($accepted/$total filled)',
-                        ),
-
-                      // Notes
-                      if (notes.isNotEmpty)
-                        _InfoRow(
-                          icon: Icons.notes_outlined,
-                          text: notes,
-                          maxLines: 2,
-                        ),
-                    ],
-                  ),
-                ),
               ),
 
-              Divider(
-                  height: 14,
-                  thickness: 1,
-                  color: Colors.grey.shade200,
-                  indent: 16,
-                  endIndent: 16),
+              AnimatedSize(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOut,
+                child: keyboardHeight > 0
+                    ? const SizedBox.shrink()
+                    : Divider(
+                        height: 14,
+                        thickness: 1,
+                        color: Colors.grey.shade200,
+                        indent: 16,
+                        endIndent: 16,
+                      ),
+              ),
 
               // ── Message list ─────────────────────────────────────────────────
               Expanded(
