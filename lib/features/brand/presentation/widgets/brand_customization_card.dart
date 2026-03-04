@@ -8,7 +8,7 @@ import 'package:nexa/l10n/app_localizations.dart';
 // TODO: Restore these imports when re-enabling Pro subscription gating
 // import 'package:nexa/core/di/injection.dart';
 // import 'package:nexa/features/subscription/data/services/subscription_service.dart';
-import 'package:nexa/features/statistics/presentation/widgets/doc_design_picker.dart';
+import 'package:nexa/features/brand/presentation/widgets/doc_design_picker.dart';
 import 'package:nexa/features/subscription/presentation/pages/subscription_paywall_page.dart';
 import 'package:provider/provider.dart';
 

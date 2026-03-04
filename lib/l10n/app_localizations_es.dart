@@ -809,12 +809,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String get failedToOpenProfile => 'Error al abrir perfil';
 
   @override
-  String get navAttendance => 'Asistencia';
-
-  @override
-  String get navStats => 'Estadísticas';
-
-  @override
   String get welcomeBack => '¡Bienvenido de nuevo!';
 
   @override

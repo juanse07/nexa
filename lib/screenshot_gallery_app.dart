@@ -14,8 +14,6 @@ import 'package:nexa/features/extraction/presentation/pending_edit_screen.dart';
 import 'package:nexa/features/extraction/presentation/pending_publish_screen.dart';
 import 'package:nexa/features/extraction/presentation/staff_detail_screen.dart';
 import 'package:nexa/features/extraction/presentation/ai_chat_screen.dart';
-import 'package:nexa/features/attendance/presentation/bulk_clock_in_screen.dart';
-import 'package:nexa/features/attendance/presentation/flagged_attendance_screen.dart';
 import 'package:nexa/features/hours_approval/presentation/hours_approval_list_screen.dart';
 import 'package:nexa/features/hours_approval/presentation/hours_approval_screen.dart';
 import 'package:nexa/features/hours_approval/presentation/manual_hours_entry_screen.dart';
@@ -58,13 +56,6 @@ class ScreenshotScenarios {
               (locale) => ScreenshotApp(
                     locale: locale,
                     initialTabIndex: 2,
-                  ),
-            ),
-            (
-              'attendance_dashboard',
-              (locale) => ScreenshotApp(
-                    locale: locale,
-                    initialTabIndex: 3,
                   ),
             ),
             (
@@ -157,16 +148,6 @@ class ScreenshotScenarios {
                     ),
                   ),
             ),
-            (
-              'bulk_clock_in',
-              (locale) => ScreenshotApp(
-                    locale: locale,
-                    child: BulkClockInScreen(
-                      event: _demoEvent,
-                    ),
-                  ),
-            ),
-
             // ── Group D: Catalog Sub-Tabs (4) ───────────────────────────
             (
               'catalog_roles',
@@ -282,28 +263,6 @@ class ScreenshotScenarios {
                   ),
             ),
 
-            // ── Group G: Attendance (4) ─────────────────────────────────
-            (
-              'attendance_live_grid',
-              (locale) => ScreenshotApp(
-                    locale: locale,
-                    initialTabIndex: 3,
-                  ),
-            ),
-            (
-              'attendance_weekly_chart',
-              (locale) => ScreenshotApp(
-                    locale: locale,
-                    initialTabIndex: 3,
-                  ),
-            ),
-            (
-              'flagged_attendance',
-              (locale) => ScreenshotApp(
-                    locale: locale,
-                    child: const FlaggedAttendanceScreen(),
-                  ),
-            ),
             (
               'hours_approval_list',
               (locale) => ScreenshotApp(

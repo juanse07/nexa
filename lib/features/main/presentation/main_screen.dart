@@ -10,8 +10,6 @@ import 'package:nexa/l10n/app_localizations.dart';
 import '../../extraction/presentation/extraction_screen.dart';
 import '../../events/presentation/manager_calendar_screen.dart';
 import '../../chat/presentation/conversations_screen.dart';
-import '../../attendance/presentation/attendance_dashboard_screen.dart';
-import '../../statistics/presentation/statistics_dashboard_screen.dart';
 import '../../users/presentation/pages/settings_page.dart';
 import '../../teams/presentation/pages/teams_management_page.dart';
 import '../../users/presentation/pages/manager_profile_page.dart';
@@ -83,8 +81,6 @@ class _MainScreenState extends State<MainScreen>
       initialScreenIndex: 4,
       hideNavigationRail: true,
     ), // Catalog screen (index 3)
-    const AttendanceDashboardScreen(), // Attendance tab (index 4)
-    const StatisticsDashboardScreen(), // Statistics tab (index 5)
   ];
 
   @override
@@ -614,18 +610,6 @@ class _MainScreenState extends State<MainScreen>
                       label: l10n.navCatalog,
                       index: 3,
                     ),
-                    _buildSheetNavTile(
-                      ctx: ctx,
-                      icon: Icons.fact_check_outlined,
-                      label: l10n.navAttendance,
-                      index: 4,
-                    ),
-                    _buildSheetNavTile(
-                      ctx: ctx,
-                      icon: Icons.bar_chart,
-                      label: l10n.navStats,
-                      index: 5,
-                    ),
                     _buildSheetActionTile(
                       ctx: ctx,
                       icon: Icons.groups_outlined,
@@ -852,7 +836,6 @@ class _MainScreenState extends State<MainScreen>
           _buildRailItem(1, Icons.calendar_month_rounded, l10n.navSchedule), // Calendar (index 1)
           _buildRailItem(2, Icons.chat_bubble_outline, l10n.navChat), // Chat (index 2)
           _buildRailItem(3, Icons.inventory_2, l10n.navCatalog), // Catalog (index 3)
-          _buildRailItem(4, Icons.fact_check_outlined, l10n.navAttendance), // Attendance (index 4)
           const Spacer(),
           // Settings at bottom
           _buildRailItem(-1, Icons.settings, l10n.settings),

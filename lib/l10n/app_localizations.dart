@@ -1548,18 +1548,6 @@ abstract class AppLocalizations {
   /// **'Failed to open profile'**
   String get failedToOpenProfile;
 
-  /// No description provided for @navAttendance.
-  ///
-  /// In en, this message translates to:
-  /// **'Attendance'**
-  String get navAttendance;
-
-  /// No description provided for @navStats.
-  ///
-  /// In en, this message translates to:
-  /// **'Stats'**
-  String get navStats;
-
   /// No description provided for @welcomeBack.
   ///
   /// In en, this message translates to:

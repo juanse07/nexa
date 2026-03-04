@@ -799,12 +799,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get failedToOpenProfile => 'Failed to open profile';
 
   @override
-  String get navAttendance => 'Attendance';
-
-  @override
-  String get navStats => 'Stats';
-
-  @override
   String get welcomeBack => 'Welcome back!';
 
   @override
