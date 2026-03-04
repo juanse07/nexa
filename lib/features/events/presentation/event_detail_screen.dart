@@ -1265,7 +1265,78 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     }
   }
 
-  void _openBulkClockIn() {
+  Future<void> _openBulkClockIn() async {
+    final l10n = AppLocalizations.of(context)!;
+    final acceptedStaff =
+        (event['accepted_staff'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final staffCount = acceptedStaff.length;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.success.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.login_rounded,
+                  color: AppColors.success, size: 22),
+            ),
+            const SizedBox(width: 12),
+            const Text('Clock In Staff',
+                style:
+                    TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+          ],
+        ),
+        content: Text(
+          'This will open bulk clock-in for all $staffCount accepted staff member${staffCount == 1 ? '' : 's'}. '
+          'You can select which staff to clock in on the next screen.',
+          style: const TextStyle(fontSize: 14, height: 1.4),
+        ),
+        actionsPadding:
+            const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        actions: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.textDark,
+                    side: BorderSide(color: Colors.grey.shade300),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: Text(l10n.cancel),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.navySpaceCadet,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    elevation: 0,
+                  ),
+                  child: const Text('Continue'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => BulkClockInScreen(event: event)),
     );
