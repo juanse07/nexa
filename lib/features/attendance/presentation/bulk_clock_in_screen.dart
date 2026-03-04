@@ -1,17 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:nexa/l10n/app_localizations.dart';
+import 'package:nexa/shared/presentation/theme/app_colors.dart';
 import 'package:nexa/shared/services/error_display_service.dart';
 import '../services/attendance_service.dart';
 
-/// Screen for managers to bulk clock-in multiple staff members at once
+/// Screen for managers to bulk clock-in multiple staff members at once.
 class BulkClockInScreen extends StatefulWidget {
   final Map<String, dynamic> event;
 
-  const BulkClockInScreen({
-    super.key,
-    required this.event,
-  });
+  const BulkClockInScreen({super.key, required this.event});
 
   @override
   State<BulkClockInScreen> createState() => _BulkClockInScreenState();
@@ -28,6 +26,7 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
   }
 
   String get _eventName =>
+      widget.event['client_name'] as String? ??
       widget.event['event_name'] as String? ??
       widget.event['shift_name'] as String? ??
       'Event';
@@ -50,16 +49,17 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
 
   void _selectAll() {
     setState(() {
-      if (_selectedUserKeys.length == _acceptedStaff.length) {
+      final eligible = _acceptedStaff
+          .where((s) => !_isAlreadyClockedIn(s))
+          .map((s) => s['userKey'] as String?)
+          .whereType<String>()
+          .toSet();
+      if (_selectedUserKeys.containsAll(eligible) && eligible.isNotEmpty) {
         _selectedUserKeys.clear();
       } else {
-        _selectedUserKeys.clear();
-        for (final staff in _acceptedStaff) {
-          final userKey = staff['userKey'] as String?;
-          if (userKey != null) {
-            _selectedUserKeys.add(userKey);
-          }
-        }
+        _selectedUserKeys
+          ..clear()
+          ..addAll(eligible);
       }
     });
   }
@@ -67,17 +67,16 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
   bool _isAlreadyClockedIn(Map<String, dynamic> staff) {
     final attendance = staff['attendance'] as List<dynamic>?;
     if (attendance == null || attendance.isEmpty) return false;
-
-    final lastAttendance = attendance.last as Map<String, dynamic>;
-    return lastAttendance['clockOutAt'] == null;
+    final last = attendance.last as Map<String, dynamic>;
+    return last['clockOutAt'] == null;
   }
 
   Future<void> _performBulkClockIn() async {
     final l10n = AppLocalizations.of(context)!;
     if (_selectedUserKeys.isEmpty) {
-      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
-        SnackBar(content: Text(l10n.pleaseSelectAtLeastOneStaff)),
-      );
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(content: Text(l10n.pleaseSelectAtLeastOneStaff)));
       return;
     }
 
@@ -93,32 +92,25 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
       if (response != null && mounted) {
         final successful = response['successful'] as int? ?? 0;
         final total = response['total'] as int? ?? 0;
-
-        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
-          SnackBar(
+        ScaffoldMessenger.of(context)
+          ..clearSnackBars()
+          ..showSnackBar(SnackBar(
             content: Text(l10n.successfullyClockedIn(successful, total)),
-            backgroundColor: Colors.green,
-          ),
-        );
-
-        // Show results dialog
+            backgroundColor: AppColors.success,
+          ));
         _showResultsDialog(response);
       } else if (mounted) {
-        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
-          SnackBar(
+        ScaffoldMessenger.of(context)
+          ..clearSnackBars()
+          ..showSnackBar(SnackBar(
             content: Text(l10n.failedBulkClockIn),
-            backgroundColor: Colors.red,
-          ),
-        );
+            backgroundColor: AppColors.errorDark,
+          ));
       }
     } catch (e) {
-      if (mounted) {
-        ErrorDisplayService.showErrorFromException(context, e);
-      }
+      if (mounted) ErrorDisplayService.showErrorFromException(context, e);
     } finally {
-      if (mounted) {
-        setState(() => _isSubmitting = false);
-      }
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
@@ -129,48 +121,98 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
 
     showDialog(
       context: context,
-      builder: (context) {
-        final l10n = AppLocalizations.of(context)!;
-        return AlertDialog(
-          title: Text(l10n.bulkClockInResults),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: results.length,
-              itemBuilder: (context, index) {
-                final result = results[index] as Map<String, dynamic>;
-                final status = result['status'] as String?;
-                final isSuccess = status == 'success';
-                final staffName = result['staffName'] as String? ?? l10n.unknown;
-
-                return ListTile(
-                  leading: Icon(
-                    isSuccess ? Icons.check_circle : Icons.error,
-                    color: isSuccess ? Colors.green : Colors.red,
-                  ),
-                  title: Text(staffName),
-                  subtitle: Text(
-                    result['message'] as String? ?? status ?? '',
-                    style: TextStyle(
-                      color: isSuccess ? Colors.grey : Colors.red,
-                    ),
-                  ),
-                );
-              },
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+        contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(
+                color: AppColors.success.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.check_circle_outline,
+                  color: AppColors.success, size: 22),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context); // Close dialog
-                Navigator.pop(context, true); // Return success to previous screen
-              },
-              child: Text(l10n.done),
+            const SizedBox(width: 12),
+            Text(
+              l10n.bulkClockInResults,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
           ],
-        );
-      },
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: results.length,
+            separatorBuilder: (_, __) =>
+                Divider(height: 1, color: Colors.grey.shade200),
+            itemBuilder: (_, i) {
+              final r = results[i] as Map<String, dynamic>;
+              final isSuccess = r['status'] == 'success';
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Row(
+                  children: [
+                    Icon(
+                      isSuccess ? Icons.check_circle : Icons.error_outline,
+                      color: isSuccess ? AppColors.success : AppColors.errorDark,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            r['staffName'] as String? ?? l10n.unknown,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w600, fontSize: 13),
+                          ),
+                          if (r['message'] is String &&
+                              (r['message'] as String).isNotEmpty)
+                            Text(
+                              r['message'] as String,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isSuccess
+                                    ? Colors.grey.shade500
+                                    : AppColors.errorDark,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                Navigator.pop(context, true);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.navySpaceCadet,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                elevation: 0,
+              ),
+              child: Text(l10n.done),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -178,151 +220,240 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final eventDate = widget.event['date'] != null
-        ? DateTime.parse(widget.event['date'] as String)
+        ? DateTime.tryParse(widget.event['date'] as String)
         : null;
-    final dateFormat = DateFormat('EEEE, MMMM d, yyyy');
+    final eligibleCount =
+        _acceptedStaff.where((s) => !_isAlreadyClockedIn(s)).length;
+    final allSelected =
+        eligibleCount > 0 && _selectedUserKeys.length >= eligibleCount;
+    final venueLabel = widget.event['venue_name']?.toString() ??
+        widget.event['venue_address']?.toString();
 
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: const Color(0xFFF4F6FA),
       appBar: AppBar(
         title: Text(l10n.bulkClockIn),
-        backgroundColor: const Color(0xFF212C4A),
+        backgroundColor: AppColors.navySpaceCadet,
         foregroundColor: Colors.white,
+        elevation: 0,
         actions: [
-          TextButton(
-            onPressed: _selectAll,
-            child: Text(
-              _selectedUserKeys.length == _acceptedStaff.length
-                  ? l10n.deselectAll
-                  : l10n.selectAll,
-              style: const TextStyle(color: Colors.white),
+          if (eligibleCount > 0)
+            TextButton(
+              onPressed: _selectAll,
+              child: Text(
+                allSelected ? l10n.deselectAll : l10n.selectAll,
+                style: const TextStyle(
+                    color: Colors.white70, fontWeight: FontWeight.w600),
+              ),
             ),
-          ),
         ],
       ),
       body: Column(
         children: [
-          // Event info card
+          // ── Event header (extends AppBar visually) ─────────────────────
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            color: Colors.white,
+            color: AppColors.navySpaceCadet,
+            padding: const EdgeInsets.fromLTRB(20, 2, 20, 20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   _eventName,
                   style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
                   ),
                 ),
                 if (eventDate != null) ...[
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(Icons.calendar_today,
-                          size: 16, color: Colors.grey),
-                      const SizedBox(width: 8),
-                      Text(
-                        dateFormat.format(eventDate),
-                        style: TextStyle(color: Colors.grey[600]),
-                      ),
-                    ],
-                  ),
+                  const SizedBox(height: 6),
+                  Row(children: [
+                    const Icon(Icons.calendar_today_outlined,
+                        size: 13, color: Colors.white54),
+                    const SizedBox(width: 6),
+                    Text(
+                      DateFormat('EEEE, MMMM d, yyyy').format(eventDate),
+                      style: const TextStyle(fontSize: 13, color: Colors.white70),
+                    ),
+                  ]),
                 ],
-                if (widget.event['venue_address'] != null) ...[
+                if (venueLabel != null) ...[
                   const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(Icons.location_on,
-                          size: 16, color: Colors.grey),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          widget.event['venue_address'] as String,
-                          style: TextStyle(color: Colors.grey[600]),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                  Row(children: [
+                    const Icon(Icons.location_on_outlined,
+                        size: 13, color: Colors.white54),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        venueLabel,
+                        style: const TextStyle(
+                            fontSize: 13, color: Colors.white70),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ],
-                  ),
+                    ),
+                  ]),
                 ],
               ],
             ),
           ),
-          const SizedBox(height: 8),
 
-          // Staff selection list
+          // ── Selection counter strip ─────────────────────────────────────
+          Container(
+            color: Colors.white,
+            padding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            child: Row(
+              children: [
+                Text(
+                  l10n.staffCount(_acceptedStaff.length),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+                const Spacer(),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: _selectedUserKeys.isEmpty
+                      ? const SizedBox.shrink()
+                      : Container(
+                          key: const ValueKey('badge'),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppColors.techBlue.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            '${_selectedUserKeys.length} selected',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.techBlue,
+                            ),
+                          ),
+                        ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 1),
+
+          // ── Staff list ──────────────────────────────────────────────────
           Expanded(
             child: _acceptedStaff.isEmpty
                 ? Center(
-                    child: Text(l10n.noAcceptedStaffForEvent),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.people_outline,
+                            size: 52, color: Colors.grey.shade300),
+                        const SizedBox(height: 12),
+                        Text(
+                          l10n.noAcceptedStaffForEvent,
+                          style: TextStyle(
+                              color: Colors.grey.shade500, fontSize: 15),
+                        ),
+                      ],
+                    ),
                   )
                 : ListView.builder(
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 12, horizontal: 16),
                     itemCount: _acceptedStaff.length,
-                    itemBuilder: (context, index) {
-                      final staff = _acceptedStaff[index];
-                      return _buildStaffTile(staff);
-                    },
+                    itemBuilder: (_, i) =>
+                        _buildStaffCard(_acceptedStaff[i]),
                   ),
           ),
 
-          // Note field and submit button
+          // ── Bottom panel ────────────────────────────────────────────────
           Container(
-            padding: const EdgeInsets.all(16),
-            color: Colors.white,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 12,
+                  offset: const Offset(0, -4),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: SafeArea(
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   TextField(
                     controller: _noteController,
                     decoration: InputDecoration(
-                      labelText: l10n.overrideNoteOptional,
                       hintText: l10n.groupCheckInHint,
+                      labelText: l10n.overrideNoteOptional,
                       border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
+                        borderSide:
+                            BorderSide(color: Colors.grey.shade300),
                       ),
-                      prefixIcon: const Icon(Icons.note_alt),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                            color: AppColors.techBlue, width: 1.5),
+                      ),
+                      prefixIcon: const Icon(Icons.edit_note_outlined,
+                          color: Colors.grey, size: 20),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                      isDense: true,
                     ),
-                    maxLines: 2,
+                    maxLines: 1,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 10),
                   SizedBox(
                     width: double.infinity,
-                    height: 50,
+                    height: 52,
                     child: ElevatedButton(
-                      onPressed: _selectedUserKeys.isEmpty || _isSubmitting
-                          ? null
-                          : _performBulkClockIn,
+                      onPressed:
+                          _selectedUserKeys.isEmpty || _isSubmitting
+                              ? null
+                              : _performBulkClockIn,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1E3A8A),
+                        backgroundColor: AppColors.navySpaceCadet,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        disabledBackgroundColor: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(14)),
+                        disabledBackgroundColor: Colors.grey.shade200,
+                        disabledForegroundColor: Colors.grey.shade400,
+                        elevation: 0,
                       ),
                       child: _isSubmitting
                           ? const SizedBox(
-                              width: 24,
-                              height: 24,
+                              width: 22,
+                              height: 22,
                               child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor:
-                                    AlwaysStoppedAnimation<Color>(Colors.white),
-                              ),
+                                  strokeWidth: 2, color: Colors.white),
                             )
-                          : Text(
-                              l10n.clockInStaffCount(_selectedUserKeys.length),
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.login_rounded, size: 20),
+                                const SizedBox(width: 8),
+                                Text(
+                                  l10n.clockInStaffCount(
+                                      _selectedUserKeys.length),
+                                  style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700),
+                                ),
+                              ],
                             ),
                     ),
                   ),
+                  const SizedBox(height: 4),
                 ],
               ),
             ),
@@ -332,91 +463,179 @@ class _BulkClockInScreenState extends State<BulkClockInScreen> {
     );
   }
 
-  Widget _buildStaffTile(Map<String, dynamic> staff) {
+  Widget _buildStaffCard(Map<String, dynamic> staff) {
     final l10n = AppLocalizations.of(context)!;
     final userKey = staff['userKey'] as String?;
-    final isSelected = userKey != null && _selectedUserKeys.contains(userKey);
-    final isAlreadyClockedIn = _isAlreadyClockedIn(staff);
+    final isSelected =
+        userKey != null && _selectedUserKeys.contains(userKey);
+    final isClockedIn = _isAlreadyClockedIn(staff);
 
-    final name = staff['name'] as String? ??
-        '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'.trim();
-    final role = staff['role'] as String?;
-    final picture = staff['picture'] as String?;
+    final rawName = (staff['name'] ??
+            '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'
+                .trim())
+        .toString();
+    final name = rawName.isEmpty ? l10n.unknown : rawName;
+    final role = staff['role']?.toString();
+    final picture = staff['picture']?.toString();
+    final initials = name[0].toUpperCase();
 
-    return Container(
-      color: Colors.white,
-      margin: const EdgeInsets.only(bottom: 1),
-      child: ListTile(
-        onTap: isAlreadyClockedIn || userKey == null
-            ? null
-            : () => _toggleSelection(userKey),
-        leading: Stack(
-          children: [
-            CircleAvatar(
-              radius: 24,
-              backgroundColor: const Color(0xFF1E3A8A),
-              backgroundImage: picture != null ? NetworkImage(picture) : null,
-              child: picture == null
-                  ? Text(
-                      (name.isNotEmpty ? name[0] : '?').toUpperCase(),
-                      style: const TextStyle(color: Colors.white, fontSize: 18),
-                    )
-                  : null,
-            ),
-            if (isAlreadyClockedIn)
-              Positioned(
-                right: 0,
-                bottom: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: const BoxDecoration(
-                    color: Colors.green,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.check,
-                    size: 14,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-          ],
-        ),
-        title: Text(
-          name.isEmpty ? l10n.unknown : name,
-          style: TextStyle(
-            fontWeight: FontWeight.w500,
-            color: isAlreadyClockedIn ? Colors.grey : Colors.black,
+    return GestureDetector(
+      onTap: isClockedIn || userKey == null
+          ? null
+          : () => _toggleSelection(userKey),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        margin: const EdgeInsets.only(bottom: 8),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: isClockedIn
+              ? AppColors.success.withOpacity(0.04)
+              : isSelected
+                  ? AppColors.techBlue.withOpacity(0.07)
+                  : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isClockedIn
+                ? AppColors.success.withOpacity(0.3)
+                : isSelected
+                    ? AppColors.techBlue.withOpacity(0.5)
+                    : Colors.grey.shade200,
+            width: isSelected ? 1.5 : 1,
           ),
+          boxShadow: isSelected || isClockedIn
+              ? null
+              : [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.03),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
         ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            if (role != null)
-              Text(
-                role,
-                style: TextStyle(color: Colors.grey[600]),
-              ),
-            if (isAlreadyClockedIn)
-              Text(
-                l10n.alreadyClockedIn,
-                style: const TextStyle(
-                  color: Colors.green,
-                  fontStyle: FontStyle.italic,
-                  fontSize: 12,
+            // ── Avatar with status badge ──────────────────────────────
+            Stack(
+              children: [
+                CircleAvatar(
+                  radius: 22,
+                  backgroundColor: isClockedIn
+                      ? AppColors.success.withOpacity(0.12)
+                      : isSelected
+                          ? AppColors.techBlue.withOpacity(0.12)
+                          : Colors.grey.shade100,
+                  backgroundImage:
+                      picture != null && picture.isNotEmpty
+                          ? NetworkImage(picture)
+                          : null,
+                  child: picture == null || picture.isEmpty
+                      ? Text(
+                          initials,
+                          style: TextStyle(
+                            color: isClockedIn
+                                ? AppColors.success
+                                : isSelected
+                                    ? AppColors.techBlue
+                                    : Colors.grey.shade600,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 16,
+                          ),
+                        )
+                      : null,
                 ),
+                if (isClockedIn || isSelected)
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      width: 16,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        color: isClockedIn
+                            ? AppColors.success
+                            : AppColors.techBlue,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                      child: const Icon(Icons.check,
+                          size: 9, color: Colors.white),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(width: 13),
+
+            // ── Name / role / clocked-in label ────────────────────────
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: isClockedIn
+                          ? Colors.grey.shade400
+                          : AppColors.textDark,
+                    ),
+                  ),
+                  if (role != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      role,
+                      style: TextStyle(
+                          fontSize: 12, color: Colors.grey.shade500),
+                    ),
+                  ],
+                  if (isClockedIn) ...[
+                    const SizedBox(height: 5),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.success.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        l10n.alreadyClockedIn,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.success,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
+            ),
+
+            // ── Custom checkbox ───────────────────────────────────────
+            if (!isClockedIn) ...[
+              const SizedBox(width: 8),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: isSelected ? AppColors.techBlue : Colors.transparent,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: isSelected
+                        ? AppColors.techBlue
+                        : Colors.grey.shade300,
+                    width: 1.5,
+                  ),
+                ),
+                child: isSelected
+                    ? const Icon(Icons.check, size: 14, color: Colors.white)
+                    : null,
+              ),
+            ],
           ],
         ),
-        trailing: isAlreadyClockedIn
-            ? Icon(Icons.check_circle, color: Colors.green[400])
-            : Checkbox(
-                value: isSelected,
-                onChanged: userKey == null
-                    ? null
-                    : (value) => _toggleSelection(userKey),
-                activeColor: const Color(0xFF1E3A8A),
-              ),
       ),
     );
   }

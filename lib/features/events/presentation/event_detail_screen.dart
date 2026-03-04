@@ -1156,23 +1156,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   }
 
   bool _shouldShowClockInButton() {
-    final status = (event['status'] ?? 'draft').toString();
-    if (status != 'published') return false;
-
     final acceptedStaff = event['accepted_staff'] as List<dynamic>?;
-    if (acceptedStaff == null || acceptedStaff.isEmpty) return false;
-
-    final rawDate = event['date'];
-    if (rawDate is! String || rawDate.isEmpty) return false;
-    try {
-      final eventDate = DateTime.parse(rawDate);
-      final today = DateTime.now();
-      final todayStart = DateTime(today.year, today.month, today.day);
-      // Allow today or past events (not future)
-      return !eventDate.isAfter(todayStart.add(const Duration(days: 1)).subtract(const Duration(milliseconds: 1)));
-    } catch (_) {
-      return false;
-    }
+    return acceptedStaff != null && acceptedStaff.isNotEmpty;
   }
 
   bool _shouldShowApproveHoursButton() {
