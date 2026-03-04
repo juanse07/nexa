@@ -2216,8 +2216,45 @@ router.post('/ai/staff/chat/message', requireAuth, requireActiveSubscription, as
       await mutableUser.save();
 
       console.log(`[ai/staff/chat/message] Pro message count for user ${userId}: ${messagesUsed + 1}/${messageLimit}`);
+    } else if (userInFreeMonth) {
+      // Free month: 4 AI messages before paywall
+      const mutableUser = await UserModel.findOne({ provider: oauthProvider, subject });
+      if (!mutableUser) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      const now = new Date();
+      const resetDate = mutableUser.ai_messages_reset_date || new Date();
+
+      if (now > resetDate) {
+        mutableUser.ai_messages_used_this_month = 0;
+        const nextMonth = new Date(now);
+        nextMonth.setMonth(nextMonth.getMonth() + 1);
+        nextMonth.setDate(1);
+        nextMonth.setHours(0, 0, 0, 0);
+        mutableUser.ai_messages_reset_date = nextMonth;
+      }
+
+      const messagesUsed = mutableUser.ai_messages_used_this_month || 0;
+      const freeLimit = 4;
+
+      if (messagesUsed >= freeLimit) {
+        return res.status(402).json({
+          message: `You've used your ${freeLimit} free AI messages this month. Upgrade to Pro for 20 messages/month.`,
+          upgradeRequired: true,
+          usage: {
+            used: messagesUsed,
+            limit: freeLimit,
+            resetDate: mutableUser.ai_messages_reset_date,
+          },
+        });
+      }
+
+      mutableUser.ai_messages_used_this_month = messagesUsed + 1;
+      await mutableUser.save();
+
+      console.log(`[ai/staff/chat/message] Free month message count for user ${userId}: ${messagesUsed + 1}/${freeLimit}`);
     }
-    // Free month users: unlimited AI, no counter needed
 
     const validated = chatMessageSchema.parse(req.body);
     const { messages, temperature, maxTokens, model } = validated;

@@ -16,6 +16,7 @@
     "seed:demo": "NODE_ENV=production ts-node --transpile-only --compiler-options '{\"rootDir\":\".\",\"types\":[\"node\"]}' scripts/demo-seed.ts",
     "seed:test-staff": "NODE_ENV=production ts-node --transpile-only --compiler-options '{\"rootDir\":\".\",\"types\":[\"node\"]}' scripts/seed-test-staff.ts",
     "seed:andres": "NODE_ENV=production ts-node --transpile-only --compiler-options '{\"rootDir\":\".\",\"types\":[\"node\"]}' scripts/seed-andres.ts",
+    "seed:review": "NODE_ENV=production ts-node --transpile-only --compiler-options '{\"rootDir\":\".\",\"types\":[\"node\"]}' scripts/demo-seed-review.ts",
     "test:concurrent": "node scripts/simulate-concurrent-acceptance.js",
     "test:duplicate": "node scripts/quick-duplicate-test.js",
     "test:load:acceptance": "k6 run load-tests/event-acceptance.k6.js",

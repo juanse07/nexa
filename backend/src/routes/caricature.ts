@@ -142,6 +142,39 @@ router.post('/generate', requireAuth, requireActiveSubscription, async (req: Req
       });
     }
 
+    // ── MONTHLY LIMIT CHECK for free tier ──
+    if (!managerId) {
+      const caricatureUser = await UserModel.findOne({ provider, subject: sub });
+      const tier = caricatureUser?.subscription_tier || 'free';
+
+      if (tier !== 'pro' && tier !== 'premium') {
+        const FREE_CARICATURE_LIMIT = 1;
+        const now = new Date();
+        const resetDate = caricatureUser?.caricatures_reset_date || new Date(0);
+
+        if (now > resetDate) {
+          if (caricatureUser) {
+            caricatureUser.caricatures_used_this_month = 0;
+            const nextMonth = new Date(now);
+            nextMonth.setMonth(nextMonth.getMonth() + 1);
+            nextMonth.setDate(1);
+            nextMonth.setHours(0, 0, 0, 0);
+            caricatureUser.caricatures_reset_date = nextMonth;
+            await caricatureUser.save();
+          }
+        }
+
+        const used = caricatureUser?.caricatures_used_this_month || 0;
+        if (used >= FREE_CARICATURE_LIMIT) {
+          return res.status(402).json({
+            message: "You've used your free caricature this month. Upgrade to Pro for unlimited caricatures.",
+            upgradeRequired: true,
+            usage: { used, limit: FREE_CARICATURE_LIMIT },
+          });
+        }
+      }
+    }
+
     // ── CACHE CHECK: Generate cache key and look up MongoDB ──
     const cacheKey = generateCacheKey(pictureUrl, role, artStyle, model, overlayText);
     logger.info({ userId, cacheKey, forceNew }, 'Generated cache key');
@@ -201,6 +234,17 @@ router.post('/generate', requireAuth, requireActiveSubscription, async (req: Req
     const imageBuffers = await generateCaricature(pictureUrl, role as CaricatureRole, artStyle as ArtStyle, model as CaricatureModel, count, overlayText);
 
     logger.info({ userId, role, artStyle, model, count: imageBuffers.length, remaining: usage.remaining, cached: false, cacheKey }, 'Caricature previews generated (new)');
+
+    // Increment caricature counter for free tier users
+    if (!managerId) {
+      const tier = (await UserModel.findOne({ provider, subject: sub }).select('subscription_tier').lean())?.subscription_tier || 'free';
+      if (tier !== 'pro' && tier !== 'premium') {
+        await UserModel.updateOne(
+          { provider, subject: sub },
+          { $inc: { caricatures_used_this_month: 1 } }
+        );
+      }
+    }
 
     // Store cacheKey for accept route (in case frontend doesn't send it back)
     pendingCacheKeys.set(userId, { cacheKey, overlayText, ts: Date.now() });

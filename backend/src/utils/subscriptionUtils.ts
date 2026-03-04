@@ -34,6 +34,11 @@ export function isReadOnly(user: Pick<UserDocument, 'subscription_tier' | 'subsc
     return false;
   }
 
+  // Users in their free month have full access
+  if (isInFreeMonth(user)) {
+    return false;
+  }
+
   // Everyone else is read-only
   return true;
 }

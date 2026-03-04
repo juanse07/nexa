@@ -118,7 +118,7 @@ router.get('/subscription/usage', requireAuth, async (req, res) => {
     }
 
     const isFree = user.subscription_tier === 'free';
-    const FREE_TIER_LIMIT = 20; // Changed from 50 to 20 to reduce costs
+    const FREE_TIER_LIMIT = 4; // 4 free AI messages before paywall
     const limit = isFree ? FREE_TIER_LIMIT : null; // Pro has unlimited
 
     return res.json({
