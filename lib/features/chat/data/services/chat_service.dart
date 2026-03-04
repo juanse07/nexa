@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../../core/config/app_config.dart';
@@ -9,7 +10,7 @@ import '../../../auth/data/services/auth_service.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/conversation.dart';
 
-class ChatService {
+class ChatService extends ChangeNotifier {
   factory ChatService() => _instance;
   ChatService._internal() {
     _setupSocketListeners();
@@ -29,14 +30,46 @@ class ChatService {
   Stream<Map<String, dynamic>> get invitationResponseStream =>
       _invitationResponseController.stream;
 
+  List<Conversation> _conversations = [];
+
+  /// Total unread message count across all conversations.
+  int get totalUnread => _conversations.fold(0, (sum, c) => sum + c.unreadCount);
+
   void _setupSocketListeners() {
     SocketManager.instance.events.listen((event) {
       if (event.event == 'chat:message') {
         try {
-          final message = ChatMessage.fromJson(
-            event.data as Map<String, dynamic>,
-          );
+          final data = event.data as Map<String, dynamic>;
+          final message = ChatMessage.fromJson(data);
           _messageController.add(message);
+
+          // Increment the matching conversation's unread count for the nav badge.
+          final convId = data['conversationId'] as String?;
+          if (convId != null) {
+            final idx = _conversations.indexWhere((c) => c.id == convId);
+            if (idx != -1) {
+              final old = _conversations[idx];
+              _conversations[idx] = Conversation(
+                id: old.id,
+                updatedAt: old.updatedAt,
+                managerId: old.managerId,
+                managerName: old.managerName,
+                managerEmail: old.managerEmail,
+                managerPicture: old.managerPicture,
+                userKey: old.userKey,
+                userName: old.userName,
+                userEmail: old.userEmail,
+                userPicture: old.userPicture,
+                lastMessageAt: old.lastMessageAt,
+                lastMessagePreview: old.lastMessagePreview,
+                unreadCount: old.unreadCount + 1,
+                role: old.role,
+                isUnavailableToday: old.isUnavailableToday,
+                unavailableUntil: old.unavailableUntil,
+              );
+            }
+          }
+          notifyListeners();
         } catch (e) {
           print('Error parsing chat message: $e');
         }
@@ -79,6 +112,8 @@ class ChatService {
           .map((e) => Conversation.fromJson(e as Map<String, dynamic>))
           .toList();
       print('[ChatService] Parsed ${conversations.length} conversations');
+      _conversations = conversations;
+      notifyListeners();
       return conversations;
     } else {
       throw Exception('Failed to fetch conversations: ${response.body}');
@@ -155,6 +190,31 @@ class ChatService {
 
     if (response.statusCode != 200) {
       throw Exception('Failed to mark as read: ${response.body}');
+    }
+
+    // Zero out local unread count so the nav badge updates immediately.
+    final idx = _conversations.indexWhere((c) => c.id == conversationId);
+    if (idx != -1) {
+      final old = _conversations[idx];
+      _conversations[idx] = Conversation(
+        id: old.id,
+        updatedAt: old.updatedAt,
+        managerId: old.managerId,
+        managerName: old.managerName,
+        managerEmail: old.managerEmail,
+        managerPicture: old.managerPicture,
+        userKey: old.userKey,
+        userName: old.userName,
+        userEmail: old.userEmail,
+        userPicture: old.userPicture,
+        lastMessageAt: old.lastMessageAt,
+        lastMessagePreview: old.lastMessagePreview,
+        unreadCount: 0,
+        role: old.role,
+        isUnavailableToday: old.isUnavailableToday,
+        unavailableUntil: old.unavailableUntil,
+      );
+      notifyListeners();
     }
   }
 

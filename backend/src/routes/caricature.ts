@@ -142,13 +142,18 @@ router.post('/generate', requireAuth, requireActiveSubscription, async (req: Req
       });
     }
 
-    // ── MONTHLY LIMIT CHECK for free tier ──
+    // ── MONTHLY LIMIT CHECK (tier-based) ──
     if (!managerId) {
       const caricatureUser = await UserModel.findOne({ provider, subject: sub });
       const tier = caricatureUser?.subscription_tier || 'free';
+      const TIER_CARICATURE_LIMITS: Record<string, number> = { free: 1, starter: 1, pro: 8, premium: 20 };
 
-      if (tier !== 'pro' && tier !== 'premium') {
-        const FREE_CARICATURE_LIMIT = 1;
+      // Free month users get premium-level limit
+      const { isInFreeMonth } = await import('../utils/subscriptionUtils');
+      const inFreeMonth = caricatureUser ? isInFreeMonth(caricatureUser) : false;
+      const caricatureLimit = inFreeMonth ? TIER_CARICATURE_LIMITS.premium : (TIER_CARICATURE_LIMITS[tier] ?? 1);
+
+      if (caricatureLimit != null) {
         const now = new Date();
         const resetDate = caricatureUser?.caricatures_reset_date || new Date(0);
 
@@ -165,11 +170,14 @@ router.post('/generate', requireAuth, requireActiveSubscription, async (req: Req
         }
 
         const used = caricatureUser?.caricatures_used_this_month || 0;
-        if (used >= FREE_CARICATURE_LIMIT) {
+        if (used >= caricatureLimit) {
+          const canUpgrade = tier === 'free' || tier === 'starter';
           return res.status(402).json({
-            message: "You've used your free caricature this month. Upgrade to Pro for unlimited caricatures.",
-            upgradeRequired: true,
-            usage: { used, limit: FREE_CARICATURE_LIMIT },
+            message: canUpgrade
+              ? `You've used your ${caricatureLimit} caricature${caricatureLimit > 1 ? 's' : ''} this month. Upgrade to Pro for ${TIER_CARICATURE_LIMITS.pro} caricatures/month.`
+              : `You've reached your monthly caricature limit (${caricatureLimit}). Your limit resets next month.`,
+            upgradeRequired: canUpgrade,
+            usage: { used, limit: caricatureLimit },
           });
         }
       }
@@ -235,15 +243,12 @@ router.post('/generate', requireAuth, requireActiveSubscription, async (req: Req
 
     logger.info({ userId, role, artStyle, model, count: imageBuffers.length, remaining: usage.remaining, cached: false, cacheKey }, 'Caricature previews generated (new)');
 
-    // Increment caricature counter for free tier users
+    // Increment caricature counter for all staff users (all tiers have limits now)
     if (!managerId) {
-      const tier = (await UserModel.findOne({ provider, subject: sub }).select('subscription_tier').lean())?.subscription_tier || 'free';
-      if (tier !== 'pro' && tier !== 'premium') {
-        await UserModel.updateOne(
-          { provider, subject: sub },
-          { $inc: { caricatures_used_this_month: 1 } }
-        );
-      }
+      await UserModel.updateOne(
+        { provider, subject: sub },
+        { $inc: { caricatures_used_this_month: 1 } }
+      );
     }
 
     // Store cacheKey for accept route (in case frontend doesn't send it back)

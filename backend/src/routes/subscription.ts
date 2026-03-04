@@ -83,7 +83,7 @@ router.get('/subscription/status', requireAuth, async (req, res) => {
       platform: user.subscription_platform || null,
       startedAt: user.subscription_started_at || null,
       expiresAt: user.subscription_expires_at || null,
-      isActive: effectiveTier === 'pro',
+      isActive: effectiveTier === 'starter' || effectiveTier === 'pro' || effectiveTier === 'premium',
       isReadOnly: readOnly,
       freeMonth,
       userType: isManager ? 'manager' : 'staff',
@@ -110,23 +110,39 @@ router.get('/subscription/usage', requireAuth, async (req, res) => {
     }
 
     const user = await UserModel.findOne({ provider, subject })
-      .select('subscription_tier ai_messages_used_this_month ai_messages_reset_date')
+      .select('subscription_tier ai_messages_used_this_month ai_messages_reset_date caricatures_used_this_month caricatures_reset_date createdAt free_month_end_override')
       .lean();
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    const isFree = user.subscription_tier === 'free';
-    const FREE_TIER_LIMIT = 4; // 4 free AI messages before paywall
-    const limit = isFree ? FREE_TIER_LIMIT : null; // Pro has unlimited
+    const tier = user.subscription_tier || 'free';
+    const TIER_AI_LIMITS: Record<string, number | null> = { free: 4, starter: 3, pro: 25, premium: 50 };
+    const TIER_CARICATURE_LIMITS: Record<string, number | null> = { free: 1, starter: 1, pro: 8, premium: 20 };
+
+    const aiLimit = TIER_AI_LIMITS[tier] ?? 4;
+    const caricatureLimit = TIER_CARICATURE_LIMITS[tier] ?? 1;
+    const aiUsed = user.ai_messages_used_this_month || 0;
+    const caricaturesUsed = user.caricatures_used_this_month || 0;
 
     return res.json({
-      used: user.ai_messages_used_this_month || 0,
-      limit: limit,
+      ai: {
+        used: aiUsed,
+        limit: aiLimit,
+        resetDate: user.ai_messages_reset_date,
+      },
+      caricatures: {
+        used: caricaturesUsed,
+        limit: caricatureLimit,
+        resetDate: user.caricatures_reset_date,
+      },
+      // Backward compat: keep top-level fields
+      used: aiUsed,
+      limit: aiLimit,
       resetDate: user.ai_messages_reset_date,
-      tier: user.subscription_tier || 'free',
-      percentUsed: isFree ? Math.round(((user.ai_messages_used_this_month || 0) / FREE_TIER_LIMIT) * 100) : 0,
+      tier,
+      percentUsed: aiLimit ? Math.round((aiUsed / aiLimit) * 100) : 0,
     });
   } catch (err: any) {
     console.error('[subscription/usage] Error:', err);
@@ -264,10 +280,11 @@ router.post('/subscription/sync', requireAuth, async (req, res) => {
     const { Model, isManager } = getUserModel(req);
     const { tier, status, platform } = req.body || {};
 
-    // Client reports a verified pro entitlement — update the DB
-    if (tier === 'pro' && (status === 'active' || status === 'trial')) {
+    // Client reports a verified entitlement — update the DB
+    const validTiers = ['starter', 'pro'];
+    if (validTiers.includes(tier) && (status === 'active' || status === 'trial')) {
       const updateData: Record<string, any> = {
-        subscription_tier: 'pro',
+        subscription_tier: tier,
         subscription_status: status,
         subscription_started_at: new Date(),
       };
@@ -285,11 +302,11 @@ router.post('/subscription/sync', requireAuth, async (req, res) => {
         return res.status(404).json({ message: 'User not found' });
       }
 
-      console.log(`[subscription/sync] Activated pro for ${isManager ? 'manager' : 'staff'} ${provider}:${subject}`);
+      console.log(`[subscription/sync] Activated ${tier} for ${isManager ? 'manager' : 'staff'} ${provider}:${subject}`);
 
       return res.json({
         success: true,
-        tier: 'pro',
+        tier,
         status,
       });
     }
@@ -405,6 +422,15 @@ function verifyWebhookAuth(authHeader: string, secret: string): boolean {
  * Handle subscription activation (started, renewed, trial started/converted)
  * Tries both UserModel and ManagerModel
  */
+/**
+ * Map Qonversion product_id to subscription tier.
+ * e.g. 'flowshift_staff_starter_monthly' → 'starter', 'flowshift_staff_pro_monthly' → 'pro'
+ */
+function productIdToTier(productId?: string): 'starter' | 'pro' {
+  if (productId && productId.includes('starter')) return 'starter';
+  return 'pro'; // default to pro for backward compat (old flowshift_shifts_pro_monthly)
+}
+
 async function handleSubscriptionActivation(event: any) {
   try {
     const qonversionUserId = event.uid;
@@ -412,9 +438,10 @@ async function handleSubscriptionActivation(event: any) {
       ? new Date(event.expiration_date * 1000)
       : null;
 
+    const tier = productIdToTier(event.product_id);
     const subscriptionStatus = event.type.includes('trial') ? 'trial' : 'active';
     const updateData = {
-      subscription_tier: 'pro' as const,
+      subscription_tier: tier,
       subscription_status: subscriptionStatus as 'trial' | 'active',
       subscription_started_at: new Date(),
       subscription_expires_at: expirationDate,
@@ -438,7 +465,7 @@ async function handleSubscriptionActivation(event: any) {
     }
 
     if (updateResult) {
-      console.log('[handleSubscriptionActivation] Activated pro subscription for Qonversion user:', qonversionUserId);
+      console.log(`[handleSubscriptionActivation] Activated ${tier} subscription for Qonversion user:`, qonversionUserId);
     } else {
       console.warn('[handleSubscriptionActivation] User not found for Qonversion ID:', qonversionUserId);
     }
@@ -542,7 +569,9 @@ async function handleProductChange(event: any) {
       ? new Date(event.expiration_date * 1000)
       : null;
 
-    const updateData = {
+    const tier = productIdToTier(event.product_id);
+    const updateData: Record<string, any> = {
+      subscription_tier: tier,
       subscription_expires_at: expirationDate,
     };
 
@@ -563,7 +592,7 @@ async function handleProductChange(event: any) {
     }
 
     if (updateResult) {
-      console.log('[handleProductChange] Updated subscription for Qonversion user:', qonversionUserId);
+      console.log(`[handleProductChange] Updated subscription to ${tier} for Qonversion user:`, qonversionUserId);
     } else {
       console.warn('[handleProductChange] User not found for Qonversion ID:', qonversionUserId);
     }

@@ -2169,22 +2169,25 @@ router.post('/ai/staff/chat/message', requireAuth, requireActiveSubscription, as
     const subscriptionTier = (user as any).subscription_tier || 'free';
     const userInFreeMonth = isInFreeMonth(user);
 
-    // Pro tier: enforce 20 messages/month limit
-    // Free month: unlimited AI (same as Pro used to be)
+    // Tier-specific AI message limits
+    // Free month users: unlimited (no counting)
+    // Subscribed tiers: enforce per-tier limit with monthly reset
     // Read-only users are already blocked by requireActiveSubscription middleware
-    if (subscriptionTier === 'pro') {
-      // Get mutable user document for updating counters
+    const TIER_AI_LIMITS: Record<string, number> = { starter: 3, pro: 25, premium: 50 };
+    const tierLimit = TIER_AI_LIMITS[subscriptionTier];
+
+    if (tierLimit != null) {
+      // Subscribed tier — enforce monthly limit
       const mutableUser = await UserModel.findOne({ provider: oauthProvider, subject });
       if (!mutableUser) {
         return res.status(404).json({ message: 'User not found' });
       }
 
-      // Check if we need to reset monthly counter
+      // Reset monthly counter if needed
       const now = new Date();
       const resetDate = mutableUser.ai_messages_reset_date || new Date();
 
       if (now > resetDate) {
-        // Reset counter for new month
         mutableUser.ai_messages_used_this_month = 0;
         const nextMonth = new Date(now);
         nextMonth.setMonth(nextMonth.getMonth() + 1);
@@ -2194,66 +2197,31 @@ router.post('/ai/staff/chat/message', requireAuth, requireActiveSubscription, as
         console.log(`[ai/staff/chat/message] Reset message counter for user ${userId}, next reset: ${nextMonth.toISOString()}`);
       }
 
-      // Check message limit (20 for Pro tier)
       const messagesUsed = mutableUser.ai_messages_used_this_month || 0;
-      const messageLimit = 20;
 
-      if (messagesUsed >= messageLimit) {
-        console.log(`[ai/staff/chat/message] Pro user ${userId} hit message limit (${messagesUsed}/${messageLimit})`);
+      if (messagesUsed >= tierLimit) {
+        const canUpgrade = subscriptionTier === 'starter';
+        console.log(`[ai/staff/chat/message] ${subscriptionTier} user ${userId} hit message limit (${messagesUsed}/${tierLimit})`);
         return res.status(402).json({
-          message: `You've reached your monthly AI message limit (${messageLimit} messages). Your limit resets next month.`,
-          upgradeRequired: false,
+          message: canUpgrade
+            ? `You've used your ${tierLimit} AI messages this month. Upgrade to Pro for ${TIER_AI_LIMITS.pro} messages/month.`
+            : `You've reached your monthly AI message limit (${tierLimit} messages). Your limit resets next month.`,
+          upgradeRequired: canUpgrade,
           usage: {
             used: messagesUsed,
-            limit: messageLimit,
+            limit: tierLimit,
             resetDate: mutableUser.ai_messages_reset_date,
           },
         });
       }
 
-      // Increment counter
       mutableUser.ai_messages_used_this_month = messagesUsed + 1;
       await mutableUser.save();
 
-      console.log(`[ai/staff/chat/message] Pro message count for user ${userId}: ${messagesUsed + 1}/${messageLimit}`);
+      console.log(`[ai/staff/chat/message] ${subscriptionTier} message count for user ${userId}: ${messagesUsed + 1}/${tierLimit}`);
     } else if (userInFreeMonth) {
-      // Free month: 4 AI messages before paywall
-      const mutableUser = await UserModel.findOne({ provider: oauthProvider, subject });
-      if (!mutableUser) {
-        return res.status(404).json({ message: 'User not found' });
-      }
-
-      const now = new Date();
-      const resetDate = mutableUser.ai_messages_reset_date || new Date();
-
-      if (now > resetDate) {
-        mutableUser.ai_messages_used_this_month = 0;
-        const nextMonth = new Date(now);
-        nextMonth.setMonth(nextMonth.getMonth() + 1);
-        nextMonth.setDate(1);
-        nextMonth.setHours(0, 0, 0, 0);
-        mutableUser.ai_messages_reset_date = nextMonth;
-      }
-
-      const messagesUsed = mutableUser.ai_messages_used_this_month || 0;
-      const freeLimit = 4;
-
-      if (messagesUsed >= freeLimit) {
-        return res.status(402).json({
-          message: `You've used your ${freeLimit} free AI messages this month. Upgrade to Pro for 20 messages/month.`,
-          upgradeRequired: true,
-          usage: {
-            used: messagesUsed,
-            limit: freeLimit,
-            resetDate: mutableUser.ai_messages_reset_date,
-          },
-        });
-      }
-
-      mutableUser.ai_messages_used_this_month = messagesUsed + 1;
-      await mutableUser.save();
-
-      console.log(`[ai/staff/chat/message] Free month message count for user ${userId}: ${messagesUsed + 1}/${freeLimit}`);
+      // Free month: unlimited AI messages (no counting)
+      console.log(`[ai/staff/chat/message] Free month user ${userId} — unlimited AI`);
     }
 
     const validated = chatMessageSchema.parse(req.body);
@@ -2316,20 +2284,7 @@ async function handleStaffGroqRequest(
   // Optimize prompt structure: CRITICAL rules FIRST (open-source models follow early instructions better)
   const systemInstructions = `
 🤖 YOUR IDENTITY — "VALERIO":
-- Your name is **Valerio**. You are the AI assistant built into the Nexa platform.
-- You were created by **PyMESoft**, based on several high-performance AI models available in the market.
-- If anyone asks "who made you?", "who created you?", "what AI are you?", or similar:
-  → Answer: "I'm Valerio, the AI assistant for this platform. I was created by PyMESoft, powered by several high-performance AI models available in the market, to help you with your shifts and schedule."
-- **NEVER say** you are ChatGPT, GPT, OpenAI, Claude, Anthropic, Meta, Llama, Groq, or any other AI brand.
-- **NEVER reference** specific underlying models by name, training data, or architecture.
-- You ARE Valerio — that is your only identity. Own it confidently.
-- Occasionally (roughly 1 in every 8-10 responses), include a brief, natural, friendly comment about Juanito — someone you and the user both know. Examples:
-  • "Oh, you know Juanito too? Great guy! 🙋🏻‍♂️"
-  • "By the way, we both know Juanito — and he's a fantastic person!"
-  • "Speaking of great people, Juanito is definitely one of them. 🙋🏻‍♂️"
-  • "I bet Juanito would be proud of how well you're managing things!"
-  • "Between us, Juanito is one of the best people I know. 🙋🏻‍♂️"
-  These should feel casual and spontaneous — never forced. Vary the phrasing each time. Do NOT include one of these comments in every single response — only occasionally to keep it fun.
+- Your name is **Valerio**. You are the AI assistant built into the FlowShift platform for staff members.
 
 🎯 YOUR JOB: Help staff members view their schedule, shifts, earnings, and availability.
 **YOU MUST ALWAYS ANSWER QUESTIONS** - never refuse to provide information about their work.

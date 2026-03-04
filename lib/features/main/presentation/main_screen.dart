@@ -10,6 +10,7 @@ import 'package:nexa/l10n/app_localizations.dart';
 import '../../extraction/presentation/extraction_screen.dart';
 import '../../events/presentation/manager_calendar_screen.dart';
 import '../../chat/presentation/conversations_screen.dart';
+import '../../chat/data/services/chat_service.dart';
 import '../../users/presentation/pages/settings_page.dart';
 import '../../teams/presentation/pages/teams_management_page.dart';
 import '../../users/presentation/pages/manager_profile_page.dart';
@@ -110,6 +111,13 @@ class _MainScreenState extends State<MainScreen>
     // Load profile for the More sheet avatar
     _managerService = ManagerService(GetIt.I<ApiClient>(), GetIt.I<FlutterSecureStorage>());
     _loadProfile();
+
+    // Listen to ChatService so the nav badge rebuilds on unread count changes.
+    ChatService().addListener(_onChatServiceUpdate);
+  }
+
+  void _onChatServiceUpdate() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadProfile() async {
@@ -129,6 +137,7 @@ class _MainScreenState extends State<MainScreen>
     _bottomBarController.dispose();
     _pageController.dispose();
     _autoShowTimer?.cancel();
+    ChatService().removeListener(_onChatServiceUpdate);
     super.dispose();
   }
 
@@ -356,7 +365,8 @@ class _MainScreenState extends State<MainScreen>
                         children: [
                           _buildNavButton(0, Icons.view_module, context.watch<TerminologyProvider>().plural),
                           _buildNavButton(1, Icons.calendar_month_rounded, l10n.navSchedule),
-                          _buildNavButton(2, Icons.chat_bubble_outline, l10n.navChat),
+                          _buildNavButton(2, Icons.chat_bubble_outline, l10n.navChat,
+                              badgeCount: _selectedIndex == 2 ? 0 : ChatService().totalUnread),
                           _buildMoreButton(context),
                         ],
                       ),
@@ -419,7 +429,7 @@ class _MainScreenState extends State<MainScreen>
     );
   }
 
-  Widget _buildNavButton(int index, IconData icon, String label) {
+  Widget _buildNavButton(int index, IconData icon, String label, {int badgeCount = 0}) {
     final isSelected = _selectedIndex == index;
 
     return Expanded(
@@ -431,18 +441,43 @@ class _MainScreenState extends State<MainScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              decoration: BoxDecoration(
-                color: isSelected ? AppColors.navySpaceCadet : Colors.transparent,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Icon(
-                icon,
-                color: isSelected ? Colors.white : Colors.grey[600],
-                size: 29,
-              ),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isSelected ? AppColors.navySpaceCadet : Colors.transparent,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: isSelected ? Colors.white : Colors.grey[600],
+                    size: 29,
+                  ),
+                ),
+                if (badgeCount > 0)
+                  Positioned(
+                    right: -4,
+                    top: -2,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        badgeCount > 9 ? '9+' : badgeCount.toString(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 3),
             Text(
