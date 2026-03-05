@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get_it/get_it.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:nexa/core/network/api_client.dart';
 import 'package:nexa/l10n/app_localizations.dart';
@@ -44,6 +45,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
 
   _OnboardingSnapshot? _snapshot;
   bool _loading = true;
+  bool _skipToMainScreen = false;
   bool _openingProfile = false;
   bool _creatingTeam = false;
   bool _creatingClient = false;
@@ -66,7 +68,7 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
     _managerService = ManagerService(api, storage);
     _subscriptionService = GetIt.I<SubscriptionService>();
     _setupEntranceAnimations();
-    _refresh();
+    _checkCacheAndLoad();
   }
 
   void _setupEntranceAnimations() {
@@ -98,6 +100,48 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
         ),
       );
     }
+  }
+
+  /// Fast-path launch: if onboarding was completed before, skip straight to
+  /// MainScreen and initialize services in the background.
+  Future<void> _checkCacheAndLoad() async {
+    final prefs = await SharedPreferences.getInstance();
+    final onboardingComplete = prefs.getBool('mgr_onboarding_complete') ?? false;
+
+    if (onboardingComplete) {
+      print('[ONBOARDING GATE] Fast path — skipping to MainScreen immediately');
+      if (mounted) {
+        setState(() {
+          _skipToMainScreen = true;
+          _loading = false;
+        });
+      }
+      _initServicesInBackground();
+      return;
+    }
+
+    // First launch or incomplete onboarding — blocking load.
+    await _refresh();
+  }
+
+  /// Initialize socket, notifications and subscriptions without blocking the UI.
+  Future<void> _initServicesInBackground() async {
+    // getMe → socket registration (needs a profile ID)
+    try {
+      final profile = await _managerService.getMe();
+      // registerManager is safe to call regardless of mounted state
+      SocketManager.instance.registerManager(profile.id);
+    } catch (_) {}
+
+    // Notification + subscription init are independent of widget state —
+    // do NOT gate them on `mounted`. If we returned early here we'd silently
+    // skip push notification registration every fast-path launch.
+    try {
+      await NotificationService().initialize();
+    } catch (_) {}
+    try {
+      await _subscriptionService.initialize();
+    } catch (_) {}
   }
 
   @override
@@ -151,6 +195,13 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
         roles: roles,
         tariffs: tariffs,
       );
+
+      // Cache completion so next launch can skip directly to MainScreen.
+      if (snapshot.isComplete) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('mgr_onboarding_complete', true);
+      }
+
       setState(() {
         _snapshot = snapshot;
         _loading = false;
@@ -412,6 +463,12 @@ class _ManagerOnboardingGateState extends State<ManagerOnboardingGate>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+
+    // Fast path: onboarding was completed on a prior launch.
+    if (_skipToMainScreen) {
+      return const MainScreen();
+    }
+
     if (_loading) {
       return Scaffold(
         body: Container(

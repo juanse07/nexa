@@ -5,7 +5,6 @@ import 'package:share_plus/share_plus.dart';
 import 'package:nexa/features/teams/data/services/teams_service.dart';
 import 'package:nexa/features/extraction/services/users_service.dart';
 import 'package:nexa/features/chat/presentation/chat_screen.dart';
-import 'package:nexa/features/teams/presentation/widgets/create_invite_link_dialog.dart';
 import 'package:nexa/features/teams/presentation/widgets/applicant_list_tile.dart';
 import 'package:nexa/features/subscription/data/services/subscription_service.dart';
 import 'package:nexa/features/subscription/presentation/pages/subscription_paywall_page.dart';
@@ -221,33 +220,6 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
     }
   }
 
-  Future<void> _createInviteLink() async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => CreateInviteLinkDialog(
-        teamName: widget.teamName,
-        onCreateLink: ({
-          int? expiresInDays,
-          int? maxUses,
-          bool requireApproval = false,
-          String? password,
-        }) async {
-          return await _teamsService.createInviteLink(
-            teamId: widget.teamId,
-            expiresInDays: expiresInDays,
-            maxUses: maxUses,
-            requireApproval: requireApproval,
-            password: password,
-          );
-        },
-      ),
-    );
-
-    if (result == true && mounted) {
-      // Refresh data to show new invite in the list
-      await _loadData();
-    }
-  }
 
   Future<void> _revokeInviteLink(String inviteId) async {
     final l10n = AppLocalizations.of(context)!;
@@ -1127,17 +1099,6 @@ class _TeamDetailPageState extends State<TeamDetailPage> {
         const SizedBox(height: 12),
         Row(
           children: [
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: _createInviteLink,
-                icon: const Icon(Icons.link, size: 18),
-                label: Text(l10n.inviteLinkButton),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-                ),
-              ),
-            ),
-            const SizedBox(width: 6),
             Expanded(
               child: ElevatedButton.icon(
                 onPressed: _createPublicLink,

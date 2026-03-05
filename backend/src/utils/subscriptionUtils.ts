@@ -1,16 +1,16 @@
 import { UserDocument } from '../models/user';
 
-const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+const FREE_TRIAL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
- * Get the date when the user's free month ends.
- * Uses free_month_end_override if set, otherwise createdAt + 30 days.
+ * Get the date when the user's free trial ends.
+ * Uses free_month_end_override if set, otherwise createdAt + 7 days.
  */
 export function getFreeMonthEndDate(user: Pick<UserDocument, 'createdAt' | 'free_month_end_override'>): Date {
   if (user.free_month_end_override) {
     return new Date(user.free_month_end_override);
   }
-  return new Date(new Date(user.createdAt).getTime() + THIRTY_DAYS_MS);
+  return new Date(new Date(user.createdAt).getTime() + FREE_TRIAL_MS);
 }
 
 /**

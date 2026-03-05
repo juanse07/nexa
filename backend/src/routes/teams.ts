@@ -80,12 +80,6 @@ const teamMembersQuerySchema = z.object({
     .default('false'),
 });
 
-const createInviteLinkSchema = z.object({
-  expiresInDays: z.number().int().min(1).max(90).optional(),
-  maxUses: z.number().int().min(1).max(1000).optional().nullable(),
-  requireApproval: z.boolean().optional().default(false),
-  password: z.string().min(4).max(50).optional(),
-});
 
 const addCoManagerSchema = z.object({
   email: z.string().email(),
@@ -1225,113 +1219,6 @@ router.post('/teams/:teamId/invites/:inviteId/cancel', requireAuth, async (req, 
   }
 });
 
-// Create shareable invite link
-router.post('/teams/:teamId/invites/create-link', inviteCreateLimiter, requireAuth, async (req, res) => {
-  try {
-    const manager = await resolveManagerForRequest(req as any);
-    const managerId = manager._id as mongoose.Types.ObjectId;
-    const teamIdParam = req.params.teamId ?? '';
-
-    if (!mongoose.Types.ObjectId.isValid(teamIdParam)) {
-      return res.status(400).json({ message: 'Invalid team id' });
-    }
-    const teamObjectId = new mongoose.Types.ObjectId(teamIdParam);
-
-    // Verify team exists and manager has access
-    const team = await findTeamWithAccess(teamObjectId, managerId);
-    if (!team) {
-      return res.status(404).json({ message: 'Team not found' });
-    }
-
-    // Validate request body
-    const parsed = createInviteLinkSchema.safeParse(req.body ?? {});
-    if (!parsed.success) {
-      return res.status(400).json({
-        message: 'Validation failed',
-        details: parsed.error.format(),
-      });
-    }
-
-    const { expiresInDays, maxUses, requireApproval, password } = parsed.data;
-
-    // Hash password if provided (using Node crypto.scrypt)
-    let passwordHash: string | undefined;
-    if (password) {
-      const salt = crypto.randomBytes(16).toString('hex');
-      const hash = await new Promise<string>((resolve, reject) => {
-        crypto.scrypt(password, salt, 64, (err, derivedKey) => {
-          if (err) reject(err);
-          else resolve(`${salt}:${derivedKey.toString('hex')}`);
-        });
-      });
-      passwordHash = hash;
-    }
-
-    // Generate unique short code
-    const shortCode = await generateUniqueShortCode();
-
-    // Generate standard token for backward compatibility
-    const token = generateInviteToken();
-
-    // Calculate expiration date
-    let expiresAt: Date | undefined;
-    if (expiresInDays) {
-      expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + expiresInDays);
-    }
-
-    // Create invite
-    const invite = await TeamInviteModel.create({
-      teamId: teamObjectId,
-      managerId,
-      invitedBy: managerId,
-      token,
-      shortCode,
-      inviteType: 'link',
-      status: 'pending',
-      maxUses: maxUses ?? null,
-      usedCount: 0,
-      requireApproval: requireApproval ?? false,
-      passwordHash,
-      usageLog: [],
-      expiresAt,
-    });
-
-    // Build universal link
-    const deepLink = `https://flowshift.work/invite/${shortCode}`;
-
-    // Generate shareable message
-    const expiryText = expiresAt
-      ? `Expires: ${expiresAt.toLocaleDateString()}`
-      : 'Never expires';
-
-    const shareableMessage = `Join my team on FlowShift! 🎉
-
-Tap this link to join:
-${deepLink}
-
-Or enter code: ${shortCode} in the app.
-
-${expiryText}`;
-
-    return res.status(201).json({
-      inviteId: String(invite._id),
-      shortCode: invite.shortCode,
-      deepLink,
-      shareableMessage,
-      expiresAt: invite.expiresAt,
-      maxUses: invite.maxUses,
-      usedCount: invite.usedCount,
-      requireApproval: invite.requireApproval,
-      hasPassword: !!passwordHash,
-    });
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error('[teams] POST /teams/:teamId/invites/create-link failed', err);
-    return res.status(500).json({ message: 'Failed to create invite link' });
-  }
-});
-
 // Get all invite links for a team
 router.get('/teams/:teamId/invites/links', requireAuth, async (req, res) => {
   try {
@@ -1350,10 +1237,10 @@ router.get('/teams/:teamId/invites/links', requireAuth, async (req, res) => {
       return res.status(404).json({ message: 'Team not found' });
     }
 
-    // Get all link-type and public-type invites for this team
+    // Get all public-type invites for this team
     const invites = await TeamInviteModel.find({
       teamId: teamObjectId,
-      inviteType: { $in: ['link', 'public'] },
+      inviteType: 'public',
     })
       .sort({ createdAt: -1 })
       .limit(50)
@@ -1582,7 +1469,7 @@ router.patch('/teams/:teamId/invites/:inviteId/revoke', requireAuth, async (req,
         _id: new mongoose.Types.ObjectId(inviteIdParam),
         teamId: new mongoose.Types.ObjectId(teamIdParam),
         managerId,
-        inviteType: 'link',
+        inviteType: 'public',
         status: 'pending',
       },
       { $set: { status: 'cancelled', updatedAt: new Date() } },

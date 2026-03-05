@@ -95,23 +95,11 @@ class _FlowShiftSplashScreenState extends State<FlowShiftSplashScreen>
   }
 
   Future<void> _startAnimationSequence() async {
-    // Start background fade in immediately
-    _backgroundController.forward();
-
-    // Wait 400ms, then start logo
-    await Future<void>.delayed(const Duration(milliseconds: 400));
-    if (!mounted) return;
-    _logoController.forward();
-
-    // Wait another 400ms, then start subtitle
-    await Future<void>.delayed(const Duration(milliseconds: 400));
-    if (!mounted) return;
-    _subtitleController.forward();
-
-    // Wait 1000ms (hold for visual impact), then fade out
-    await Future<void>.delayed(const Duration(milliseconds: 1000));
-    if (!mounted) return;
-    _fadeOutController.forward();
+    // Skip animation delay — OS native launch screen already handled branding.
+    // Defer to post-frame so onComplete() isn't called mid-build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.onComplete();
+    });
   }
 
   @override

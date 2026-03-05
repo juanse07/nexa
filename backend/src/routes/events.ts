@@ -3337,18 +3337,34 @@ router.post('/events/:id/respond', requireAuth, requireActiveSubscription, async
           { new: true }
         );
 
-        if (chatMsg && updatedEvent.managerId) {
+        if (updatedEvent.managerId) {
           const staffName = (req as any).authUser?.name || userKey;
-          emitToManager(String(updatedEvent.managerId), 'invitation:responded', {
-            messageId: String(chatMsg._id),
-            conversationId: String(chatMsg.conversationId),
-            status: responseVal === 'accept' ? 'accepted' : 'declined',
-            respondedAt: respondedAt.toISOString(),
-            userId: userKey,
-            userName: staffName,
-            eventId,
-            roleId: roleVal,
-          });
+          const managerId = String(updatedEvent.managerId);
+
+          if (chatMsg) {
+            emitToManager(managerId, 'invitation:responded', {
+              messageId: String(chatMsg._id),
+              conversationId: String(chatMsg.conversationId),
+              status: responseVal === 'accept' ? 'accepted' : 'declined',
+              respondedAt: respondedAt.toISOString(),
+              userId: userKey,
+              userName: staffName,
+              eventId,
+              roleId: roleVal,
+            });
+          }
+
+          // Push notification to manager (for background/closed app)
+          const eventName = updatedEvent.event_name || updatedEvent.shift_name || 'a shift';
+          const emoji = responseVal === 'accept' ? '✅' : '❌';
+          const action = responseVal === 'accept' ? 'accepted' : 'declined';
+          notificationService.sendToUser(
+            managerId,
+            `${emoji} ${staffName} ${action} an invitation`,
+            `${staffName} ${action} "${eventName}"`,
+            { type: 'event', eventId },
+            'manager'
+          ).catch((err: Error) => console.error('[respond] push notif to manager failed:', err));
         }
         // eslint-disable-next-line no-console
         console.log('[respond] chat message synced', { eventId, userKey, chatMsgFound: !!chatMsg });

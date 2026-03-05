@@ -32,43 +32,34 @@ class NotificationService {
 
   /// Initialize OneSignal and local notifications
   Future<void> initialize() async {
-    // Prevent duplicate initialization
-    if (_isInitialized) {
-      print('⚠️ NotificationService already initialized, skipping setup...');
-      return;
-    }
+    // Only set up handlers and OneSignal SDK once — adding listeners multiple
+    // times causes duplicate notifications (the original "duplicates" bug).
+    if (!_isInitialized) {
+      try {
+        await _initializeLocalNotifications();
 
-    try {
-      // Initialize local notifications for foreground display
-      await _initializeLocalNotifications();
+        OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
+        OneSignal.initialize(_oneSignalAppId);
 
-      // Initialize OneSignal
-      OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
+        if (Platform.isIOS) {
+          final permission = await OneSignal.Notifications.requestPermission(true);
+          print('OneSignal permission granted: $permission');
+        }
 
-      OneSignal.initialize(_oneSignalAppId);
-
-      // Request permission (iOS only, Android granted at install)
-      if (Platform.isIOS) {
-        final permission = await OneSignal.Notifications.requestPermission(true);
-        print('OneSignal permission granted: $permission');
+        _setupNotificationHandlers();
+        _isInitialized = true;
+        print('✅ NotificationService handlers initialized');
+      } catch (e) {
+        print('❌ Failed to initialize NotificationService: $e');
+        return;
       }
-
-      // Set up notification handlers (only once!)
-      _setupNotificationHandlers();
-
-      // Get and register device token
-      await _registerDevice();
-
-      // Load notification preferences
-      await _loadNotificationPreferences();
-
-      // Mark as initialized to prevent duplicate listeners
-      _isInitialized = true;
-
-      print('✅ NotificationService initialized successfully');
-    } catch (e) {
-      print('❌ Failed to initialize NotificationService: $e');
     }
+
+    // Device registration is idempotent — always attempt it so that
+    // whichever call has a valid JWT (e.g. the post-login call from
+    // _initServicesInBackground) succeeds even if an earlier call failed.
+    await _registerDevice();
+    await _loadNotificationPreferences();
   }
 
   /// Initialize local notifications for foreground display
@@ -97,18 +88,13 @@ class NotificationService {
     OneSignal.Notifications.addForegroundWillDisplayListener((event) {
       print('Notification received in foreground: ${event.notification.title}');
 
-      // Prevent OneSignal from auto-displaying the notification natively,
-      // since we show it ourselves via flutter_local_notifications below.
-      event.preventDefault();
-
-      // Show local notification when app is in foreground
-      _showLocalNotification(
-        event.notification.title ?? 'New Notification',
-        event.notification.body ?? '',
-        event.notification.additionalData ?? {},
-      );
-
-      // Update badge count
+      // Let OneSignal display the notification natively — it renders correctly
+      // in both foreground and background this way. We no longer call
+      // event.preventDefault() + flutter_local_notifications because:
+      //  1. _isInitialized ensures this listener is only registered ONCE, so
+      //     there is zero risk of duplicate banners.
+      //  2. DarwinNotificationDetails.presentAlert is deprecated on iOS 14+ and
+      //     doesn't produce a banner; the native OneSignal path does.
       _updateBadgeCount(event.notification.additionalData);
     });
 

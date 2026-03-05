@@ -1,6 +1,5 @@
 import crypto from 'crypto';
 import { Router } from 'express';
-import mongoose from 'mongoose';
 import { z } from 'zod';
 
 import { requireAuth, AuthenticatedUser } from '../middleware/requireAuth';
@@ -8,13 +7,10 @@ import { TeamModel } from '../models/team';
 import { TeamMemberModel } from '../models/teamMember';
 import { TeamInviteModel } from '../models/teamInvite';
 import { UserModel } from '../models/user';
-import { ManagerModel } from '../models/manager';
-import { ConversationModel } from '../models/conversation';
-import { ChatMessageModel } from '../models/chatMessage';
 import { TeamApplicantModel } from '../models/teamApplicant';
 import { isValidShortCodeFormat } from '../utils/inviteCodeGenerator';
 import { inviteValidateLimiter, inviteRedeemLimiter } from '../middleware/rateLimiter';
-import { emitToUser, emitToManager } from '../socket/server';
+import { emitToManager } from '../socket/server';
 
 const router = Router();
 
@@ -45,10 +41,10 @@ router.get('/invites/validate/:shortCode', inviteValidateLimiter, async (req, re
       });
     }
 
-    // Find invite by short code (match both 'link' and 'public' types)
+    // Find invite by short code
     const invite = await TeamInviteModel.findOne({
       shortCode: shortCode.toUpperCase(),
-      inviteType: { $in: ['link', 'public'] },
+      inviteType: 'public',
     }).lean();
 
     if (!invite) {
@@ -153,10 +149,10 @@ router.post('/invites/redeem', inviteRedeemLimiter, requireAuth, async (req, res
       return res.status(400).json({ message: 'Invalid invite code format' });
     }
 
-    // Find invite (match both 'link' and 'public' types)
+    // Find public invite
     const invite = await TeamInviteModel.findOne({
       shortCode: shortCode.toUpperCase(),
-      inviteType: { $in: ['link', 'public'] },
+      inviteType: 'public',
     });
 
     if (!invite) {
@@ -248,106 +244,41 @@ router.post('/invites/redeem', inviteRedeemLimiter, requireAuth, async (req, res
 
     const userKey = `${authUser.provider}:${authUser.sub}`;
 
-    // PUBLIC LINK: Create an applicant record instead of a team member
-    if (invite.inviteType === 'public') {
-      // Check if already applied
-      const existingApplicant = await TeamApplicantModel.findOne({
-        teamId: invite.teamId,
-        provider: authUser.provider,
-        subject: authUser.sub,
-      }).lean();
+    // Check if already applied
+    const existingApplicant = await TeamApplicantModel.findOne({
+      teamId: invite.teamId,
+      provider: authUser.provider,
+      subject: authUser.sub,
+    }).lean();
 
-      if (existingApplicant) {
-        return res.status(409).json({
-          message: existingApplicant.status === 'pending'
-            ? 'You have already applied to this team. Please wait for manager approval.'
-            : `Your application was previously ${existingApplicant.status}.`,
-          applicationSubmitted: existingApplicant.status === 'pending',
-          applicationStatus: existingApplicant.status,
-        });
-      }
-
-      // Create applicant
-      const applicant = await TeamApplicantModel.create({
-        teamId: invite.teamId,
-        managerId: invite.managerId,
-        inviteId: invite._id,
-        provider: authUser.provider,
-        subject: authUser.sub,
-        name: authUser.name,
-        email: authUser.email,
-        status: 'pending',
-        appliedAt: new Date(),
-      });
-
-      // Increment usage
-      await TeamInviteModel.updateOne(
-        { _id: invite._id },
-        {
-          $inc: { usedCount: 1 },
-          $push: {
-            usageLog: {
-              userKey,
-              userName: authUser.name,
-              joinedAt: new Date(),
-            },
-          },
-        }
-      );
-
-      // Notify manager of new applicant
-      emitToManager(String(invite.managerId), 'applicant:new', {
-        applicantId: String(applicant._id),
-        teamId: String(invite.teamId),
-        teamName: team.name,
-        applicantName: authUser.name,
-      });
-
-      return res.json({
-        success: true,
-        applicationSubmitted: true,
-        team: {
-          id: String(team._id),
-          name: team.name,
-          description: team.description,
-        },
-        message: `Thanks for applying to ${team.name}! The manager has been notified and will review your application.`,
+    if (existingApplicant) {
+      return res.status(409).json({
+        message: existingApplicant.status === 'pending'
+          ? 'You have already applied to this team. Please wait for manager approval.'
+          : `Your application was previously ${existingApplicant.status}.`,
+        applicationSubmitted: existingApplicant.status === 'pending',
+        applicationStatus: existingApplicant.status,
       });
     }
 
-    // STANDARD LINK: Create team member directly
-    const memberStatus = invite.requireApproval ? 'pending' : 'active';
+    // Create applicant
+    const applicant = await TeamApplicantModel.create({
+      teamId: invite.teamId,
+      managerId: invite.managerId,
+      inviteId: invite._id,
+      provider: authUser.provider,
+      subject: authUser.sub,
+      name: authUser.name,
+      email: authUser.email,
+      status: 'pending',
+      appliedAt: new Date(),
+    });
 
-    // Create team member
-    const member = await TeamMemberModel.findOneAndUpdate(
-      {
-        teamId: invite.teamId,
-        provider: authUser.provider,
-        subject: authUser.sub,
-      },
-      {
-        $set: {
-          managerId: invite.managerId,
-          email: authUser.email,
-          name: authUser.name,
-          status: memberStatus,
-          joinedAt: new Date(),
-          updatedAt: new Date(),
-        },
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
-
-    // Increment used count and log usage
+    // Increment usage
     await TeamInviteModel.updateOne(
       { _id: invite._id },
       {
         $inc: { usedCount: 1 },
-        $set: {
-          // Mark as accepted if it was pending
-          status: invite.status === 'pending' ? 'accepted' : invite.status,
-          acceptedAt: new Date(),
-        },
         $push: {
           usageLog: {
             userKey,
@@ -358,117 +289,23 @@ router.post('/invites/redeem', inviteRedeemLimiter, requireAuth, async (req, res
       }
     );
 
-    // Check if max uses reached and update status
-    if (invite.maxUses && invite.usedCount + 1 >= invite.maxUses) {
-      await TeamInviteModel.updateOne(
-        { _id: invite._id },
-        { $set: { status: 'accepted' } }
-      );
-    }
-
-    // Send automated welcome message (only if member is active, not pending)
-    if (memberStatus === 'active') {
-      try {
-        // Get manager details for the message sender
-        const manager = await ManagerModel.findById(invite.managerId).lean();
-        if (manager) {
-          // Use team's custom welcome message or default template
-          const welcomeText = team.welcomeMessage
-            ? team.welcomeMessage.replace('{teamName}', team.name)
-            : `Welcome to ${team.name}! We're excited to have you on the team.`;
-
-          // Create or get conversation
-          let conversation = await ConversationModel.findOne({
-            managerId: invite.managerId,
-            userKey: userKey,
-          });
-
-          if (!conversation) {
-            conversation = await ConversationModel.create({
-              managerId: invite.managerId,
-              userKey: userKey,
-              lastMessageAt: new Date(),
-              lastMessagePreview: welcomeText.substring(0, 200),
-              unreadCountManager: 0,
-              unreadCountUser: 1,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            });
-          }
-
-          // Create welcome message
-          const welcomeMessage = await ChatMessageModel.create({
-            conversationId: conversation._id,
-            managerId: invite.managerId,
-            userKey: userKey,
-            senderType: 'manager',
-            message: welcomeText,
-            messageType: 'text',
-            metadata: {
-              automated: true,
-              type: 'welcome',
-            },
-            readByManager: true,
-            readByUser: false,
-            createdAt: new Date(),
-          });
-
-          // Update conversation
-          await ConversationModel.updateOne(
-            { _id: conversation._id },
-            {
-              $set: {
-                lastMessageAt: new Date(),
-                lastMessagePreview: welcomeText.substring(0, 200),
-                unreadCountUser: conversation.unreadCountUser + 1,
-                updatedAt: new Date(),
-              },
-            }
-          );
-
-          // Emit message to user via Socket.IO for real-time delivery
-          emitToUser(userKey, 'chat:message', {
-            id: String(welcomeMessage._id),
-            conversationId: String(conversation._id),
-            managerId: String(invite.managerId),
-            userKey: userKey,
-            senderType: 'manager',
-            message: welcomeText,
-            messageType: 'text',
-            readByManager: true,
-            readByUser: false,
-            createdAt: welcomeMessage.createdAt.toISOString(),
-            metadata: welcomeMessage.metadata,
-          });
-
-          // eslint-disable-next-line no-console
-          console.log(`[invites] Sent welcome message to ${userKey} for team ${team.name}`);
-        }
-      } catch (welcomeErr) {
-        // Log error but don't fail the invite redemption
-        // eslint-disable-next-line no-console
-        console.error('[invites] Failed to send welcome message (non-fatal):', welcomeErr);
-      }
-    }
+    // Notify manager of new applicant
+    emitToManager(String(invite.managerId), 'applicant:new', {
+      applicantId: String(applicant._id),
+      teamId: String(invite.teamId),
+      teamName: team.name,
+      applicantName: authUser.name,
+    });
 
     return res.json({
       success: true,
-      applicationSubmitted: false,
+      applicationSubmitted: true,
       team: {
         id: String(team._id),
         name: team.name,
         description: team.description,
       },
-      member: {
-        id: String(member._id),
-        status: member.status,
-        joinedAt: member.joinedAt,
-      },
-      memberStatus: memberStatus,
-      requiresApproval: invite.requireApproval,
-      message: invite.requireApproval
-        ? 'Join request submitted. Waiting for manager approval.'
-        : 'Successfully joined team!',
+      message: `Thanks for applying to ${team.name}! The manager has been notified and will review your application.`,
     });
   } catch (err) {
     // eslint-disable-next-line no-console
