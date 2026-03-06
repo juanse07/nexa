@@ -36,6 +36,8 @@ const updateSchema = z.object({
   picture: z.string().url().max(2048).optional(),
   isCaricature: z.boolean().optional(), // When true, saves current picture as originalPicture
   eventTerminology: z.enum(['shift', 'job', 'event']).optional(),
+  homeAddress: z.string().trim().min(1).max(500).optional().nullable(),
+  homeCoordinates: z.object({ lat: z.number(), lng: z.number() }).optional().nullable(),
 });
 
 router.get('/users/me', requireAuth, async (req, res) => {
@@ -71,6 +73,8 @@ router.get('/users/me', requireAuth, async (req, res) => {
       caricatureHistory: user.caricatureHistory || [],
       appId: user.app_id,
       eventTerminology: user.eventTerminology || 'shift',
+      homeAddress: user.homeAddress || null,
+      homeCoordinates: user.homeCoordinates || null,
     });
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -122,6 +126,8 @@ router.patch('/users/me', requireAuth, async (req, res) => {
     if (restData.appId !== undefined) dbUpdate.app_id = restData.appId;
     if (restData.picture !== undefined) dbUpdate.picture = restData.picture;
     if (restData.eventTerminology !== undefined) dbUpdate.eventTerminology = restData.eventTerminology;
+    if (restData.homeAddress !== undefined) dbUpdate.homeAddress = restData.homeAddress;
+    if (restData.homeCoordinates !== undefined) dbUpdate.homeCoordinates = restData.homeCoordinates;
 
     // If this is a caricature update, save the current picture as originalPicture
     if (isCaricature && restData.picture) {
@@ -166,6 +172,8 @@ router.patch('/users/me', requireAuth, async (req, res) => {
       caricatureHistory: updated.caricatureHistory || [],
       appId: updated.app_id,
       eventTerminology: updated.eventTerminology || 'shift',
+      homeAddress: updated.homeAddress || null,
+      homeCoordinates: updated.homeCoordinates || null,
     });
   } catch (err) {
     // eslint-disable-next-line no-console

@@ -275,6 +275,12 @@ router.get('/staff', requireAuth, async (req: Request, res: Response) => {
         roles: stats.roles,
         shiftCount: stats.shiftCount,
         groups,
+        // Payroll fields
+        externalEmployeeId: profile?.externalEmployeeId || '',
+        workerType: profile?.workerType || 'w2',
+        department: profile?.department || '',
+        earningsCode: profile?.earningsCode || '',
+        isMapped: !!(profile?.externalEmployeeId),
       };
     });
 
@@ -390,6 +396,12 @@ router.get('/staff/:userKey', requireAuth, async (req: Request, res: Response) =
       roles,
       groups,
       recentShifts,
+      // Payroll fields
+      externalEmployeeId: (profile as any)?.externalEmployeeId || '',
+      workerType: (profile as any)?.workerType || 'w2',
+      department: (profile as any)?.department || '',
+      earningsCode: (profile as any)?.earningsCode || '',
+      isMapped: !!((profile as any)?.externalEmployeeId),
     });
   } catch (err: any) {
     console.error('[GET /staff/:userKey] Error:', err);
@@ -467,6 +479,17 @@ router.patch('/staff/:userKey', requireAuth, async (req: Request, res: Response)
       update.rating = rating;
     }
     if (req.body.isFavorite !== undefined) update.isFavorite = Boolean(req.body.isFavorite);
+
+    // Payroll fields
+    if (req.body.externalEmployeeId !== undefined) update.externalEmployeeId = String(req.body.externalEmployeeId);
+    if (req.body.workerType !== undefined) {
+      if (!['w2', '1099'].includes(req.body.workerType)) {
+        return res.status(400).json({ message: 'workerType must be "w2" or "1099"' });
+      }
+      update.workerType = req.body.workerType;
+    }
+    if (req.body.department !== undefined) update.department = String(req.body.department);
+    if (req.body.earningsCode !== undefined) update.earningsCode = String(req.body.earningsCode);
 
     if (Object.keys(update).length === 0) {
       return res.status(400).json({ message: 'No fields to update' });

@@ -89,12 +89,20 @@ class StaffService {
     String? notes,
     double? rating,
     bool? isFavorite,
+    String? externalEmployeeId,
+    String? workerType,
+    String? department,
+    String? earningsCode,
   }) async {
     final encoded = Uri.encodeComponent(userKey);
     final body = <String, dynamic>{};
     if (notes != null) body['notes'] = notes;
     if (rating != null) body['rating'] = rating;
     if (isFavorite != null) body['isFavorite'] = isFavorite;
+    if (externalEmployeeId != null) body['externalEmployeeId'] = externalEmployeeId;
+    if (workerType != null) body['workerType'] = workerType;
+    if (department != null) body['department'] = department;
+    if (earningsCode != null) body['earningsCode'] = earningsCode;
 
     try {
       final response = await _apiClient.patch<Map<String, dynamic>>(

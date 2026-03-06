@@ -14,6 +14,7 @@ import { extractLastUserMessage } from '../utils/cascadeRouter';
 import { EventModel } from '../models/event';
 import { UserModel } from '../models/user';
 import { AvailabilityModel } from '../models/availability';
+import { PersonalEventModel } from '../models/personalEvent';
 import { TeamMemberModel } from '../models/teamMember';
 import { ConversationModel } from '../models/conversation';
 import { ChatMessageModel } from '../models/chatMessage';
@@ -92,6 +93,140 @@ router.get('/ai/staff/system-info', requireAuth, async (req, res) => {
   } catch (err: any) {
     console.error('[ai/staff/system-info] Error:', err);
     return res.status(500).json({ message: 'Failed to get system info' });
+  }
+});
+
+/**
+ * POST /api/ai/staff/extract
+ * Groq-powered extraction endpoint for personal events:
+ * - Images: Llama 4 Scout 17B vision model
+ * - Text/PDFs: Llama 3.1 8B Instant text model
+ * Accepts text or base64 image input and returns structured personal event data
+ */
+const staffExtractionSchema = z.object({
+  input: z.string().min(1, 'input is required'),
+  isImage: z.boolean().optional().default(false),
+});
+
+router.post('/ai/staff/extract', requireAuth, async (req, res) => {
+  try {
+    const validated = staffExtractionSchema.parse(req.body);
+    const { input, isImage } = validated;
+
+    const groqKey = process.env.GROQ_API_KEY;
+    if (!groqKey) {
+      console.error('[ai/staff/extract] GROQ_API_KEY not configured');
+      return res.status(500).json({ message: 'Groq API key not configured on server' });
+    }
+
+    const visionModel = 'meta-llama/llama-4-scout-17b-16e-instruct';
+    const textModel = 'llama-3.1-8b-instant';
+    const groqBaseUrl = 'https://api.groq.com/openai/v1';
+
+    const systemPrompt =
+      'You are a structured information extractor for personal work events. ' +
+      'Extract fields: title, date (YYYY-MM-DD), start_time (HH:mm), end_time (HH:mm), ' +
+      'role, client, hourly_rate (number), currency (string, e.g. "USD"), location, notes. ' +
+      'Return strict JSON only. Use null for missing fields. Do not include any text outside the JSON object.';
+
+    let requestBody: any;
+    if (isImage) {
+      requestBody = {
+        model: visionModel,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: 'Extract structured personal event info and return only JSON.',
+              },
+              {
+                type: 'image_url',
+                image_url: { url: `data:image/png;base64,${input}` },
+              },
+            ],
+          },
+        ],
+        temperature: 0,
+        max_tokens: 800,
+      };
+    } else {
+      requestBody = {
+        model: textModel,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          {
+            role: 'user',
+            content: `Extract JSON from the following text:\n\n${input}`,
+          },
+        ],
+        temperature: 0,
+        max_tokens: 800,
+      };
+    }
+
+    const headers = {
+      'Authorization': `Bearer ${groqKey}`,
+      'Content-Type': 'application/json',
+    };
+
+    // Call Groq API with retries
+    let response: any;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        response = await axios.post(`${groqBaseUrl}/chat/completions`, requestBody, {
+          headers,
+          validateStatus: () => true,
+        });
+        if (response.status !== 429 && response.status < 500) break;
+        if (attempt < 3) {
+          await new Promise(r => setTimeout(r, Math.pow(2, attempt - 1) * 1000));
+        }
+      } catch (err) {
+        if (attempt >= 3) throw err;
+        await new Promise(r => setTimeout(r, Math.pow(2, attempt - 1) * 1000));
+      }
+    }
+
+    if (response.status >= 300) {
+      console.error(`[ai/staff/extract] Groq API error:`, response.status);
+      console.error(`[ai/staff/extract] Error details:`, JSON.stringify(response.data, null, 2));
+      if (response.status === 429) {
+        return res.status(429).json({
+          message: 'AI rate limit exceeded. Please try again later.',
+        });
+      }
+      return res.status(response.status).json({
+        message: `Groq API error: ${response.statusText}`,
+        details: response.data,
+      });
+    }
+
+    const content = response.data.choices?.[0]?.message?.content || '';
+
+    // Extract JSON from response (between first { and last })
+    const start = content.indexOf('{');
+    const end = content.lastIndexOf('}');
+    if (start !== -1 && end !== -1 && end > start) {
+      const jsonSlice = content.substring(start, end + 1);
+      try {
+        const parsed = JSON.parse(jsonSlice);
+        return res.json({ extracted: parsed });
+      } catch (parseErr) {
+        console.error('[ai/staff/extract] Failed to parse JSON:', parseErr);
+        return res.status(500).json({ message: 'Failed to parse response from AI' });
+      }
+    }
+
+    return res.status(500).json({ message: 'No valid JSON found in AI response' });
+  } catch (err: any) {
+    console.error('[ai/staff/extract] Error:', err);
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ message: 'Invalid request data', errors: err.issues });
+    }
+    return res.status(500).json({ message: err.message || 'Failed to extract data' });
   }
 });
 
@@ -769,7 +904,7 @@ const chatMessageSchema = z.object({
 const STAFF_AI_TOOLS = [
   {
     name: 'get_my_schedule',
-    description: 'Get my shifts and assigned events. Use this when I ask about my schedule, upcoming shifts, past shifts, work history, specific dates, or "when do I work". Supports both future and past queries.',
+    description: 'Get my shifts and assigned events, INCLUDING personal gigs. Returns both manager-assigned shifts (source: "manager") and personal events (source: "personal"). Use when I ask about my schedule, upcoming shifts, past shifts, work history, specific dates, or "when do I work". Supports both future and past queries.',
     parameters: {
       type: 'object',
       properties: {
@@ -938,6 +1073,173 @@ const STAFF_AI_TOOLS = [
       required: ['event_id']
     }
   },
+  {
+    name: 'create_personal_event',
+    description: 'Create a personal event (external gig, side job, personal commitment). Creates a visible event card in My Shifts AND auto-marks staff as unavailable. Use when staff mentions personal gigs, side jobs, freelance work, doctor visits, or wants to block time. Different from mark_availability — this creates a FULL event card with role, client, and pay tracking. 🚨 CRITICAL: ALL EVENTS MUST BE IN THE FUTURE. If user says a month that has passed this year, use NEXT year.',
+    parameters: {
+      type: 'object',
+      properties: {
+        title: {
+          type: 'string',
+          description: 'Name/title of the event (e.g. "Wedding Gig", "Freelance Bartending", "Doctor Appointment")'
+        },
+        date: {
+          type: 'string',
+          description: 'Date in YYYY-MM-DD format. 🚨 If user says a day name (e.g. "Saturday"), use the NEXT occurrence. If month has passed this year, use next year.'
+        },
+        start_time: {
+          type: 'string',
+          description: 'Start time in HH:mm 24h format (e.g. "14:00" for 2 PM, "4 de la tarde" → "16:00")'
+        },
+        end_time: {
+          type: 'string',
+          description: 'End time in HH:mm 24h format (e.g. "22:00" for 10 PM, "11 de la noche" → "23:00")'
+        },
+        notes: {
+          type: ['string', 'null'],
+          description: 'Optional notes (e.g. "Bring black vest", "Parking in back lot")'
+        },
+        location: {
+          type: ['string', 'null'],
+          description: 'Optional venue/location name or address'
+        },
+        role: {
+          type: ['string', 'null'],
+          description: 'Role for the gig (e.g. "Bartender", "Server", "Valet"). ALWAYS extract when staff mentions what they\'ll be doing.'
+        },
+        client: {
+          type: ['string', 'null'],
+          description: 'Client/employer name (e.g. "Marriott", "Joe\'s Catering"). ALWAYS extract when staff mentions who they\'re working for.'
+        },
+        hourly_rate: {
+          type: ['number', 'null'],
+          description: 'Hourly pay rate in dollars (e.g. 25 for $25/hr). Extract when staff mentions pay/rate.'
+        }
+      },
+      required: ['title', 'date', 'start_time', 'end_time']
+    }
+  },
+  {
+    name: 'create_personal_events_bulk',
+    description: 'Create multiple personal events at once (max 20). Use for recurring patterns like "I bartend every Saturday in March", "I have gigs on the 10th, 15th, and 22nd", "block off every Monday for school". Each event auto-creates an unavailability record.',
+    parameters: {
+      type: 'object',
+      properties: {
+        events: {
+          type: 'array',
+          description: 'Array of personal event objects (same fields as create_personal_event)',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string', description: 'Event name' },
+              date: { type: 'string', description: 'YYYY-MM-DD' },
+              start_time: { type: 'string', description: '24h format HH:mm' },
+              end_time: { type: 'string', description: '24h format HH:mm' },
+              notes: { type: ['string', 'null'] },
+              location: { type: ['string', 'null'] },
+              role: { type: ['string', 'null'] },
+              client: { type: ['string', 'null'] },
+              hourly_rate: { type: ['number', 'null'] }
+            }
+          }
+        }
+      },
+      required: ['events']
+    }
+  },
+  {
+    name: 'update_personal_event',
+    description: 'Update an existing personal event. Also updates the linked unavailability. Use when staff says "change my gig time", "move my event to Thursday", "update the location". First use get_my_personal_events to find the event ID.',
+    parameters: {
+      type: 'object',
+      properties: {
+        event_id: {
+          type: 'string',
+          description: 'The personal event ID to update (get this from get_my_personal_events results)'
+        },
+        title: { type: ['string', 'null'], description: 'New title (null = keep current)' },
+        date: { type: ['string', 'null'], description: 'New date YYYY-MM-DD (null = keep current). Must be in the future.' },
+        start_time: { type: ['string', 'null'], description: 'New start time HH:mm (null = keep current)' },
+        end_time: { type: ['string', 'null'], description: 'New end time HH:mm (null = keep current)' },
+        notes: { type: ['string', 'null'], description: 'New notes (null = keep current)' },
+        location: { type: ['string', 'null'], description: 'New location (null = keep current)' },
+        role: { type: ['string', 'null'], description: 'New role (null = keep current)' },
+        client: { type: ['string', 'null'], description: 'New client (null = keep current)' },
+        hourly_rate: { type: ['number', 'null'], description: 'New hourly rate (null = keep current)' }
+      },
+      required: ['event_id']
+    }
+  },
+  {
+    name: 'update_personal_events_bulk',
+    description: 'Update multiple personal events at once with the same field values. Use when staff says "update the location on all my La Tinto events", "change the pay rate on all my Saturday gigs", etc. First use get_my_personal_events to get the event IDs.',
+    parameters: {
+      type: 'object',
+      properties: {
+        event_ids: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Array of personal event IDs to update (get these from get_my_personal_events results)'
+        },
+        location: { type: ['string', 'null'], description: 'New location for all events (null = keep current)' },
+        role: { type: ['string', 'null'], description: 'New role for all events (null = keep current)' },
+        client: { type: ['string', 'null'], description: 'New client for all events (null = keep current)' },
+        hourly_rate: { type: ['number', 'null'], description: 'New hourly rate for all events (null = keep current)' },
+        notes: { type: ['string', 'null'], description: 'New notes for all events (null = keep current)' },
+        title: { type: ['string', 'null'], description: 'New title for all events (null = keep current)' }
+      },
+      required: ['event_ids']
+    }
+  },
+  {
+    name: 'get_my_personal_events',
+    description: 'Get my personal events (external gigs, side jobs, personal commitments I created). Use when staff asks specifically about personal events, "my personal gigs", or BEFORE update/delete to find the event ID. Note: get_my_schedule also includes personal events mixed with shifts.',
+    parameters: {
+      type: 'object',
+      properties: {
+        date_range: {
+          type: ['string', 'null'],
+          description: 'Date filter. Same options as get_my_schedule: "this_week", "next_week", "last_week", "this_month", "last_month", "last_3_months", "last_6_months", "all_past", "YYYY-MM-DD", or "YYYY-MM-DD:YYYY-MM-DD". Takes precedence over period.'
+        },
+        limit: {
+          type: ['number', 'null'],
+          description: 'Max events to return (default 50, max 50).'
+        },
+        period: {
+          type: ['string', 'null'],
+          description: 'Deprecated. Use date_range instead. "future" for upcoming, "past" for past only.'
+        }
+      }
+    }
+  },
+  {
+    name: 'delete_personal_event',
+    description: 'Delete a personal event I created. Also removes the linked unavailability. Use when staff says "remove my personal event", "cancel my gig", "delete the wedding event". First use get_my_personal_events to find the event ID.',
+    parameters: {
+      type: 'object',
+      properties: {
+        event_id: {
+          type: 'string',
+          description: 'The personal event ID to delete (get this from get_my_personal_events results)'
+        }
+      },
+      required: ['event_id']
+    }
+  },
+  {
+    name: 'search_address',
+    description: 'Search for a real address or venue using Google Places. Returns the formatted address with coordinates. Use this BEFORE create_personal_event when the staff mentions a location — resolve it to a proper address first, then pass the formatted_address as the location field.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Address or venue name to search (e.g. "Cherokee Ranch and Castle", "Marriott Denver", "1600 Pennsylvania Ave")'
+        }
+      },
+      required: ['query']
+    }
+  },
 ];
 
 /**
@@ -1009,8 +1311,93 @@ function parsePayRate(payRateInfo: any): number {
 }
 
 /**
+ * Build a Mongoose { date: { $gte, $lte } } filter from a date_range string.
+ * Shared by get_my_schedule, get_my_personal_events, and get_earnings_summary.
+ *
+ * Supports: this_week, last_week, next_week, this_month, last_month,
+ *           last_3_months, last_6_months, all_past, YYYY-MM-DD, YYYY-MM-DD:YYYY-MM-DD
+ *
+ * Returns empty object {} if dateRange is falsy (caller decides default behavior).
+ */
+function buildDateFilter(dateRange?: string): Record<string, any> {
+  if (!dateRange) return {};
+
+  const now = new Date();
+
+  if (dateRange === 'this_week') {
+    const start = new Date(now);
+    start.setDate(now.getDate() - now.getDay());
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+    return { date: { $gte: start, $lte: end } };
+  }
+  if (dateRange === 'last_week') {
+    const start = new Date(now);
+    start.setDate(now.getDate() - now.getDay() - 7);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+    return { date: { $gte: start, $lte: end } };
+  }
+  if (dateRange === 'next_week') {
+    const start = new Date(now);
+    start.setDate(now.getDate() - now.getDay() + 7);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+    return { date: { $gte: start, $lte: end } };
+  }
+  if (dateRange === 'this_month') {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    return { date: { $gte: start, $lte: end } };
+  }
+  if (dateRange === 'last_month') {
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+    return { date: { $gte: start, $lte: end } };
+  }
+  if (dateRange === 'last_3_months') {
+    const start = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+    start.setHours(0, 0, 0, 0);
+    return { date: { $gte: start, $lte: now } };
+  }
+  if (dateRange === 'last_6_months') {
+    const start = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+    start.setHours(0, 0, 0, 0);
+    return { date: { $gte: start, $lte: now } };
+  }
+  if (dateRange === 'all_past') {
+    return { date: { $lt: now } };
+  }
+  if (dateRange.includes(':')) {
+    const parts = dateRange.split(':');
+    const startDate = new Date(parts[0] || dateRange);
+    startDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(parts[1] || parts[0] || dateRange);
+    endDate.setHours(23, 59, 59, 999);
+    return { date: { $gte: startDate, $lte: endDate } };
+  }
+  // Assume ISO date (YYYY-MM-DD) — match the entire day
+  const specificDate = new Date(dateRange);
+  if (!isNaN(specificDate.getTime())) {
+    const startOfDay = new Date(specificDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(specificDate);
+    endOfDay.setHours(23, 59, 59, 999);
+    return { date: { $gte: startOfDay, $lte: endOfDay } };
+  }
+  // Unrecognized — return empty so caller can handle
+  return {};
+}
+
+/**
  * Execute get_my_schedule function
- * Returns upcoming shifts and assigned events
+ * Returns upcoming shifts and assigned events, INCLUDING personal events
  */
 async function executeGetMySchedule(
   userId: string,
@@ -1022,83 +1409,16 @@ async function executeGetMySchedule(
   try {
     console.log(`[executeGetMySchedule] Getting schedule for userId ${userId}, userKey ${userKey}, range: ${dateRange || 'all'}, tier: ${subscriptionTier}`);
 
-    // Parse date range filter
-    let dateFilter: any = {};
+    // Build date filter using shared helper
     const now = new Date();
-
-    if (dateRange) {
-      if (dateRange === 'this_week') {
-        const startOfWeek = new Date(now);
-        startOfWeek.setDate(now.getDate() - now.getDay());
-        startOfWeek.setHours(0, 0, 0, 0);
-        const endOfWeek = new Date(startOfWeek);
-        endOfWeek.setDate(startOfWeek.getDate() + 6);
-        endOfWeek.setHours(23, 59, 59, 999);
-        dateFilter = { date: { $gte: startOfWeek, $lte: endOfWeek } };
-      } else if (dateRange === 'last_week') {
-        const startOfLastWeek = new Date(now);
-        startOfLastWeek.setDate(now.getDate() - now.getDay() - 7);
-        startOfLastWeek.setHours(0, 0, 0, 0);
-        const endOfLastWeek = new Date(startOfLastWeek);
-        endOfLastWeek.setDate(startOfLastWeek.getDate() + 6);
-        endOfLastWeek.setHours(23, 59, 59, 999);
-        dateFilter = { date: { $gte: startOfLastWeek, $lte: endOfLastWeek } };
-      } else if (dateRange === 'next_week') {
-        const startOfNextWeek = new Date(now);
-        startOfNextWeek.setDate(now.getDate() - now.getDay() + 7);
-        startOfNextWeek.setHours(0, 0, 0, 0);
-        const endOfNextWeek = new Date(startOfNextWeek);
-        endOfNextWeek.setDate(startOfNextWeek.getDate() + 6);
-        endOfNextWeek.setHours(23, 59, 59, 999);
-        dateFilter = { date: { $gte: startOfNextWeek, $lte: endOfNextWeek } };
-      } else if (dateRange === 'this_month') {
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-        dateFilter = { date: { $gte: startOfMonth, $lte: endOfMonth } };
-      } else if (dateRange === 'last_month') {
-        const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
-        dateFilter = { date: { $gte: startOfLastMonth, $lte: endOfLastMonth } };
-      } else if (dateRange === 'last_3_months') {
-        const start = new Date(now.getFullYear(), now.getMonth() - 3, 1);
-        start.setHours(0, 0, 0, 0);
-        dateFilter = { date: { $gte: start, $lte: now } };
-      } else if (dateRange === 'last_6_months') {
-        const start = new Date(now.getFullYear(), now.getMonth() - 6, 1);
-        start.setHours(0, 0, 0, 0);
-        dateFilter = { date: { $gte: start, $lte: now } };
-      } else if (dateRange === 'all_past') {
-        dateFilter = { date: { $lt: now } };
-      } else if (dateRange.includes(':')) {
-        // Custom range: "YYYY-MM-DD:YYYY-MM-DD"
-        const parts = dateRange.split(':');
-        const startDate = new Date(parts[0] || dateRange);
-        startDate.setHours(0, 0, 0, 0);
-        const endDate = new Date(parts[1] || parts[0] || dateRange);
-        endDate.setHours(23, 59, 59, 999);
-        dateFilter = { date: { $gte: startDate, $lte: endDate } };
-      } else {
-        // Assume ISO date (YYYY-MM-DD) - match the entire day
-        const specificDate = new Date(dateRange);
-        const startOfDay = new Date(specificDate);
-        startOfDay.setHours(0, 0, 0, 0);
-        const endOfDay = new Date(specificDate);
-        endOfDay.setHours(23, 59, 59, 999);
-        dateFilter = { date: { $gte: startOfDay, $lte: endOfDay } };
-      }
-      console.log(`[executeGetMySchedule] Date filter for '${dateRange}':`, JSON.stringify(dateFilter));
-    } else {
-      // No date filter specified - return upcoming events
+    let dateFilter = buildDateFilter(dateRange);
+    if (!dateRange || Object.keys(dateFilter).length === 0) {
+      // No date filter or unrecognized range — return upcoming events
       dateFilter = { date: { $gte: now } };
       console.log(`[executeGetMySchedule] No date filter - returning upcoming events from ${now.toISOString()}`);
+    } else {
+      console.log(`[executeGetMySchedule] Date filter for '${dateRange}':`, JSON.stringify(dateFilter));
     }
-
-    const query = {
-      'accepted_staff.userKey': userKey,
-      status: { $ne: 'cancelled' },
-      ...dateFilter
-    };
-    console.log('[executeGetMySchedule] Query:', JSON.stringify(query, null, 2));
 
     // Dynamic limit: generous for reading own history, model needs full picture
     // Free: 30 events | Pro: 100 events
@@ -1109,27 +1429,24 @@ async function executeGetMySchedule(
 
     console.log(`[executeGetMySchedule] Using limit: ${eventLimit} (requested: ${limit || 'default'}, max: ${maxLimit})`);
 
-    const events = await EventModel.find(query)
-    .sort({ date: 1 })
-    .limit(eventLimit)
-    .select('shift_name event_name client_name date start_time end_time venue_name venue_address city state accepted_staff status roles pay_rate_info')
-    .lean();
+    // --- Fetch manager-assigned shifts ---
+    const managerQuery = {
+      'accepted_staff.userKey': userKey,
+      status: { $ne: 'cancelled' },
+      ...dateFilter
+    };
+    console.log('[executeGetMySchedule] Manager query:', JSON.stringify(managerQuery, null, 2));
 
-    console.log('[executeGetMySchedule] Found', events.length, 'events');
-    if (events.length > 0) {
-      console.log('[executeGetMySchedule] First event sample:', JSON.stringify({
-        event_name: (events[0] as any).event_name,
-        client_name: (events[0] as any).client_name,
-        venue_name: (events[0] as any).venue_name,
-        start_time: (events[0] as any).start_time,
-        end_time: (events[0] as any).end_time,
-        date: (events[0] as any).date,
-      }, null, 2));
-    }
+    const managerEvents = await EventModel.find(managerQuery)
+      .sort({ date: 1 })
+      .limit(eventLimit)
+      .select('shift_name event_name client_name date start_time end_time venue_name venue_address city state accepted_staff status roles pay_rate_info')
+      .lean();
 
-    // Extract user's data from accepted_staff for each event
-    // Cost optimization: Use abbreviated keys and skip null fields
-    const schedule = events.map((event: any) => {
+    console.log('[executeGetMySchedule] Found', managerEvents.length, 'manager events');
+
+    // Map manager events with source tag
+    const managerSchedule = managerEvents.map((event: any) => {
       const userInEvent = event.accepted_staff?.find((staff: any) =>
         staff.userKey === userKey
       );
@@ -1137,6 +1454,7 @@ async function executeGetMySchedule(
       const roleInfo = event.roles?.find((r: any) => r.role_name === userRole || r.role === userRole);
       return {
         id: event._id,
+        source: 'manager' as const,
         name: event.shift_name || event.event_name || event.client_name || 'Untitled',
         client: event.client_name,
         date: event.date,
@@ -1149,10 +1467,46 @@ async function executeGetMySchedule(
       };
     });
 
+    // --- Fetch personal events with the same date filter ---
+    const personalQuery = { userKey, ...dateFilter };
+    const personalEvents = await PersonalEventModel.find(personalQuery)
+      .sort({ date: 1 })
+      .limit(eventLimit)
+      .lean();
+
+    console.log('[executeGetMySchedule] Found', personalEvents.length, 'personal events');
+
+    const personalSchedule = personalEvents.map((pe: any) => ({
+      id: String(pe._id),
+      source: 'personal' as const,
+      name: pe.title || 'Personal Event',
+      client: pe.client || null,
+      date: pe.date,
+      time: `${pe.startTime}-${pe.endTime}`,
+      venue: pe.location || null,
+      addr: null,
+      role: pe.role || null,
+      pay: pe.hourlyRate ? `$${pe.hourlyRate}/hr` : null,
+      status: 'personal',
+      notes: pe.notes || null,
+    }));
+
+    // --- Merge, sort by date, apply combined limit ---
+    const merged = [...managerSchedule, ...personalSchedule]
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .slice(0, eventLimit);
+
+    const shiftCount = merged.filter(e => e.source === 'manager').length;
+    const personalCount = merged.filter(e => e.source === 'personal').length;
+    const parts: string[] = [];
+    if (shiftCount > 0) parts.push(`${shiftCount} shift${shiftCount !== 1 ? 's' : ''}`);
+    if (personalCount > 0) parts.push(`${personalCount} personal`);
+    const summary = parts.length > 0 ? `${merged.length} event(s) found (${parts.join(', ')})` : '0 events found';
+
     return {
       success: true,
-      message: `${schedule.length} shift(s) found`,
-      data: schedule
+      message: summary,
+      data: merged
     };
   } catch (error: any) {
     console.error('[executeGetMySchedule] Error:', error);
@@ -1175,71 +1529,14 @@ async function executeGetEarningsSummary(
   try {
     console.log(`[executeGetEarningsSummary] Getting earnings for userId ${userId}, userKey ${userKey}, range: ${dateRange || 'all'}`);
 
-    // Parse date range filter
-    // All dates are stored as Date objects (standardized by migration)
-    let dateFilter: any = {};
-    const now = new Date();
-
-    if (dateRange) {
-      if (dateRange === 'this_week') {
-        const startOfWeek = new Date(now);
-        startOfWeek.setDate(now.getDate() - now.getDay());
-        startOfWeek.setHours(0, 0, 0, 0);
-        const endOfWeek = new Date(startOfWeek);
-        endOfWeek.setDate(startOfWeek.getDate() + 7);
-        endOfWeek.setHours(23, 59, 59, 999);
-        dateFilter = { date: { $gte: startOfWeek, $lt: endOfWeek } };
-      } else if (dateRange === 'last_week') {
-        const startOfLastWeek = new Date(now);
-        startOfLastWeek.setDate(now.getDate() - now.getDay() - 7);
-        startOfLastWeek.setHours(0, 0, 0, 0);
-        const endOfLastWeek = new Date(startOfLastWeek);
-        endOfLastWeek.setDate(startOfLastWeek.getDate() + 7);
-        endOfLastWeek.setHours(23, 59, 59, 999);
-        dateFilter = { date: { $gte: startOfLastWeek, $lt: endOfLastWeek } };
-      } else if (dateRange === 'this_month') {
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        startOfMonth.setHours(0, 0, 0, 0);
-        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-        dateFilter = { date: { $gte: startOfMonth, $lte: endOfMonth } };
-      } else if (dateRange === 'last_month') {
-        const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        startOfLastMonth.setHours(0, 0, 0, 0);
-        const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
-        dateFilter = { date: { $gte: startOfLastMonth, $lte: endOfLastMonth } };
-      } else if (dateRange === 'last_3_months') {
-        const start = new Date(now.getFullYear(), now.getMonth() - 3, 1);
-        start.setHours(0, 0, 0, 0);
-        dateFilter = { date: { $gte: start, $lte: now } };
-      } else if (dateRange === 'last_6_months') {
-        const start = new Date(now.getFullYear(), now.getMonth() - 6, 1);
-        start.setHours(0, 0, 0, 0);
-        dateFilter = { date: { $gte: start, $lte: now } };
-      } else if (dateRange.includes(':')) {
-        // Custom range: "YYYY-MM-DD:YYYY-MM-DD"
-        const parts = dateRange.split(':');
-        const startDate = new Date(parts[0] || dateRange);
-        startDate.setHours(0, 0, 0, 0);
-        const endDate = new Date(parts[1] || parts[0] || dateRange);
-        endDate.setHours(23, 59, 59, 999);
-        dateFilter = { date: { $gte: startDate, $lte: endDate } };
-      } else {
-        // Assume ISO date (YYYY-MM-DD) - match the entire day
-        const specificDate = new Date(dateRange);
-        if (!isNaN(specificDate.getTime())) {
-          const startOfDay = new Date(specificDate);
-          startOfDay.setHours(0, 0, 0, 0);
-          const endOfDay = new Date(specificDate);
-          endOfDay.setHours(23, 59, 59, 999);
-          dateFilter = { date: { $gte: startOfDay, $lte: endOfDay } };
-        } else {
-          console.warn(`[executeGetEarningsSummary] Unrecognized date range: ${dateRange}`);
-          return {
-            success: false,
-            message: `Unrecognized date range "${dateRange}". Use: "this_week", "last_week", "this_month", "last_month", "last_3_months", "last_6_months", or custom "YYYY-MM-DD:YYYY-MM-DD" (e.g. "2025-11-01:2025-11-30").`
-          };
-        }
-      }
+    // Use shared date filter builder
+    const dateFilter = buildDateFilter(dateRange);
+    if (dateRange && Object.keys(dateFilter).length === 0) {
+      console.warn(`[executeGetEarningsSummary] Unrecognized date range: ${dateRange}`);
+      return {
+        success: false,
+        message: `Unrecognized date range "${dateRange}". Use: "this_week", "last_week", "this_month", "last_month", "last_3_months", "last_6_months", or custom "YYYY-MM-DD:YYYY-MM-DD" (e.g. "2025-11-01:2025-11-30").`
+      };
     }
 
     console.log(`[executeGetEarningsSummary] Date filter for '${dateRange}':`, JSON.stringify(dateFilter));
@@ -2075,6 +2372,552 @@ async function executeGetShiftDetails(
 }
 
 /**
+ * Execute create_personal_event — creates event + linked availability
+ * Includes 5-minute dedup guard and estimated earnings calculation (like manager create_event)
+ */
+async function executeCreatePersonalEvent(
+  userKey: string,
+  title: string,
+  date: string,
+  startTime: string,
+  endTime: string,
+  notes?: string,
+  location?: string,
+  role?: string,
+  client?: string,
+  hourlyRate?: number,
+): Promise<{ success: boolean; message: string; data?: any }> {
+  try {
+    // Validate required fields
+    if (!title || !date || !startTime || !endTime) {
+      return { success: false, message: '❌ Missing required fields. Need: title, date, start_time, end_time' };
+    }
+
+    const eventDate = new Date(date + 'T00:00:00');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (eventDate < today) {
+      return { success: false, message: `❌ Cannot create events in the past. The date ${date} has already passed.` };
+    }
+
+    // 5-minute dedup guard — prevent duplicate creation
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const existingDup = await PersonalEventModel.findOne({
+      userKey, title, date: eventDate, startTime,
+      createdAt: { $gte: fiveMinAgo },
+    }).lean();
+
+    if (existingDup) {
+      const dupDate = existingDup.date instanceof Date ? existingDup.date.toISOString().split('T')[0] : String(existingDup.date);
+      return {
+        success: true,
+        message: `⚠️ This event already exists (created moments ago).\n📌 "${existingDup.title}" on ${dupDate} from ${existingDup.startTime} to ${existingDup.endTime}\nEvent ID: ${existingDup._id}\nDo NOT create again — use this existing event.`,
+        data: { id: String(existingDup._id), alreadyExists: true },
+      };
+    }
+
+    const personalEvent = await PersonalEventModel.create({
+      userKey, title, date: eventDate, startTime, endTime,
+      notes: notes || undefined, location: location || undefined,
+      role: role || undefined, client: client || undefined,
+      hourlyRate: hourlyRate ?? undefined,
+    });
+
+    // Auto-create linked unavailability
+    const avail = await AvailabilityModel.create({
+      userKey, date, startTime, endTime,
+      status: 'unavailable',
+      notes: notes || undefined,
+      personalEventId: personalEvent._id,
+      source: 'personal_event',
+    });
+
+    personalEvent.availabilityId = avail._id as any;
+    await personalEvent.save();
+
+    // Build rich response (fat response pattern — like manager create_event)
+    let summary = `✅ Personal event created! Event ID: ${personalEvent._id}\n`;
+    summary += `📌 ${title}\n`;
+    summary += `📅 Date: ${date}\n`;
+    summary += `⏰ Time: ${startTime} – ${endTime}\n`;
+    if (role) summary += `👔 Role: ${role}\n`;
+    if (client) summary += `🏢 Client: ${client}\n`;
+    if (location) summary += `📍 Location: ${location}\n`;
+    if (notes) summary += `📝 Notes: ${notes}\n`;
+
+    // Calculate estimated earnings
+    if (hourlyRate && hourlyRate > 0) {
+      const startParts = startTime.split(':').map(Number);
+      const endParts = endTime.split(':').map(Number);
+      const startMins = startParts[0] * 60 + startParts[1];
+      const endMins = endParts[0] * 60 + endParts[1];
+      const hours = endMins > startMins ? (endMins - startMins) / 60.0 : 0;
+      if (hours > 0) {
+        const total = hours * hourlyRate;
+        summary += `💰 Pay: $${hourlyRate}/hr × ${hours.toFixed(1)}h = ~$${total.toFixed(0)}\n`;
+      } else {
+        summary += `💰 Rate: $${hourlyRate}/hr\n`;
+      }
+    }
+
+    summary += `\n🚫 Managers will see you as unavailable during this time.`;
+
+    return {
+      success: true,
+      message: summary,
+      data: {
+        id: String(personalEvent._id),
+        title, date, startTime, endTime,
+        notes: notes || null, location: location || null,
+        role: role || null, client: client || null,
+        hourlyRate: hourlyRate ?? null,
+      },
+    };
+  } catch (err: any) {
+    console.error('[executeCreatePersonalEvent] Error:', err);
+    return { success: false, message: 'Failed to create personal event.' };
+  }
+}
+
+/**
+ * Execute create_personal_events_bulk — bulk create personal events + linked availability
+ * Supports up to 20 events at once with dedup guard (like manager create_events_bulk)
+ */
+async function executeCreatePersonalEventsBulk(
+  userKey: string,
+  events: any[],
+): Promise<{ success: boolean; message: string; data?: any }> {
+  try {
+    if (!Array.isArray(events) || events.length === 0) {
+      return { success: false, message: '❌ No events provided. Pass an array of event objects.' };
+    }
+    if (events.length > 20) {
+      return { success: false, message: `❌ Too many events (${events.length}). Maximum is 20 per bulk operation.` };
+    }
+
+    // Validate all events before creating any
+    const todayBulk = new Date();
+    todayBulk.setHours(0, 0, 0, 0);
+    for (let i = 0; i < events.length; i++) {
+      const ev = events[i];
+      if (!ev.title || !ev.date || !ev.start_time || !ev.end_time) {
+        return { success: false, message: `❌ Event #${i + 1} missing required fields. Need: title, date, start_time, end_time` };
+      }
+      if (new Date(ev.date) < todayBulk) {
+        return { success: false, message: `❌ Event #${i + 1} has a past date (${ev.date}). All events must be in the future.` };
+      }
+    }
+
+    // Dedup guard: check against recently created events (last 5 min)
+    const bulkFiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const recentEvents = await PersonalEventModel.find({
+      userKey,
+      createdAt: { $gte: bulkFiveMinAgo },
+    }).select('_id title date startTime').lean();
+
+    if (recentEvents.length > 0) {
+      let matchedCount = 0;
+      for (const ev of events) {
+        const evDateStr = new Date(ev.date).toISOString().slice(0, 10);
+        const match = recentEvents.find((r: any) => {
+          const rDate = r.date instanceof Date ? r.date.toISOString().slice(0, 10) : String(r.date);
+          return r.title === ev.title && rDate === evDateStr && r.startTime === ev.start_time;
+        });
+        if (match) matchedCount++;
+      }
+
+      // If >=50% already exist, block creation
+      if (matchedCount >= Math.ceil(events.length / 2)) {
+        let dupMsg = `⚠️ These events already exist (created moments ago). Found ${recentEvents.length} recent events:\n`;
+        recentEvents.forEach((d: any, i: number) => {
+          const dt = d.date instanceof Date ? d.date.toISOString().split('T')[0] : String(d.date);
+          dupMsg += `  ${i + 1}. ${d.title} — ${dt} — ID: ${d._id}\n`;
+        });
+        dupMsg += `\nDo NOT create again. Use these existing event IDs.`;
+        return { success: true, message: dupMsg, data: { alreadyExists: true } };
+      }
+    }
+
+    // Create all events + linked availability records
+    const created: any[] = [];
+    let totalEarnings = 0;
+
+    for (const ev of events) {
+      const evDate = new Date(ev.date + 'T00:00:00');
+      const pe = await PersonalEventModel.create({
+        userKey,
+        title: ev.title,
+        date: evDate,
+        startTime: ev.start_time,
+        endTime: ev.end_time,
+        notes: ev.notes || undefined,
+        location: ev.location || undefined,
+        role: ev.role || undefined,
+        client: ev.client || undefined,
+        hourlyRate: ev.hourly_rate ?? undefined,
+      });
+
+      const avail = await AvailabilityModel.create({
+        userKey,
+        date: ev.date,
+        startTime: ev.start_time,
+        endTime: ev.end_time,
+        status: 'unavailable',
+        notes: ev.notes || undefined,
+        personalEventId: pe._id,
+        source: 'personal_event',
+      });
+
+      pe.availabilityId = avail._id as any;
+      await pe.save();
+
+      // Calculate earnings for this event
+      if (ev.hourly_rate && ev.hourly_rate > 0) {
+        const sp = ev.start_time.split(':').map(Number) as number[];
+        const ep = ev.end_time.split(':').map(Number) as number[];
+        const hours = (((ep[0] || 0) * 60 + (ep[1] || 0)) - ((sp[0] || 0) * 60 + (sp[1] || 0))) / 60.0;
+        if (hours > 0) totalEarnings += hours * ev.hourly_rate;
+      }
+
+      created.push(pe);
+    }
+
+    let summary = `✅ Created ${created.length} personal events:\n`;
+    created.forEach((c: any, i: number) => {
+      const dt = c.date instanceof Date ? c.date.toISOString().split('T')[0] : String(c.date);
+      summary += `  ${i + 1}. ${c.title}${c.role ? ` (${c.role})` : ''} — ${dt} ${c.startTime}–${c.endTime}${c.client ? ` for ${c.client}` : ''} — ID: ${c._id}\n`;
+    });
+
+    if (totalEarnings > 0) {
+      summary += `\n💰 Total estimated earnings: ~$${totalEarnings.toFixed(0)}`;
+    }
+    summary += `\n🚫 Managers will see you as unavailable for all these time slots.`;
+
+    return {
+      success: true,
+      message: summary,
+      data: {
+        events: created.map((c: any) => ({
+          id: String(c._id),
+          title: c.title,
+          date: c.date instanceof Date ? c.date.toISOString().split('T')[0] : String(c.date),
+        })),
+      },
+    };
+  } catch (err: any) {
+    console.error('[executeCreatePersonalEventsBulk] Error:', err);
+    return { success: false, message: `Failed to create events: ${err.message}` };
+  }
+}
+
+/**
+ * Execute update_personal_event — update event + linked availability
+ */
+async function executeUpdatePersonalEvent(
+  userKey: string,
+  eventId: string,
+  updates: {
+    title?: string;
+    date?: string;
+    startTime?: string;
+    endTime?: string;
+    notes?: string;
+    location?: string;
+    role?: string;
+    client?: string;
+    hourlyRate?: number;
+  },
+): Promise<{ success: boolean; message: string; data?: any }> {
+  try {
+    const existing = await PersonalEventModel.findOne({ _id: eventId, userKey });
+    if (!existing) {
+      return { success: false, message: 'Personal event not found or does not belong to you.' };
+    }
+
+    // Validate new date is not in the past
+    if (updates.date) {
+      const newDate = new Date(updates.date + 'T00:00:00');
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (newDate < today) {
+        return { success: false, message: `❌ Cannot move event to a past date (${updates.date}).` };
+      }
+    }
+
+    // Apply updates to personal event
+    const changes: string[] = [];
+    if (updates.date) { (existing as any).date = new Date(updates.date + 'T00:00:00'); changes.push(`date → ${updates.date}`); }
+    if (updates.title) { existing.title = updates.title; changes.push(`title → "${updates.title}"`); }
+    if (updates.startTime) { existing.startTime = updates.startTime; changes.push(`start → ${updates.startTime}`); }
+    if (updates.endTime) { existing.endTime = updates.endTime; changes.push(`end → ${updates.endTime}`); }
+    if (updates.notes !== undefined) { existing.notes = updates.notes || undefined; changes.push('notes updated'); }
+    if (updates.location !== undefined) { existing.location = updates.location || undefined; changes.push(`location → "${updates.location}"`); }
+    if (updates.role !== undefined) { (existing as any).role = updates.role || undefined; changes.push(`role → "${updates.role}"`); }
+    if (updates.client !== undefined) { (existing as any).client = updates.client || undefined; changes.push(`client → "${updates.client}"`); }
+    if (updates.hourlyRate !== undefined) { (existing as any).hourlyRate = updates.hourlyRate ?? undefined; changes.push(`rate → $${updates.hourlyRate}/hr`); }
+    await existing.save();
+
+    // Update linked availability record
+    if (existing.availabilityId) {
+      const availUpdates: any = { status: 'unavailable', source: 'personal_event' };
+      if (updates.date) availUpdates.date = updates.date;
+      if (updates.startTime) availUpdates.startTime = updates.startTime;
+      if (updates.endTime) availUpdates.endTime = updates.endTime;
+      if (updates.notes !== undefined) availUpdates.notes = updates.notes;
+      await AvailabilityModel.findByIdAndUpdate(existing.availabilityId, availUpdates);
+    }
+
+    const dateStr = existing.date instanceof Date ? existing.date.toISOString().split('T')[0] : String(existing.date);
+
+    return {
+      success: true,
+      message: `✅ Personal event "${existing.title}" updated.\n📅 ${dateStr} ${existing.startTime}–${existing.endTime}\nChanges: ${changes.join(', ')}`,
+      data: {
+        id: String(existing._id),
+        title: existing.title,
+        date: dateStr,
+        startTime: existing.startTime,
+        endTime: existing.endTime,
+        role: (existing as any).role || null,
+        client: (existing as any).client || null,
+        hourlyRate: (existing as any).hourlyRate ?? null,
+      },
+    };
+  } catch (err: any) {
+    console.error('[executeUpdatePersonalEvent] Error:', err);
+    return { success: false, message: 'Failed to update personal event.' };
+  }
+}
+
+/**
+ * Execute update_personal_events_bulk — apply the same field updates to multiple personal events
+ */
+async function executeUpdatePersonalEventsBulk(
+  userKey: string,
+  eventIds: string[],
+  updates: {
+    title?: string;
+    location?: string;
+    role?: string;
+    client?: string;
+    hourlyRate?: number;
+    notes?: string;
+  },
+): Promise<{ success: boolean; message: string; data?: any }> {
+  try {
+    if (!eventIds || eventIds.length === 0) {
+      return { success: false, message: 'No event IDs provided.' };
+    }
+    if (eventIds.length > 50) {
+      return { success: false, message: 'Too many events (max 50).' };
+    }
+
+    // Build the $set object from provided updates
+    const setFields: any = {};
+    const changeDescriptions: string[] = [];
+    if (updates.title !== undefined) { setFields.title = updates.title; changeDescriptions.push(`title → "${updates.title}"`); }
+    if (updates.location !== undefined) { setFields.location = updates.location; changeDescriptions.push(`location → "${updates.location}"`); }
+    if (updates.role !== undefined) { setFields.role = updates.role; changeDescriptions.push(`role → "${updates.role}"`); }
+    if (updates.client !== undefined) { setFields.client = updates.client; changeDescriptions.push(`client → "${updates.client}"`); }
+    if (updates.hourlyRate !== undefined) { setFields.hourlyRate = updates.hourlyRate; changeDescriptions.push(`rate → $${updates.hourlyRate}/hr`); }
+    if (updates.notes !== undefined) { setFields.notes = updates.notes; changeDescriptions.push('notes updated'); }
+
+    if (Object.keys(setFields).length === 0) {
+      return { success: false, message: 'No fields to update.' };
+    }
+
+    // Update all matching events that belong to this user
+    const result = await PersonalEventModel.updateMany(
+      { _id: { $in: eventIds }, userKey },
+      { $set: setFields }
+    );
+
+    const updatedCount = result.modifiedCount || 0;
+    const matchedCount = result.matchedCount || 0;
+
+    console.log(`[executeUpdatePersonalEventsBulk] Updated ${updatedCount}/${matchedCount} of ${eventIds.length} events for userKey=${userKey}. Changes: ${changeDescriptions.join(', ')}`);
+
+    if (matchedCount === 0) {
+      return { success: false, message: 'No matching personal events found. Make sure the event IDs are correct.' };
+    }
+
+    return {
+      success: true,
+      message: `✅ Updated ${updatedCount} personal event(s).\nChanges: ${changeDescriptions.join(', ')}`,
+      data: { updatedCount, matchedCount, requested: eventIds.length, changes: changeDescriptions },
+    };
+  } catch (err: any) {
+    console.error('[executeUpdatePersonalEventsBulk] Error:', err);
+    return { success: false, message: 'Failed to bulk-update personal events.' };
+  }
+}
+
+/**
+ * Execute get_my_personal_events — list user's personal events
+ * Supports date_range (same as get_my_schedule) with backward-compat for legacy period param
+ */
+async function executeGetMyPersonalEvents(
+  userKey: string,
+  period?: string,
+  dateRange?: string,
+  limit?: number,
+): Promise<{ success: boolean; message: string; data?: any }> {
+  try {
+    const filter: any = { userKey };
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // date_range takes precedence over legacy period param
+    if (dateRange) {
+      const df = buildDateFilter(dateRange);
+      if (Object.keys(df).length > 0) {
+        Object.assign(filter, df);
+      } else {
+        // Unrecognized dateRange — fall through to default (all events)
+        console.warn(`[executeGetMyPersonalEvents] Unrecognized date_range: ${dateRange}`);
+      }
+    } else if (period === 'future') {
+      filter.date = { $gte: today };
+    } else if (period === 'past') {
+      filter.date = { $lt: today };
+    }
+
+    const eventLimit = Math.min(limit || 50, 50);
+
+    const events = await PersonalEventModel.find(filter)
+      .sort({ date: 1 })
+      .limit(eventLimit)
+      .lean();
+
+    if (events.length === 0) {
+      return { success: true, message: 'You have no personal events.', data: { events: [] } };
+    }
+
+    const mapped = events.map((e: any) => ({
+      id: String(e._id),
+      title: e.title,
+      date: e.date instanceof Date ? e.date.toISOString().split('T')[0] : String(e.date),
+      startTime: e.startTime,
+      endTime: e.endTime,
+      notes: e.notes || null,
+      location: e.location || null,
+      role: e.role || null,
+      client: e.client || null,
+      hourlyRate: e.hourlyRate ?? null,
+    }));
+
+    return {
+      success: true,
+      message: `Found ${events.length} personal event(s).`,
+      data: { events: mapped },
+    };
+  } catch (err: any) {
+    console.error('[executeGetMyPersonalEvents] Error:', err);
+    return { success: false, message: 'Failed to retrieve personal events.' };
+  }
+}
+
+/**
+ * Execute delete_personal_event — delete event + linked availability
+ */
+async function executeDeletePersonalEvent(
+  userKey: string,
+  eventId: string,
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const existing = await PersonalEventModel.findOne({ _id: eventId, userKey });
+    if (!existing) {
+      return { success: false, message: 'Personal event not found or does not belong to you.' };
+    }
+
+    // Delete linked availability
+    if (existing.availabilityId) {
+      await AvailabilityModel.findByIdAndDelete(existing.availabilityId);
+    }
+
+    const title = existing.title;
+    await PersonalEventModel.deleteOne({ _id: eventId });
+
+    return { success: true, message: `Personal event "${title}" deleted. You are no longer marked as unavailable for that time.` };
+  } catch (err: any) {
+    console.error('[executeDeletePersonalEvent] Error:', err);
+    return { success: false, message: 'Failed to delete personal event.' };
+  }
+}
+
+/**
+ * Execute search_address — resolve a query to a formatted address via Google Places
+ */
+async function executeSearchAddress(
+  query: string,
+): Promise<{ success: boolean; message: string; data?: any }> {
+  try {
+    const googleMapsKey = process.env.GOOGLE_MAPS_API_KEY;
+    if (!googleMapsKey) {
+      return { success: false, message: 'Google Maps API key not configured on server.' };
+    }
+
+    // Step 1: Autocomplete
+    const acParams = new URLSearchParams({
+      input: query,
+      key: googleMapsKey,
+      location: '39.7392,-104.9903',
+      radius: '450000',
+      region: 'us',
+      components: 'country:us',
+    });
+
+    const acResponse = await axios.get(
+      `https://maps.googleapis.com/maps/api/place/autocomplete/json?${acParams.toString()}`
+    );
+
+    const predictions = acResponse.data?.predictions || [];
+    if (predictions.length === 0) {
+      return { success: false, message: `No results found for "${query}". Try a more specific address or venue name.` };
+    }
+
+    // Step 2: Get details for top result
+    const placeId = predictions[0].place_id;
+    const detParams = new URLSearchParams({
+      place_id: placeId,
+      key: googleMapsKey,
+      fields: 'formatted_address,geometry,address_components,name',
+    });
+
+    const detResponse = await axios.get(
+      `https://maps.googleapis.com/maps/api/place/details/json?${detParams.toString()}`
+    );
+
+    if (detResponse.data?.status !== 'OK') {
+      return { success: false, message: 'Could not resolve address details.' };
+    }
+
+    const result = detResponse.data.result;
+    const formatted = result.formatted_address || query;
+    const lat = result.geometry?.location?.lat;
+    const lng = result.geometry?.location?.lng;
+    const name = result.name || '';
+
+    console.log(`[executeSearchAddress] Resolved "${query}" → "${formatted}"`);
+
+    return {
+      success: true,
+      message: `Found: ${name ? name + ' — ' : ''}${formatted}`,
+      data: {
+        formatted_address: formatted,
+        name,
+        latitude: lat,
+        longitude: lng,
+        place_id: placeId,
+      }
+    };
+  } catch (err: any) {
+    console.error('[executeSearchAddress] Error:', err.message);
+    return { success: false, message: 'Failed to search address.' };
+  }
+}
+
+/**
  * Execute staff function based on name and arguments
  */
 async function executeStaffFunction(
@@ -2133,6 +2976,55 @@ async function executeStaffFunction(
 
     case 'get_shift_details':
       return await executeGetShiftDetails(functionArgs.event_id, userKey);
+
+    case 'create_personal_event':
+      return await executeCreatePersonalEvent(
+        userKey,
+        functionArgs.title,
+        functionArgs.date,
+        functionArgs.start_time,
+        functionArgs.end_time,
+        functionArgs.notes,
+        functionArgs.location,
+        functionArgs.role,
+        functionArgs.client,
+        functionArgs.hourly_rate != null ? Number(functionArgs.hourly_rate) : undefined,
+      );
+
+    case 'create_personal_events_bulk':
+      return await executeCreatePersonalEventsBulk(userKey, functionArgs.events);
+
+    case 'update_personal_event':
+      return await executeUpdatePersonalEvent(userKey, functionArgs.event_id, {
+        title: functionArgs.title || undefined,
+        date: functionArgs.date || undefined,
+        startTime: functionArgs.start_time || undefined,
+        endTime: functionArgs.end_time || undefined,
+        notes: functionArgs.notes,
+        location: functionArgs.location,
+        role: functionArgs.role,
+        client: functionArgs.client,
+        hourlyRate: functionArgs.hourly_rate != null ? Number(functionArgs.hourly_rate) : undefined,
+      });
+
+    case 'update_personal_events_bulk':
+      return await executeUpdatePersonalEventsBulk(userKey, functionArgs.event_ids || [], {
+        title: functionArgs.title || undefined,
+        location: functionArgs.location,
+        role: functionArgs.role,
+        client: functionArgs.client,
+        hourlyRate: functionArgs.hourly_rate != null ? Number(functionArgs.hourly_rate) : undefined,
+        notes: functionArgs.notes,
+      });
+
+    case 'get_my_personal_events':
+      return await executeGetMyPersonalEvents(userKey, functionArgs.period, functionArgs.date_range, functionArgs.limit);
+
+    case 'delete_personal_event':
+      return await executeDeletePersonalEvent(userKey, functionArgs.event_id);
+
+    case 'search_address':
+      return await executeSearchAddress(functionArgs.query);
 
     default:
       return {
@@ -2314,7 +3206,11 @@ When showing schedule information, use this friendly format:
    📍 [LINK:Convention Center]
    👔 Server • Client: Tech Corp
 
-(Use emojis, bold text, and clear formatting)
+3. 🏷️ **Monday, Jan 27th** • 6:00 PM - 10:00 PM *(Personal)*
+   📍 Marriott Downtown
+   👔 Bartender • $30/hr
+
+(Use emojis, bold text, and clear formatting. Tag personal events with 🏷️ and *(Personal)* to distinguish from manager shifts)
 
 📊 HOW MANY TO SHOW:
 - "my schedule" / "my shifts" / "my jobs" → Show next 7-10 upcoming
@@ -2326,6 +3222,9 @@ When showing schedule information, use this friendly format:
 - The context data only shows UPCOMING events. It does NOT contain past/completed events.
 - When user asks about ANY specific date range, past events, history, or "show me shifts from X to Y":
   → You MUST call get_my_schedule with the appropriate date_range. NEVER answer from context alone.
+- get_my_schedule now returns BOTH manager-assigned shifts (source: "manager") AND personal events (source: "personal").
+  → When showing results, label personal events distinctly with 🏷️ Personal tag so staff can tell them apart from assigned shifts.
+  → Personal events have source: "personal" and status: "personal" in the data.
 - The eventSummary.pastEvents count tells you how many past events exist — use the tool to fetch them.
 - get_earnings_summary ALWAYS returns earnings broken down by venue, role, AND client (byVenue, byRole, byClient arrays).
   → ALWAYS include total earned, total hours, AND total events in your initial earnings response. Never skip hours or event count.
@@ -2335,6 +3234,7 @@ When showing schedule information, use this friendly format:
   → When user asks "how many hours in February?" or "break it down by month", use the PREVIOUS get_performance result. Do NOT call the tool again.
 - get_my_schedule and get_all_my_events include pay rate per shift.
   → When user asks "how much does this pay?" after viewing their schedule, the pay info is already there. Do NOT call get_shift_details just for pay.
+- Use get_my_personal_events ONLY for personal-event-specific queries (e.g. "show my personal gigs") or when you need the event ID for update/delete operations. For general schedule queries, get_my_schedule already includes personal events.
 
 🗓️ DATE HANDLING FOR SCHEDULE QUERIES:
 - When user asks about past months (e.g. "October to December", "last summer", "January shifts"):
@@ -2349,6 +3249,47 @@ When showing schedule information, use this friendly format:
 - Use mark_availability tool directly — it saves to the database immediately
 - After marking, confirm naturally: "Done! Marked you as unavailable for Feb 15-17."
 - Expand date ranges to individual ISO dates: "Feb 15-17" → ["2026-02-15", "2026-02-16", "2026-02-17"]
+
+📌 PERSONAL EVENTS (AGENTIC WORKFLOW):
+Tools: create_personal_event, create_personal_events_bulk, update_personal_event, update_personal_events_bulk, get_my_personal_events, delete_personal_event, search_address
+NOTE: get_my_schedule already includes personal events alongside shifts. Use get_my_personal_events only for personal-specific queries or to find an event ID before update/delete.
+
+WHEN TO USE:
+- Staff mentions personal gigs, side jobs, freelance work, doctor visits, school, or blocking time
+- Triggers: "I have a wedding gig Saturday", "Add my freelance event", "I bartend every Saturday at Marriott"
+- Different from mark_availability — creates a FULL event card in My Shifts with role, client, and pay tracking
+
+ADDRESS LOOKUP (search_address):
+- When staff mentions a venue or location (e.g. "at Cherokee Ranch", "at the Marriott downtown"), call search_address FIRST to resolve it to a real address
+- Pass the formatted_address from search_address as the location in create_personal_event
+- Example flow: "gig at Cherokee Ranch" → search_address("Cherokee Ranch") → gets "Cherokee Ranch and Castle, 6113 N Daniels Park Rd, Sedalia, CO 80135" → use that as location
+- If search_address returns no results, use the staff's original text as-is
+
+SINGLE EVENT (create_personal_event):
+- Executes directly — no confirmation needed
+- ALWAYS extract role, client, and hourly_rate when staff mentions them
+- Example: "I'm bartending at Marriott Saturday 4-10pm for $30/hr" → role: "Bartender", client: "Marriott", hourly_rate: 30
+- After creating, present the summary with estimated earnings: "Done! Added Bartender gig at Marriott — $30/hr × 6h = ~$180"
+- The response includes FULL event details. Do NOT call get_my_personal_events after creating.
+
+BULK CREATION (create_personal_events_bulk):
+- For recurring patterns: "every Saturday in March", "I have 3 gigs next week", "block off all Mondays for school"
+- Present a summary of all events BEFORE creating. Ask user to confirm.
+- After creation, show the full list with total estimated earnings.
+- ⚠️ CRITICAL: When user says "yes"/"si"/"create" after you present the summary, create them. If they already exist (dedup guard triggers), do NOT recreate.
+
+UPDATING (update_personal_event / update_personal_events_bulk):
+- First use get_my_personal_events to find the event ID(s)
+- Single event: call update_personal_event with only the fields that changed
+- Multiple events with same change: call update_personal_events_bulk with all event IDs + the shared field values
+  Example: "update the address on all my La Tinto events" → get IDs → update_personal_events_bulk with event_ids + location
+- ⚠️ NEVER claim data is already correct without COMPARING the exact field value from get_my_personal_events against the new value. If user asks to update, ALWAYS call the update tool.
+- Also updates the linked unavailability automatically
+
+DELETING (delete_personal_event):
+- First use get_my_personal_events to find the event ID
+- Then call delete_personal_event — also removes linked unavailability
+- Confirm: "Done! Removed 'Wedding Gig' and you're available again for that time slot."
 
 💬 MESSAGING:
 - When user wants to send a message to their manager (call off, running late, time off, etc.):

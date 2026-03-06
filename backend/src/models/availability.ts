@@ -6,6 +6,9 @@ export interface AvailabilityDocument extends Document {
   startTime: string; // e.g., HH:mm
   endTime: string; // e.g., HH:mm
   status: 'available' | 'unavailable';
+  notes?: string;
+  personalEventId?: mongoose.Types.ObjectId;
+  source?: 'manual' | 'personal_event';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -17,6 +20,9 @@ const AvailabilitySchema = new Schema<AvailabilityDocument>(
     startTime: { type: String, required: true, trim: true },
     endTime: { type: String, required: true, trim: true },
     status: { type: String, required: true, enum: ['available', 'unavailable'] },
+    notes: { type: String, trim: true },
+    personalEventId: { type: Schema.Types.ObjectId, ref: 'PersonalEvent' },
+    source: { type: String, enum: ['manual', 'personal_event'] },
   },
   { timestamps: true }
 );

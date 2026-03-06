@@ -7,6 +7,11 @@ export interface StaffProfileDocument extends Document {
   rating: number; // 1-5, 0 = unrated
   isFavorite: boolean;
   groupIds: mongoose.Types.ObjectId[];
+  // Payroll fields (merged from EmployeePayrollMapping)
+  externalEmployeeId?: string;   // ADP File Number or Paychex Employee ID
+  workerType?: 'w2' | '1099';
+  department?: string;
+  earningsCode?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -19,6 +24,11 @@ const StaffProfileSchema = new Schema<StaffProfileDocument>(
     rating: { type: Number, default: 0, min: 0, max: 5 },
     isFavorite: { type: Boolean, default: false },
     groupIds: { type: [Schema.Types.ObjectId], ref: 'StaffGroup', default: [] },
+    // Payroll fields (merged from EmployeePayrollMapping)
+    externalEmployeeId: { type: String, trim: true },
+    workerType: { type: String, enum: ['w2', '1099'] },
+    department: { type: String, trim: true },
+    earningsCode: { type: String, trim: true },
   },
   { timestamps: true, collection: 'staffprofiles' }
 );

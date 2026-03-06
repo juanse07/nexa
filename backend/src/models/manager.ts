@@ -93,6 +93,16 @@ export interface ManagerDocument extends Document {
     updatedAt?: Date;
   };
 
+  // Payroll configuration (org-wide)
+  payrollConfig?: {
+    provider: 'adp' | 'paychex' | 'gusto' | 'none';
+    companyCode?: string;
+    defaultDepartment?: string;
+    defaultEarningsCode?: string;
+    overtimeThreshold?: number;    // Hours per client per period before OT (default 40)
+    overtimeMultiplier?: number;   // OT rate multiplier (default 1.5)
+  };
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -194,6 +204,16 @@ const ManagerSchema = new Schema<ManagerDocument>(
       preferredDocDesign: { type: String, enum: ['plain', 'classic', 'executive', 'modern'], default: 'classic' },
       createdAt: { type: Date },
       updatedAt: { type: Date },
+    },
+
+    // Payroll configuration (org-wide)
+    payrollConfig: {
+      provider: { type: String, enum: ['adp', 'paychex', 'gusto', 'none'], default: 'none' },
+      companyCode: { type: String, trim: true },
+      defaultDepartment: { type: String, trim: true },
+      defaultEarningsCode: { type: String, trim: true, default: 'REG' },
+      overtimeThreshold: { type: Number, default: 40 },
+      overtimeMultiplier: { type: Number, default: 1.5 },
     },
 
     // AI provider usage tracking

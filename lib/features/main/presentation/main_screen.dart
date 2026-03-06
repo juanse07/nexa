@@ -13,6 +13,7 @@ import '../../chat/presentation/conversations_screen.dart';
 import '../../chat/data/services/chat_service.dart';
 import '../../users/presentation/pages/settings_page.dart';
 import '../../teams/presentation/pages/teams_management_page.dart';
+import '../../payroll/presentation/payroll_export_screen.dart';
 import '../../users/presentation/pages/manager_profile_page.dart';
 import '../../auth/data/services/auth_service.dart';
 import '../../auth/presentation/pages/login_page.dart';
@@ -653,6 +654,17 @@ class _MainScreenState extends State<MainScreen>
                         Navigator.pop(ctx);
                         Navigator.of(context).push(
                           MaterialPageRoute(builder: (_) => const TeamsManagementPage()),
+                        );
+                      },
+                    ),
+                    _buildSheetActionTile(
+                      ctx: ctx,
+                      icon: Icons.receipt_long_outlined,
+                      label: l10n.payrollReportLabel,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const PayrollExportScreen()),
                         );
                       },
                     ),

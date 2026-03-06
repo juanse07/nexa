@@ -17,6 +17,7 @@ import { eventsCreatedTotal, clockInsTotal, clockOutsTotal } from '../metrics/me
 import { notificationService } from '../services/notificationService';
 import { UserModel } from '../models/user';
 import { StaffProfileModel } from '../models/staffProfile';
+import { PersonalEventModel } from '../models/personalEvent';
 import { ChatMessageModel } from '../models/chatMessage';
 import {
   isWithinGeofence,
@@ -2091,8 +2092,67 @@ router.get('/events/my-shifts', requireAuth, async (req, res) => {
       };
     });
 
+    // ── Merge personal events ──────────────────────────────────────────
+    const peFilter: any = { userKey: audienceKey };
+    if (period === 'future') {
+      const todayStr = new Date().toISOString().split('T')[0];
+      peFilter.date = { $gte: new Date(todayStr) };
+    } else if (period === 'past') {
+      const todayStr = new Date().toISOString().split('T')[0];
+      peFilter.date = { $lt: new Date(todayStr) };
+    }
+    if (lastSyncParam) {
+      try {
+        const lastSyncDate = new Date(lastSyncParam);
+        if (!isNaN(lastSyncDate.getTime())) {
+          peFilter.updatedAt = { $gt: lastSyncDate };
+        }
+      } catch (_e) { /* ignore */ }
+    }
+
+    const personalEvents = await PersonalEventModel.find(peFilter).sort({ date: -1 }).lean();
+
+    const mappedPersonalEvents = personalEvents.map((pe: any) => {
+      const dateStr = pe.date instanceof Date ? pe.date.toISOString().split('T')[0] : String(pe.date);
+      // Calculate estimated pay if hourlyRate is set
+      let estimatedPay: number | undefined;
+      if (pe.hourlyRate) {
+        const [sh, sm] = (pe.startTime || '0:0').split(':').map(Number);
+        const [eh, em] = (pe.endTime || '0:0').split(':').map(Number);
+        const hours = ((eh * 60 + em) - (sh * 60 + sm)) / 60;
+        if (hours > 0) estimatedPay = Math.round(hours * pe.hourlyRate * 100) / 100;
+      }
+      return {
+        id: String(pe._id),
+        _id: String(pe._id),
+        type: 'personal',
+        event_name: pe.title,
+        client_name: pe.client || pe.title,
+        shift_name: pe.title,
+        date: dateStr,
+        start_time: pe.startTime,
+        end_time: pe.endTime,
+        notes: pe.notes || '',
+        venue_name: pe.location || '',
+        location: pe.location || '',
+        status: 'confirmed',
+        accepted_staff: [{ userKey: pe.userKey, response: 'accept', role: pe.role || '' }],
+        roles: pe.role ? [{ role: pe.role, count: 1, tariff: pe.hourlyRate ? { rate: pe.hourlyRate, currency: pe.currency || '$' } : undefined }] : [],
+        role_stats: [],
+        personal_role: pe.role || '',
+        personal_client: pe.client || '',
+        personal_hourly_rate: pe.hourlyRate ?? null,
+        personal_currency: pe.currency || '$',
+        personal_estimated_pay: estimatedPay ?? null,
+        createdAt: pe.createdAt,
+        updatedAt: pe.updatedAt,
+      };
+    });
+
+    const allEvents = [...mappedEvents, ...mappedPersonalEvents];
+
     return res.json({
-      events: mappedEvents,
+      events: allEvents,
       serverTimestamp: new Date().toISOString(),
       deltaSync: !!lastSyncParam,
     });

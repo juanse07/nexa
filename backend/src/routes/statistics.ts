@@ -10,6 +10,7 @@ import { FlaggedAttendanceModel } from '../models/flaggedAttendance';
 import { resolveManagerForRequest } from '../utils/manager';
 import { generateReport, ReportFormat, BrandConfig, TemplateDesign } from '../services/docService';
 import { ManagerModel } from '../models/manager';
+import { calculatePayroll } from '../services/payroll/payrollCalculator';
 import { getPresignedUrl, extractKeyFromUrl } from '../services/storageService';
 
 const router = Router();
@@ -660,106 +661,7 @@ router.get('/statistics/manager/payroll', requireAuth, async (req: Request, res:
       endDate as string
     );
 
-    // Get all completed events in period
-    const events = await EventModel.find({
-      managerId: manager._id,
-      status: { $in: ['completed', 'in_progress', 'fulfilled', 'published'] },
-      date: { $gte: start, $lte: end }
-    }).lean();
-
-    // Pre-load tariff rate lookup
-    const [allTariffs, allRoles, allClients] = await Promise.all([
-      TariffModel.find({ managerId: manager._id }).lean(),
-      RoleModel.find({ managerId: manager._id }).lean(),
-      ClientModel.find({ managerId: manager._id }).lean(),
-    ]);
-
-    const roleIdToName: Record<string, string> = {};
-    for (const r of allRoles) {
-      roleIdToName[String(r._id)] = r.name.trim().toLowerCase();
-    }
-    const clientIdToName: Record<string, string> = {};
-    for (const c of allClients) {
-      clientIdToName[String(c._id)] = c.name.trim().toLowerCase();
-    }
-
-    const tariffMap: Record<string, number> = {};
-    for (const t of allTariffs) {
-      const cName = clientIdToName[String(t.clientId)] || '';
-      const rName = roleIdToName[String(t.roleId)] || '';
-      if (cName && rName) {
-        tariffMap[`${cName}|${rName}`] = t.rate;
-      }
-    }
-
-    // Aggregate by staff member
-    const staffPayroll: Record<string, {
-      userKey: string;
-      name: string;
-      email: string;
-      picture: string;
-      shifts: number;
-      hours: number;
-      earnings: number;
-      roles: Set<string>;
-    }> = {};
-
-    for (const event of events) {
-      const acceptedStaff = ((event as any).accepted_staff || []).filter(
-        (s: any) => s.response === 'accepted' || s.response === 'accept'
-      );
-
-      const eventClientName = ((event as any).client_name || '').trim().toLowerCase();
-
-      for (const staff of acceptedStaff) {
-        const userKey = staff.userKey;
-        const attendance = (staff.attendance || [])[0];
-        const hours = attendance?.approvedHours ||
-          calculateHours((event as any).start_time, (event as any).end_time);
-
-        // Look up pay rate from tariffs
-        const staffRoleNorm = (staff.role || '').trim().toLowerCase();
-        const hourlyRate = tariffMap[`${eventClientName}|${staffRoleNorm}`] || 0;
-
-        if (!staffPayroll[userKey]) {
-          staffPayroll[userKey] = {
-            userKey,
-            name: staff.name || 'Unknown',
-            email: staff.email || '',
-            picture: staff.picture || '',
-            shifts: 0,
-            hours: 0,
-            earnings: 0,
-            roles: new Set(),
-          };
-        }
-
-        staffPayroll[userKey].shifts++;
-        staffPayroll[userKey].hours += hours;
-        staffPayroll[userKey].earnings += hourlyRate * hours;
-        if (staff.role) staffPayroll[userKey].roles.add(staff.role);
-      }
-    }
-
-    // Format and sort by earnings
-    const payrollEntries = Object.values(staffPayroll)
-      .map(entry => ({
-        userKey: entry.userKey,
-        name: entry.name,
-        email: entry.email,
-        picture: entry.picture,
-        shifts: entry.shifts,
-        hours: Math.round(entry.hours * 10) / 10,
-        earnings: Math.round(entry.earnings * 100) / 100,
-        averageRate: entry.hours > 0
-          ? Math.round((entry.earnings / entry.hours) * 100) / 100
-          : 0,
-        roles: Array.from(entry.roles),
-      }))
-      .sort((a, b) => b.earnings - a.earnings);
-
-    const totalPayroll = payrollEntries.reduce((sum, e) => sum + e.earnings, 0);
-    const totalHours = payrollEntries.reduce((sum, e) => sum + e.hours, 0);
+    const payroll = await calculatePayroll(manager._id, start, end);
 
     return res.json({
       period: {
@@ -767,15 +669,8 @@ router.get('/statistics/manager/payroll', requireAuth, async (req: Request, res:
         end: end.toISOString(),
         label: getPeriodLabel(period as string, start, end),
       },
-      summary: {
-        staffCount: payrollEntries.length,
-        totalHours: Math.round(totalHours * 10) / 10,
-        totalPayroll: Math.round(totalPayroll * 100) / 100,
-        averagePerStaff: payrollEntries.length > 0
-          ? Math.round((totalPayroll / payrollEntries.length) * 100) / 100
-          : 0,
-      },
-      entries: payrollEntries,
+      summary: payroll.summary,
+      entries: payroll.entries,
     });
   } catch (err: any) {
     console.error('[statistics/manager/payroll] Error:', err);

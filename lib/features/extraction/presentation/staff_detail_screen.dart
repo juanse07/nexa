@@ -21,6 +21,7 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
   final StaffService _staffService = StaffService();
   final GroupService _groupService = GroupService();
   final TextEditingController _notesController = TextEditingController();
+  final TextEditingController _externalIdController = TextEditingController();
 
   Map<String, dynamic>? _hours;
   Map<String, dynamic>? _detail;
@@ -28,8 +29,10 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
   bool _isLoadingHours = false;
   bool _isLoadingDetail = false;
   bool _isSaving = false;
+  bool _isSavingPayroll = false;
   late bool _isFavorite;
   late double _rating;
+  String _workerType = 'w2';
 
   String get _userKey => widget.staff['userKey'] as String? ?? '';
   String get _name =>
@@ -59,6 +62,7 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
   @override
   void dispose() {
     _notesController.dispose();
+    _externalIdController.dispose();
     super.dispose();
   }
 
@@ -90,6 +94,9 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
           _notesController.text = detail['notes'] as String? ?? _notesController.text;
           _rating = (detail['rating'] as num?)?.toDouble() ?? _rating;
           _isFavorite = detail['isFavorite'] == true;
+          // Payroll fields
+          _externalIdController.text = detail['externalEmployeeId'] as String? ?? '';
+          _workerType = detail['workerType'] as String? ?? 'w2';
         });
       }
     } catch (_) {
@@ -179,6 +186,8 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
             _buildRecentShifts(),
             const SizedBox(height: 16),
             _buildRatingSection(),
+            const SizedBox(height: 16),
+            _buildPayrollSection(),
             const SizedBox(height: 16),
             _buildNotesSection(),
             const SizedBox(height: 32),
@@ -910,6 +919,158 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
           ),
         ],
       ],
+    );
+  }
+
+  Future<void> _savePayroll() async {
+    setState(() => _isSavingPayroll = true);
+    try {
+      await _staffService.updateStaffProfile(
+        _userKey,
+        externalEmployeeId: _externalIdController.text.trim(),
+        workerType: _workerType,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
+          const SnackBar(
+            content: Text('Payroll info updated'),
+            backgroundColor: ExColors.successDark,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
+          SnackBar(
+            content: Text('Error saving payroll info: $e'),
+            backgroundColor: ExColors.errorDark,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSavingPayroll = false);
+    }
+  }
+
+  Widget _buildPayrollSection() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.account_balance_outlined, size: 18, color: ExColors.techBlue),
+              const SizedBox(width: 8),
+              const Text(
+                'Payroll',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: ExColors.textPrimary,
+                ),
+              ),
+              const Spacer(),
+              if (_externalIdController.text.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: ExColors.successDark.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text('Mapped', style: TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.w600, color: ExColors.successDark,
+                  )),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // External Employee ID
+          TextField(
+            controller: _externalIdController,
+            decoration: InputDecoration(
+              labelText: 'External Employee ID',
+              hintText: 'ADP File Number / Paychex ID',
+              hintStyle: TextStyle(color: Colors.grey.shade400),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: ExColors.techBlue),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Worker type toggle
+          Row(
+            children: [
+              const Text('Worker Type:', style: TextStyle(
+                fontSize: 14, color: ExColors.textSecondary,
+              )),
+              const SizedBox(width: 12),
+              ChoiceChip(
+                label: const Text('W-2'),
+                selected: _workerType == 'w2',
+                onSelected: (_) => setState(() => _workerType = 'w2'),
+                selectedColor: ExColors.techBlue.withOpacity(0.15),
+                labelStyle: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: _workerType == 'w2' ? ExColors.techBlue : Colors.grey,
+                ),
+              ),
+              const SizedBox(width: 8),
+              ChoiceChip(
+                label: const Text('1099'),
+                selected: _workerType == '1099',
+                onSelected: (_) => setState(() => _workerType = '1099'),
+                selectedColor: const Color(0xFFFED7AA),
+                labelStyle: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: _workerType == '1099' ? const Color(0xFF92400E) : Colors.grey,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _isSavingPayroll ? null : _savePayroll,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: ExColors.techBlue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: _isSavingPayroll
+                  ? const SizedBox(
+                      width: 20, height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Text('Save Payroll Info', style: TextStyle(fontWeight: FontWeight.w600)),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

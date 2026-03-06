@@ -39,6 +39,8 @@ import groupsRouter from './routes/groups';
 import uploadRouter from './routes/upload';
 import caricatureRouter from './routes/caricature';
 import brandRouter from './routes/brand';
+import payrollRouter from './routes/payroll';
+import personalEventsRouter from './routes/personalEvents';
 import organizationsRouter from './routes/organizations';
 import { stripeWebhookHandler } from './routes/organizations';
 import { notificationScheduler } from './services/notificationScheduler';
@@ -132,6 +134,8 @@ export async function createServer() {
   app.use('/api/upload', uploadRouter); // File upload routes
   app.use('/api/caricature', caricatureRouter); // AI caricature generation
   app.use('/api/brand', brandRouter); // Brand customization (Pro tier)
+  app.use('/api', payrollRouter); // Payroll export + employee mapping
+  app.use('/api', personalEventsRouter); // Staff personal events + auto-availability
   app.use('/api', organizationsRouter); // B2B organization management
 
   // Serve locally-stored uploads (caricatures, etc.) when R2 is not configured

@@ -88,6 +88,10 @@ export interface UserDocument extends Document {
     }>;
   };
 
+  // Home address (for commute estimates)
+  homeAddress?: string;
+  homeCoordinates?: { lat: number; lng: number };
+
   // Clock-in preferences
   clockInSettings?: {
     preShiftReminderMinutes?: number; // Default: 30
@@ -208,6 +212,14 @@ const UserSchema = new Schema<UserDocument>(
         eventId: { type: String, required: true },
         earnedAt: { type: Date, default: Date.now },
       }],
+    },
+
+    // Home address (for commute estimates)
+    homeAddress: { type: String, trim: true },
+    homeCoordinates: {
+      lat: { type: Number },
+      lng: { type: Number },
+      _id: false,
     },
 
     // Clock-in preferences
