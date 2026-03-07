@@ -52,3 +52,21 @@ app.*.map.json
 
 # Claude Code configuration (may contain local paths and server info)
 .claude/
+
+# Wrangler (Cloudflare Workers local state)
+.wrangler/
+cloudflare-worker/.wrangler/
+cloudflare-worker/node_modules/
+cloudflare-worker/package-lock.json
+
+# Fastlane generated
+android/fastlane/README.md
+android/fastlane/report.xml
+ios/fastlane/README.md
+ios/fastlane/report.xml
+
+# iOS build artifacts
+ios/build/
+
+# Misc
+flutter_03.png
