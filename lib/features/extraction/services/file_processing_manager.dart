@@ -92,7 +92,7 @@ class FileProcessingManager extends ChangeNotifier {
   /// 4. Update status to completed
   /// 5. Auto-remove after 500ms
   /// 6. Notify callback with extracted data
-  Future<Map<String, dynamic>?> processImage(File imageFile) async {
+  Future<List<Map<String, dynamic>>> processImage(File imageFile) async {
     // Add image to list with pending status
     _selectedImages.add(imageFile);
     _imageStatuses[imageFile] = ExtractionStatus.pending;
@@ -110,22 +110,25 @@ class FileProcessingManager extends ChangeNotifier {
       final base64String = base64Encode(bytes);
       final processedInput = '[[IMAGE_BASE64]]:$base64String';
 
-      // Call extraction API
-      final structuredData = await _extractionService.extractStructuredData(
+      // Call multi extraction API (handles 1 or many events without truncation)
+      final eventsList = await _extractionService.extractStructuredDataMulti(
         input: processedInput,
       );
 
       // Mark as completed
       _imageStatuses[imageFile] = ExtractionStatus.completed;
       _notifyEvent(FileProcessingEvent.statusChanged, imageFile);
-      _notifyEvent(FileProcessingEvent.extractionCompleted, imageFile, structuredData);
+      // Fire callback with first event for backward compat with chat state
+      if (eventsList.isNotEmpty) {
+        _notifyEvent(FileProcessingEvent.extractionCompleted, imageFile, eventsList.first);
+      }
       notifyListeners();
 
       // Auto-remove after delay
       await Future.delayed(const Duration(milliseconds: 500));
       removeImage(imageFile);
 
-      return structuredData;
+      return eventsList;
     } catch (e) {
       print('[FileProcessingManager] Error extracting from image: $e');
       _imageStatuses[imageFile] = ExtractionStatus.failed;
@@ -146,7 +149,7 @@ class FileProcessingManager extends ChangeNotifier {
   /// 4. Update status to completed
   /// 5. Auto-remove after 500ms
   /// 6. Notify callback with extracted data
-  Future<Map<String, dynamic>?> processDocument(File documentFile) async {
+  Future<List<Map<String, dynamic>>> processDocument(File documentFile) async {
     // Add document to list with pending status
     _selectedDocuments.add(documentFile);
     _documentStatuses[documentFile] = ExtractionStatus.pending;
@@ -169,22 +172,25 @@ class FileProcessingManager extends ChangeNotifier {
         throw Exception('No text found in PDF. The PDF might be scanned or image-based.');
       }
 
-      // Send extracted text to extraction API
-      final structuredData = await _extractionService.extractStructuredData(
+      // Call multi extraction API (handles 1 or many events without truncation)
+      final eventsList = await _extractionService.extractStructuredDataMulti(
         input: extractedText,
       );
 
       // Mark as completed
       _documentStatuses[documentFile] = ExtractionStatus.completed;
       _notifyEvent(FileProcessingEvent.statusChanged, documentFile);
-      _notifyEvent(FileProcessingEvent.extractionCompleted, documentFile, structuredData);
+      // Fire callback with first event for backward compat with chat state
+      if (eventsList.isNotEmpty) {
+        _notifyEvent(FileProcessingEvent.extractionCompleted, documentFile, eventsList.first);
+      }
       notifyListeners();
 
       // Auto-remove after delay
       await Future.delayed(const Duration(milliseconds: 500));
       removeDocument(documentFile);
 
-      return structuredData;
+      return eventsList;
     } catch (e) {
       print('[FileProcessingManager] Error extracting from document: $e');
       _documentStatuses[documentFile] = ExtractionStatus.failed;

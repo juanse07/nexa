@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:nexa/shared/services/error_display_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:nexa/shared/widgets/initials_avatar.dart';
+import 'package:nexa/shared/constants/skill_cert_catalogs.dart';
 import '../services/staff_service.dart';
 import '../services/group_service.dart';
 import '../../chat/presentation/chat_screen.dart';
@@ -17,7 +18,9 @@ class StaffDetailScreen extends StatefulWidget {
   State<StaffDetailScreen> createState() => _StaffDetailScreenState();
 }
 
-class _StaffDetailScreenState extends State<StaffDetailScreen> {
+class _StaffDetailScreenState extends State<StaffDetailScreen>
+    with SingleTickerProviderStateMixin {
+  TabController? _tabController;
   final StaffService _staffService = StaffService();
   final GroupService _groupService = GroupService();
   final TextEditingController _notesController = TextEditingController();
@@ -26,10 +29,13 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
   Map<String, dynamic>? _hours;
   Map<String, dynamic>? _detail;
   List<Map<String, dynamic>> _allGroups = [];
+  List<Map<String, dynamic>> _venueHistory = [];
   bool _isLoadingHours = false;
   bool _isLoadingDetail = false;
+  bool _isLoadingVenues = false;
   bool _isSaving = false;
   bool _isSavingPayroll = false;
+  bool _isSavingSkills = false;
   late bool _isFavorite;
   late double _rating;
   String _workerType = 'w2';
@@ -50,9 +56,17 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
   List<dynamic> get _groups =>
       (_detail?['groups'] as List<dynamic>?) ?? [];
 
+  void _ensureTabController() {
+    if (_tabController == null) {
+      _tabController = TabController(length: 3, vsync: this);
+      _tabController!.addListener(() => setState(() {}));
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _ensureTabController();
     _isFavorite = widget.staff['isFavorite'] == true;
     _rating = (widget.staff['rating'] as num?)?.toDouble() ?? 0;
     _notesController.text = widget.staff['notes'] as String? ?? '';
@@ -61,6 +75,7 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
 
   @override
   void dispose() {
+    _tabController?.dispose();
     _notesController.dispose();
     _externalIdController.dispose();
     super.dispose();
@@ -101,6 +116,22 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
       }
     } catch (_) {
       if (mounted) setState(() => _isLoadingDetail = false);
+    }
+
+    // Load venue history
+    try {
+      setState(() => _isLoadingVenues = true);
+      final venueData = await _staffService.fetchVenueHistory(_userKey);
+      if (mounted) {
+        setState(() {
+          _venueHistory = (venueData['venues'] as List<dynamic>? ?? [])
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList();
+          _isLoadingVenues = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingVenues = false);
     }
   }
 
@@ -160,6 +191,10 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
         backgroundColor: Colors.white,
         foregroundColor: ExColors.textPrimary,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         actions: [
           IconButton(
             icon: Icon(
@@ -179,11 +214,13 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
             const SizedBox(height: 16),
             _buildQuickActions(),
             const SizedBox(height: 16),
-            _buildGroupsSection(),
+            _buildStaffInfoTabs(),
             const SizedBox(height: 16),
             _buildHoursSummary(),
             const SizedBox(height: 16),
             _buildRecentShifts(),
+            const SizedBox(height: 16),
+            _buildVenueHistorySection(),
             const SizedBox(height: 16),
             _buildRatingSection(),
             const SizedBox(height: 16),
@@ -387,6 +424,217 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  // ─── Tabbed Staff Info Card ──────────────────────────────────────────
+  Widget _buildStaffInfoTabs() {
+    _ensureTabController();
+    final tc = _tabController!;
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TabBar(
+            controller: tc,
+            isScrollable: false,
+            labelColor: ExColors.techBlue,
+            unselectedLabelColor: Colors.grey.shade500,
+            indicatorColor: ExColors.techBlue,
+            indicatorSize: TabBarIndicatorSize.tab,
+            labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            unselectedLabelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+            dividerHeight: 0,
+            tabs: const [
+              Tab(text: 'Groups'),
+              Tab(text: 'Skills'),
+              Tab(text: 'Certs'),
+            ],
+          ),
+          Divider(height: 1, color: Colors.grey.shade200),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: _buildTabContent(tc.index),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabContent(int index) {
+    switch (index) {
+      case 0:
+        return _buildGroupsTabContent();
+      case 1:
+        return _buildSkillsTabContent();
+      case 2:
+        return _buildCertsTabContent();
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  Widget _buildGroupsTabContent() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Spacer(),
+            GestureDetector(
+              onTap: _showAddToGroupDialog,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: ExColors.techBlue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.add, size: 20, color: ExColors.techBlue),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_groups.isEmpty)
+          Text('Not in any groups', style: TextStyle(fontSize: 14, color: Colors.grey.shade500))
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _groups.map((group) {
+              final groupId = (group['_id'] ?? '').toString();
+              final name = (group['name'] ?? '').toString();
+              final colorHex = group['color'] as String?;
+              final chipColor = _parseColor(colorHex) ?? ExColors.techBlue;
+              return Chip(
+                label: Text(name, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: chipColor)),
+                backgroundColor: chipColor.withOpacity(0.1),
+                deleteIcon: Icon(Icons.close, size: 16, color: chipColor),
+                onDeleted: () => _removeFromGroup(groupId),
+                side: BorderSide.none,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              );
+            }).toList(),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildSkillsTabContent() {
+    final unconfirmed = _selfReportedSkills
+        .where((s) => !_skills.any((ms) => ms.toLowerCase() == s.toLowerCase()))
+        .toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Spacer(),
+            if (_isSavingSkills)
+              const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+            else
+              GestureDetector(
+                onTap: _showSkillPicker,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: ExColors.techBlue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.add, size: 20, color: ExColors.techBlue),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_skills.isEmpty && unconfirmed.isEmpty)
+          Text('No skills added yet', style: TextStyle(fontSize: 14, color: Colors.grey.shade500))
+        else ...[
+          if (_skills.isNotEmpty)
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _skills.map((skill) => Chip(
+                label: Text(_titleCase(skill), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: ExColors.techBlue)),
+                backgroundColor: ExColors.techBlue.withOpacity(0.1),
+                deleteIcon: const Icon(Icons.close, size: 16, color: ExColors.techBlue),
+                onDeleted: () => _removeSkill(skill),
+                side: BorderSide.none,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              )).toList(),
+            ),
+          if (unconfirmed.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text('Self-reported', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey.shade600)),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: unconfirmed.map((skill) => ActionChip(
+                label: Text(_titleCase(skill), style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                avatar: const Icon(Icons.check_circle_outline, size: 16, color: ExColors.successDark),
+                backgroundColor: Colors.grey.shade100,
+                side: BorderSide(color: Colors.grey.shade300),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                onPressed: () => _confirmSkill(skill),
+              )).toList(),
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+
+  Widget _buildCertsTabContent() {
+    final unverified = _selfReportedCerts.where((sc) =>
+      !_certifications.any((mc) =>
+        (mc['name'] as String?)?.toLowerCase() == (sc['name'] as String?)?.toLowerCase()
+      )
+    ).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Spacer(),
+            GestureDetector(
+              onTap: _showCertPicker,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: ExColors.techBlue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.add, size: 20, color: ExColors.techBlue),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_certifications.isEmpty && unverified.isEmpty)
+          Text('No certifications', style: TextStyle(fontSize: 14, color: Colors.grey.shade500))
+        else ...[
+          ..._certifications.map((cert) => _buildCertCard(cert, verified: true)),
+          if (unverified.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text('Self-reported', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey.shade600)),
+            const SizedBox(height: 6),
+            ...unverified.map((cert) => _buildCertCard(cert, verified: false)),
+          ],
+        ],
+      ],
     );
   }
 
@@ -626,6 +874,857 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
         ErrorDisplayService.showErrorFromException(context, e, prefix: 'Error updating groups');
       }
     }
+  }
+
+  // ─── Skills Section ─────────────────────────────────────────────────────
+  List<String> get _skills =>
+      List<String>.from((_detail?['skills'] as List<dynamic>?) ?? []);
+  List<String> get _selfReportedSkills =>
+      List<String>.from((_detail?['selfReportedSkills'] as List<dynamic>?) ?? []);
+
+  Widget _buildSkillsSection() {
+    // Self-reported skills not yet confirmed by manager
+    final unconfirmed = _selfReportedSkills
+        .where((s) => !_skills.any((ms) => ms.toLowerCase() == s.toLowerCase()))
+        .toList();
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.psychology_outlined, size: 18, color: ExColors.techBlue),
+              const SizedBox(width: 8),
+              const Text(
+                'Skills',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: ExColors.textPrimary,
+                ),
+              ),
+              const Spacer(),
+              if (_isSavingSkills)
+                const SizedBox(
+                  width: 16, height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                GestureDetector(
+                  onTap: _showSkillPicker,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: ExColors.techBlue.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.add, size: 20, color: ExColors.techBlue),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (_skills.isEmpty && unconfirmed.isEmpty)
+            Text(
+              'No skills added yet',
+              style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+            )
+          else ...[
+            // Manager-confirmed skills
+            if (_skills.isNotEmpty)
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _skills.map((skill) => Chip(
+                  label: Text(
+                    _titleCase(skill),
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: ExColors.techBlue),
+                  ),
+                  backgroundColor: ExColors.techBlue.withOpacity(0.1),
+                  deleteIcon: const Icon(Icons.close, size: 16, color: ExColors.techBlue),
+                  onDeleted: () => _removeSkill(skill),
+                  side: BorderSide.none,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                )).toList(),
+              ),
+            // Self-reported (unconfirmed) skills
+            if (unconfirmed.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Self-reported',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: unconfirmed.map((skill) => ActionChip(
+                  label: Text(
+                    _titleCase(skill),
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                  ),
+                  avatar: const Icon(Icons.check_circle_outline, size: 16, color: ExColors.successDark),
+                  backgroundColor: Colors.grey.shade100,
+                  side: BorderSide(color: Colors.grey.shade300),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  onPressed: () => _confirmSkill(skill),
+                )).toList(),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  // Using shared catalogs from skill_cert_catalogs.dart
+  static final _skillCategories = skillCategories;
+
+  Future<void> _showSkillPicker() async {
+    final existing = _skills.map((s) => s.toLowerCase()).toSet();
+    final selected = <String>{};
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        var searchQuery = '';
+        var activeCategory = 'All';
+
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            final entries = <MapEntry<String, List<String>>>[];
+            for (final cat in _skillCategories.entries) {
+              final filtered = cat.value.$2.where((s) {
+                if (activeCategory != 'All' && cat.key != activeCategory) return false;
+                if (searchQuery.isNotEmpty) return s.toLowerCase().contains(searchQuery.toLowerCase());
+                return true;
+              }).toList();
+              if (filtered.isNotEmpty) entries.add(MapEntry(cat.key, filtered));
+            }
+
+            return Container(
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.85),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    margin: const EdgeInsets.only(top: 12),
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 12, 0),
+                    child: Row(
+                      children: [
+                        const Text('Add Skills', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: ExColors.textPrimary)),
+                        const Spacer(),
+                        IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                    child: TextField(
+                      decoration: InputDecoration(
+                        hintText: 'Search skills...',
+                        prefixIcon: const Icon(Icons.search, size: 20),
+                        filled: true, fillColor: Colors.grey.shade50,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                      ),
+                      onChanged: (v) => setSheetState(() => searchQuery = v),
+                    ),
+                  ),
+                  SizedBox(
+                    height: 40,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: const Text('All'),
+                            selected: activeCategory == 'All',
+                            selectedColor: ExColors.techBlue.withOpacity(0.15),
+                            onSelected: (_) => setSheetState(() => activeCategory = 'All'),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ),
+                        ..._skillCategories.entries.map((cat) => Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            avatar: Icon(cat.value.$1, size: 16),
+                            label: Text(cat.key),
+                            selected: activeCategory == cat.key,
+                            selectedColor: ExColors.techBlue.withOpacity(0.15),
+                            onSelected: (_) => setSheetState(() => activeCategory = cat.key),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        )),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Flexible(
+                    child: entries.isEmpty
+                      ? Center(child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Text('No skills match "$searchQuery"', style: TextStyle(color: Colors.grey.shade500)),
+                        ))
+                      : ListView(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          children: entries.expand((entry) => [
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8, bottom: 6),
+                              child: Text(entry.key, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
+                            ),
+                            Wrap(
+                              spacing: 8, runSpacing: 8,
+                              children: entry.value.map((skill) {
+                                final isExisting = existing.contains(skill.toLowerCase());
+                                final isSelected = selected.contains(skill.toLowerCase());
+                                return FilterChip(
+                                  label: Text(skill, style: TextStyle(fontSize: 13, color: isExisting ? Colors.grey : null)),
+                                  selected: isExisting || isSelected,
+                                  selectedColor: isExisting ? Colors.grey.shade200 : ExColors.techBlue.withOpacity(0.15),
+                                  checkmarkColor: isExisting ? Colors.grey : ExColors.techBlue,
+                                  onSelected: isExisting ? null : (val) => setSheetState(() {
+                                    val ? selected.add(skill.toLowerCase()) : selected.remove(skill.toLowerCase());
+                                  }),
+                                  visualDensity: VisualDensity.compact,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  side: BorderSide(color: isExisting ? Colors.grey.shade300 : Colors.grey.shade200),
+                                );
+                              }).toList(),
+                            ),
+                          ]).toList(),
+                        ),
+                  ),
+                  Container(
+                    padding: EdgeInsets.fromLTRB(16, 8, 16, MediaQuery.of(ctx).viewInsets.bottom + MediaQuery.of(ctx).padding.bottom + 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border(top: BorderSide(color: Colors.grey.shade200)),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                textCapitalization: TextCapitalization.words,
+                                decoration: InputDecoration(
+                                  hintText: 'Enter custom skill...',
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade200)),
+                                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade200)),
+                                  isDense: true,
+                                ),
+                                onSubmitted: (v) {
+                                  final trimmed = v.trim();
+                                  if (trimmed.isNotEmpty && !existing.contains(trimmed.toLowerCase()) && !selected.contains(trimmed.toLowerCase())) {
+                                    setSheetState(() => selected.add(trimmed.toLowerCase()));
+                                  }
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: ExColors.techBlue,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: Text(selected.isEmpty ? 'Cancel' : 'Done (${selected.length} selected)'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (selected.isNotEmpty) {
+      final updated = [..._skills, ...selected];
+      await _saveSkills(updated);
+    }
+  }
+
+  Future<void> _addSkill(String skill) async {
+    final updated = [..._skills, skill.toLowerCase()];
+    await _saveSkills(updated);
+  }
+
+  Future<void> _removeSkill(String skill) async {
+    final updated = _skills.where((s) => s != skill).toList();
+    await _saveSkills(updated);
+  }
+
+  Future<void> _confirmSkill(String skill) async {
+    final updated = [..._skills, skill.toLowerCase()];
+    await _saveSkills(updated);
+  }
+
+  Future<void> _saveSkills(List<String> skills) async {
+    setState(() => _isSavingSkills = true);
+    try {
+      await _staffService.updateStaffProfile(_userKey, skills: skills);
+      final detail = await _staffService.fetchStaffDetail(_userKey);
+      if (mounted) setState(() => _detail = detail);
+    } catch (e) {
+      if (mounted) {
+        ErrorDisplayService.showErrorFromException(context, e, prefix: 'Error saving skills');
+      }
+    } finally {
+      if (mounted) setState(() => _isSavingSkills = false);
+    }
+  }
+
+  // ─── Certifications Section ────────────────────────────────────────────
+  List<Map<String, dynamic>> get _certifications =>
+      List<Map<String, dynamic>>.from((_detail?['certifications'] as List<dynamic>?) ?? []);
+  List<Map<String, dynamic>> get _selfReportedCerts =>
+      List<Map<String, dynamic>>.from((_detail?['selfReportedCertifications'] as List<dynamic>?) ?? []);
+
+  Widget _buildCertificationsSection() {
+    final unverified = _selfReportedCerts.where((sc) =>
+      !_certifications.any((mc) =>
+        (mc['name'] as String?)?.toLowerCase() == (sc['name'] as String?)?.toLowerCase()
+      )
+    ).toList();
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.verified_outlined, size: 18, color: ExColors.techBlue),
+              const SizedBox(width: 8),
+              const Text(
+                'Certifications',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: ExColors.textPrimary),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: _showCertPicker,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: ExColors.techBlue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.add, size: 20, color: ExColors.techBlue),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (_certifications.isEmpty && unverified.isEmpty)
+            Text('No certifications', style: TextStyle(fontSize: 14, color: Colors.grey.shade500))
+          else ...[
+            ..._certifications.map((cert) => _buildCertCard(cert, verified: true)),
+            if (unverified.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text('Self-reported', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey.shade600)),
+              const SizedBox(height: 6),
+              ...unverified.map((cert) => _buildCertCard(cert, verified: false)),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCertCard(Map<String, dynamic> cert, {required bool verified}) {
+    final name = cert['name']?.toString() ?? '';
+    final expiryStr = cert['expiryDate']?.toString();
+    final expiry = expiryStr != null ? DateTime.tryParse(expiryStr) : null;
+    final now = DateTime.now();
+
+    Color statusColor = ExColors.successDark;
+    String statusText = 'Valid';
+    if (expiry != null) {
+      if (expiry.isBefore(now)) {
+        statusColor = Colors.red.shade700;
+        statusText = 'Expired';
+      } else if (expiry.isBefore(now.add(const Duration(days: 30)))) {
+        statusColor = Colors.orange.shade700;
+        statusText = 'Expiring soon';
+      }
+    } else {
+      statusText = 'No expiry';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(
+            verified ? Icons.verified : Icons.pending_outlined,
+            size: 18,
+            color: verified ? ExColors.successDark : Colors.grey,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                if (expiry != null)
+                  Text(
+                    '${expiry.month}/${expiry.day}/${expiry.year}',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: statusColor.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(statusText, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: statusColor)),
+          ),
+          if (!verified) ...[
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: () => _verifyCertification(cert),
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: ExColors.successDark.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(Icons.check, size: 16, color: ExColors.successDark),
+              ),
+            ),
+          ] else ...[
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: () => _removeCertification(name),
+              child: Icon(Icons.close, size: 16, color: Colors.grey.shade400),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // Using shared catalogs from skill_cert_catalogs.dart
+  static final _certCategories = certCategories;
+
+  Future<void> _showCertPicker() async {
+    final existingNames = _certifications.map((c) => (c['name'] as String?)?.toLowerCase() ?? '').toSet();
+    final newCerts = <Map<String, dynamic>>[];
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        var searchQuery = '';
+        var activeCategory = 'All';
+        final selectedNames = <String>{};
+        final expiryDates = <String, DateTime?>{};
+
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            final entries = <MapEntry<String, List<String>>>[];
+            for (final cat in _certCategories.entries) {
+              final filtered = cat.value.$2.where((c) {
+                if (activeCategory != 'All' && cat.key != activeCategory) return false;
+                if (searchQuery.isNotEmpty) return c.toLowerCase().contains(searchQuery.toLowerCase());
+                return true;
+              }).toList();
+              if (filtered.isNotEmpty) entries.add(MapEntry(cat.key, filtered));
+            }
+
+            return Container(
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.85),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    margin: const EdgeInsets.only(top: 12),
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 12, 0),
+                    child: Row(
+                      children: [
+                        const Text('Add Certification', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: ExColors.textPrimary)),
+                        const Spacer(),
+                        IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                    child: TextField(
+                      decoration: InputDecoration(
+                        hintText: 'Search certifications...',
+                        prefixIcon: const Icon(Icons.search, size: 20),
+                        filled: true, fillColor: Colors.grey.shade50,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                      ),
+                      onChanged: (v) => setSheetState(() => searchQuery = v),
+                    ),
+                  ),
+                  SizedBox(
+                    height: 40,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: const Text('All'),
+                            selected: activeCategory == 'All',
+                            selectedColor: ExColors.techBlue.withOpacity(0.15),
+                            onSelected: (_) => setSheetState(() => activeCategory = 'All'),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ),
+                        ..._certCategories.entries.map((cat) => Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            avatar: Icon(cat.value.$1, size: 16),
+                            label: Text(cat.key),
+                            selected: activeCategory == cat.key,
+                            selectedColor: ExColors.techBlue.withOpacity(0.15),
+                            onSelected: (_) => setSheetState(() => activeCategory = cat.key),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        )),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Flexible(
+                    child: entries.isEmpty
+                      ? Center(child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Text('No certifications match "$searchQuery"', style: TextStyle(color: Colors.grey.shade500)),
+                        ))
+                      : ListView(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          children: entries.expand((entry) => [
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8, bottom: 6),
+                              child: Text(entry.key, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
+                            ),
+                            Wrap(
+                              spacing: 8, runSpacing: 8,
+                              children: entry.value.map((cert) {
+                                final isExisting = existingNames.contains(cert.toLowerCase());
+                                final isSelected = selectedNames.contains(cert);
+                                return FilterChip(
+                                  label: Text(cert, style: TextStyle(fontSize: 13, color: isExisting ? Colors.grey : null)),
+                                  selected: isExisting || isSelected,
+                                  selectedColor: isExisting ? Colors.grey.shade200 : ExColors.techBlue.withOpacity(0.15),
+                                  checkmarkColor: isExisting ? Colors.grey : ExColors.techBlue,
+                                  onSelected: isExisting ? null : (val) async {
+                                    if (val) {
+                                      final expiry = await showDatePicker(
+                                        context: ctx,
+                                        initialDate: DateTime.now().add(const Duration(days: 365)),
+                                        firstDate: DateTime(2020),
+                                        lastDate: DateTime(2040),
+                                        helpText: 'Expiry date (cancel to skip)',
+                                      );
+                                      setSheetState(() {
+                                        selectedNames.add(cert);
+                                        expiryDates[cert] = expiry;
+                                      });
+                                    } else {
+                                      setSheetState(() {
+                                        selectedNames.remove(cert);
+                                        expiryDates.remove(cert);
+                                      });
+                                    }
+                                  },
+                                  visualDensity: VisualDensity.compact,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  side: BorderSide(color: isExisting ? Colors.grey.shade300 : Colors.grey.shade200),
+                                );
+                              }).toList(),
+                            ),
+                          ]).toList(),
+                        ),
+                  ),
+                  Container(
+                    padding: EdgeInsets.fromLTRB(16, 8, 16, MediaQuery.of(ctx).viewInsets.bottom + MediaQuery.of(ctx).padding.bottom + 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border(top: BorderSide(color: Colors.grey.shade200)),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                textCapitalization: TextCapitalization.words,
+                                decoration: InputDecoration(
+                                  hintText: 'Enter custom certification...',
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade200)),
+                                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade200)),
+                                  isDense: true,
+                                ),
+                                onSubmitted: (v) async {
+                                  final trimmed = v.trim();
+                                  if (trimmed.isNotEmpty && !existingNames.contains(trimmed.toLowerCase()) && !selectedNames.contains(trimmed)) {
+                                    final expiry = await showDatePicker(
+                                      context: ctx,
+                                      initialDate: DateTime.now().add(const Duration(days: 365)),
+                                      firstDate: DateTime(2020),
+                                      lastDate: DateTime(2040),
+                                      helpText: 'Expiry date (cancel to skip)',
+                                    );
+                                    setSheetState(() {
+                                      selectedNames.add(trimmed);
+                                      expiryDates[trimmed] = expiry;
+                                    });
+                                  }
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              for (final name in selectedNames) {
+                                final map = <String, dynamic>{
+                                  'name': name,
+                                  'verifiedAt': DateTime.now().toUtc().toIso8601String(),
+                                };
+                                if (expiryDates[name] != null) {
+                                  map['expiryDate'] = expiryDates[name]!.toUtc().toIso8601String();
+                                }
+                                newCerts.add(map);
+                              }
+                              Navigator.pop(ctx);
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: ExColors.techBlue,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: Text(selectedNames.isEmpty ? 'Cancel' : 'Done (${selectedNames.length} selected)'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (newCerts.isNotEmpty) {
+      final updated = [..._certifications, ...newCerts];
+      await _saveCertifications(updated);
+    }
+  }
+
+  Future<void> _verifyCertification(Map<String, dynamic> cert) async {
+    final verified = {
+      'name': cert['name'],
+      if (cert['expiryDate'] != null) 'expiryDate': cert['expiryDate'],
+      'verifiedAt': DateTime.now().toUtc().toIso8601String(),
+    };
+    final updated = [..._certifications, verified];
+    await _saveCertifications(updated);
+  }
+
+  Future<void> _removeCertification(String name) async {
+    final updated = _certifications.where((c) => c['name'] != name).toList();
+    await _saveCertifications(updated);
+  }
+
+  Future<void> _saveCertifications(List<Map<String, dynamic>> certs) async {
+    try {
+      await _staffService.updateStaffProfile(_userKey, certifications: certs);
+      final detail = await _staffService.fetchStaffDetail(_userKey);
+      if (mounted) setState(() => _detail = detail);
+    } catch (e) {
+      if (mounted) {
+        ErrorDisplayService.showErrorFromException(context, e, prefix: 'Error saving certifications');
+      }
+    }
+  }
+
+  // ─── Venue History Section ─────────────────────────────────────────────
+  Widget _buildVenueHistorySection() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.location_on_outlined, size: 18, color: ExColors.techBlue),
+              const SizedBox(width: 8),
+              const Text(
+                'Venue History',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: ExColors.textPrimary),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (_isLoadingVenues)
+            const Center(child: CircularProgressIndicator(strokeWidth: 2))
+          else if (_venueHistory.isEmpty)
+            Text('No venue history yet', style: TextStyle(fontSize: 14, color: Colors.grey.shade500))
+          else
+            ..._venueHistory.take(10).map((venue) {
+              final venueName = venue['venueName']?.toString() ?? 'Unknown';
+              final clientName = venue['clientName']?.toString() ?? '';
+              final timesWorked = venue['timesWorked'] ?? 0;
+              final lastWorked = venue['lastWorked'] != null
+                  ? DateTime.tryParse(venue['lastWorked'].toString())
+                  : null;
+              final roles = (venue['roles'] as List<dynamic>? ?? []).cast<String>();
+              final lastStr = lastWorked != null
+                  ? '${lastWorked.month}/${lastWorked.year}'
+                  : '';
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 40, height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(Icons.store, size: 20, color: Colors.orange.shade700),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            venueName,
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: ExColors.textPrimary),
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                          ),
+                          if (clientName.isNotEmpty)
+                            Text(clientName, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                          Text(
+                            '$timesWorked times${lastStr.isNotEmpty ? ' · Last: $lastStr' : ''}',
+                            style: const TextStyle(fontSize: 12, color: ExColors.textSecondary),
+                          ),
+                          if (roles.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Wrap(
+                              spacing: 4,
+                              children: roles.map((r) => Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade100,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(r, style: TextStyle(fontSize: 10, color: Colors.grey.shade700)),
+                              )).toList(),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  String _titleCase(String s) {
+    if (s.isEmpty) return s;
+    return s.split(' ').map((word) {
+      if (word.isEmpty) return word;
+      return word[0].toUpperCase() + word.substring(1);
+    }).join(' ');
   }
 
   Widget _buildHoursSummary() {

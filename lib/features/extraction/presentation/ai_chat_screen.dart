@@ -349,18 +349,26 @@ class _AIChatScreenState extends State<AIChatScreen>
     }
   }
 
-  /// Process an image file: extract shift data using Vision API, present in chat for review
+  /// Process an image file: extract shift data, branch on count
   Future<void> _processImage(File imageFile) async {
     try {
-      // Process through provider (handles all state management)
-      final structuredData = await _stateProvider.processImage(imageFile);
+      final events = await _stateProvider.processImage(imageFile);
 
-      if (structuredData != null) {
-        // Present extracted data in AI chat for review
-        final formattedText = EventDataFormatter.formatExtractedData(structuredData);
+      if (events.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No event data found in image')),
+          );
+        }
+      } else if (events.length == 1) {
+        // Single event → show in chat as before
+        final formattedText = EventDataFormatter.formatExtractedData(events.first);
         await _stateProvider.sendMessage(
           'I extracted this information from your image:\n\n$formattedText'
         );
+      } else {
+        // Multiple events → navigate to bulk preview
+        _openBulkPreview(imageFile, events);
       }
     } catch (e) {
       print('[AIChatScreen] Error extracting from image: $e');
@@ -370,18 +378,26 @@ class _AIChatScreenState extends State<AIChatScreen>
     }
   }
 
-  /// Process a PDF document: extract text, get structured data, present in chat for review
+  /// Process a PDF document: extract text, branch on count
   Future<void> _processDocument(File documentFile) async {
     try {
-      // Process through provider (handles all state management and PDF extraction)
-      final structuredData = await _stateProvider.processDocument(documentFile);
+      final events = await _stateProvider.processDocument(documentFile);
 
-      if (structuredData != null) {
-        // Present extracted data in AI chat for review
-        final formattedText = EventDataFormatter.formatExtractedData(structuredData);
+      if (events.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No event data found in PDF')),
+          );
+        }
+      } else if (events.length == 1) {
+        // Single event → show in chat as before
+        final formattedText = EventDataFormatter.formatExtractedData(events.first);
         await _stateProvider.sendMessage(
           'I extracted this information from your PDF:\n\n$formattedText'
         );
+      } else {
+        // Multiple events → navigate to bulk preview
+        _openBulkPreview(documentFile, events);
       }
     } catch (e) {
       print('[AIChatScreen] Error extracting from document: $e');
@@ -389,6 +405,19 @@ class _AIChatScreenState extends State<AIChatScreen>
         ErrorDisplayService.showErrorFromException(context, e, prefix: 'Failed to extract from PDF');
       }
     }
+  }
+
+  /// Navigate to BulkExtractionScreen with pre-extracted events
+  void _openBulkPreview(File file, List<Map<String, dynamic>> events) {
+    if (!mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => BulkExtractionScreen.preloaded(
+          preloadedFile: file,
+          preloadedEvents: events,
+        ),
+      ),
+    );
   }
 
   /// Remove an image from the list
@@ -413,6 +442,9 @@ class _AIChatScreenState extends State<AIChatScreen>
       // Save as draft event
       final payload = Map<String, dynamic>.from(currentData);
       payload['status'] = 'draft';
+      // Default times when AI didn't extract them
+      payload['start_time'] ??= '09:00';
+      payload['end_time'] ??= '17:00';
       await _eventService.createEvent(payload);
 
       if (mounted) {
@@ -476,6 +508,9 @@ class _AIChatScreenState extends State<AIChatScreen>
         ..._stateProvider.currentEventData,
         'status': 'draft',
       };
+      // Default times when AI didn't extract them
+      eventData['start_time'] ??= '09:00';
+      eventData['end_time'] ??= '17:00';
 
       final createdEvent = await _eventService.createEvent(eventData);
       final eventId = createdEvent['_id'] ?? createdEvent['id'] ?? '';

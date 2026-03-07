@@ -58,6 +58,53 @@ export function timeToMinutes(timeStr: string | undefined): number {
 }
 
 /**
+ * Format 24h "HH:mm" to 12h (e.g., "5 PM", "2:30 PM").
+ */
+function formatTime12h(timeStr: string): { formatted: string; period: string } {
+  const parts = timeStr.split(':');
+  if (parts.length < 2) return { formatted: timeStr, period: '' };
+  const h = parseInt(parts[0]!, 10);
+  const m = parseInt(parts[1]!, 10);
+  if (isNaN(h) || isNaN(m)) return { formatted: timeStr, period: '' };
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  const formatted = m === 0 ? `${hour12}` : `${hour12}:${String(m).padStart(2, '0')}`;
+  return { formatted, period };
+}
+
+/**
+ * Format a time range in 12h (e.g., "5\u201311 PM", "9 AM\u20135 PM").
+ */
+export function formatTimeRange(startTime: string, endTime: string): string {
+  const start = formatTime12h(startTime);
+  const end = formatTime12h(endTime);
+  if (!start.period || !end.period) return `${startTime} - ${endTime}`;
+  if (start.period === end.period) {
+    return `${start.formatted}\u2013${end.formatted} ${end.period}`;
+  }
+  return `${start.formatted} ${start.period}\u2013${end.formatted} ${end.period}`;
+}
+
+/**
+ * Format date as "Mar 9" from a Date or ISO string.
+ */
+export function formatNotifDate(date: Date | string): string {
+  const d = date instanceof Date ? date : new Date(date);
+  const day = d.getDate();
+  const month = d.toLocaleDateString('en-US', { month: 'short' });
+  return `${month} ${day}`;
+}
+
+/**
+ * Format start time to 12h for display (e.g., "5:00 PM").
+ */
+export function formatStartTime12h(timeStr: string): string {
+  const t = formatTime12h(timeStr);
+  if (!t.period) return timeStr;
+  return `${t.formatted} ${t.period}`;
+}
+
+/**
  * Send event push notifications to a list of staff userKeys.
  * Handles per-user terminology, team name lookup, and one-notification-per-role.
  *
@@ -79,19 +126,16 @@ export async function sendEventNotifications(params: {
   const endTime = event.end_time;
   const roles = event.roles || [];
 
-  // Format date as "8 Jan"
+  // Format date as "Mar 9"
   let formattedDate = '';
   if (eventDate) {
-    const d = new Date(eventDate);
-    const day = d.getDate();
-    const month = d.toLocaleDateString('en-US', { month: 'short' });
-    formattedDate = `${day} ${month}`;
+    formattedDate = formatNotifDate(eventDate);
   }
 
-  // Format time part
-  let timePart = '';
+  // Format time range in 12h (e.g., "5–11 PM")
+  let timeRange = '';
   if (startTime && endTime) {
-    timePart = `${startTime} - ${endTime}`;
+    timeRange = formatTimeRange(startTime, endTime);
   }
 
   const teamIdStrings = Array.from(teamIdToName.keys());
@@ -134,23 +178,22 @@ export async function sendEventNotifications(params: {
 
         switch (notificationType) {
           case 'new_open':
-            notificationTitle = `🔵 New Open ${capitalizedTerm}`;
-            notificationBody = `${teamName} posted a new ${terminology} as ${roleName}`;
+          case 'now_open': {
+            notificationTitle = `New Open ${capitalizedTerm}`;
+            const parts = [roleName];
+            if (formattedDate) parts.push(formattedDate);
+            if (timeRange) parts.push(timeRange);
+            notificationBody = parts.join(' \u2022 ') + '\n' + teamName;
             break;
-          case 'now_open':
-            notificationTitle = `🟢 ${capitalizedTerm} Now Open`;
-            notificationBody = `${teamName} posted a new ${terminology} as ${roleName}`;
+          }
+          case 'cancelled': {
+            notificationTitle = `${capitalizedTerm} Cancelled`;
+            let datePart = '';
+            if (formattedDate && timeRange) datePart = ` on ${formattedDate} \u2022 ${timeRange}`;
+            else if (formattedDate) datePart = ` on ${formattedDate}`;
+            notificationBody = `Your ${terminology}${datePart} was cancelled`;
             break;
-          case 'cancelled':
-            notificationTitle = `⚪ ${capitalizedTerm} Canceled`;
-            notificationBody = `${roleName} at ${teamName}`;
-            break;
-        }
-
-        if (formattedDate && timePart) {
-          notificationBody += ` • ${formattedDate}, ${timePart}`;
-        } else if (formattedDate) {
-          notificationBody += ` • ${formattedDate}`;
+          }
         }
 
         await notificationService.sendToUser(

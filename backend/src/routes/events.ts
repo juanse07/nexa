@@ -30,6 +30,9 @@ import {
   sanitizeTeamIds,
   timeToMinutes,
   sendEventNotifications,
+  formatTimeRange,
+  formatNotifDate,
+  formatStartTime12h,
 } from '../utils/eventHelpers';
 import {
   shareEventPublic,
@@ -38,6 +41,7 @@ import {
 } from '../services/eventShareService';
 import { logAIUsage } from '../utils/logAIUsage';
 import { EventShareLinkModel } from '../models/eventShareLink';
+import { rankStaffForRole } from '../services/staffMatchingService';
 import { generateUniqueShortCode, isValidShortCodeFormat } from '../utils/inviteCodeGenerator';
 
 const router = Router();
@@ -145,10 +149,10 @@ async function checkUnusualPatterns(
             const managerUserKey = `${flagManager.provider}:${flagManager.subject}`;
             await notificationService.sendToUser(
               managerUserKey,
-              `⚠️ Attendance Flag: ${flag.severity.toUpperCase()}`,
+              `Attendance Flag`,
               `${staffInfo?.name || userKey}: ${flag.reason}`,
               {
-                type: 'event',  // Use existing notification type
+                type: 'event',
                 eventId: String(event._id),
               }
             );
@@ -815,6 +819,60 @@ router.post('/events/:id/publish', requireAuth, async (req, res) => {
   }
 });
 
+// Get recommended staff for a specific role on an event
+router.get('/events/:id/recommended-staff', requireAuth, async (req, res) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const eventId = req.params.id;
+
+    if (!eventId || !mongoose.Types.ObjectId.isValid(eventId)) {
+      return res.status(400).json({ message: 'Invalid event ID' });
+    }
+
+    const event = await EventModel.findOne({ _id: eventId, managerId });
+    if (!event) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    const roleName = (req.query.role as string || '').trim();
+    if (!roleName) {
+      return res.status(400).json({ message: 'Query parameter "role" is required' });
+    }
+
+    const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 10, 1), 50);
+
+    // Find the matching role in the event
+    const matchedRole = event.roles.find(
+      r => r.role.toLowerCase() === roleName.toLowerCase()
+    );
+
+    const requiredSkills = matchedRole?.requiredSkills || [];
+    const requiredCerts = matchedRole?.requiredCertifications || [];
+
+    const candidates = await rankStaffForRole(managerId, {
+      roleName,
+      requiredSkills,
+      requiredCertifications: requiredCerts,
+      eventDate: event.date ? new Date(event.date as string) : undefined,
+      eventStartTime: matchedRole?.start_time || event.start_time,
+      eventEndTime: matchedRole?.end_time || event.end_time,
+      venueLat: event.venue_latitude,
+      venueLng: event.venue_longitude,
+    }, { limit });
+
+    return res.json({
+      role: roleName,
+      requiredSkills,
+      requiredCertifications: requiredCerts,
+      candidates,
+    });
+  } catch (err) {
+    console.error('[recommended-staff] failed', err);
+    return res.status(500).json({ message: 'Failed to get recommended staff' });
+  }
+});
+
 // Unified share endpoint — dispatches to the appropriate service function
 const shareEventSchema = z.object({
   shareType: z.enum(['public', 'private', 'direct_invitation']),
@@ -1393,19 +1451,16 @@ router.patch('/events/:id', requireAuth, async (req, res) => {
         const endTime = (updated as any).end_time;
         const roles = (updated as any).roles || [];
 
-        // Format date as "8 Jan"
+        // Format date as "Mar 9"
         let formattedDate = '';
         if (eventDate) {
-          const d = new Date(eventDate);
-          const day = d.getDate();
-          const month = d.toLocaleDateString('en-US', { month: 'short' });
-          formattedDate = `${day} ${month}`;
+          formattedDate = formatNotifDate(eventDate);
         }
 
-        // Format time part
-        let timePart = '';
+        // Format time range in 12h (e.g., "5–11 PM")
+        let timeRange = '';
         if (startTime && endTime) {
-          timePart = `${startTime} - ${endTime}`;
+          timeRange = formatTimeRange(startTime, endTime);
         }
 
         // Get team names for lookup
@@ -1449,16 +1504,11 @@ router.patch('/events/:id', requireAuth, async (req, res) => {
               const roleName = role.role || role.role_name;
               if (!roleName) continue;
 
-              // Title: "🔵 New Open Shift"
-              const notificationTitle = `🔵 New Open ${capitalizedTerm}`;
-
-              // Body: "Tie Events posted a new shift as Bartender • 8 Jan, 4:00 PM - 9:00 PM"
-              let notificationBody = `${teamName} posted a new ${terminology} as ${roleName}`;
-              if (formattedDate && timePart) {
-                notificationBody += ` • ${formattedDate}, ${timePart}`;
-              } else if (formattedDate) {
-                notificationBody += ` • ${formattedDate}`;
-              }
+              const notificationTitle = `New Open ${capitalizedTerm}`;
+              const bodyParts = [roleName];
+              if (formattedDate) bodyParts.push(formattedDate);
+              if (timeRange) bodyParts.push(timeRange);
+              const notificationBody = bodyParts.join(' \u2022 ') + '\n' + teamName;
 
               await notificationService.sendToUser(
                 String(user._id),
@@ -3446,13 +3496,36 @@ router.post('/events/:id/respond', requireAuth, requireActiveSubscription, async
           }
 
           // Push notification to manager (for background/closed app)
-          const eventName = updatedEvent.event_name || updatedEvent.shift_name || 'a shift';
-          const emoji = responseVal === 'accept' ? '✅' : '❌';
-          const action = responseVal === 'accept' ? 'accepted' : 'declined';
+          const action = responseVal === 'accept' ? 'Accepted' : 'Declined';
+
+          // Look up role name from event roles
+          let roleName = '';
+          if (roleVal && updatedEvent.roles) {
+            const role = (updatedEvent.roles as any[]).find((r: any) =>
+              String(r._id) === roleVal || r.role_id === roleVal || r.role === roleVal
+            );
+            roleName = role?.role || role?.role_name || '';
+          }
+
+          // Format date
+          let respondDate = '';
+          if (updatedEvent.date) {
+            respondDate = formatNotifDate(updatedEvent.date);
+          }
+
+          // Look up manager's terminology
+          const mgr = await ManagerModel.findById(managerId).select('eventTerminology').lean();
+          const mgrTerm = (mgr as any)?.eventTerminology || 'shift';
+          const capitalizedMgrTerm = mgrTerm.charAt(0).toUpperCase() + mgrTerm.slice(1);
+
+          const notifTitle = `${capitalizedMgrTerm} ${action}`;
+          let notifBody = `${staffName} ${action.toLowerCase()} ${roleName || (updatedEvent.event_name || updatedEvent.shift_name || 'a shift')}`;
+          if (respondDate) notifBody += ` for ${respondDate}`;
+
           notificationService.sendToUser(
             managerId,
-            `${emoji} ${staffName} ${action} an invitation`,
-            `${staffName} ${action} "${eventName}"`,
+            notifTitle,
+            notifBody,
             { type: 'event', eventId },
             'manager'
           ).catch((err: Error) => console.error('[respond] push notif to manager failed:', err));
@@ -3961,8 +4034,8 @@ router.post('/events/:id/bulk-clock-in', requireAuth, async (req, res) => {
           const eventName = event.event_name || event.shift_name || 'your shift';
           await notificationService.sendToUser(
             String(user._id),
-            '✅ Clocked In by Manager',
-            `Your manager has clocked you in to "${eventName}".${note ? ` Note: ${note}` : ''}`,
+            'Clocked In',
+            `Your manager clocked you in to "${eventName}"${note ? `\nNote: ${note}` : ''}`,
             {
               type: 'event',
               eventId: String(event._id),
@@ -4793,9 +4866,9 @@ router.post('/events/:id/force-clock-out/:userKey', requireAuth, async (req, res
     try {
       await notificationService.sendToUser(
         userKey,
-        'You have been clocked out',
-        `A manager has clocked you out from ${event.event_name}.${note ? ` Note: ${note}` : ''}`,
-        { type: 'event', eventId: String(event._id) }  // Use existing notification type
+        'Clocked Out',
+        `Your manager clocked you out from ${event.event_name}${note ? `\nNote: ${note}` : ''}`,
+        { type: 'event', eventId: String(event._id) }
       );
     } catch (notifyErr) {
       console.warn('[force-clock-out] Failed to send notification:', notifyErr);

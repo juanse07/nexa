@@ -6119,6 +6119,264 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Tap to set'**
   String get tapToSetTime;
+
+  /// No description provided for @editAllSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit All'**
+  String get editAllSelected;
+
+  /// No description provided for @bulkEditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit Selected Events'**
+  String get bulkEditTitle;
+
+  /// No description provided for @applyToSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply to Selected'**
+  String get applyToSelected;
+
+  /// No description provided for @bulkEditHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Only checked fields will be applied'**
+  String get bulkEditHint;
+
+  /// No description provided for @skills.
+  ///
+  /// In en, this message translates to:
+  /// **'Skills'**
+  String get skills;
+
+  /// No description provided for @addSkill.
+  ///
+  /// In en, this message translates to:
+  /// **'Add Skill'**
+  String get addSkill;
+
+  /// No description provided for @confirmSkill.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm'**
+  String get confirmSkill;
+
+  /// No description provided for @selfReported.
+  ///
+  /// In en, this message translates to:
+  /// **'Self-reported'**
+  String get selfReported;
+
+  /// No description provided for @managerConfirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'Manager confirmed'**
+  String get managerConfirmed;
+
+  /// No description provided for @removeSkill.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove Skill'**
+  String get removeSkill;
+
+  /// No description provided for @certifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Certifications'**
+  String get certifications;
+
+  /// No description provided for @addCertification.
+  ///
+  /// In en, this message translates to:
+  /// **'Add Certification'**
+  String get addCertification;
+
+  /// No description provided for @certificationName.
+  ///
+  /// In en, this message translates to:
+  /// **'Certification Name'**
+  String get certificationName;
+
+  /// No description provided for @expiryDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Expiry Date'**
+  String get expiryDate;
+
+  /// No description provided for @issuedDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Issued Date'**
+  String get issuedDate;
+
+  /// No description provided for @expired.
+  ///
+  /// In en, this message translates to:
+  /// **'Expired'**
+  String get expired;
+
+  /// No description provided for @expiringSoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Expiring soon'**
+  String get expiringSoon;
+
+  /// No description provided for @valid.
+  ///
+  /// In en, this message translates to:
+  /// **'Valid'**
+  String get valid;
+
+  /// No description provided for @noExpiry.
+  ///
+  /// In en, this message translates to:
+  /// **'No expiry'**
+  String get noExpiry;
+
+  /// No description provided for @preferredRoles.
+  ///
+  /// In en, this message translates to:
+  /// **'Preferred Roles'**
+  String get preferredRoles;
+
+  /// No description provided for @maxHoursPerWeek.
+  ///
+  /// In en, this message translates to:
+  /// **'Max Hours/Week'**
+  String get maxHoursPerWeek;
+
+  /// No description provided for @travelRadius.
+  ///
+  /// In en, this message translates to:
+  /// **'Travel Radius'**
+  String get travelRadius;
+
+  /// No description provided for @preferredDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Preferred Days'**
+  String get preferredDays;
+
+  /// No description provided for @preferredShifts.
+  ///
+  /// In en, this message translates to:
+  /// **'Preferred Shifts'**
+  String get preferredShifts;
+
+  /// No description provided for @workPreferences.
+  ///
+  /// In en, this message translates to:
+  /// **'Work Preferences'**
+  String get workPreferences;
+
+  /// No description provided for @morning.
+  ///
+  /// In en, this message translates to:
+  /// **'Morning'**
+  String get morning;
+
+  /// No description provided for @afternoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Afternoon'**
+  String get afternoon;
+
+  /// No description provided for @evening.
+  ///
+  /// In en, this message translates to:
+  /// **'Evening'**
+  String get evening;
+
+  /// No description provided for @overnight.
+  ///
+  /// In en, this message translates to:
+  /// **'Overnight'**
+  String get overnight;
+
+  /// No description provided for @venueHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Venue History'**
+  String get venueHistory;
+
+  /// No description provided for @timesWorked.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} times'**
+  String timesWorked(int count);
+
+  /// No description provided for @lastWorkedDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Last: {date}'**
+  String lastWorkedDate(String date);
+
+  /// No description provided for @firstWorkedDate.
+  ///
+  /// In en, this message translates to:
+  /// **'First: {date}'**
+  String firstWorkedDate(String date);
+
+  /// No description provided for @recommendedStaff.
+  ///
+  /// In en, this message translates to:
+  /// **'AI Recommended Staff'**
+  String get recommendedStaff;
+
+  /// No description provided for @matchScore.
+  ///
+  /// In en, this message translates to:
+  /// **'Match Score'**
+  String get matchScore;
+
+  /// No description provided for @skillsMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Skills Match'**
+  String get skillsMatch;
+
+  /// No description provided for @missingSkills.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing Skills'**
+  String get missingSkills;
+
+  /// No description provided for @busyWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Busy'**
+  String get busyWarning;
+
+  /// No description provided for @noRequirements.
+  ///
+  /// In en, this message translates to:
+  /// **'No requirements set'**
+  String get noRequirements;
+
+  /// No description provided for @addRequirements.
+  ///
+  /// In en, this message translates to:
+  /// **'Add requirements'**
+  String get addRequirements;
+
+  /// No description provided for @requiredSkills.
+  ///
+  /// In en, this message translates to:
+  /// **'Required Skills'**
+  String get requiredSkills;
+
+  /// No description provided for @requiredCertifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Required Certifications'**
+  String get requiredCertifications;
+
+  /// No description provided for @nRequirements.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} requirements'**
+  String nRequirements(int count);
 }
 
 class _AppLocalizationsDelegate

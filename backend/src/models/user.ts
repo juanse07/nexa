@@ -88,6 +88,22 @@ export interface UserDocument extends Document {
     }>;
   };
 
+  // Smart scheduling fields
+  skills?: string[];   // self-reported skill tags, freeform, max 50
+  certifications?: Array<{
+    name: string;
+    issuedDate?: Date;
+    expiryDate?: Date;      // null = no expiry
+    certNumber?: string;
+  }>;
+  workPreferences?: {
+    preferredRoles?: string[];
+    maxHoursPerWeek?: number;
+    travelRadiusMiles?: number;
+    preferredDays?: ('mon'|'tue'|'wed'|'thu'|'fri'|'sat'|'sun')[];
+    preferredShifts?: ('morning'|'afternoon'|'evening'|'overnight')[];
+  };
+
   // Home address (for commute estimates)
   homeAddress?: string;
   homeCoordinates?: { lat: number; lng: number };
@@ -212,6 +228,28 @@ const UserSchema = new Schema<UserDocument>(
         eventId: { type: String, required: true },
         earnedAt: { type: Date, default: Date.now },
       }],
+    },
+
+    // Smart scheduling fields
+    skills: {
+      type: [String],
+      default: [],
+      validate: [(v: string[]) => v.length <= 50, 'Maximum 50 skills allowed'],
+    },
+    certifications: [{
+      name: { type: String, required: true, trim: true },
+      issuedDate: { type: Date },
+      expiryDate: { type: Date },
+      certNumber: { type: String, trim: true },
+      _id: false,
+    }],
+    workPreferences: {
+      preferredRoles: { type: [String], default: undefined },
+      maxHoursPerWeek: { type: Number, min: 0, max: 168 },
+      travelRadiusMiles: { type: Number, min: 0, max: 500 },
+      preferredDays: [{ type: String, enum: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] }],
+      preferredShifts: [{ type: String, enum: ['morning', 'afternoon', 'evening', 'overnight'] }],
+      _id: false,
     },
 
     // Home address (for commute estimates)

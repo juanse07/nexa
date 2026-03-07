@@ -184,7 +184,7 @@ router.post('/events/:eventId/chat/messages', requireAuth, async (req: Request, 
           // Send to manager app
           await notificationService.sendToUser(
             manager._id.toString(),
-            `💬 ${senderName}`,
+            senderName,
             message.trim().substring(0, 100), // Truncate long messages
             {
               type: 'event',
@@ -203,7 +203,7 @@ router.post('/events/:eventId/chat/messages', requireAuth, async (req: Request, 
       if (recipientIds.length > 0) {
         await notificationService.sendToMultipleUsers(
           recipientIds,
-          `💬 ${senderName}`,
+          senderName,
           message.trim().substring(0, 100), // Truncate long messages
           {
             type: 'event',

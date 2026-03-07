@@ -3368,4 +3368,141 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tapToSetTime => 'Tap to set';
+
+  @override
+  String get editAllSelected => 'Edit All';
+
+  @override
+  String get bulkEditTitle => 'Edit Selected Events';
+
+  @override
+  String get applyToSelected => 'Apply to Selected';
+
+  @override
+  String get bulkEditHint => 'Only checked fields will be applied';
+
+  @override
+  String get skills => 'Skills';
+
+  @override
+  String get addSkill => 'Add Skill';
+
+  @override
+  String get confirmSkill => 'Confirm';
+
+  @override
+  String get selfReported => 'Self-reported';
+
+  @override
+  String get managerConfirmed => 'Manager confirmed';
+
+  @override
+  String get removeSkill => 'Remove Skill';
+
+  @override
+  String get certifications => 'Certifications';
+
+  @override
+  String get addCertification => 'Add Certification';
+
+  @override
+  String get certificationName => 'Certification Name';
+
+  @override
+  String get expiryDate => 'Expiry Date';
+
+  @override
+  String get issuedDate => 'Issued Date';
+
+  @override
+  String get expired => 'Expired';
+
+  @override
+  String get expiringSoon => 'Expiring soon';
+
+  @override
+  String get valid => 'Valid';
+
+  @override
+  String get noExpiry => 'No expiry';
+
+  @override
+  String get preferredRoles => 'Preferred Roles';
+
+  @override
+  String get maxHoursPerWeek => 'Max Hours/Week';
+
+  @override
+  String get travelRadius => 'Travel Radius';
+
+  @override
+  String get preferredDays => 'Preferred Days';
+
+  @override
+  String get preferredShifts => 'Preferred Shifts';
+
+  @override
+  String get workPreferences => 'Work Preferences';
+
+  @override
+  String get morning => 'Morning';
+
+  @override
+  String get afternoon => 'Afternoon';
+
+  @override
+  String get evening => 'Evening';
+
+  @override
+  String get overnight => 'Overnight';
+
+  @override
+  String get venueHistory => 'Venue History';
+
+  @override
+  String timesWorked(int count) {
+    return '$count times';
+  }
+
+  @override
+  String lastWorkedDate(String date) {
+    return 'Last: $date';
+  }
+
+  @override
+  String firstWorkedDate(String date) {
+    return 'First: $date';
+  }
+
+  @override
+  String get recommendedStaff => 'AI Recommended Staff';
+
+  @override
+  String get matchScore => 'Match Score';
+
+  @override
+  String get skillsMatch => 'Skills Match';
+
+  @override
+  String get missingSkills => 'Missing Skills';
+
+  @override
+  String get busyWarning => 'Busy';
+
+  @override
+  String get noRequirements => 'No requirements set';
+
+  @override
+  String get addRequirements => 'Add requirements';
+
+  @override
+  String get requiredSkills => 'Required Skills';
+
+  @override
+  String get requiredCertifications => 'Required Certifications';
+
+  @override
+  String nRequirements(int count) {
+    return '$count requirements';
+  }
 }

@@ -8,6 +8,7 @@ import 'package:nexa/shared/presentation/theme/app_colors.dart';
 import 'package:nexa/shared/services/error_display_service.dart';
 import 'package:nexa/shared/widgets/web_content_wrapper.dart';
 import '../../hours_approval/presentation/hours_approval_detail_screen.dart';
+import '../../extraction/widgets/role_requirements_picker.dart';
 
 class EventEditScreen extends StatefulWidget {
   final Map<String, dynamic> event;
@@ -45,6 +46,8 @@ class _EventEditScreenState extends State<EventEditScreen> {
 
   List<Map<String, dynamic>> _roles = [];
   Map<String, TextEditingController> _roleCountControllers = {};
+  // Per-role requirements: roleName → {skills: [...], certs: [...]}
+  final Map<String, Map<String, List<String>>> _roleRequirements = {};
 
   bool _isSaving = false;
 
@@ -126,6 +129,15 @@ class _EventEditScreenState extends State<EventEditScreen> {
 
         final count = existing != null ? (existing['count'] ?? 0).toString() : '0';
         _roleCountControllers[roleName] = TextEditingController(text: count);
+
+        // Initialize requirements from existing event data
+        if (existing != null) {
+          final skills = (existing['requiredSkills'] as List?)?.cast<String>() ?? [];
+          final certs = (existing['requiredCertifications'] as List?)?.cast<String>() ?? [];
+          if (skills.isNotEmpty || certs.isNotEmpty) {
+            _roleRequirements[roleName] = {'skills': skills, 'certs': certs};
+          }
+        }
       }
     } catch (e) {
       // Fail silently
@@ -228,12 +240,18 @@ class _EventEditScreenState extends State<EventEditScreen> {
             '&query_place_id=${Uri.encodeComponent(_selectedVenuePlace!.placeId)}';
       }
 
-      // Build roles array
+      // Build roles array with requirements
       final roles = <Map<String, dynamic>>[];
       for (final entry in _roleCountControllers.entries) {
         final count = int.tryParse(entry.value.text.trim()) ?? 0;
         if (count > 0) {
-          roles.add({'role': entry.key, 'count': count});
+          final roleData = <String, dynamic>{'role': entry.key, 'count': count};
+          final reqs = _roleRequirements[entry.key];
+          if (reqs != null) {
+            if (reqs['skills']?.isNotEmpty == true) roleData['requiredSkills'] = reqs['skills'];
+            if (reqs['certs']?.isNotEmpty == true) roleData['requiredCertifications'] = reqs['certs'];
+          }
+          roles.add(roleData);
         }
       }
       if (roles.isNotEmpty) {
@@ -477,13 +495,66 @@ class _EventEditScreenState extends State<EventEditScreen> {
               _buildSectionTitle(AppLocalizations.of(context)!.staffRolesRequired, Icons.work),
               const SizedBox(height: 16),
               ..._roleCountControllers.entries.map((entry) {
+                final reqs = _roleRequirements[entry.key];
+                final reqCount = (reqs?['skills']?.length ?? 0) + (reqs?['certs']?.length ?? 0);
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
-                  child: _buildTextField(
-                    controller: entry.value,
-                    label: entry.key,
-                    icon: Icons.people,
-                    keyboardType: TextInputType.number,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildTextField(
+                        controller: entry.value,
+                        label: entry.key,
+                        icon: Icons.people,
+                        keyboardType: TextInputType.number,
+                      ),
+                      const SizedBox(height: 4),
+                      GestureDetector(
+                        onTap: () async {
+                          final result = await showRoleRequirementsPicker(
+                            context: context,
+                            roleName: entry.key,
+                            initialSkills: reqs?['skills'] ?? [],
+                            initialCerts: reqs?['certs'] ?? [],
+                          );
+                          if (result != null) {
+                            setState(() {
+                              _roleRequirements[entry.key] = {
+                                'skills': result.skills,
+                                'certs': result.certifications,
+                              };
+                            });
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: reqCount > 0 ? AppColors.techBlue.withValues(alpha: 0.08) : Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: reqCount > 0 ? AppColors.techBlue.withValues(alpha: 0.3) : Colors.grey.shade200),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                reqCount > 0 ? Icons.checklist : Icons.add_circle_outline,
+                                size: 16,
+                                color: reqCount > 0 ? AppColors.techBlue : Colors.grey.shade500,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                reqCount > 0 ? '$reqCount requirements' : 'Add requirements',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: reqCount > 0 ? FontWeight.w600 : FontWeight.w400,
+                                  color: reqCount > 0 ? AppColors.techBlue : Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 );
               }),

@@ -3,6 +3,7 @@ import { EventModel } from '../models/event';
 import { UserModel } from '../models/user';
 import { EventChatMessageModel } from '../models/eventChatMessage';
 import { notificationService } from './notificationService';
+import { formatNotifDate, formatStartTime12h } from '../utils/eventHelpers';
 import { emitToManager } from '../socket/server';
 
 class NotificationScheduler {
@@ -105,11 +106,24 @@ class NotificationScheduler {
             ? `${Math.round(timeUntilShift / 60)}h ${timeUntilShift % 60}m`
             : `${timeUntilShift}m`;
 
-          // Send notification
+          // Get staff's role name
+          const staffRole = (staff as any).role || '';
+
+          // Format start time in 12h
+          const startTime12h = event.start_time ? formatStartTime12h(event.start_time) : '';
+
+          // Build body lines
+          const line1 = staffRole
+            ? `${staffRole} shift starts in ${timeText}`
+            : `Your shift starts in ${timeText}`;
+          const line2 = event.venue_name ? `${event.venue_name}` : '';
+          const line3 = startTime12h ? `Your shift starts at ${startTime12h}` : '';
+          const bodyLines = [line1, line2, line3].filter(Boolean);
+
           await notificationService.sendToUser(
             userId,
-            '🔔 Shift Starting Soon!',
-            `Your shift at ${event.venue_name || 'venue'} starts in ${timeText}`,
+            'Shift Starting Soon',
+            bodyLines.join('\n'),
             {
               type: 'event',
               eventId: event._id.toString(),
@@ -119,7 +133,7 @@ class NotificationScheduler {
               startTime: eventDate.toISOString(),
             },
             'user',
-            '6366F1' // Indigo accent color
+            '6366F1'
           );
 
           console.log(`[NotificationScheduler] ✅ Sent shift reminder to ${userId} for event ${event._id}`);
@@ -192,8 +206,8 @@ class NotificationScheduler {
 
             await notificationService.sendToUser(
               userId,
-              '⏰ Forgot to Clock Out?',
-              `Your shift at ${event.venue_name || 'venue'} ended ${hoursSinceEnd}h ago. Don't forget to clock out!`,
+              'Clock Out Reminder',
+              `Your shift at ${event.venue_name || 'venue'} ended ${hoursSinceEnd}h ago`,
               {
                 type: 'event',
                 eventId: event._id.toString(),
@@ -203,7 +217,7 @@ class NotificationScheduler {
                 endTime: endDateTime.toISOString(),
               },
               'user',
-              'F59E0B' // Amber/warning color
+              'F59E0B'
             );
 
             sentNotificationCount++;
@@ -245,8 +259,8 @@ class NotificationScheduler {
       for (const user of users) {
         await notificationService.sendToUser(
           user._id.toString(),
-          '📋 Weekly Timesheet Reminder',
-          'Don\'t forget to review and approve your timesheet for this week!',
+          'Timesheet Reminder',
+          'You have hours pending approval this week',
           {
             type: 'hours',
             action: 'timesheet_reminder',
@@ -339,7 +353,7 @@ class NotificationScheduler {
             senderId: event.managerId,
             senderType: 'manager',
             senderName: 'System',
-            message: '👋 Team chat is now open! Your event is fully staffed and starting soon. Use this to coordinate with your team.',
+            message: 'Team chat is now open. Your event is fully staffed and starting soon. Use this to coordinate with your team.',
             messageType: 'system',
           });
 

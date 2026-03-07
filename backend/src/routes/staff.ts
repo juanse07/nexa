@@ -1,11 +1,13 @@
 import { Router, Request, Response } from 'express';
 import mongoose from 'mongoose';
+import { z } from 'zod';
 import { requireAuth } from '../middleware/requireAuth';
 import { resolveManagerForRequest } from '../utils/manager';
 import { TeamMemberModel } from '../models/teamMember';
 import { StaffProfileModel } from '../models/staffProfile';
 import { StaffGroupModel } from '../models/staffGroup';
 import { EventModel } from '../models/event';
+import { UserModel } from '../models/user';
 
 const router = Router();
 
@@ -82,6 +84,7 @@ router.get('/staff', requireAuth, async (req: Request, res: Response) => {
     const favorite = req.query.favorite;
     const groupId = (req.query.groupId ?? '').toString().trim();
     const role = (req.query.role ?? '').toString().trim();
+    const skill = (req.query.skill ?? '').toString().trim();
     const cursor = (req.query.cursor ?? '').toString();
     const limit = Math.min(parseInt((req.query.limit ?? '50').toString(), 10) || 50, 100);
 
@@ -128,6 +131,7 @@ router.get('/staff', requireAuth, async (req: Request, res: Response) => {
             $project: {
               _id: 1, provider: 1, subject: 1, email: 1, name: 1,
               first_name: 1, last_name: 1, phone_number: 1, picture: 1,
+              skills: 1,
             },
           },
         ],
@@ -241,6 +245,15 @@ router.get('/staff', requireAuth, async (req: Request, res: Response) => {
       });
     }
 
+    // Filter by skill if requested (post-aggregation since skills come from staffProfile)
+    if (skill) {
+      const skillLower = skill.toLowerCase();
+      members = members.filter((m: any) => {
+        const profileSkills: string[] = m.staffProfile?.[0]?.skills || [];
+        return profileSkills.some((s: string) => s.toLowerCase() === skillLower);
+      });
+    }
+
     // Determine pagination
     const hasMore = members.length > limit;
     const items = hasMore ? members.slice(0, limit) : members;
@@ -281,6 +294,9 @@ router.get('/staff', requireAuth, async (req: Request, res: Response) => {
         department: profile?.department || '',
         earningsCode: profile?.earningsCode || '',
         isMapped: !!(profile?.externalEmployeeId),
+        // Smart scheduling fields
+        skills: profile?.skills || [],
+        selfReportedSkills: userProfile?.skills || [],
       };
     });
 
@@ -319,7 +335,6 @@ router.get('/staff/:userKey', requireAuth, async (req: Request, res: Response) =
     }
 
     // Get user profile
-    const { UserModel } = await import('../models/user');
     const user = await UserModel.findOne({ provider, subject }).lean();
 
     // Get staff profile (annotations)
@@ -402,6 +417,14 @@ router.get('/staff/:userKey', requireAuth, async (req: Request, res: Response) =
       department: (profile as any)?.department || '',
       earningsCode: (profile as any)?.earningsCode || '',
       isMapped: !!((profile as any)?.externalEmployeeId),
+      // Smart scheduling fields (manager-confirmed)
+      skills: (profile as any)?.skills || [],
+      certifications: (profile as any)?.certifications || [],
+      preferredRoles: (profile as any)?.preferredRoles || [],
+      // Self-reported from user
+      selfReportedSkills: (user as any)?.skills || [],
+      selfReportedCertifications: (user as any)?.certifications || [],
+      selfReportedPreferences: (user as any)?.workPreferences || null,
     });
   } catch (err: any) {
     console.error('[GET /staff/:userKey] Error:', err);
@@ -491,6 +514,40 @@ router.patch('/staff/:userKey', requireAuth, async (req: Request, res: Response)
     if (req.body.department !== undefined) update.department = String(req.body.department);
     if (req.body.earningsCode !== undefined) update.earningsCode = String(req.body.earningsCode);
 
+    // Smart scheduling fields
+    if (req.body.skills !== undefined) {
+      const skillsSchema = z.array(z.string().trim().min(1).max(100)).max(50);
+      const parsed = skillsSchema.safeParse(req.body.skills);
+      if (!parsed.success) {
+        return res.status(400).json({ message: 'Invalid skills', details: parsed.error.issues });
+      }
+      update.skills = parsed.data;
+    }
+    if (req.body.certifications !== undefined) {
+      const certsSchema = z.array(z.object({
+        name: z.string().trim().min(1).max(200),
+        expiryDate: z.string().datetime().optional().nullable(),
+        verifiedAt: z.string().datetime().optional().nullable(),
+      })).max(30);
+      const parsed = certsSchema.safeParse(req.body.certifications);
+      if (!parsed.success) {
+        return res.status(400).json({ message: 'Invalid certifications', details: parsed.error.issues });
+      }
+      update.certifications = parsed.data.map((c: any) => ({
+        name: c.name,
+        expiryDate: c.expiryDate ? new Date(c.expiryDate) : undefined,
+        verifiedAt: c.verifiedAt ? new Date(c.verifiedAt) : undefined,
+      }));
+    }
+    if (req.body.preferredRoles !== undefined) {
+      const rolesSchema = z.array(z.string().trim().min(1).max(100)).max(20);
+      const parsed = rolesSchema.safeParse(req.body.preferredRoles);
+      if (!parsed.success) {
+        return res.status(400).json({ message: 'Invalid preferredRoles', details: parsed.error.issues });
+      }
+      update.preferredRoles = parsed.data;
+    }
+
     if (Object.keys(update).length === 0) {
       return res.status(400).json({ message: 'No fields to update' });
     }
@@ -504,6 +561,66 @@ router.patch('/staff/:userKey', requireAuth, async (req: Request, res: Response)
     return res.json(profile);
   } catch (err: any) {
     console.error('[PATCH /staff/:userKey] Error:', err);
+    return res.status(500).json({ message: err.message || 'Server error' });
+  }
+});
+
+// ============================================================================
+// GET /staff/:userKey/venue-history — Aggregated venue/client history
+// ============================================================================
+
+router.get('/staff/:userKey/venue-history', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const manager = await resolveManagerForRequest(req as any);
+    if (!manager || !manager._id) {
+      return res.status(400).json({ message: 'Manager not found' });
+    }
+    const managerId = manager._id as mongoose.Types.ObjectId;
+    const userKey = decodeURIComponent(req.params.userKey as string);
+
+    const venues = await EventModel.aggregate([
+      {
+        $match: {
+          managerId,
+          'accepted_staff.userKey': userKey,
+          status: { $ne: 'cancelled' },
+        },
+      },
+      { $unwind: '$accepted_staff' },
+      {
+        $match: {
+          'accepted_staff.userKey': userKey,
+          'accepted_staff.response': { $in: ['accepted', 'accept'] },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            venueName: { $ifNull: ['$venue_name', 'Unknown Venue'] },
+            clientName: { $ifNull: ['$client_name', ''] },
+          },
+          timesWorked: { $sum: 1 },
+          lastWorked: { $max: '$date' },
+          firstWorked: { $min: '$date' },
+          roles: { $addToSet: '$accepted_staff.role' },
+        },
+      },
+      { $sort: { timesWorked: -1 } },
+      { $limit: 50 },
+    ]);
+
+    const result = venues.map((v: any) => ({
+      venueName: v._id.venueName,
+      clientName: v._id.clientName,
+      timesWorked: v.timesWorked,
+      lastWorked: v.lastWorked,
+      firstWorked: v.firstWorked,
+      roles: (v.roles || []).filter(Boolean),
+    }));
+
+    return res.json({ venues: result });
+  } catch (err: any) {
+    console.error('[GET /staff/:userKey/venue-history] Error:', err);
     return res.status(500).json({ message: err.message || 'Server error' });
   }
 });

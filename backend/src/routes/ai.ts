@@ -28,6 +28,8 @@ import { notificationService } from '../services/notificationService';
 import { computeRoleStats } from '../utils/eventCapacity';
 import { logAIUsage } from '../utils/logAIUsage';
 import { shareEventPublic, shareEventPrivate, sendDirectInvitation } from '../services/eventShareService';
+import { computePunctuality, PunctualityRecord, PunctualityEventDetail } from '../utils/performanceMetrics';
+import { rankStaffForRole } from '../services/staffMatchingService';
 
 const router = Router();
 
@@ -1252,6 +1254,28 @@ const AI_TOOLS = [
       },
       required: ['event_id']
     }
+  },
+  {
+    name: 'recommend_staff_for_role',
+    description: 'Recommend the best-matched staff for a specific role on an event. Uses AI scoring based on skills, certifications, performance history, and availability. Use when: "who should I assign", "recommend staff", "best match for", "who\'s available for", "suggest staff for".',
+    parameters: {
+      type: 'object',
+      properties: {
+        event_id: {
+          type: 'string',
+          description: 'The event ID to get recommendations for. Get this from search_events first.'
+        },
+        role_name: {
+          type: 'string',
+          description: 'The role name to find matches for (e.g. "Bartender", "Server")'
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of recommendations (default: 5, max: 10)'
+        }
+      },
+      required: ['event_id', 'role_name']
+    }
   }
 ];
 
@@ -1347,156 +1371,8 @@ async function sendManagerMessage(
 // Punctuality / Lateness Computation
 // ---------------------------------------------------------------------------
 
-interface PunctualityEventDetail {
-  date: string;
-  clientName: string;
-  role: string;
-  status: 'on_time' | 'late' | 'no_show';
-  minutesLate: number;
-  bulkClockIn: boolean;
-}
-
-interface PunctualityRecord {
-  staffKey: string;
-  staffName: string;
-  onTimeCount: number;
-  lateCount: number;
-  noShowCount: number;
-  totalLateMinutes: number;
-  totalEvents: number;
-  eventDetails: PunctualityEventDetail[];
-}
-
-/**
- * Compute punctuality stats from a set of events.
- *
- * For each accepted staff member on each event, compares their first clockInAt
- * against the expected arrival time (role call_time → event start_time fallback).
- *
- * @param events       - Pre-queried events (must include accepted_staff, date, start_time, roles, client_name, status)
- * @param staffUserKey - If set, only compute for this specific staff member
- * @param staffNamePattern - Fallback regex pattern when userKey is unavailable
- * @param thresholdMinutes - Grace period before marking late (default 5 min)
- */
-function computePunctuality(
-  events: any[],
-  staffUserKey?: string | null,
-  staffNamePattern?: string | null,
-  thresholdMinutes: number = 5
-): PunctualityRecord[] {
-  const recordMap = new Map<string, PunctualityRecord>();
-
-  for (const event of events) {
-    if (!event.accepted_staff || !Array.isArray(event.accepted_staff)) continue;
-
-    // Only evaluate completed/fulfilled/in_progress events (future drafts are meaningless)
-    const eventStatus = event.status;
-    if (!['completed', 'fulfilled', 'in_progress'].includes(eventStatus)) continue;
-
-    const eventDate = event.date ? new Date(event.date) : null;
-    if (!eventDate) continue;
-
-    for (const staff of event.accepted_staff) {
-      // Filter: only accepted staff
-      if (staff.response !== 'accepted' && staff.response !== 'accept') continue;
-
-      // Filter to specific staff if requested
-      if (staffUserKey && staff.userKey !== staffUserKey) continue;
-      if (!staffUserKey && staffNamePattern && !new RegExp(staffNamePattern, 'i').test(staff.name || '')) continue;
-
-      // Determine expected arrival time
-      // Priority: role-specific call_time → event start_time
-      let expectedTimeStr: string | null = null;
-
-      if (staff.role && event.roles && Array.isArray(event.roles)) {
-        const matchedRole = event.roles.find(
-          (r: any) => r.role && r.call_time && r.role.toLowerCase() === staff.role.toLowerCase()
-        );
-        if (matchedRole?.call_time) {
-          expectedTimeStr = matchedRole.call_time;
-        }
-      }
-
-      if (!expectedTimeStr && event.start_time) {
-        expectedTimeStr = event.start_time;
-      }
-
-      if (!expectedTimeStr) continue; // Can't compute without an expected time
-
-      // Build full expected datetime
-      const timeParts = expectedTimeStr.split(':').map(Number);
-      const expH = timeParts[0] ?? 0;
-      const expM = timeParts[1] ?? 0;
-      const expectedDt = new Date(eventDate);
-      expectedDt.setHours(expH, expM, 0, 0);
-
-      // Staff key for grouping
-      const key = staff.userKey || staff.name || 'unknown';
-      if (!recordMap.has(key)) {
-        recordMap.set(key, {
-          staffKey: key,
-          staffName: staff.name || staff.first_name || 'Unknown',
-          onTimeCount: 0,
-          lateCount: 0,
-          noShowCount: 0,
-          totalLateMinutes: 0,
-          totalEvents: 0,
-          eventDetails: []
-        });
-      }
-      const record = recordMap.get(key)!;
-      record.totalEvents++;
-
-      const attendance = staff.attendance;
-      const hasClockIn = attendance && Array.isArray(attendance) && attendance.length > 0 && attendance[0].clockInAt;
-
-      if (!hasClockIn) {
-        // No attendance → no-show (only meaningful for completed events)
-        record.noShowCount++;
-        record.eventDetails.push({
-          date: eventDate.toISOString().slice(0, 10),
-          clientName: event.client_name || 'Unknown',
-          role: staff.role || 'N/A',
-          status: 'no_show',
-          minutesLate: 0,
-          bulkClockIn: false
-        });
-        continue;
-      }
-
-      // Use first session's clockInAt
-      const clockIn = new Date(attendance[0].clockInAt);
-      const diffMinutes = (clockIn.getTime() - expectedDt.getTime()) / (1000 * 60);
-      const isBulk = !!attendance[0].overrideBy;
-
-      if (diffMinutes <= thresholdMinutes) {
-        record.onTimeCount++;
-        record.eventDetails.push({
-          date: eventDate.toISOString().slice(0, 10),
-          clientName: event.client_name || 'Unknown',
-          role: staff.role || 'N/A',
-          status: 'on_time',
-          minutesLate: 0,
-          bulkClockIn: isBulk
-        });
-      } else {
-        const minsLate = Math.round(diffMinutes);
-        record.lateCount++;
-        record.totalLateMinutes += minsLate;
-        record.eventDetails.push({
-          date: eventDate.toISOString().slice(0, 10),
-          clientName: event.client_name || 'Unknown',
-          role: staff.role || 'N/A',
-          status: 'late',
-          minutesLate: minsLate,
-          bulkClockIn: isBulk
-        });
-      }
-    }
-  }
-
-  return Array.from(recordMap.values());
-}
+// PunctualityEventDetail, PunctualityRecord, and computePunctuality
+// are now imported from '../utils/performanceMetrics'
 
 /**
  * Execute a function call from the AI model
@@ -3734,6 +3610,55 @@ ${topStaff ? `Most Flagged: ${topStaff}` : ''}`;
         return `✅ Message broadcast: sent to ${sent} staff member(s)${failed > 0 ? `, ${failed} failed` : ''}`;
       }
 
+      case 'recommend_staff_for_role': {
+        const { event_id, role_name, limit: rawLimit } = functionArgs;
+
+        if (!event_id) return 'Error: event_id is required. Use search_events first to find the event ID.';
+        if (!role_name) return 'Error: role_name is required (e.g. "Bartender", "Server").';
+
+        const event = await EventModel.findOne({ _id: event_id, managerId });
+        if (!event) return `Error: Event not found with ID "${event_id}". Use search_events to find the correct event.`;
+
+        const matchedRole = event.roles.find(
+          r => r.role.toLowerCase() === role_name.toLowerCase()
+        );
+
+        const candidates = await rankStaffForRole(managerId, {
+          roleName: role_name,
+          requiredSkills: matchedRole?.requiredSkills || [],
+          requiredCertifications: matchedRole?.requiredCertifications || [],
+          eventDate: event.date ? new Date(event.date as string) : undefined,
+          eventStartTime: matchedRole?.start_time || event.start_time,
+          eventEndTime: matchedRole?.end_time || event.end_time,
+          venueLat: event.venue_latitude,
+          venueLng: event.venue_longitude,
+        }, { limit: Math.min(rawLimit || 5, 10) });
+
+        if (candidates.length === 0) {
+          return `No staff members found in your team. Add team members first.`;
+        }
+
+        const eventLabel = event.shift_name || event.client_name || 'this event';
+        const lines = [`Top matches for **${role_name}** on "${eventLabel}":\n`];
+
+        for (let i = 0; i < candidates.length; i++) {
+          const c = candidates[i];
+          const badges: string[] = [];
+          if (c.isFavorite) badges.push('⭐');
+          if (c.isBusy) badges.push(`⚠️ ${c.busyReason}`);
+
+          lines.push(`${i + 1}. **${c.name}** — Score: ${c.scores.total}/100 ${badges.join(' ')}`);
+          lines.push(`   Skills: ${c.scores.skills}% | Certs: ${c.scores.certifications}% | Performance: ${c.scores.performance}% | Availability: ${c.scores.availability}%`);
+
+          if (c.matchedSkills.length > 0) lines.push(`   ✅ Has: ${c.matchedSkills.join(', ')}`);
+          if (c.missingSkills.length > 0) lines.push(`   ❌ Missing: ${c.missingSkills.join(', ')}`);
+          if (c.matchedCerts.length > 0) lines.push(`   📜 Certs: ${c.matchedCerts.join(', ')}`);
+          if (c.missingCerts.length > 0) lines.push(`   📜 Missing certs: ${c.missingCerts.join(', ')}`);
+        }
+
+        return lines.join('\n');
+      }
+
       default:
         return `Unknown function: ${functionName}`;
     }
@@ -4155,6 +4080,10 @@ Default behavior:
   → When user asks "who's the contact?" or "what's the pay?" after viewing events, data is already there — do NOT call again.
 - get_staff_stats returns a monthly breakdown (byMonth) with events and hours per month.
   → When user asks "how did she do in February vs March?", use the PREVIOUS get_staff_stats result. Do NOT call the tool again.
+- recommend_staff_for_role ranks staff by skills, certifications, performance, and availability.
+  → Use when manager asks "who should I assign?", "best match for bartender", "recommend staff for this event".
+  → Requires event_id (get from search_events first) and role_name.
+  → Present results as a ranked list with scores and matched/missing skills.
 
 🚫 DO NOT output EVENT_COMPLETE, EVENT_UPDATE, or other markers. Use the create_event / update_event tools instead.
 `;

@@ -8,6 +8,9 @@ import 'package:syncfusion_flutter_pdf/pdf.dart';
 import '../services/extraction_service.dart';
 import '../services/event_service.dart';
 
+/// Phases of the bulk import flow.
+enum BulkPhase { selectFiles, extracting, preview, creating, complete }
+
 /// Status of a file being processed in bulk extraction
 enum BulkFileStatus {
   pending,
@@ -19,10 +22,16 @@ enum BulkFileStatus {
 /// Tracks one extracted event within a file (a file can yield multiple events).
 class BulkExtractedEventItem {
   Map<String, dynamic> data;
+  bool isSelected;
   String? createdEventId;
   String? errorMessage;
 
-  BulkExtractedEventItem({required this.data, this.createdEventId, this.errorMessage});
+  BulkExtractedEventItem({
+    required this.data,
+    this.isSelected = true,
+    this.createdEventId,
+    this.errorMessage,
+  });
 
   bool get created => createdEventId != null;
 }
@@ -62,28 +71,31 @@ class BulkFileItem {
   }
 }
 
-/// Provider for managing bulk file extraction and event creation
+/// Provider for managing bulk file extraction and event creation.
+///
+/// Flow: selectFiles → extracting → preview (edit/toggle) → creating → complete
 class BulkExtractionProvider extends ChangeNotifier {
   final ExtractionService _extractionService = ExtractionService();
   final EventService _eventService = EventService();
 
   List<BulkFileItem> _files = [];
-  bool _isProcessing = false;
+  BulkPhase _phase = BulkPhase.selectFiles;
   bool _isCancelled = false;
-  bool _isComplete = false;
 
   // Public getters
+  BulkPhase get phase => _phase;
   List<BulkFileItem> get files => List.unmodifiable(_files);
-  bool get isProcessing => _isProcessing;
   bool get isCancelled => _isCancelled;
-  bool get isComplete => _isComplete;
   bool get hasFiles => _files.isNotEmpty;
+
+  // Legacy compat getters used by existing UI code
+  bool get isProcessing => _phase == BulkPhase.extracting || _phase == BulkPhase.creating;
+  bool get isComplete => _phase == BulkPhase.complete;
 
   int get totalFiles => _files.length;
   int get pendingCount => _files.where((f) => f.status == BulkFileStatus.pending).length;
   int get processingCount => _files.where((f) => f.status == BulkFileStatus.processing).length;
   int get successCount {
-    // Count total created events across all files
     int count = 0;
     for (final f in _files) {
       count += f.extractedEvents.where((e) => e.created).length;
@@ -94,6 +106,26 @@ class BulkExtractionProvider extends ChangeNotifier {
   int get completedCount => successCount + failedCount;
 
   double get progress => totalFiles > 0 ? completedCount / totalFiles : 0.0;
+
+  List<BulkExtractedEventItem> get allExtractedEvents =>
+      _files.expand((f) => f.extractedEvents).toList();
+
+  int get selectedCount =>
+      allExtractedEvents.where((e) => e.isSelected).length;
+
+  int get totalExtractedEvents => allExtractedEvents.length;
+
+  int get extractedFileCount =>
+      _files.where((f) => f.status == BulkFileStatus.success || f.extractedEvents.isNotEmpty).length;
+
+  double get extractionProgress {
+    if (_files.isEmpty) return 0;
+    final done = _files.where((f) =>
+        f.status == BulkFileStatus.success ||
+        f.status == BulkFileStatus.failed ||
+        f.extractedEvents.isNotEmpty).length;
+    return done / _files.length;
+  }
 
   /// Add files to the queue
   void addFiles(List<File> newFiles) {
@@ -126,7 +158,7 @@ class BulkExtractionProvider extends ChangeNotifier {
   /// Clear all files
   void clearAll() {
     _files.clear();
-    _isComplete = false;
+    _phase = BulkPhase.selectFiles;
     _isCancelled = false;
     notifyListeners();
   }
@@ -134,9 +166,8 @@ class BulkExtractionProvider extends ChangeNotifier {
   /// Reset state for another round of imports
   void reset() {
     _files.clear();
-    _isProcessing = false;
+    _phase = BulkPhase.selectFiles;
     _isCancelled = false;
-    _isComplete = false;
     notifyListeners();
   }
 
@@ -146,33 +177,52 @@ class BulkExtractionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Process all files sequentially
-  /// Sequential processing avoids API rate limits and provides clear progress
-  Future<void> processAllFiles() async {
-    if (_files.isEmpty || _isProcessing) return;
+  /// Load pre-extracted events from AI Chat (skips file selection + extraction phases).
+  /// Jumps directly to the preview phase.
+  void loadPreExtractedEvents({
+    required File file,
+    required List<Map<String, dynamic>> events,
+  }) {
+    final fileName = file.path.split('/').last;
+    final extension = fileName.split('.').last.toLowerCase();
+    final isImage = ['jpg', 'jpeg', 'png', 'heic'].contains(extension);
 
-    _isProcessing = true;
+    final item = BulkFileItem(
+      file: file,
+      fileName: fileName,
+      isImage: isImage,
+      fileSize: file.existsSync() ? file.lengthSync() : 0,
+      status: BulkFileStatus.success,
+      extractedEvents: events
+          .map((data) => BulkExtractedEventItem(data: data))
+          .toList(),
+    );
+
+    _files = [item];
+    _phase = BulkPhase.preview;
     _isCancelled = false;
-    _isComplete = false;
+    notifyListeners();
+  }
+
+  // ── Phase 1: Extract all files (no creation) ──
+
+  Future<void> extractAllFiles() async {
+    if (_files.isEmpty) return;
+
+    _phase = BulkPhase.extracting;
+    _isCancelled = false;
     notifyListeners();
 
     for (int i = 0; i < _files.length; i++) {
       if (_isCancelled) break;
 
       final item = _files[i];
+      if (item.extractedEvents.isNotEmpty) continue; // already extracted
 
-      // Skip already processed files
-      if (item.status == BulkFileStatus.success ||
-          item.status == BulkFileStatus.failed) {
-        continue;
-      }
-
-      // Mark as processing
       item.status = BulkFileStatus.processing;
       notifyListeners();
 
       try {
-        // Step 1: Read file and prepare input
         final bytes = await item.file.readAsBytes();
         String input;
 
@@ -186,7 +236,6 @@ class BulkExtractionProvider extends ChangeNotifier {
           }
         }
 
-        // Step 2: Extract structured data via AI (multi-event)
         final extractedList = await _extractionService.extractStructuredDataMulti(
           input: input,
         );
@@ -195,43 +244,11 @@ class BulkExtractionProvider extends ChangeNotifier {
           throw Exception('No events found in this file.');
         }
 
-        // Step 3: Create each extracted event
-        bool anyCreated = false;
-        for (final extractedData in extractedList) {
-          if (_isCancelled) break;
+        item.extractedEvents = extractedList
+            .map((data) => BulkExtractedEventItem(data: data))
+            .toList();
+        item.status = BulkFileStatus.success;
 
-          final eventItem = BulkExtractedEventItem(data: extractedData);
-          item.extractedEvents.add(eventItem);
-
-          try {
-            final eventPayload = _sanitizeEventPayload(extractedData);
-            final createdEvent = await _eventService.createEvent(eventPayload);
-            eventItem.createdEventId =
-                createdEvent['_id']?.toString() ?? createdEvent['id']?.toString();
-            anyCreated = true;
-          } on SubscriptionLimitException catch (e) {
-            eventItem.errorMessage = e.message;
-            _isCancelled = true;
-          } catch (e) {
-            eventItem.errorMessage = _formatErrorMessage(e.toString());
-          }
-
-          notifyListeners();
-
-          if (!_isCancelled && extractedList.length > 1) {
-            await Future<void>.delayed(const Duration(milliseconds: 300));
-          }
-        }
-
-        item.status = anyCreated ? BulkFileStatus.success : BulkFileStatus.failed;
-        if (!anyCreated && item.errorMessage == null) {
-          item.errorMessage = 'Failed to create events';
-        }
-
-      } on SubscriptionLimitException catch (e) {
-        item.status = BulkFileStatus.failed;
-        item.errorMessage = e.message;
-        _isCancelled = true;
       } catch (e) {
         item.status = BulkFileStatus.failed;
         item.errorMessage = _formatErrorMessage(e.toString());
@@ -239,15 +256,117 @@ class BulkExtractionProvider extends ChangeNotifier {
 
       notifyListeners();
 
-      // Small delay between files to be gentle on the API
       if (!_isCancelled && i < _files.length - 1) {
         await Future<void>.delayed(const Duration(milliseconds: 500));
       }
     }
 
-    _isProcessing = false;
-    _isComplete = true;
+    _phase = BulkPhase.preview;
     notifyListeners();
+  }
+
+  // ── Preview controls ──
+
+  void toggleEvent(int fileIdx, int eventIdx) {
+    if (fileIdx < _files.length &&
+        eventIdx < _files[fileIdx].extractedEvents.length) {
+      final event = _files[fileIdx].extractedEvents[eventIdx];
+      event.isSelected = !event.isSelected;
+      notifyListeners();
+    }
+  }
+
+  void selectAll() {
+    for (final f in _files) {
+      for (final e in f.extractedEvents) {
+        e.isSelected = true;
+      }
+    }
+    notifyListeners();
+  }
+
+  void deselectAll() {
+    for (final f in _files) {
+      for (final e in f.extractedEvents) {
+        e.isSelected = false;
+      }
+    }
+    notifyListeners();
+  }
+
+  void updateEventData(int fileIdx, int eventIdx, Map<String, dynamic> data) {
+    if (fileIdx < _files.length &&
+        eventIdx < _files[fileIdx].extractedEvents.length) {
+      _files[fileIdx].extractedEvents[eventIdx].data = data;
+      notifyListeners();
+    }
+  }
+
+  /// Apply shared field values to all selected events.
+  /// Skips 'date' to preserve each event's individual date.
+  void applyBulkEdit(Map<String, dynamic> edits) {
+    final safeEdits = Map<String, dynamic>.from(edits)..remove('date');
+    for (final file in _files) {
+      for (final event in file.extractedEvents) {
+        if (!event.isSelected) continue;
+        for (final entry in safeEdits.entries) {
+          event.data[entry.key] = entry.value;
+        }
+      }
+    }
+    notifyListeners();
+  }
+
+  // ── Phase 2: Create selected events ──
+
+  Future<void> createSelectedEvents() async {
+    _phase = BulkPhase.creating;
+    _isCancelled = false;
+    notifyListeners();
+
+    for (final file in _files) {
+      for (final event in file.extractedEvents) {
+        if (_isCancelled) break;
+        if (!event.isSelected || event.created) continue;
+
+        try {
+          final eventPayload = _sanitizeEventPayload(event.data);
+          final createdEvent = await _eventService.createEvent(eventPayload);
+          event.createdEventId =
+              createdEvent['_id']?.toString() ?? createdEvent['id']?.toString();
+        } on SubscriptionLimitException catch (e) {
+          event.errorMessage = e.message;
+          _isCancelled = true;
+        } catch (e) {
+          event.errorMessage = _formatErrorMessage(e.toString());
+        }
+
+        notifyListeners();
+
+        if (!_isCancelled) {
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+        }
+      }
+      if (_isCancelled) break;
+    }
+
+    // Update file statuses based on event results
+    for (final file in _files) {
+      final selected = file.extractedEvents.where((e) => e.isSelected);
+      if (selected.isEmpty) continue;
+      final anyCreated = selected.any((e) => e.created);
+      file.status = anyCreated ? BulkFileStatus.success : BulkFileStatus.failed;
+    }
+
+    _phase = BulkPhase.complete;
+    notifyListeners();
+  }
+
+  /// Legacy method: extract + create in one pass (backward compat).
+  Future<void> processAllFiles() async {
+    await extractAllFiles();
+    if (_isCancelled) return;
+    await createSelectedEvents();
   }
 
   /// Sanitize extracted data to match backend validation requirements
@@ -344,6 +463,10 @@ class BulkExtractionProvider extends ChangeNotifier {
         }
       }
     }
+
+    // Default times when AI didn't extract them
+    payload['start_time'] ??= '09:00';
+    payload['end_time'] ??= '17:00';
 
     // Normalize date field - ensure it's just YYYY-MM-DD
     if (payload['date'] is String) {

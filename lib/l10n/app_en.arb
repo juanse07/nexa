@@ -1703,5 +1703,71 @@
   "grossHours": "Gross Hours",
   "deduct30MinBreak": "Deduct 30-min break",
   "finalHours": "Final Hours",
-  "tapToSetTime": "Tap to set"
+  "tapToSetTime": "Tap to set",
+
+  "editAllSelected": "Edit All",
+  "bulkEditTitle": "Edit Selected Events",
+  "applyToSelected": "Apply to Selected",
+  "bulkEditHint": "Only checked fields will be applied",
+
+  "@@ Smart Scheduling Data": {},
+  "skills": "Skills",
+  "addSkill": "Add Skill",
+  "confirmSkill": "Confirm",
+  "selfReported": "Self-reported",
+  "managerConfirmed": "Manager confirmed",
+  "removeSkill": "Remove Skill",
+  "certifications": "Certifications",
+  "addCertification": "Add Certification",
+  "certificationName": "Certification Name",
+  "expiryDate": "Expiry Date",
+  "issuedDate": "Issued Date",
+  "expired": "Expired",
+  "expiringSoon": "Expiring soon",
+  "valid": "Valid",
+  "noExpiry": "No expiry",
+  "preferredRoles": "Preferred Roles",
+  "maxHoursPerWeek": "Max Hours/Week",
+  "travelRadius": "Travel Radius",
+  "preferredDays": "Preferred Days",
+  "preferredShifts": "Preferred Shifts",
+  "workPreferences": "Work Preferences",
+  "morning": "Morning",
+  "afternoon": "Afternoon",
+  "evening": "Evening",
+  "overnight": "Overnight",
+  "venueHistory": "Venue History",
+  "timesWorked": "{count} times",
+  "@timesWorked": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "lastWorkedDate": "Last: {date}",
+  "@lastWorkedDate": {
+    "placeholders": {
+      "date": { "type": "String" }
+    }
+  },
+  "firstWorkedDate": "First: {date}",
+  "@firstWorkedDate": {
+    "placeholders": {
+      "date": { "type": "String" }
+    }
+  },
+  "recommendedStaff": "AI Recommended Staff",
+  "matchScore": "Match Score",
+  "skillsMatch": "Skills Match",
+  "missingSkills": "Missing Skills",
+  "busyWarning": "Busy",
+  "noRequirements": "No requirements set",
+  "addRequirements": "Add requirements",
+  "requiredSkills": "Required Skills",
+  "requiredCertifications": "Required Certifications",
+  "nRequirements": "{count} requirements",
+  "@nRequirements": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  }
 }

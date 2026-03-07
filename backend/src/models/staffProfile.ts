@@ -12,6 +12,14 @@ export interface StaffProfileDocument extends Document {
   workerType?: 'w2' | '1099';
   department?: string;
   earningsCode?: string;
+  // Smart scheduling fields
+  skills?: string[];   // manager-confirmed skill tags, freeform, max 50
+  certifications?: Array<{
+    name: string;
+    expiryDate?: Date;
+    verifiedAt?: Date;     // when manager confirmed
+  }>;
+  preferredRoles?: string[];   // manager-assigned role preferences
   createdAt: Date;
   updatedAt: Date;
 }
@@ -29,6 +37,19 @@ const StaffProfileSchema = new Schema<StaffProfileDocument>(
     workerType: { type: String, enum: ['w2', '1099'] },
     department: { type: String, trim: true },
     earningsCode: { type: String, trim: true },
+    // Smart scheduling fields
+    skills: {
+      type: [String],
+      default: [],
+      validate: [(v: string[]) => v.length <= 50, 'Maximum 50 skills allowed'],
+    },
+    certifications: [{
+      name: { type: String, required: true, trim: true },
+      expiryDate: { type: Date },
+      verifiedAt: { type: Date },
+      _id: false,
+    }],
+    preferredRoles: { type: [String], default: [] },
   },
   { timestamps: true, collection: 'staffprofiles' }
 );
@@ -36,6 +57,7 @@ const StaffProfileSchema = new Schema<StaffProfileDocument>(
 StaffProfileSchema.index({ managerId: 1, userKey: 1 }, { unique: true });
 StaffProfileSchema.index({ managerId: 1, isFavorite: 1 });
 StaffProfileSchema.index({ managerId: 1, groupIds: 1 });
+StaffProfileSchema.index({ managerId: 1, skills: 1 });
 
 export const StaffProfileModel: Model<StaffProfileDocument> =
   mongoose.models.StaffProfile || mongoose.model<StaffProfileDocument>('StaffProfile', StaffProfileSchema);

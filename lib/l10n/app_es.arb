@@ -1120,5 +1120,71 @@
   "grossHours": "Horas Brutas",
   "deduct30MinBreak": "Descontar 30 min de descanso",
   "finalHours": "Horas Finales",
-  "tapToSetTime": "Toca para configurar"
+  "tapToSetTime": "Toca para configurar",
+
+  "editAllSelected": "Editar todos",
+  "bulkEditTitle": "Editar eventos seleccionados",
+  "applyToSelected": "Aplicar a seleccionados",
+  "bulkEditHint": "Solo los campos marcados se aplicarán",
+
+  "@@ Smart Scheduling Data": {},
+  "skills": "Habilidades",
+  "addSkill": "Agregar habilidad",
+  "confirmSkill": "Confirmar",
+  "selfReported": "Auto-reportado",
+  "managerConfirmed": "Confirmado por gerente",
+  "removeSkill": "Eliminar habilidad",
+  "certifications": "Certificaciones",
+  "addCertification": "Agregar certificación",
+  "certificationName": "Nombre de certificación",
+  "expiryDate": "Fecha de vencimiento",
+  "issuedDate": "Fecha de emisión",
+  "expired": "Vencido",
+  "expiringSoon": "Por vencer",
+  "valid": "Vigente",
+  "noExpiry": "Sin vencimiento",
+  "preferredRoles": "Roles preferidos",
+  "maxHoursPerWeek": "Máx. horas/semana",
+  "travelRadius": "Radio de viaje",
+  "preferredDays": "Días preferidos",
+  "preferredShifts": "Turnos preferidos",
+  "workPreferences": "Preferencias de trabajo",
+  "morning": "Mañana",
+  "afternoon": "Tarde",
+  "evening": "Noche",
+  "overnight": "Madrugada",
+  "venueHistory": "Historial de venues",
+  "timesWorked": "{count} veces",
+  "@timesWorked": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "lastWorkedDate": "Último: {date}",
+  "@lastWorkedDate": {
+    "placeholders": {
+      "date": { "type": "String" }
+    }
+  },
+  "firstWorkedDate": "Primero: {date}",
+  "@firstWorkedDate": {
+    "placeholders": {
+      "date": { "type": "String" }
+    }
+  },
+  "recommendedStaff": "Personal Recomendado por IA",
+  "matchScore": "Puntuaci\u00f3n",
+  "skillsMatch": "Habilidades",
+  "missingSkills": "Habilidades faltantes",
+  "busyWarning": "Ocupado",
+  "noRequirements": "Sin requisitos",
+  "addRequirements": "Agregar requisitos",
+  "requiredSkills": "Habilidades requeridas",
+  "requiredCertifications": "Certificaciones requeridas",
+  "nRequirements": "{count} requisitos",
+  "@nRequirements": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  }
 }

@@ -6,6 +6,8 @@ export interface RoleRequirement {
   call_time?: string;
   start_time?: string;
   end_time?: string;
+  requiredSkills?: string[];
+  requiredCertifications?: string[];
 }
 
 export interface ClockLocation {
@@ -165,6 +167,8 @@ const RoleRequirementSchema = new Schema<RoleRequirement>(
     call_time: { type: String },
     start_time: { type: String, trim: true },
     end_time: { type: String, trim: true },
+    requiredSkills: { type: [String], default: undefined },
+    requiredCertifications: { type: [String], default: undefined },
   },
   { _id: false }
 );

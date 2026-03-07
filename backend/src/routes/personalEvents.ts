@@ -12,8 +12,8 @@ const router = express.Router();
 const personalEventSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
-  startTime: z.string().regex(/^\d{2}:\d{2}$/, 'Start time must be HH:mm'),
-  endTime: z.string().regex(/^\d{2}:\d{2}$/, 'End time must be HH:mm'),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/, 'Start time must be HH:mm').optional(),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/, 'End time must be HH:mm').optional(),
   notes: z.string().max(1000).optional(),
   location: z.string().max(300).optional(),
   role: z.string().max(100).optional(),
@@ -83,19 +83,14 @@ router.post('/personal-events', requireAuth, requireActiveSubscription, async (r
       return res.status(400).json({ message: 'Invalid request', errors: parsed.error.errors });
     }
 
-    const { date, startTime, endTime, notes, location, role, client, hourlyRate, currency } = parsed.data;
+    const { date, notes, location, role, client, hourlyRate, currency } = parsed.data;
+    const startTime = parsed.data.startTime || '09:00';
+    const endTime = parsed.data.endTime || '17:00';
     const title = parsed.data.title?.trim() ||
       [role, client].filter(Boolean).join(' @ ') ||
       date;
 
-    // Reject past dates
     const eventDate = new Date(date + 'T00:00:00');
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (eventDate < today) {
-      return res.status(400).json({ message: 'Cannot create personal events in the past.' });
-    }
-
     const userKey = `${provider}:${sub}`;
 
     // Create the personal event
@@ -234,16 +229,6 @@ router.put('/personal-events/:id', requireAuth, async (req, res) => {
     }
 
     const updates = parsed.data;
-
-    // If date changed, reject past dates
-    if (updates.date) {
-      const newDate = new Date(updates.date + 'T00:00:00');
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (newDate < today) {
-        return res.status(400).json({ message: 'Cannot move personal event to a past date.' });
-      }
-    }
 
     // Update the personal event
     if (updates.date) (existing as any).date = new Date(updates.date + 'T00:00:00');

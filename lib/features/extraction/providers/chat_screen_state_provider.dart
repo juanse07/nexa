@@ -147,8 +147,8 @@ class ChatScreenStateProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  /// Process an image file
-  Future<Map<String, dynamic>?> processImage(File file) async {
+  /// Process an image file (returns list of extracted events)
+  Future<List<Map<String, dynamic>>> processImage(File file) async {
     try {
       final result = await fileProcessingManager.processImage(file);
       return result;
@@ -157,8 +157,8 @@ class ChatScreenStateProvider with ChangeNotifier {
     }
   }
 
-  /// Process a document file
-  Future<Map<String, dynamic>?> processDocument(File file) async {
+  /// Process a document file (returns list of extracted events)
+  Future<List<Map<String, dynamic>>> processDocument(File file) async {
     try {
       final result = await fileProcessingManager.processDocument(file);
       return result;

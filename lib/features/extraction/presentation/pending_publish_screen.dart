@@ -66,6 +66,11 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
   int _totalLoadedCount = 0;
   final Set<String> _allLoadedKeys = {};
 
+  // AI Recommendations state
+  final Map<String, List<Map<String, dynamic>>> _recommendations = {};
+  final Map<String, bool> _recommendationsLoading = {};
+  bool _recommendationsExpanded = false;
+
   // Memoized filtered list — invalidated on setState
   List<Map<String, dynamic>>? _filteredUsersCache;
   String? _filterCacheKey;
@@ -119,6 +124,38 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
       setState(() => _roles = roles);
     } catch (e) {
       // Silently fail, roles will be empty
+    }
+  }
+
+  /// Check if any roles have skill/cert requirements defined
+  bool get _hasRoleRequirements {
+    final roles = (widget.draft['roles'] as List?)?.whereType<Map>().toList() ?? [];
+    return roles.any((r) =>
+      (r['requiredSkills'] is List && (r['requiredSkills'] as List).isNotEmpty) ||
+      (r['requiredCertifications'] is List && (r['requiredCertifications'] as List).isNotEmpty));
+  }
+
+  /// Fetch AI recommendations for a specific role on this event
+  Future<void> _loadRecommendations(String roleName) async {
+    final draftId = widget.draftId;
+    if (draftId.isEmpty) return;
+
+    setState(() => _recommendationsLoading[roleName] = true);
+    try {
+      final result = await _staffService.fetchRecommendedStaff(draftId, roleName);
+      final candidates = (result['candidates'] as List?)
+          ?.map((c) => c is Map<String, dynamic> ? c : <String, dynamic>{})
+          .toList() ?? [];
+      if (mounted) {
+        setState(() {
+          _recommendations[roleName] = candidates;
+          _recommendationsLoading[roleName] = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _recommendationsLoading[roleName] = false);
+      }
     }
   }
 
@@ -708,6 +745,7 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
 
                   _buildTeamSelector(),
                   _buildGroupSelector(),
+                  if (_hasRoleRequirements) _buildRecommendedSection(),
                   _buildFilterSection(l10n),
                   const SizedBox(height: 16),
 
@@ -931,6 +969,287 @@ class _PendingPublishScreenState extends State<PendingPublishScreen> {
           // ── Smart action button ──────────────────────────────
           _buildSmartButton(l10n),
         ],
+      ),
+    );
+  }
+
+  Widget _buildRecommendedSection() {
+    final roles = (widget.draft['roles'] as List?)?.whereType<Map>().toList() ?? [];
+    final rolesWithReqs = roles.where((r) =>
+      (r['requiredSkills'] is List && (r['requiredSkills'] as List).isNotEmpty) ||
+      (r['requiredCertifications'] is List && (r['requiredCertifications'] as List).isNotEmpty)
+    ).toList();
+
+    if (rolesWithReqs.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.techBlue.withValues(alpha: 0.2)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          InkWell(
+            onTap: () {
+              setState(() => _recommendationsExpanded = !_recommendationsExpanded);
+              if (_recommendationsExpanded) {
+                // Load recommendations for all roles with requirements
+                for (final role in rolesWithReqs) {
+                  final roleName = (role['role'] ?? '').toString();
+                  if (roleName.isNotEmpty && !_recommendations.containsKey(roleName)) {
+                    _loadRecommendations(roleName);
+                  }
+                }
+              }
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  Container(
+                    width: 32, height: 32,
+                    decoration: BoxDecoration(
+                      color: AppColors.techBlue.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.auto_awesome, size: 18, color: AppColors.techBlue),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      'AI Recommended Staff',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: AppColors.navySpaceCadet),
+                    ),
+                  ),
+                  Text(
+                    '${rolesWithReqs.length} role${rolesWithReqs.length != 1 ? 's' : ''}',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    _recommendationsExpanded ? Icons.expand_less : Icons.expand_more,
+                    color: Colors.grey.shade400,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Expanded content
+          if (_recommendationsExpanded) ...[
+            Divider(height: 1, color: Colors.grey.shade200),
+            for (final role in rolesWithReqs) ...[
+              _buildRoleRecommendations(role),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRoleRecommendations(Map role) {
+    final roleName = (role['role'] ?? '').toString();
+    final isLoading = _recommendationsLoading[roleName] == true;
+    final candidates = _recommendations[roleName] ?? [];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+          child: Row(
+            children: [
+              Icon(Icons.work_outline, size: 16, color: AppColors.techBlue),
+              const SizedBox(width: 6),
+              Text(
+                roleName,
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: AppColors.navySpaceCadet),
+              ),
+              const Spacer(),
+              if (!isLoading && candidates.isEmpty)
+                TextButton.icon(
+                  onPressed: () => _loadRecommendations(roleName),
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Load', style: TextStyle(fontSize: 12)),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        if (isLoading)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+          )
+        else if (candidates.isEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+            child: Text('Tap Load to get recommendations', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+          )
+        else
+          ...candidates.take(5).map((c) => _buildCandidateRow(c)),
+        Divider(height: 1, color: Colors.grey.shade100),
+      ],
+    );
+  }
+
+  Widget _buildCandidateRow(Map<String, dynamic> candidate) {
+    final name = (candidate['name'] ?? 'Unknown').toString();
+    final scores = candidate['scores'] as Map<String, dynamic>? ?? {};
+    final total = (scores['total'] ?? 0) as num;
+    final matchedSkills = (candidate['matchedSkills'] as List?)?.cast<String>() ?? [];
+    final missingSkills = (candidate['missingSkills'] as List?)?.cast<String>() ?? [];
+    final isBusy = candidate['isBusy'] == true;
+    final busyReason = (candidate['busyReason'] ?? '').toString();
+    final isFavorite = candidate['isFavorite'] == true;
+    final userKey = (candidate['userKey'] ?? '').toString();
+    final picture = (candidate['picture'] ?? '').toString();
+    final isSelected = _selectedKeys.contains(userKey);
+
+    // Score color
+    Color scoreColor;
+    if (total >= 70) {
+      scoreColor = AppColors.success;
+    } else if (total >= 40) {
+      scoreColor = Colors.orange;
+    } else {
+      scoreColor = AppColors.errorDark;
+    }
+
+    return InkWell(
+      onTap: () {
+        setState(() {
+          if (isSelected) {
+            _selectedKeys.remove(userKey);
+          } else {
+            _selectedKeys.add(userKey);
+            // Also store user info for audience building
+            _keyToUser[userKey] = {
+              'name': name,
+              'picture': picture,
+            };
+          }
+        });
+      },
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+        child: Row(
+          children: [
+            // Score badge
+            Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: scoreColor.withValues(alpha: 0.12),
+                border: Border.all(color: scoreColor.withValues(alpha: 0.4), width: 2),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                '${total.toInt()}',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: scoreColor),
+              ),
+            ),
+            const SizedBox(width: 10),
+            // Name + skills
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          name,
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (isFavorite) ...[
+                        const SizedBox(width: 4),
+                        const Icon(Icons.star, size: 14, color: Colors.amber),
+                      ],
+                      if (isBusy) ...[
+                        const SizedBox(width: 4),
+                        Tooltip(
+                          message: busyReason,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.shade50,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.orange.shade200),
+                            ),
+                            child: Text('Busy', style: TextStyle(fontSize: 10, color: Colors.orange.shade700, fontWeight: FontWeight.w600)),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  if (matchedSkills.isNotEmpty || missingSkills.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 4, runSpacing: 2,
+                      children: [
+                        ...matchedSkills.take(3).map((s) => _skillChip(s, true)),
+                        ...missingSkills.take(2).map((s) => _skillChip(s, false)),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            // Checkbox
+            Checkbox(
+              value: isSelected,
+              onChanged: (val) {
+                setState(() {
+                  if (val == true) {
+                    _selectedKeys.add(userKey);
+                    _keyToUser[userKey] = {'name': name, 'picture': picture};
+                  } else {
+                    _selectedKeys.remove(userKey);
+                  }
+                });
+              },
+              activeColor: AppColors.techBlue,
+              visualDensity: VisualDensity.compact,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _skillChip(String skill, bool matched) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: matched ? AppColors.success.withValues(alpha: 0.08) : Colors.red.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: matched ? AppColors.success.withValues(alpha: 0.3) : Colors.red.withValues(alpha: 0.3)),
+      ),
+      child: Text(
+        skill,
+        style: TextStyle(
+          fontSize: 10,
+          color: matched ? AppColors.success : AppColors.errorDark,
+          fontWeight: FontWeight.w500,
+        ),
       ),
     );
   }

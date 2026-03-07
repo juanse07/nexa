@@ -9,6 +9,7 @@ import '../services/event_service.dart';
 import '../services/google_places_service.dart';
 import '../services/roles_service.dart';
 import 'modern_address_field.dart';
+import 'role_requirements_picker.dart';
 
 /// A lightweight bottom sheet for quick event creation without AI extraction.
 /// Allows managers to manually enter essential event details.
@@ -515,15 +516,19 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
       if (_contactPhoneCtrl.text.trim().isNotEmpty) locationFields['contact_phone'] = _contactPhoneCtrl.text.trim();
       if (_notesCtrl.text.trim().isNotEmpty) locationFields['notes'] = _notesCtrl.text.trim();
 
-      // Always include per-role times
+      // Always include per-role times and requirements
       final rolesPayload = validRoles.map((r) {
         final rs = r['role_start_time'] as TimeOfDay?;
         final re = r['role_end_time']   as TimeOfDay?;
+        final reqSkills = r['requiredSkills'] as List<String>?;
+        final reqCerts = r['requiredCertifications'] as List<String>?;
         return <String, dynamic>{
           'role': r['role'],
           'count': r['count'],
           if (rs != null) 'start_time': _formatTimeForSave(rs),
           if (re != null) 'end_time':   _formatTimeForSave(re),
+          if (reqSkills != null && reqSkills.isNotEmpty) 'requiredSkills': reqSkills,
+          if (reqCerts != null && reqCerts.isNotEmpty) 'requiredCertifications': reqCerts,
         };
       }).toList();
 
@@ -1315,7 +1320,64 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
               ),
             ],
           ),
+          // Requirements button
+          const SizedBox(height: 6),
+          _buildRequirementsChip(index, roleName),
         ],
+      ),
+    );
+  }
+
+  Widget _buildRequirementsChip(int index, String roleName) {
+    final role = _roles[index];
+    final skills = (role['requiredSkills'] as List<String>?) ?? [];
+    final certs = (role['requiredCertifications'] as List<String>?) ?? [];
+    final total = skills.length + certs.length;
+
+    return GestureDetector(
+      onTap: () async {
+        final result = await showRoleRequirementsPicker(
+          context: context,
+          roleName: roleName,
+          initialSkills: skills,
+          initialCerts: certs,
+        );
+        if (result != null) {
+          setState(() {
+            _roles[index] = {
+              ..._roles[index],
+              'requiredSkills': result.skills,
+              'requiredCertifications': result.certifications,
+            };
+          });
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: total > 0 ? AppColors.techBlue.withValues(alpha: 0.08) : Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: total > 0 ? AppColors.techBlue.withValues(alpha: 0.3) : Colors.grey.shade200),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              total > 0 ? Icons.checklist : Icons.add_circle_outline,
+              size: 16,
+              color: total > 0 ? AppColors.techBlue : Colors.grey.shade500,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              total > 0 ? '$total requirements' : 'Add requirements',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: total > 0 ? FontWeight.w600 : FontWeight.w400,
+                color: total > 0 ? AppColors.techBlue : Colors.grey.shade600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

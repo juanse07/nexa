@@ -9,6 +9,7 @@ import { TeamMemberModel } from '../models/teamMember';
 import { TeamModel } from '../models/team';
 import { emitToManager, emitToUser } from '../socket/server';
 import { notificationService } from '../services/notificationService';
+import { formatNotifDate } from '../utils/eventHelpers';
 import { AvailabilityModel } from '../models/availability';
 import mongoose from 'mongoose';
 
@@ -747,10 +748,7 @@ router.post('/conversations/:targetId/messages', requireAuth, requireActiveSubsc
           ? `${manager.first_name} ${manager.last_name}`
           : manager?.name || 'Your manager';
 
-        // Add purple dot for event invitations
-        const notificationTitle = messageType === 'eventInvitation'
-          ? `🟣 ${managerName}`
-          : managerName;
+        const notificationTitle = managerName;
 
         // Format invitation notification body with event details
         let notificationBody = message.length > 100 ? message.substring(0, 100) + '...' : message;
@@ -1370,7 +1368,7 @@ router.post('/invitations/:messageId/respond', requireAuth, async (req, res) => 
           // Send notification to manager
           await notificationService.sendToUser(
             message.managerId.toString(),
-            '✅ Event Fulfilled',
+            'Event Fulfilled',
             `All positions filled for ${(eventDoc as any).event_name || 'your event'}`,
             {
               type: 'event',
@@ -1448,7 +1446,7 @@ router.post('/invitations/:messageId/respond', requireAuth, async (req, res) => 
             // Send notification to manager
             await notificationService.sendToUser(
               message.managerId.toString(),
-              '🔓 Event Reopened',
+              'Event Reopened',
               `Position available in ${(reloadedEvent as any).event_name || 'your event'} - staff member declined`,
               {
                 type: 'event',
@@ -1506,37 +1504,35 @@ router.post('/invitations/:messageId/respond', requireAuth, async (req, res) => 
 
       const staffName = name || 'Staff member';
 
-      if (accept) {
-        // Green dot for acceptance
-        await notificationService.sendToUser(
-          message.managerId.toString(),
-          '🟢 Job Accepted',
-          `${staffName} accepted ${eventName} as ${roleName}`,
-          {
-            type: 'event',
-            eventId: String(eventId),
-            userKey,
-            roleId,
-            action: 'accepted'
-          },
-          'manager'
-        );
-      } else {
-        // Red dot for decline
-        await notificationService.sendToUser(
-          message.managerId.toString(),
-          '🔴 Job Declined',
-          `${staffName} declined ${eventName} as ${roleName}`,
-          {
-            type: 'event',
-            eventId: String(eventId),
-            userKey,
-            roleId,
-            action: 'declined'
-          },
-          'manager'
-        );
+      // Look up manager's terminology
+      const mgrDoc = await ManagerModel.findById(message.managerId).select('eventTerminology').lean();
+      const mgrTerm = (mgrDoc as any)?.eventTerminology || 'shift';
+      const capitalizedMgrTerm = mgrTerm.charAt(0).toUpperCase() + mgrTerm.slice(1);
+
+      // Format date
+      let eventDate = '';
+      if ((eventForNotification as any).date) {
+        eventDate = formatNotifDate((eventForNotification as any).date);
       }
+
+      const actionWord = accept ? 'accepted' : 'declined';
+      const notifTitle = `${capitalizedMgrTerm} ${accept ? 'Accepted' : 'Declined'}`;
+      let notifBody = `${staffName} ${actionWord} ${roleName}`;
+      if (eventDate) notifBody += ` for ${eventDate}`;
+
+      await notificationService.sendToUser(
+        message.managerId.toString(),
+        notifTitle,
+        notifBody,
+        {
+          type: 'event',
+          eventId: String(eventId),
+          userKey,
+          roleId,
+          action: actionWord,
+        },
+        'manager'
+      );
     }
 
     console.log('[INVITATION] Response successful - status:', accept ? 'accepted' : 'declined');
@@ -1863,7 +1859,7 @@ router.post('/invitations/send-bulk', requireAuth, async (req, res) => {
 
         await notificationService.sendToUser(
           String(user._id),
-          `🟣 ${managerName}`,
+          managerName,
           invitationMessage.length > 100
             ? invitationMessage.substring(0, 100) + '...'
             : invitationMessage,
@@ -2129,7 +2125,7 @@ router.post('/broadcast', requireAuth, async (req, res) => {
         const [userProvider, userSubject] = userKey.split(':');
         const user = await UserModel.findOne({ provider: userProvider, subject: userSubject });
         if (user) {
-          const pushTitle = `\u{1F4E2} ${managerName}`;
+          const pushTitle = managerName;
           const pushBody = trimmedMessage.length > 100
             ? trimmedMessage.substring(0, 100) + '...'
             : trimmedMessage;

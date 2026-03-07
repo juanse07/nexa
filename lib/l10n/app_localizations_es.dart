@@ -3411,4 +3411,141 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get tapToSetTime => 'Toca para configurar';
+
+  @override
+  String get editAllSelected => 'Editar todos';
+
+  @override
+  String get bulkEditTitle => 'Editar eventos seleccionados';
+
+  @override
+  String get applyToSelected => 'Aplicar a seleccionados';
+
+  @override
+  String get bulkEditHint => 'Solo los campos marcados se aplicarán';
+
+  @override
+  String get skills => 'Habilidades';
+
+  @override
+  String get addSkill => 'Agregar habilidad';
+
+  @override
+  String get confirmSkill => 'Confirmar';
+
+  @override
+  String get selfReported => 'Auto-reportado';
+
+  @override
+  String get managerConfirmed => 'Confirmado por gerente';
+
+  @override
+  String get removeSkill => 'Eliminar habilidad';
+
+  @override
+  String get certifications => 'Certificaciones';
+
+  @override
+  String get addCertification => 'Agregar certificación';
+
+  @override
+  String get certificationName => 'Nombre de certificación';
+
+  @override
+  String get expiryDate => 'Fecha de vencimiento';
+
+  @override
+  String get issuedDate => 'Fecha de emisión';
+
+  @override
+  String get expired => 'Vencido';
+
+  @override
+  String get expiringSoon => 'Por vencer';
+
+  @override
+  String get valid => 'Vigente';
+
+  @override
+  String get noExpiry => 'Sin vencimiento';
+
+  @override
+  String get preferredRoles => 'Roles preferidos';
+
+  @override
+  String get maxHoursPerWeek => 'Máx. horas/semana';
+
+  @override
+  String get travelRadius => 'Radio de viaje';
+
+  @override
+  String get preferredDays => 'Días preferidos';
+
+  @override
+  String get preferredShifts => 'Turnos preferidos';
+
+  @override
+  String get workPreferences => 'Preferencias de trabajo';
+
+  @override
+  String get morning => 'Mañana';
+
+  @override
+  String get afternoon => 'Tarde';
+
+  @override
+  String get evening => 'Noche';
+
+  @override
+  String get overnight => 'Madrugada';
+
+  @override
+  String get venueHistory => 'Historial de venues';
+
+  @override
+  String timesWorked(int count) {
+    return '$count veces';
+  }
+
+  @override
+  String lastWorkedDate(String date) {
+    return 'Último: $date';
+  }
+
+  @override
+  String firstWorkedDate(String date) {
+    return 'Primero: $date';
+  }
+
+  @override
+  String get recommendedStaff => 'Personal Recomendado por IA';
+
+  @override
+  String get matchScore => 'Puntuación';
+
+  @override
+  String get skillsMatch => 'Habilidades';
+
+  @override
+  String get missingSkills => 'Habilidades faltantes';
+
+  @override
+  String get busyWarning => 'Ocupado';
+
+  @override
+  String get noRequirements => 'Sin requisitos';
+
+  @override
+  String get addRequirements => 'Agregar requisitos';
+
+  @override
+  String get requiredSkills => 'Habilidades requeridas';
+
+  @override
+  String get requiredCertifications => 'Certificaciones requeridas';
+
+  @override
+  String nRequirements(int count) {
+    return '$count requisitos';
+  }
 }
