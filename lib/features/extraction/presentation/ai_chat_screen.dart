@@ -1193,12 +1193,16 @@ class _AIChatScreenState extends State<AIChatScreen>
   String _getTimeOfDayGreeting() {
     final hour = DateTime.now().hour;
     String timeOfDay;
-    if (hour < 12) {
+    if (hour < 5) {
+      timeOfDay = 'tonight';
+    } else if (hour < 12) {
       timeOfDay = 'this morning';
     } else if (hour < 17) {
       timeOfDay = 'this afternoon';
-    } else {
+    } else if (hour < 21) {
       timeOfDay = 'this evening';
+    } else {
+      timeOfDay = 'tonight';
     }
     return 'How can I help you\n$timeOfDay?';
   }

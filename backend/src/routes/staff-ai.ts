@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import mongoose from 'mongoose';
 import { requireAuth } from '../middleware/requireAuth';
 import { requireActiveSubscription } from '../middleware/requireActiveSubscription';
 import { isInFreeMonth } from '../utils/subscriptionUtils';
@@ -106,12 +107,13 @@ router.get('/ai/staff/system-info', requireAuth, async (req, res) => {
 const staffExtractionSchema = z.object({
   input: z.string().min(1, 'input is required'),
   isImage: z.boolean().optional().default(false),
+  multi: z.boolean().optional().default(false),
 });
 
 router.post('/ai/staff/extract', requireAuth, async (req, res) => {
   try {
     const validated = staffExtractionSchema.parse(req.body);
-    const { input, isImage } = validated;
+    const { input, isImage, multi } = validated;
 
     const groqKey = process.env.GROQ_API_KEY;
     if (!groqKey) {
@@ -123,11 +125,26 @@ router.post('/ai/staff/extract', requireAuth, async (req, res) => {
     const textModel = 'llama-3.1-8b-instant';
     const groqBaseUrl = 'https://api.groq.com/openai/v1';
 
-    const systemPrompt =
+    const singlePrompt =
       'You are a structured information extractor for personal work events. ' +
       'Extract fields: title, date (YYYY-MM-DD), start_time (HH:mm), end_time (HH:mm), ' +
       'role, client, hourly_rate (number), currency (string, e.g. "USD"), location, notes. ' +
       'Return strict JSON only. Use null for missing fields. Do not include any text outside the JSON object.';
+
+    const multiPrompt =
+      'You are a structured information extractor for work schedules. ' +
+      'The document may contain MULTIPLE shifts/events. Extract ALL of them. ' +
+      'For each event extract: title, date (YYYY-MM-DD), start_time (HH:mm), end_time (HH:mm), ' +
+      'role, client, hourly_rate (number), currency (string, e.g. "USD"), location, notes. ' +
+      'Return a JSON ARRAY of objects. Use null for missing fields. ' +
+      'Do not include any text outside the JSON array. Example: [{...}, {...}]';
+
+    const systemPrompt = multi ? multiPrompt : singlePrompt;
+
+    const maxTokens = multi ? 4000 : 800;
+    const userText = multi
+      ? 'Extract ALL shifts/events from this document and return a JSON array.'
+      : 'Extract structured personal event info and return only JSON.';
 
     let requestBody: any;
     if (isImage) {
@@ -138,10 +155,7 @@ router.post('/ai/staff/extract', requireAuth, async (req, res) => {
           {
             role: 'user',
             content: [
-              {
-                type: 'text',
-                text: 'Extract structured personal event info and return only JSON.',
-              },
+              { type: 'text', text: userText },
               {
                 type: 'image_url',
                 image_url: { url: `data:image/png;base64,${input}` },
@@ -150,7 +164,7 @@ router.post('/ai/staff/extract', requireAuth, async (req, res) => {
           },
         ],
         temperature: 0,
-        max_tokens: 800,
+        max_tokens: maxTokens,
       };
     } else {
       requestBody = {
@@ -159,11 +173,11 @@ router.post('/ai/staff/extract', requireAuth, async (req, res) => {
           { role: 'system', content: systemPrompt },
           {
             role: 'user',
-            content: `Extract JSON from the following text:\n\n${input}`,
+            content: `${userText}\n\n${input}`,
           },
         ],
         temperature: 0,
-        max_tokens: 800,
+        max_tokens: maxTokens,
       };
     }
 
@@ -206,21 +220,44 @@ router.post('/ai/staff/extract', requireAuth, async (req, res) => {
 
     const content = response.data.choices?.[0]?.message?.content || '';
 
-    // Extract JSON from response (between first { and last })
-    const start = content.indexOf('{');
-    const end = content.lastIndexOf('}');
-    if (start !== -1 && end !== -1 && end > start) {
-      const jsonSlice = content.substring(start, end + 1);
+    // Try to extract JSON — array first (for multi), then single object
+    const arrStart = content.indexOf('[');
+    const arrEnd = content.lastIndexOf(']');
+    const objStart = content.indexOf('{');
+    const objEnd = content.lastIndexOf('}');
+
+    let parsed: any = null;
+
+    // Attempt array parse first (covers multi mode)
+    if (arrStart !== -1 && arrEnd !== -1 && arrEnd > arrStart) {
       try {
-        const parsed = JSON.parse(jsonSlice);
-        return res.json({ extracted: parsed });
+        parsed = JSON.parse(content.substring(arrStart, arrEnd + 1));
+      } catch (_) { /* fall through to object parse */ }
+    }
+
+    // Attempt single object parse
+    if (!parsed && objStart !== -1 && objEnd !== -1 && objEnd > objStart) {
+      try {
+        parsed = JSON.parse(content.substring(objStart, objEnd + 1));
       } catch (parseErr) {
         console.error('[ai/staff/extract] Failed to parse JSON:', parseErr);
         return res.status(500).json({ message: 'Failed to parse response from AI' });
       }
     }
 
-    return res.status(500).json({ message: 'No valid JSON found in AI response' });
+    if (!parsed) {
+      return res.status(500).json({ message: 'No valid JSON found in AI response' });
+    }
+
+    // Normalize response shape based on multi flag
+    if (multi) {
+      const arr = Array.isArray(parsed) ? parsed : [parsed];
+      return res.json({ extracted: arr });
+    } else {
+      // Backward compatible: single object
+      const single = Array.isArray(parsed) ? parsed[0] : parsed;
+      return res.json({ extracted: single });
+    }
   } catch (err: any) {
     console.error('[ai/staff/extract] Error:', err);
     if (err instanceof z.ZodError) {
@@ -1310,6 +1347,103 @@ function parsePayRate(payRateInfo: any): number {
   return 0;
 }
 
+// ── Commute calculation (Nominatim + OSRM) ──────────────────────────────
+// Ports the same free APIs used by Flutter's CommuteService to the backend
+// so AI tools can include distance/time data in schedule responses.
+
+const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org';
+const OSRM_BASE = 'https://router.project-osrm.org';
+const COMMUTE_USER_AGENT = 'FlowShiftAPI/1.0';
+const COMMUTE_TIMEOUT = 5000; // ms
+
+// In-memory geocode cache: address → {lat,lng} | null
+const geocodeCache = new Map<string, { lat: number; lng: number } | null>();
+
+/**
+ * Geocode an address to lat/lng via Nominatim.
+ * Returns cached result if available.
+ */
+async function geocodeAddress(address: string): Promise<{ lat: number; lng: number } | null> {
+  const key = address.trim();
+  if (!key) return null;
+  if (geocodeCache.has(key)) return geocodeCache.get(key) || null;
+
+  try {
+    const resp = await axios.get(`${NOMINATIM_BASE}/search`, {
+      params: { q: key, format: 'json', limit: 1 },
+      headers: { 'User-Agent': COMMUTE_USER_AGENT, 'Accept-Language': 'en' },
+      timeout: COMMUTE_TIMEOUT,
+    });
+    const list = resp.data;
+    if (!Array.isArray(list) || list.length === 0) {
+      // Retry without first comma segment (strips venue name prefix)
+      const commaIdx = key.indexOf(',');
+      if (commaIdx > 0) {
+        const stripped = key.substring(commaIdx + 1).trim();
+        const retryResp = await axios.get(`${NOMINATIM_BASE}/search`, {
+          params: { q: stripped, format: 'json', limit: 1 },
+          headers: { 'User-Agent': COMMUTE_USER_AGENT, 'Accept-Language': 'en' },
+          timeout: COMMUTE_TIMEOUT,
+        });
+        const retryList = retryResp.data;
+        if (Array.isArray(retryList) && retryList.length > 0) {
+          const coords = { lat: parseFloat(retryList[0].lat), lng: parseFloat(retryList[0].lon) };
+          if (!isNaN(coords.lat) && !isNaN(coords.lng)) {
+            geocodeCache.set(key, coords);
+            return coords;
+          }
+        }
+      }
+      geocodeCache.set(key, null);
+      return null;
+    }
+    const coords = { lat: parseFloat(list[0].lat), lng: parseFloat(list[0].lon) };
+    if (isNaN(coords.lat) || isNaN(coords.lng)) {
+      geocodeCache.set(key, null);
+      return null;
+    }
+    geocodeCache.set(key, coords);
+    return coords;
+  } catch (err) {
+    geocodeCache.set(key, null);
+    return null;
+  }
+}
+
+/**
+ * Compute driving distance (miles) and duration (minutes) between two points
+ * using OSRM's free routing API.
+ */
+async function computeCommute(
+  homeLat: number, homeLng: number, venueAddress: string
+): Promise<{ miles: number; minutes: number } | null> {
+  try {
+    const dest = await geocodeAddress(venueAddress);
+    if (!dest) return null;
+
+    const resp = await axios.get(
+      `${OSRM_BASE}/route/v1/driving/${homeLng},${homeLat};${dest.lng},${dest.lat}`,
+      {
+        params: { overview: 'false' },
+        headers: { 'User-Agent': COMMUTE_USER_AGENT },
+        timeout: COMMUTE_TIMEOUT,
+      }
+    );
+    const body = resp.data;
+    if (body?.code !== 'Ok' || !body.routes?.length) return null;
+
+    const route = body.routes[0];
+    const distanceMeters = route.distance ?? 0;
+    const durationSeconds = route.duration ?? 0;
+    return {
+      miles: Math.round((distanceMeters / 1609.344) * 10) / 10,
+      minutes: Math.round(durationSeconds / 60),
+    };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Build a Mongoose { date: { $gte, $lte } } filter from a date_range string.
  * Shared by get_my_schedule, get_my_personal_events, and get_earnings_summary.
@@ -1496,6 +1630,11 @@ async function executeGetMySchedule(
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
       .slice(0, eventLimit);
 
+    // NOTE: Commute/miles enrichment removed from AI chat — the Flutter client
+    // pre-computes distances via CommuteService and appends them to the prompt
+    // in the "My Shifts Breakdown" sheet. This avoids slow geocoding/OSRM calls
+    // that were adding ~2-4s latency per shift in full-chat responses.
+
     const shiftCount = merged.filter(e => e.source === 'manager').length;
     const personalCount = merged.filter(e => e.source === 'personal').length;
     const parts: string[] = [];
@@ -1575,14 +1714,7 @@ async function executeGetEarningsSummary(
         }
       }
 
-      // Fallback: scheduled shift duration if no approved attendance
-      if (hours === 0 && event.start_time && event.end_time) {
-        const start = new Date(`1970-01-01T${event.start_time}`);
-        const end = new Date(`1970-01-01T${event.end_time}`);
-        hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-        if (hours < 0) hours += 24; // Handle overnight shifts
-      }
-
+      // Strict: only count approved hours (matches Flutter earnings page)
       if (hours === 0) return;
 
       totalHoursWorked += hours;
@@ -2306,7 +2438,8 @@ async function executeSendMessageToManager(
  */
 async function executeGetShiftDetails(
   eventId: string,
-  userKey: string
+  userKey: string,
+  userId?: string
 ): Promise<{ success: boolean; message: string; data?: any }> {
   try {
     console.log(`[executeGetShiftDetails] Getting details for event ${eventId}`);
@@ -2331,40 +2464,56 @@ async function executeGetShiftDetails(
     const userRole = userInEvent?.role || userInEvent?.position;
     const roleInfo = e.roles?.find((r: any) => r.role_name === userRole || r.role === userRole);
 
-    return {
-      success: true,
-      message: 'Event details found',
-      data: {
-        name: e.shift_name || e.event_name || e.client_name || 'Untitled',
-        client: e.client_name,
-        date: e.date,
-        time: `${e.start_time} - ${e.end_time}`,
-        venue: e.venue_name,
-        address: e.venue_address,
-        city: e.city,
-        state: e.state,
-        notes: e.notes || null,
-        status: e.status,
-        yourRole: userRole || 'Not assigned',
-        yourStatus: userInEvent?.response || 'unknown',
-        payRate: roleInfo?.pay_rate_info || e.pay_rate_info || null,
-        uniform: e.uniform || null,
-        contactName: e.contact_name || null,
-        contactPhone: e.contact_phone || null,
-        contactEmail: e.contact_email || null,
-        setupTime: e.setup_time || null,
-        roleDetails: roleInfo ? {
-          name: roleInfo.role_name || roleInfo.role,
-          quantity: roleInfo.quantity || roleInfo.count,
-          payRate: roleInfo.pay_rate_info,
-        } : null,
-        allRoles: e.roles?.map((r: any) => ({
-          name: r.role_name || r.role,
-          quantity: r.quantity || r.count,
-          payRate: r.pay_rate_info,
-        })) || [],
-      }
+    const data: any = {
+      name: e.shift_name || e.event_name || e.client_name || 'Untitled',
+      client: e.client_name,
+      date: e.date,
+      time: `${e.start_time} - ${e.end_time}`,
+      venue: e.venue_name,
+      address: e.venue_address,
+      city: e.city,
+      state: e.state,
+      notes: e.notes || null,
+      status: e.status,
+      yourRole: userRole || 'Not assigned',
+      yourStatus: userInEvent?.response || 'unknown',
+      payRate: roleInfo?.pay_rate_info || e.pay_rate_info || null,
+      uniform: e.uniform || null,
+      contactName: e.contact_name || null,
+      contactPhone: e.contact_phone || null,
+      contactEmail: e.contact_email || null,
+      setupTime: e.setup_time || null,
+      roleDetails: roleInfo ? {
+        name: roleInfo.role_name || roleInfo.role,
+        quantity: roleInfo.quantity || roleInfo.count,
+        payRate: roleInfo.pay_rate_info,
+      } : null,
+      allRoles: e.roles?.map((r: any) => ({
+        name: r.role_name || r.role,
+        quantity: r.quantity || r.count,
+        payRate: r.pay_rate_info,
+      })) || [],
     };
+
+    // Enrich with commute data if user has home coordinates
+    if (userId) {
+      try {
+        const user = await UserModel.findById(userId).select('homeCoordinates').lean();
+        const home = user?.homeCoordinates;
+        const venueAddr = e.venue_address || e.venue_name;
+        if (home?.lat && home?.lng && venueAddr) {
+          const commute = await computeCommute(home.lat, home.lng, venueAddr);
+          if (commute) {
+            data.miles = commute.miles;
+            data.commute_min = commute.minutes;
+          }
+        }
+      } catch (commuteErr) {
+        console.warn('[executeGetShiftDetails] Commute enrichment failed (non-fatal):', commuteErr);
+      }
+    }
+
+    return { success: true, message: 'Event details found', data };
   } catch (error: any) {
     console.error('[executeGetShiftDetails] Error:', error);
     return { success: false, message: `Failed to get event details: ${error.message}` };
@@ -2538,13 +2687,30 @@ async function executeCreatePersonalEventsBulk(
       }
     }
 
-    // Create all events + linked availability records
-    const created: any[] = [];
+    // Pre-generate ObjectIds and build document arrays for bulk insert
     let totalEarnings = 0;
+    const availabilityDocs: any[] = [];
+    const personalEventDocs: any[] = [];
 
     for (const ev of events) {
+      const personalEventId = new mongoose.Types.ObjectId();
+      const availabilityId = new mongoose.Types.ObjectId();
       const evDate = new Date(ev.date + 'T00:00:00');
-      const pe = await PersonalEventModel.create({
+
+      availabilityDocs.push({
+        _id: availabilityId,
+        userKey,
+        date: ev.date,
+        startTime: ev.start_time,
+        endTime: ev.end_time,
+        status: 'unavailable',
+        notes: ev.notes || undefined,
+        personalEventId,
+        source: 'personal_event',
+      });
+
+      personalEventDocs.push({
+        _id: personalEventId,
         userKey,
         title: ev.title,
         date: evDate,
@@ -2555,21 +2721,8 @@ async function executeCreatePersonalEventsBulk(
         role: ev.role || undefined,
         client: ev.client || undefined,
         hourlyRate: ev.hourly_rate ?? undefined,
+        availabilityId,
       });
-
-      const avail = await AvailabilityModel.create({
-        userKey,
-        date: ev.date,
-        startTime: ev.start_time,
-        endTime: ev.end_time,
-        status: 'unavailable',
-        notes: ev.notes || undefined,
-        personalEventId: pe._id,
-        source: 'personal_event',
-      });
-
-      pe.availabilityId = avail._id as any;
-      await pe.save();
 
       // Calculate earnings for this event
       if (ev.hourly_rate && ev.hourly_rate > 0) {
@@ -2578,8 +2731,21 @@ async function executeCreatePersonalEventsBulk(
         const hours = (((ep[0] || 0) * 60 + (ep[1] || 0)) - ((sp[0] || 0) * 60 + (sp[1] || 0))) / 60.0;
         if (hours > 0) totalEarnings += hours * ev.hourly_rate;
       }
+    }
 
-      created.push(pe);
+    // Bulk insert both collections in a transaction (atomic: all-or-nothing)
+    const session = await mongoose.startSession();
+    let created: any[];
+    try {
+      session.startTransaction();
+      await AvailabilityModel.insertMany(availabilityDocs, { session });
+      created = await PersonalEventModel.insertMany(personalEventDocs, { session });
+      await session.commitTransaction();
+    } catch (txErr) {
+      await session.abortTransaction();
+      throw txErr;
+    } finally {
+      session.endSession();
     }
 
     let summary = `✅ Created ${created.length} personal events:\n`;
@@ -2975,7 +3141,7 @@ async function executeStaffFunction(
       return await executeSendMessageToManager(userKey, userId, functionArgs.message, functionArgs.manager_id);
 
     case 'get_shift_details':
-      return await executeGetShiftDetails(functionArgs.event_id, userKey);
+      return await executeGetShiftDetails(functionArgs.event_id, userKey, userId);
 
     case 'create_personal_event':
       return await executeCreatePersonalEvent(
@@ -3200,17 +3366,21 @@ When showing schedule information, use this friendly format:
 
 1. **Saturday, Jan 25th** • 4:00 PM - 11:00 PM
    📍 [LINK:Mission Ballroom]
+   🚗 15.8 mi · 22 min each way
    👔 Bartender • Client: Epicurean
 
 2. **Sunday, Jan 26th** • 10:00 AM - 6:00 PM
    📍 [LINK:Convention Center]
+   🚗 8.2 mi · 14 min each way
    👔 Server • Client: Tech Corp
 
 3. 🏷️ **Monday, Jan 27th** • 6:00 PM - 10:00 PM *(Personal)*
    📍 Marriott Downtown
+   🚗 5.1 mi · 10 min each way
    👔 Bartender • $30/hr
 
-(Use emojis, bold text, and clear formatting. Tag personal events with 🏷️ and *(Personal)* to distinguish from manager shifts)
+(Use emojis, bold text, and clear formatting. Tag personal events with 🏷️ and *(Personal)* to distinguish from manager shifts.
+When event data includes "miles" and "commute_min" fields, show the 🚗 commute line under the venue. If those fields are missing, omit the commute line.)
 
 📊 HOW MANY TO SHOW:
 - "my schedule" / "my shifts" / "my jobs" → Show next 7-10 upcoming
@@ -3235,6 +3405,10 @@ When showing schedule information, use this friendly format:
 - get_my_schedule and get_all_my_events include pay rate per shift.
   → When user asks "how much does this pay?" after viewing their schedule, the pay info is already there. Do NOT call get_shift_details just for pay.
 - Use get_my_personal_events ONLY for personal-event-specific queries (e.g. "show my personal gigs") or when you need the event ID for update/delete operations. For general schedule queries, get_my_schedule already includes personal events.
+- get_my_schedule and get_shift_details include commute data (miles, commute_min) when the user has a home address set in their profile.
+  → Use this to answer "how far is my next shift?", "analyze my commute this week", etc.
+  → If commute fields are missing, the user hasn't set a home address — suggest they set it in Profile → Home Address.
+  → For weekly/monthly commute analysis, sum up miles and minutes across events and present totals + averages.
 
 🗓️ DATE HANDLING FOR SCHEDULE QUERIES:
 - When user asks about past months (e.g. "October to December", "last summer", "January shifts"):

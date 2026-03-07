@@ -190,6 +190,7 @@ export function formatGenericCsv(
     'Rate',
     'Earnings',
     'Earnings Type',
+    'Approval Status',
     'Department',
   ]);
 
@@ -216,6 +217,7 @@ export function formatGenericCsv(
       item.rate.toFixed(2),
       item.earnings.toFixed(2),
       item.earningsType || 'REG',
+      item.approvalStatus === 'approved' ? 'Approved' : 'Pending',
       mapping?.department || '',
     ]));
   }

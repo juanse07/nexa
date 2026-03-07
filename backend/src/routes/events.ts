@@ -2471,11 +2471,42 @@ router.get('/events/completed', requireAuth, async (req, res) => {
     ]);
 
     const totalCount = result[0]?.totalCount[0]?.count ?? 0;
-    const events = (result[0]?.events ?? []).map((e: any) => ({
-      ...e,
-      id: String(e._id),
-      tab: 'completed',
-    }));
+    const events = (result[0]?.events ?? []).map((e: any) => {
+      // Compute approvalCategory (mirrors main GET /events logic)
+      const acceptedStaff = e.accepted_staff || [];
+      let clockedOutCount = 0;
+      let hasDigitalHours = false;
+      for (const staff of acceptedStaff) {
+        const attendance = staff.attendance || [];
+        if (attendance.length === 0) continue;
+        const last = attendance[attendance.length - 1];
+        if (!last) continue;
+        if (last.clockOutAt) {
+          clockedOutCount++;
+          hasDigitalHours = true;
+        } else if (last.clockInAt) {
+          hasDigitalHours = true;
+        }
+      }
+
+      let approvalCategory: string | undefined;
+      if (e.hoursStatus === 'approved') {
+        approvalCategory = 'approved';
+      } else if (e.hoursStatus === 'sheet_submitted') {
+        approvalCategory = 'sheet_submitted';
+      } else if (hasDigitalHours && clockedOutCount > 0) {
+        approvalCategory = 'ready_to_approve';
+      } else if (acceptedStaff.length > 0) {
+        approvalCategory = 'needs_hours_entry';
+      }
+
+      return {
+        ...e,
+        id: String(e._id),
+        tab: 'completed',
+        ...(approvalCategory ? { approvalCategory } : {}),
+      };
+    });
 
     return res.json({ events, totalCount, skip, limit, hasMore: skip + events.length < totalCount });
   } catch (err) {
@@ -4333,6 +4364,11 @@ router.post('/events/:id/approve-hours/:userKey', requireAuth, async (req, res) 
       return res.status(400).json({ message: 'approvedHours required' });
     }
 
+    // Validate approvedHours is a positive, reasonable number
+    if (typeof approvedHours !== 'number' || approvedHours < 0 || approvedHours > 24) {
+      return res.status(400).json({ message: 'approvedHours must be between 0 and 24' });
+    }
+
     const event = await EventModel.findOne({
       _id: new mongoose.Types.ObjectId(eventId),
       managerId,
@@ -4347,15 +4383,18 @@ router.post('/events/:id/approve-hours/:userKey', requireAuth, async (req, res) 
       return res.status(404).json({ message: 'Staff member not found' });
     }
 
-    if (staffMember.attendance && staffMember.attendance.length > 0) {
-      const lastAttendance = staffMember.attendance[staffMember.attendance.length - 1];
-      if (lastAttendance) {
-        lastAttendance.approvedHours = approvedHours;
-        lastAttendance.approvedBy = approvedBy;
-        lastAttendance.approvedAt = new Date();
-        lastAttendance.status = 'approved';
-        if (notes) lastAttendance.managerNotes = notes;
-      }
+    // Ensure attendance session exists
+    if (!staffMember.attendance?.length) {
+      return res.status(400).json({ message: 'No attendance session to approve' });
+    }
+
+    const lastAttendance = staffMember.attendance[staffMember.attendance.length - 1];
+    if (lastAttendance) {
+      lastAttendance.approvedHours = approvedHours;
+      lastAttendance.approvedBy = approvedBy;
+      lastAttendance.approvedAt = new Date();
+      lastAttendance.status = 'approved';
+      if (notes) lastAttendance.managerNotes = notes;
     }
 
     await event.save();
@@ -4465,9 +4504,17 @@ router.post('/events/:id/bulk-approve-hours', requireAuth, async (req, res) => {
       }
     }
 
-    event.hoursStatus = 'approved';
-    event.hoursApprovedBy = approvedBy;
-    event.hoursApprovedAt = new Date();
+    if (approvedCount > 0) {
+      // Only mark event fully approved if ALL accepted staff with attendance are now approved
+      const allApproved = (event.accepted_staff || []).every((s: any) => {
+        if (!s.attendance?.length) return true; // no attendance = skip
+        const last = s.attendance[s.attendance.length - 1];
+        return last.status === 'approved';
+      });
+      event.hoursStatus = allApproved ? 'approved' : 'sheet_submitted';
+      event.hoursApprovedBy = approvedBy;
+      event.hoursApprovedAt = new Date();
+    }
 
     await event.save();
 

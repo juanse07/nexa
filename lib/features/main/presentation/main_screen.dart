@@ -682,24 +682,6 @@ class _MainScreenState extends State<MainScreen>
                         );
                       },
                     ),
-                    const SizedBox(height: 8),
-                    Divider(height: 1, color: AppColors.borderLight),
-                    const SizedBox(height: 8),
-                    _buildSheetActionTile(
-                      ctx: ctx,
-                      icon: Icons.logout_rounded,
-                      label: l10n.logout,
-                      color: Colors.red[600],
-                      onTap: () async {
-                        Navigator.pop(ctx);
-                        await AuthService.signOut();
-                        if (!mounted) return;
-                        Navigator.of(context).pushAndRemoveUntil(
-                          MaterialPageRoute(builder: (_) => const LoginPage()),
-                          (_) => false,
-                        );
-                      },
-                    ),
                   ],
                 ),
               ),

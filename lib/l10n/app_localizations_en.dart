@@ -963,10 +963,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get unknownEvent => 'Unknown Event';
 
   @override
-  String get clockInTime => 'Clock-In';
+  String get clockInTime => 'Clock In';
 
   @override
-  String get clockOutTime => 'Clock-Out';
+  String get clockOutTime => 'Clock Out';
 
   @override
   String get durationLabel => 'Duration';
@@ -1255,6 +1255,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get approveHours => 'Approve Hours';
+
+  @override
+  String get hoursApproved => 'Hours Approved';
 
   @override
   String get uploadSignInSheet => 'Upload Sign-In Sheet';
@@ -3344,4 +3347,25 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get eventBecomesVisible =>
       'Event becomes visible to selected teams / members';
+
+  @override
+  String get exportEventCsv => 'Export CSV';
+
+  @override
+  String get exportingCsv => 'Generating export...';
+
+  @override
+  String get exportReady => 'CSV ready — opening download';
+
+  @override
+  String get grossHours => 'Gross Hours';
+
+  @override
+  String get deduct30MinBreak => 'Deduct 30-min break';
+
+  @override
+  String get finalHours => 'Final Hours';
+
+  @override
+  String get tapToSetTime => 'Tap to set';
 }

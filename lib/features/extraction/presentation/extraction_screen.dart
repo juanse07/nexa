@@ -33,6 +33,7 @@ import '../services/draft_service.dart';
 import '../services/event_service.dart';
 import '../services/extraction_service.dart';
 import '../services/file_processor_service.dart';
+import 'bulk_extraction_screen.dart';
 import '../services/google_places_service.dart';
 // import '../services/pending_events_service.dart'; // DEPRECATED: Now using backend draft events
 import '../services/roles_service.dart';
@@ -815,28 +816,68 @@ class _ExtractionScreenState extends State<ExtractionScreen>
 
       final platformFile = result.files.single;
 
-      // Use FileProcessorService to handle all processing
-      final processResult = await _fileProcessorService.processFile(platformFile);
+      // Use multi extraction to handle docs with multiple events
+      List<Map<String, dynamic>> multiResults;
+      try {
+        multiResults = await _fileProcessorService.processFileMulti(platformFile);
+      } catch (_) {
+        // Fallback to single extraction if multi fails
+        final processResult = await _fileProcessorService.processFile(platformFile);
+        if (!processResult.success) {
+          setState(() {
+            errorMessage = processResult.error;
+            isLoading = false;
+          });
+          return;
+        }
+        multiResults = [if (processResult.structuredData != null) processResult.structuredData!];
+      }
 
-      if (!processResult.success) {
+      if (multiResults.isEmpty) {
         setState(() {
-          errorMessage = processResult.error;
+          errorMessage = 'No events found in this file.';
           isLoading = false;
         });
         return;
       }
 
+      // Use first event for the form
+      final firstEvent = multiResults.first;
+      // Remove client fields (user must pick from DB)
+      final sanitized = Map<String, dynamic>.from(firstEvent);
+      sanitized.remove('client_name');
+      sanitized.remove('client_company_name');
+      sanitized.remove('third_party_company_name');
+
       _clientNameController.text = '';
       setState(() {
-        extractedText = processResult.extractedText;
-        structuredData = processResult.structuredData;
+        structuredData = sanitized;
         isLoading = false;
         _lastStructuredFromUpload = true;
       });
 
-      // Persist draft to allow switching tabs
-      if (processResult.structuredData != null) {
-        await saveDraft(processResult.structuredData!);
+      await saveDraft(sanitized);
+
+      // Notify user if more events were found
+      if (multiResults.length > 1 && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${multiResults.length} events found — showing first. Use Bulk Import for all.',
+            ),
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'Bulk Import',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const BulkExtractionScreen(),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
       }
     } catch (e) {
       setState(() {
@@ -1662,12 +1703,16 @@ class _ExtractionScreenState extends State<ExtractionScreen>
     final hour = now.hour;
 
     String greeting;
-    if (hour < 12) {
+    if (hour < 5) {
+      greeting = "Good Night!";
+    } else if (hour < 12) {
       greeting = "Good Morning!";
     } else if (hour < 17) {
       greeting = "Good Afternoon!";
-    } else {
+    } else if (hour < 21) {
       greeting = "Good Evening!";
+    } else {
+      greeting = "Good Night!";
     }
 
     switch (_selectedIndex) {
@@ -2352,8 +2397,12 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                               _isSearchActive
                                                   ? Icons.close_rounded
                                                   : Icons.search_rounded,
-                                              size: 20,
+                                              size: 26,
                                               color: ExColors.yellow,
+                                            ),
+                                            style: IconButton.styleFrom(
+                                              backgroundColor: Colors.white.withValues(alpha: 0.12),
+                                              shape: const CircleBorder(),
                                             ),
                                             onPressed: _isSearchActive
                                                 ? _dismissSearch
@@ -4980,11 +5029,17 @@ class _ExtractionScreenState extends State<ExtractionScreen>
       color: Colors.white,
       offset: const Offset(0, 42),
       onSelected: (mode) => setState(() => _sortMode = mode),
-      child: Padding(
-        padding: const EdgeInsets.all(8),
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.white.withValues(alpha: 0.12),
+        ),
+        alignment: Alignment.center,
         child: Icon(
           Icons.swap_vert_rounded,
-          size: 20,
+          size: 26,
           color: ExColors.yellow,
         ),
       ),
@@ -9523,6 +9578,36 @@ class _ExtractionScreenState extends State<ExtractionScreen>
                                 ),
                               ],
                             ),
+                          ),
+                        ),
+                      // Hours Approved badge (for completed events with approved hours)
+                      if (e['tab'] == 'completed' &&
+                          e['approvalCategory'] == 'approved')
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: Colors.green.withValues(alpha: 0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.check_circle_outline, size: 11, color: Colors.green.shade700),
+                              const SizedBox(width: 4),
+                              Text(
+                                AppLocalizations.of(context)!.hoursApproved,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.green.shade700,
+                                  height: 1.2,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                     ],

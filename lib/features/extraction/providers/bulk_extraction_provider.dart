@@ -16,6 +16,17 @@ enum BulkFileStatus {
   failed,
 }
 
+/// Tracks one extracted event within a file (a file can yield multiple events).
+class BulkExtractedEventItem {
+  Map<String, dynamic> data;
+  String? createdEventId;
+  String? errorMessage;
+
+  BulkExtractedEventItem({required this.data, this.createdEventId, this.errorMessage});
+
+  bool get created => createdEventId != null;
+}
+
 /// Represents a single file in the bulk extraction queue
 class BulkFileItem {
   final File file;
@@ -24,8 +35,14 @@ class BulkFileItem {
   final int fileSize;
   BulkFileStatus status;
   String? errorMessage;
-  Map<String, dynamic>? extractedData;
-  String? createdEventId;
+  /// Events extracted from this file (may be 1 or many).
+  List<BulkExtractedEventItem> extractedEvents;
+
+  // Legacy single-event accessors for backward compat with UI
+  Map<String, dynamic>? get extractedData =>
+      extractedEvents.isNotEmpty ? extractedEvents.first.data : null;
+  String? get createdEventId =>
+      extractedEvents.isNotEmpty ? extractedEvents.first.createdEventId : null;
 
   BulkFileItem({
     required this.file,
@@ -34,9 +51,8 @@ class BulkFileItem {
     required this.fileSize,
     this.status = BulkFileStatus.pending,
     this.errorMessage,
-    this.extractedData,
-    this.createdEventId,
-  });
+    List<BulkExtractedEventItem>? extractedEvents,
+  }) : extractedEvents = extractedEvents ?? [];
 
   /// Human-readable file size
   String get formattedSize {
@@ -66,7 +82,14 @@ class BulkExtractionProvider extends ChangeNotifier {
   int get totalFiles => _files.length;
   int get pendingCount => _files.where((f) => f.status == BulkFileStatus.pending).length;
   int get processingCount => _files.where((f) => f.status == BulkFileStatus.processing).length;
-  int get successCount => _files.where((f) => f.status == BulkFileStatus.success).length;
+  int get successCount {
+    // Count total created events across all files
+    int count = 0;
+    for (final f in _files) {
+      count += f.extractedEvents.where((e) => e.created).length;
+    }
+    return count > 0 ? count : _files.where((f) => f.status == BulkFileStatus.success).length;
+  }
   int get failedCount => _files.where((f) => f.status == BulkFileStatus.failed).length;
   int get completedCount => successCount + failedCount;
 
@@ -154,34 +177,60 @@ class BulkExtractionProvider extends ChangeNotifier {
         String input;
 
         if (item.isImage) {
-          // Images: convert to base64 with marker
           final base64 = base64Encode(bytes);
           input = '[[IMAGE_BASE64]]:$base64';
         } else {
-          // PDFs: extract text first
           input = await _extractTextFromPdf(bytes);
           if (input.trim().isEmpty) {
             throw Exception('No text found in PDF. It may be scanned or image-based.');
           }
         }
 
-        // Step 2: Extract structured data via AI
-        final extractedData = await _extractionService.extractStructuredData(
+        // Step 2: Extract structured data via AI (multi-event)
+        final extractedList = await _extractionService.extractStructuredDataMulti(
           input: input,
         );
-        item.extractedData = extractedData;
 
-        // Step 3: Sanitize and create event as draft
-        final eventPayload = _sanitizeEventPayload(extractedData);
+        if (extractedList.isEmpty) {
+          throw Exception('No events found in this file.');
+        }
 
-        final createdEvent = await _eventService.createEvent(eventPayload);
-        item.createdEventId = createdEvent['_id']?.toString() ?? createdEvent['id']?.toString();
-        item.status = BulkFileStatus.success;
+        // Step 3: Create each extracted event
+        bool anyCreated = false;
+        for (final extractedData in extractedList) {
+          if (_isCancelled) break;
+
+          final eventItem = BulkExtractedEventItem(data: extractedData);
+          item.extractedEvents.add(eventItem);
+
+          try {
+            final eventPayload = _sanitizeEventPayload(extractedData);
+            final createdEvent = await _eventService.createEvent(eventPayload);
+            eventItem.createdEventId =
+                createdEvent['_id']?.toString() ?? createdEvent['id']?.toString();
+            anyCreated = true;
+          } on SubscriptionLimitException catch (e) {
+            eventItem.errorMessage = e.message;
+            _isCancelled = true;
+          } catch (e) {
+            eventItem.errorMessage = _formatErrorMessage(e.toString());
+          }
+
+          notifyListeners();
+
+          if (!_isCancelled && extractedList.length > 1) {
+            await Future<void>.delayed(const Duration(milliseconds: 300));
+          }
+        }
+
+        item.status = anyCreated ? BulkFileStatus.success : BulkFileStatus.failed;
+        if (!anyCreated && item.errorMessage == null) {
+          item.errorMessage = 'Failed to create events';
+        }
 
       } on SubscriptionLimitException catch (e) {
         item.status = BulkFileStatus.failed;
         item.errorMessage = e.message;
-        // Stop processing on subscription limit
         _isCancelled = true;
       } catch (e) {
         item.status = BulkFileStatus.failed;

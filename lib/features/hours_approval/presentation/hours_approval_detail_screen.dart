@@ -12,6 +12,8 @@ import 'package:nexa/features/hours_approval/services/timesheet_extraction_servi
 import 'package:nexa/l10n/app_localizations.dart';
 import 'package:nexa/services/file_upload_service.dart';
 import 'package:nexa/shared/presentation/theme/app_colors.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:nexa/features/payroll/data/services/payroll_export_service.dart';
 
 class HoursApprovalDetailScreen extends StatefulWidget {
   final Map<String, dynamic> event;
@@ -34,6 +36,7 @@ class _HoursApprovalDetailScreenState extends State<HoursApprovalDetailScreen> {
   late Map<String, dynamic> _event;
   bool _isBulkApproving = false;
   bool _isAnalyzing = false;
+  bool _isExportingCsv = false;
   String? _error;
 
   // Track individually approved staff (optimistic UI)
@@ -302,6 +305,23 @@ class _HoursApprovalDetailScreenState extends State<HoursApprovalDetailScreen> {
                 ),
               ),
             ),
+            const SizedBox(width: 8),
+            // Export CSV button
+            IconButton(
+              onPressed: _isExportingCsv ? null : _exportEventCsv,
+              icon: _isExportingCsv
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.download, size: 22),
+              tooltip: l10n.exportEventCsv,
+              style: IconButton.styleFrom(
+                backgroundColor: AppColors.navySpaceCadet.withValues(alpha: 0.08),
+                padding: const EdgeInsets.all(12),
+              ),
+            ),
           ],
         ),
       ),
@@ -387,6 +407,8 @@ class _HoursApprovalDetailScreenState extends State<HoursApprovalDetailScreen> {
         clockOutAt: info.clockOutAt,
         estimatedHours: info.estimatedHours,
         currentApprovedHours: info.approvedHours,
+        eventStartTime: _event['start_time']?.toString(),
+        eventEndTime: _event['end_time']?.toString(),
       ),
     );
 
@@ -494,6 +516,45 @@ class _HoursApprovalDetailScreenState extends State<HoursApprovalDetailScreen> {
         _isBulkApproving = false;
         _error = '${l10n.failedToSubmitHours}: $e';
       });
+    }
+  }
+
+  Future<void> _exportEventCsv() async {
+    final l10n = AppLocalizations.of(context)!;
+    final eventId = _event['_id'] ?? _event['id'];
+    if (eventId == null) return;
+
+    setState(() => _isExportingCsv = true);
+
+    try {
+      final service = PayrollExportService();
+      final result = await service.exportEventCsv(eventId.toString());
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
+        SnackBar(
+          content: Text(l10n.exportReady),
+          backgroundColor: AppColors.success,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+
+      final uri = Uri.parse(result.url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
+          SnackBar(
+            content: Text('Export failed: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isExportingCsv = false);
     }
   }
 

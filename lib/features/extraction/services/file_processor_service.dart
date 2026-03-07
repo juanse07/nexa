@@ -104,6 +104,26 @@ class FileProcessorService {
     }
   }
 
+  /// Process a single file with multi-event extraction.
+  /// Returns a list of extracted events (may be 1 or many).
+  Future<List<Map<String, dynamic>>> processFileMulti(PlatformFile platformFile) async {
+    final bytes = await _resolvePlatformFileBytes(platformFile);
+    final fileType = _detectFileType(bytes, platformFile.name);
+
+    if (fileType == ProcessedFileType.unsupported) {
+      throw Exception('Unsupported file type');
+    }
+
+    final String extractedInput = await _extractContentFromFile(
+      bytes: bytes,
+      fileType: fileType,
+    );
+
+    return await _extractionService.extractStructuredDataMulti(
+      input: extractedInput,
+    );
+  }
+
   /// Process a file from bulk upload item (stored as Map)
   Future<FileProcessResult> processBulkItem(
     Map<String, dynamic> item,

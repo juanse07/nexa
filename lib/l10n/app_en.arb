@@ -606,6 +606,7 @@
 
 
   "approveHours": "Approve Hours",
+  "hoursApproved": "Hours Approved",
   "uploadSignInSheet": "Upload Sign-In Sheet",
   "takePhotoOrUploadSheet": "Take a photo or upload the client's sign-in/out sheet",
   "camera": "Camera",
@@ -1692,5 +1693,15 @@
   "sendDirectInvitations": "Send Direct Invitations",
   "publishToTeam": "Publish to Team",
   "eventStaysPrivate": "Event stays private — only invited people can see it",
-  "eventBecomesVisible": "Event becomes visible to selected teams / members"
+  "eventBecomesVisible": "Event becomes visible to selected teams / members",
+  "exportEventCsv": "Export CSV",
+  "exportingCsv": "Generating export...",
+  "exportReady": "CSV ready — opening download",
+
+  "clockInTime": "Clock In",
+  "clockOutTime": "Clock Out",
+  "grossHours": "Gross Hours",
+  "deduct30MinBreak": "Deduct 30-min break",
+  "finalHours": "Final Hours",
+  "tapToSetTime": "Tap to set"
 }

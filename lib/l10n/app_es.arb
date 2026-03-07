@@ -399,6 +399,7 @@
 
 
   "approveHours": "Aprobar Horas",
+  "hoursApproved": "Horas Aprobadas",
   "uploadSignInSheet": "Subir Hoja de Asistencia",
   "takePhotoOrUploadSheet": "Toma una foto o sube la hoja de entrada/salida del cliente",
   "camera": "C\u00e1mara",
@@ -1109,5 +1110,15 @@
   "sendDirectInvitations": "Enviar Invitaciones Directas",
   "publishToTeam": "Publicar al Equipo",
   "eventStaysPrivate": "El evento se mantiene privado — solo los invitados pueden verlo",
-  "eventBecomesVisible": "El evento será visible para los equipos / miembros seleccionados"
+  "eventBecomesVisible": "El evento será visible para los equipos / miembros seleccionados",
+  "exportEventCsv": "Exportar CSV",
+  "exportingCsv": "Generando exportación...",
+  "exportReady": "CSV listo — abriendo descarga",
+
+  "clockInTime": "Entrada",
+  "clockOutTime": "Salida",
+  "grossHours": "Horas Brutas",
+  "deduct30MinBreak": "Descontar 30 min de descanso",
+  "finalHours": "Horas Finales",
+  "tapToSetTime": "Toca para configurar"
 }

@@ -1851,13 +1851,13 @@ abstract class AppLocalizations {
   /// No description provided for @clockInTime.
   ///
   /// In en, this message translates to:
-  /// **'Clock-In'**
+  /// **'Clock In'**
   String get clockInTime;
 
   /// No description provided for @clockOutTime.
   ///
   /// In en, this message translates to:
-  /// **'Clock-Out'**
+  /// **'Clock Out'**
   String get clockOutTime;
 
   /// No description provided for @durationLabel.
@@ -2339,6 +2339,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Approve Hours'**
   String get approveHours;
+
+  /// No description provided for @hoursApproved.
+  ///
+  /// In en, this message translates to:
+  /// **'Hours Approved'**
+  String get hoursApproved;
 
   /// No description provided for @uploadSignInSheet.
   ///
@@ -6071,6 +6077,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Event becomes visible to selected teams / members'**
   String get eventBecomesVisible;
+
+  /// No description provided for @exportEventCsv.
+  ///
+  /// In en, this message translates to:
+  /// **'Export CSV'**
+  String get exportEventCsv;
+
+  /// No description provided for @exportingCsv.
+  ///
+  /// In en, this message translates to:
+  /// **'Generating export...'**
+  String get exportingCsv;
+
+  /// No description provided for @exportReady.
+  ///
+  /// In en, this message translates to:
+  /// **'CSV ready — opening download'**
+  String get exportReady;
+
+  /// No description provided for @grossHours.
+  ///
+  /// In en, this message translates to:
+  /// **'Gross Hours'**
+  String get grossHours;
+
+  /// No description provided for @deduct30MinBreak.
+  ///
+  /// In en, this message translates to:
+  /// **'Deduct 30-min break'**
+  String get deduct30MinBreak;
+
+  /// No description provided for @finalHours.
+  ///
+  /// In en, this message translates to:
+  /// **'Final Hours'**
+  String get finalHours;
+
+  /// No description provided for @tapToSetTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to set'**
+  String get tapToSetTime;
 }
 
 class _AppLocalizationsDelegate

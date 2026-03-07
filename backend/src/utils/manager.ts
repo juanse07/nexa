@@ -5,6 +5,9 @@ import { ManagerDocument, ManagerModel } from '../models/manager';
  * Resolve the Manager document for the authenticated request.
  * SECURITY: Requires managerId in JWT token - does NOT auto-create managers.
  * Managers must be created explicitly via /auth/manager/* endpoints.
+ *
+ * If the managerId from the JWT is stale (e.g. after demo re-seed),
+ * falls back to lookup by {provider, subject} to stay resilient.
  */
 export async function resolveManagerForRequest(req: AuthenticatedRequest): Promise<ManagerDocument> {
   if (!req.authUser?.provider || !req.authUser?.sub) {
@@ -16,8 +19,16 @@ export async function resolveManagerForRequest(req: AuthenticatedRequest): Promi
     throw new Error('Manager authentication required. Please sign in using the manager app.');
   }
 
-  // Look up manager by the managerId claim in JWT (more efficient and secure)
-  const manager = await ManagerModel.findById(req.authUser.managerId);
+  // Primary: look up by the managerId claim in JWT (fast, indexed)
+  let manager = await ManagerModel.findById(req.authUser.managerId);
+
+  // Fallback: if ID is stale (e.g. demo re-seed), look up by provider+subject
+  if (!manager) {
+    manager = await ManagerModel.findOne({
+      provider: req.authUser.provider,
+      subject: req.authUser.sub,
+    });
+  }
 
   if (!manager) {
     throw new Error('Manager profile not found. Please sign in again using the manager app.');

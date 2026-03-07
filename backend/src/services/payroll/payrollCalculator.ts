@@ -43,6 +43,14 @@ export interface PayrollLineItem {
   earnings: number;
   earningsType?: 'REG' | 'OT';   // Set by overtime post-processor
   originalRate?: number;           // Pre-multiplier rate (when OT applied)
+  approvalStatus: 'approved' | 'pending';
+}
+
+export interface UnapprovedStaffShift {
+  userKey: string;
+  name: string;
+  eventName: string;
+  eventDate: Date;
 }
 
 export interface PayrollResult {
@@ -53,6 +61,9 @@ export interface PayrollResult {
     totalHours: number;
     totalPayroll: number;
     averagePerStaff: number;
+  };
+  warnings: {
+    unapprovedStaffShifts: UnapprovedStaffShift[];
   };
 }
 
@@ -133,6 +144,7 @@ export async function calculatePayroll(
   }> = {};
 
   const lineItems: PayrollLineItem[] = [];
+  const unapprovedStaffShifts: UnapprovedStaffShift[] = [];
 
   for (const event of events) {
     const acceptedStaff = ((event as any).accepted_staff || []).filter(
@@ -146,14 +158,32 @@ export async function calculatePayroll(
     for (const staff of acceptedStaff) {
       const userKey = staff.userKey;
       const attendance = (staff.attendance || [])[0];
-      const hours = attendance?.approvedHours ||
-        calculateHours((event as any).start_time, (event as any).end_time);
+
+      // Strict: only count hours that are explicitly approved
+      const isApproved = attendance?.status === 'approved' && attendance?.approvedHours != null;
+      const hours = isApproved
+        ? attendance.approvedHours
+        : calculateHours((event as any).start_time, (event as any).end_time);
+      const approvalStatus = isApproved ? 'approved' as const : 'pending' as const;
+
+      // Track unapproved staff for warnings (only for staff who had attendance)
+      if (!isApproved && attendance) {
+        unapprovedStaffShifts.push({
+          userKey,
+          name: staff.name || 'Unknown',
+          eventName,
+          eventDate,
+        });
+      }
+
+      if (hours === 0) continue;
 
       const staffRoleNorm = (staff.role || '').trim().toLowerCase();
       const hourlyRate = tariffMap[`${eventClientName}|${staffRoleNorm}`] || 0;
       const earnings = hourlyRate * hours;
 
       // Line item (one per staff per shift) — phone/appId filled after User lookup
+      const lineEarnings = approvalStatus === 'approved' ? Math.round(earnings * 100) / 100 : 0;
       lineItems.push({
         userKey,
         name: staff.name || 'Unknown',
@@ -166,7 +196,8 @@ export async function calculatePayroll(
         role: staff.role || '',
         hours: Math.round(hours * 10) / 10,
         rate: hourlyRate,
-        earnings: Math.round(earnings * 100) / 100,
+        earnings: lineEarnings,
+        approvalStatus,
       });
 
       // Aggregate
@@ -184,8 +215,10 @@ export async function calculatePayroll(
       }
 
       staffPayroll[userKey].shifts++;
-      staffPayroll[userKey].hours += hours;
-      staffPayroll[userKey].earnings += earnings;
+      if (approvalStatus === 'approved') {
+        staffPayroll[userKey].hours += hours;
+        staffPayroll[userKey].earnings += earnings;
+      }
       if (staff.role) staffPayroll[userKey].roles.add(staff.role);
     }
   }
@@ -256,6 +289,9 @@ export async function calculatePayroll(
       averagePerStaff: entries.length > 0
         ? Math.round((totalPayroll / entries.length) * 100) / 100
         : 0,
+    },
+    warnings: {
+      unapprovedStaffShifts,
     },
   };
 }

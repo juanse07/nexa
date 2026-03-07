@@ -5,6 +5,8 @@ import 'package:nexa/services/terminology_provider.dart';
 import '../../../../core/widgets/custom_sliver_app_bar.dart';
 import '../../../../shared/presentation/theme/app_colors.dart';
 import '../../../brand/presentation/widgets/brand_customization_card.dart';
+import '../../../auth/data/services/auth_service.dart';
+import '../../../auth/presentation/pages/login_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -183,6 +185,55 @@ class _SettingsPageState extends State<SettingsPage> {
                 const SizedBox(height: 16),
                 // Brand Customization Section
                 const BrandCustomizationCard(),
+                const SizedBox(height: 32),
+                // Logout
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: Text(l10n.logout),
+                          content: const Text('Are you sure you want to log out?'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(ctx).pop(false),
+                              child: Text(l10n.cancel),
+                            ),
+                            FilledButton(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: Colors.red[600],
+                              ),
+                              onPressed: () => Navigator.of(ctx).pop(true),
+                              child: Text(l10n.logout),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirmed != true || !mounted) return;
+                      await AuthService.signOut();
+                      if (!mounted) return;
+                      Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(builder: (_) => const LoginPage()),
+                        (_) => false,
+                      );
+                    },
+                    icon: const Icon(Icons.logout_rounded, color: Colors.red),
+                    label: Text(
+                      l10n.logout,
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: Colors.red.shade300),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
               ]),
             ),
           ),

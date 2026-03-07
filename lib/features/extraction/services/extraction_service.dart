@@ -82,6 +82,60 @@ class ExtractionService {
     }
   }
 
+  /// Multi-event extraction: sends multi=true, returns a list of events.
+  Future<List<Map<String, dynamic>>> extractStructuredDataMulti({
+    required String input,
+  }) async {
+    final bool isImage = input.startsWith('[[IMAGE_BASE64]]:');
+    final String actualInput = isImage
+        ? input.substring('[[IMAGE_BASE64]]:'.length)
+        : input;
+
+    final Uri uri = _resolveEndpoint();
+
+    final Map<String, dynamic> requestBody = {
+      'input': actualInput,
+      'isImage': isImage,
+      'multi': true,
+    };
+
+    final Map<String, String> headers = {
+      'Content-Type': 'application/json',
+    };
+
+    final http.Response httpResponse = await _postWithRetries(
+      uri,
+      headers,
+      requestBody,
+    );
+    if (httpResponse.statusCode >= 300) {
+      if (httpResponse.statusCode == 429) {
+        throw Exception(
+          'AI extraction rate limit reached. Please try again later.',
+        );
+      }
+      throw Exception(
+        'Extraction failed (${httpResponse.statusCode}): ${httpResponse.body}',
+      );
+    }
+
+    // multi=true returns { extracted: [...] }
+    final decoded = jsonDecode(httpResponse.body);
+    final extracted = decoded['extracted'];
+    if (extracted is List) {
+      return extracted.cast<Map<String, dynamic>>();
+    }
+    // Fallback: single object
+    if (extracted is Map<String, dynamic>) {
+      return [extracted];
+    }
+    // Legacy fallback: raw object (shouldn't happen with multi=true)
+    if (decoded is Map<String, dynamic> && decoded.containsKey('event_name')) {
+      return [decoded];
+    }
+    return [];
+  }
+
   Uri _resolveEndpoint() {
     final baseUrl = AppConfig.instance.baseUrl;
     return Uri.parse('$baseUrl/ai/extract');

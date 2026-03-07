@@ -1271,6 +1271,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get approveHours => 'Aprobar Horas';
 
   @override
+  String get hoursApproved => 'Horas Aprobadas';
+
+  @override
   String get uploadSignInSheet => 'Subir Hoja de Asistencia';
 
   @override
@@ -3387,4 +3390,25 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get eventBecomesVisible =>
       'El evento será visible para los equipos / miembros seleccionados';
+
+  @override
+  String get exportEventCsv => 'Exportar CSV';
+
+  @override
+  String get exportingCsv => 'Generando exportación...';
+
+  @override
+  String get exportReady => 'CSV listo — abriendo descarga';
+
+  @override
+  String get grossHours => 'Horas Brutas';
+
+  @override
+  String get deduct30MinBreak => 'Descontar 30 min de descanso';
+
+  @override
+  String get finalHours => 'Horas Finales';
+
+  @override
+  String get tapToSetTime => 'Toca para configurar';
 }

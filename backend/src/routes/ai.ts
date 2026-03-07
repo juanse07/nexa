@@ -386,6 +386,7 @@ router.post('/ai/transcribe', requireAuth, upload.single('audio'), async (req, r
 const extractionSchema = z.object({
   input: z.string().min(1, 'input is required'),
   isImage: z.boolean().optional().default(false),
+  multi: z.boolean().optional().default(false),
 });
 
 // Schema for chat message request
@@ -3752,7 +3753,7 @@ ${topStaff ? `Most Flagged: ${topStaff}` : ''}`;
 router.post('/ai/extract', requireAuth, async (req, res) => {
   try {
     const validated = extractionSchema.parse(req.body);
-    const { input, isImage } = validated;
+    const { input, isImage, multi } = validated;
 
     // Use Groq for both vision and text extraction
     const groqKey = process.env.GROQ_API_KEY;
@@ -3767,8 +3768,22 @@ router.post('/ai/extract', requireAuth, async (req, res) => {
     const textModel = 'llama-3.1-8b-instant'; // Fast Groq text model
     const groqBaseUrl = 'https://api.groq.com/openai/v1';
 
-    const systemPrompt =
+    const singlePrompt =
       'You are a structured information extractor for catering event staffing. Extract fields: event_name, client_name, date (ISO 8601), start_time, end_time, venue_name, venue_address, city, state, country, contact_name, contact_phone, contact_email, setup_time, uniform, notes, headcount_total, roles (list of {role, count, call_time}), pay_rate_info. Return strict JSON.';
+
+    const multiPrompt =
+      'You are a structured information extractor for catering event staffing. ' +
+      'The document may contain MULTIPLE events. Extract ALL of them. ' +
+      'For each event extract: event_name, client_name, date (ISO 8601), start_time, end_time, ' +
+      'venue_name, venue_address, city, state, country, contact_name, contact_phone, contact_email, ' +
+      'setup_time, uniform, notes, headcount_total, roles (list of {role, count, call_time}), pay_rate_info. ' +
+      'Return a JSON ARRAY of objects. Do not include any text outside the JSON array. Example: [{...}, {...}]';
+
+    const systemPrompt = multi ? multiPrompt : singlePrompt;
+    const maxTokens = multi ? 4000 : 800;
+    const userText = multi
+      ? 'Extract ALL events from this document and return a JSON array.'
+      : 'Extract structured event staffing info and return only JSON.';
 
     let requestBody: any;
     if (isImage) {
@@ -3780,10 +3795,7 @@ router.post('/ai/extract', requireAuth, async (req, res) => {
           {
             role: 'user',
             content: [
-              {
-                type: 'text',
-                text: 'Extract structured event staffing info and return only JSON.',
-              },
+              { type: 'text', text: userText },
               {
                 type: 'image_url',
                 image_url: { url: `data:image/png;base64,${input}` },
@@ -3792,7 +3804,7 @@ router.post('/ai/extract', requireAuth, async (req, res) => {
           },
         ],
         temperature: 0,
-        max_tokens: 800,
+        max_tokens: maxTokens,
       };
     } else {
       // Input is text
@@ -3802,11 +3814,11 @@ router.post('/ai/extract', requireAuth, async (req, res) => {
           { role: 'system', content: systemPrompt },
           {
             role: 'user',
-            content: `Extract JSON from the following text:\n\n${input}`,
+            content: `${userText}\n\n${input}`,
           },
         ],
         temperature: 0,
-        max_tokens: 800,
+        max_tokens: maxTokens,
       };
     }
 
@@ -3840,21 +3852,41 @@ router.post('/ai/extract', requireAuth, async (req, res) => {
 
     const content = response.data.choices?.[0]?.message?.content || '';
 
-    // Extract JSON from response
-    const start = content.indexOf('{');
-    const end = content.lastIndexOf('}');
-    if (start !== -1 && end !== -1 && end > start) {
-      const jsonSlice = content.substring(start, end + 1);
+    // Try to extract JSON — array first (for multi), then single object
+    const arrStart = content.indexOf('[');
+    const arrEnd = content.lastIndexOf(']');
+    const objStart = content.indexOf('{');
+    const objEnd = content.lastIndexOf('}');
+
+    let parsed: any = null;
+
+    if (arrStart !== -1 && arrEnd !== -1 && arrEnd > arrStart) {
       try {
-        const parsed = JSON.parse(jsonSlice);
-        return res.json(parsed);
+        parsed = JSON.parse(content.substring(arrStart, arrEnd + 1));
+      } catch (_) { /* fall through */ }
+    }
+
+    if (!parsed && objStart !== -1 && objEnd !== -1 && objEnd > objStart) {
+      try {
+        parsed = JSON.parse(content.substring(objStart, objEnd + 1));
       } catch (parseErr) {
         console.error('[ai/extract] Failed to parse JSON:', parseErr);
         return res.status(500).json({ message: 'Failed to parse response from AI' });
       }
     }
 
-    return res.status(500).json({ message: 'No valid JSON found in AI response' });
+    if (!parsed) {
+      return res.status(500).json({ message: 'No valid JSON found in AI response' });
+    }
+
+    if (multi) {
+      const arr = Array.isArray(parsed) ? parsed : [parsed];
+      return res.json({ extracted: arr });
+    } else {
+      // Backward compatible: return raw object (no wrapper)
+      const single = Array.isArray(parsed) ? parsed[0] : parsed;
+      return res.json(single);
+    }
   } catch (err: any) {
     console.error('[ai/extract] Error:', err);
     if (err instanceof z.ZodError) {

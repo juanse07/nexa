@@ -10,7 +10,7 @@ const router = express.Router();
 
 // ── Validation ──────────────────────────────────────────────────────────
 const personalEventSchema = z.object({
-  title: z.string().min(1).max(200),
+  title: z.string().min(1).max(200).optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
   startTime: z.string().regex(/^\d{2}:\d{2}$/, 'Start time must be HH:mm'),
   endTime: z.string().regex(/^\d{2}:\d{2}$/, 'End time must be HH:mm'),
@@ -83,7 +83,10 @@ router.post('/personal-events', requireAuth, requireActiveSubscription, async (r
       return res.status(400).json({ message: 'Invalid request', errors: parsed.error.errors });
     }
 
-    const { title, date, startTime, endTime, notes, location, role, client, hourlyRate, currency } = parsed.data;
+    const { date, startTime, endTime, notes, location, role, client, hourlyRate, currency } = parsed.data;
+    const title = parsed.data.title?.trim() ||
+      [role, client].filter(Boolean).join(' @ ') ||
+      date;
 
     // Reject past dates
     const eventDate = new Date(date + 'T00:00:00');

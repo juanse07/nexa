@@ -18,6 +18,7 @@ import '../../attendance/presentation/bulk_clock_in_screen.dart';
 import '../../attendance/services/attendance_service.dart';
 import '../../hours_approval/presentation/hours_approval_detail_screen.dart';
 import '../../chat/presentation/widgets/broadcast_compose_sheet.dart';
+import '../../payroll/data/services/payroll_export_service.dart';
 
 class EventDetailScreen extends StatefulWidget {
   final Map<String, dynamic> event;
@@ -39,6 +40,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   bool _isRemoving = false;
   bool _isUpdatingKeepOpen = false;
   bool _isGeneratingSheet = false;
+  bool _isExportingCsv = false;
 
   @override
   void initState() {
@@ -248,6 +250,35 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 (event['status'] == 'draft' &&
                     (event['accepted_staff'] as List?)?.isNotEmpty == true)) ...[
               _buildActionButtons(),
+              const SizedBox(height: 16),
+            ],
+
+            // Export CSV button (any past event with accepted staff, including completed)
+            if (_shouldShowExportButton()) ...[
+              ElevatedButton.icon(
+                onPressed: _isExportingCsv ? null : _exportEventCsv,
+                icon: _isExportingCsv
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.download, size: 18),
+                label: Text(_isExportingCsv
+                    ? AppLocalizations.of(context)!.exportingCsv
+                    : AppLocalizations.of(context)!.exportEventCsv),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.navySpaceCadet,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
               const SizedBox(height: 16),
             ],
 
@@ -1254,6 +1285,51 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       return eventDate.isBefore(todayStart);
     } catch (_) {
       return false;
+    }
+  }
+
+  bool _shouldShowExportButton() {
+    if (event['status'] != 'completed') return false;
+    final acceptedStaff = event['accepted_staff'] as List<dynamic>?;
+    return acceptedStaff != null && acceptedStaff.isNotEmpty;
+  }
+
+  Future<void> _exportEventCsv() async {
+    final l10n = AppLocalizations.of(context)!;
+    final eventId = event['_id'] ?? event['id'];
+    if (eventId == null) return;
+
+    setState(() => _isExportingCsv = true);
+
+    try {
+      final service = PayrollExportService();
+      final result = await service.exportEventCsv(eventId.toString());
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
+        SnackBar(
+          content: Text(l10n.exportReady),
+          backgroundColor: AppColors.success,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+
+      final uri = Uri.parse(result.url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)..clearSnackBars()..showSnackBar(
+          SnackBar(
+            content: Text('Export failed: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isExportingCsv = false);
     }
   }
 

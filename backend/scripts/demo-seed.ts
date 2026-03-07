@@ -1,24 +1,20 @@
 /**
- * DEMO SEED SCRIPT — Apple App Store Review Dataset
+ * DEMO SEED SCRIPT — Approval Workflow Testing
  *
- * Seeds `nexa_prod` with a rich dataset designed for impressive
- * App Store screenshots and Apple reviewer walkthroughs:
+ * Seeds `nexa_prod` with focused data for testing the payroll
+ * hours-approval workflow:
  *
- * - 1 Manager (Elena Rivera)
- * - 10 Staff Users (Marcus Johnson = demo staff login)
- * - 1 Team with all 10 staff
- * - 4 Clients with different pay rate multipliers
- * - 5 Roles (Server, Bartender, Host, Chef, Event Coordinator)
- * - 10 Denver-area Venues
- * - 20 Tariffs (4 clients × 5 roles)
- * - 6 Manager-focused events (3 past + 2 published + 1 draft)
- * - ~260 Staff-focused events (Apr 2025 → Apr 2026)
- *   - ~210 completed with approved hours for Marcus
- *   - ~30 future published (Marcus accepted)
- *   - ~20 future published (open/pending)
- * - 3 Chat conversations with messages
- * - Staff profiles with ratings
- * - JWT tokens printed for quick API testing
+ * - 1 Manager (Elena Rivera — demo@flowshift.work)
+ * - 1 Staff User (Juan Suarez — juansegz07s@gmail.com via Google)
+ * - 3 Additional staff (co-workers on events)
+ * - 1 Team with all staff
+ * - 2 Clients with tariffs
+ * - 3 Roles (Server, Bartender, Host)
+ * - 3 Denver-area Venues
+ * - 6 Tariffs (2 clients × 3 roles)
+ * - 8 Past events with approved hours (earnings history)
+ * - 5 Events needing approval (various states for workflow testing)
+ * - 3 Future published events
  *
  * Usage:
  *   cd backend && npm run seed:demo
@@ -26,6 +22,9 @@
  *
  * Prerequisites:
  *   - .env with MONGO_URI and BACKEND_JWT_SECRET
+ *
+ * NOTE: Google login for juansegz07s@gmail.com will auto-link via
+ * email matching in upsertUser (auth.ts step 3).
  */
 
 import mongoose from 'mongoose';
@@ -39,12 +38,30 @@ import { TeamMemberModel } from '../src/models/teamMember';
 import { ClientModel } from '../src/models/client';
 import { RoleModel } from '../src/models/role';
 import { TariffModel } from '../src/models/tariff';
-import { VenueModel } from '../src/models/venue';
 import { EventModel } from '../src/models/event';
-import { ConversationModel } from '../src/models/conversation';
-import { ChatMessageModel } from '../src/models/chatMessage';
 import { StaffProfileModel } from '../src/models/staffProfile';
-import { StaffGroupModel } from '../src/models/staffGroup';
+
+// Venue data — stored inline on events (no separate Venue collection)
+interface VenueData { name: string; address: string; city: string; state: string; lat: number; lng: number; }
+
+// ════════════════════════════════════════════════════════════
+// DETERMINISTIC IDs — survive re-seeding so JWTs stay valid
+// ════════════════════════════════════════════════════════════
+
+const FIXED_IDS = {
+  managerUser: new mongoose.Types.ObjectId('aaa000000000000000000001'),
+  manager:     new mongoose.Types.ObjectId('aaa000000000000000000002'),
+  staffJuan:   new mongoose.Types.ObjectId('aaa000000000000000000010'),
+  staffSofia:  new mongoose.Types.ObjectId('aaa000000000000000000011'),
+  staffJames:  new mongoose.Types.ObjectId('aaa000000000000000000012'),
+  staffOlivia: new mongoose.Types.ObjectId('aaa000000000000000000013'),
+  team:        new mongoose.Types.ObjectId('aaa000000000000000000020'),
+  clientHyatt: new mongoose.Types.ObjectId('aaa000000000000000000030'),
+  clientStellar: new mongoose.Types.ObjectId('aaa000000000000000000031'),
+  roleServer:  new mongoose.Types.ObjectId('aaa000000000000000000040'),
+  roleBartender: new mongoose.Types.ObjectId('aaa000000000000000000041'),
+  roleHost:    new mongoose.Types.ObjectId('aaa000000000000000000042'),
+};
 
 // ════════════════════════════════════════════════════════════
 // STATIC DATA
@@ -61,83 +78,38 @@ const MANAGER_DEF = {
   teamName: 'Rivera Events Team',
 };
 
-const DEMO_STAFF_DEF = {
-  email: 'staff@flowshift.work',
-  password: 'FlowShift2024!',
+const STAFF_DEF = {
+  email: 'juansegz07s@gmail.com',
+  first_name: 'Juan',
+  last_name: 'Suarez',
+  name: 'Juan Suarez',
 };
 
-const STAFF_DEFS = [
-  { first: 'Marcus',  last: 'Johnson',  id: '001' },
-  { first: 'Sofia',   last: 'Chen',     id: '002' },
-  { first: 'James',   last: 'Williams', id: '003' },
-  { first: 'Olivia',  last: 'Martinez', id: '004' },
-  { first: 'David',   last: 'Thompson', id: '005' },
-  { first: 'Emma',    last: 'Garcia',   id: '006' },
-  { first: 'Michael', last: 'Brown',    id: '007' },
-  { first: 'Ava',     last: 'Davis',    id: '008' },
-  { first: 'Daniel',  last: 'Wilson',   id: '009' },
-  { first: 'Isabella',last: 'Lee',      id: '010' },
+const COWORKERS = [
+  { first: 'Sofia', last: 'Chen', id: '002' },
+  { first: 'James', last: 'Williams', id: '003' },
+  { first: 'Olivia', last: 'Martinez', id: '004' },
 ];
 
 const CLIENT_DEFS = [
-  { name: 'The Grand Hyatt Group',      multiplier: 1.0 },
-  { name: 'Stellar Productions Inc',    multiplier: 1.3 },
-  { name: 'Rocky Mountain Event Co',    multiplier: 1.1 },
-  { name: 'Mile High Hospitality Group', multiplier: 1.2 },
+  { name: 'The Grand Hyatt Group', multiplier: 1.0 },
+  { name: 'Stellar Productions Inc', multiplier: 1.3 },
 ];
 
 const ROLE_DEFS = [
-  { name: 'Server',            baseRate: 25 },
-  { name: 'Bartender',         baseRate: 30 },
-  { name: 'Host',              baseRate: 22 },
-  { name: 'Chef',              baseRate: 45 },
-  { name: 'Event Coordinator', baseRate: 40 },
+  { name: 'Server', baseRate: 25 },
+  { name: 'Bartender', baseRate: 30 },
+  { name: 'Host', baseRate: 22 },
 ];
 
 const VENUE_DEFS = [
-  { name: 'Four Seasons Hotel Denver',      address: '1111 14th St',             city: 'Denver',      state: 'CO', lat: 39.7447, lng: -104.9997 },
-  { name: 'The Ritz-Carlton, Denver',       address: '1881 Curtis St',           city: 'Denver',      state: 'CO', lat: 39.7473, lng: -104.9941 },
-  { name: 'Denver Art Museum',              address: '100 W 14th Ave Pkwy',      city: 'Denver',      state: 'CO', lat: 39.7373, lng: -104.9896 },
-  { name: 'Colorado Convention Center',     address: '700 14th St',              city: 'Denver',      state: 'CO', lat: 39.7392, lng: -104.9973 },
-  { name: 'Ellie Caulkins Opera House',     address: '1385 Curtis St',           city: 'Denver',      state: 'CO', lat: 39.7396, lng: -105.0003 },
-  { name: 'Mile High Station',              address: '2027 W Colfax Ave',        city: 'Denver',      state: 'CO', lat: 39.7406, lng: -105.0088 },
-  { name: 'The Manor House',               address: '1 Manor House Rd',         city: 'Littleton',   state: 'CO', lat: 39.5853, lng: -105.0144 },
-  { name: 'Cielo at Castle Pines',          address: '6380 Village Ln',          city: 'Castle Rock', state: 'CO', lat: 39.4733, lng: -104.8861 },
-  { name: 'Della Terra Mountain Chateau',   address: '3501 Fall River Rd',       city: 'Estes Park',  state: 'CO', lat: 40.3883, lng: -105.5858 },
-  { name: 'Wellshire Event Center',         address: '3333 S Colorado Blvd',     city: 'Denver',      state: 'CO', lat: 39.6578, lng: -104.9408 },
-];
-
-const GROUP_DEFS = [
-  { name: 'Top Performers', color: '#FFD700' },
-  { name: 'Reliable Staff',  color: '#4CAF50' },
-];
-
-const STAFF_EVENT_NAMES = [
-  'Corporate Gala', 'Annual Fundraiser', 'Wedding Reception', 'VIP Cocktail Party',
-  'Holiday Dinner', 'Product Launch', 'Art Exhibition Opening', 'Wine Tasting Soirée',
-  'Charity Auction', 'Award Ceremony', 'Rehearsal Dinner', 'Corporate Retreat',
-  'Sports Banquet', 'Birthday Celebration', 'Networking Mixer', 'Fashion Show',
-  'Grand Opening', 'Film Premiere', 'Tech Summit Reception', 'Music Festival VIP',
-  'New Year\'s Eve Gala', 'Bridal Shower', 'Anniversary Party', 'Retirement Celebration',
-  'Memorial Dinner', 'Graduation Party', 'Whiskey Tasting', 'Book Launch',
-  'Garden Party', 'Harvest Festival',
-];
-
-const UNIFORM_POOL = [
-  'Black tie formal',
-  'All black attire',
-  'White shirt, black vest, black pants',
-  'Formal service attire',
-  'Black pants, white button-down',
-  'Business casual',
-  'Black cocktail attire',
-  'Chef whites',
-  'Black suit, no tie',
-  'Smart casual — dark colors',
+  { name: 'Four Seasons Hotel Denver', address: '1111 14th St', city: 'Denver', state: 'CO', lat: 39.7447, lng: -104.9997 },
+  { name: 'The Ritz-Carlton, Denver', address: '1881 Curtis St', city: 'Denver', state: 'CO', lat: 39.7473, lng: -104.9941 },
+  { name: 'Denver Art Museum', address: '100 W 14th Ave Pkwy', city: 'Denver', state: 'CO', lat: 39.7373, lng: -104.9896 },
 ];
 
 // ════════════════════════════════════════════════════════════
-// UTILITIES
+// HELPERS
 // ════════════════════════════════════════════════════════════
 
 function daysAgo(n: number): Date {
@@ -154,44 +126,6 @@ function daysAhead(n: number): Date {
   return d;
 }
 
-/** Seeded pseudo-random number generator (Mulberry32) for reproducible data */
-function mulberry32(seed: number) {
-  return function () {
-    let t = (seed += 0x6d2b79f5);
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-const rand = mulberry32(42);
-
-function randomPick<T>(arr: T[]): T {
-  return arr[Math.floor(rand() * arr.length)]!;
-}
-
-function randomInt(min: number, max: number): number {
-  return Math.floor(rand() * (max - min + 1)) + min;
-}
-
-/** Generate `count` dates spread across [start, end] with slight random jitter */
-function generateSpreadDates(start: Date, end: Date, count: number): Date[] {
-  const startMs = start.getTime();
-  const endMs = end.getTime();
-  const span = endMs - startMs;
-  const dates: Date[] = [];
-  for (let i = 0; i < count; i++) {
-    // Evenly spaced base position + random jitter within ±1 day
-    const base = startMs + (span * i) / count;
-    const jitter = (rand() - 0.5) * 2 * 86400000; // ±1 day
-    const ms = Math.max(startMs, Math.min(endMs, base + jitter));
-    const d = new Date(ms);
-    d.setHours(0, 0, 0, 0);
-    dates.push(d);
-  }
-  return dates.sort((a, b) => a.getTime() - b.getTime());
-}
-
 // ════════════════════════════════════════════════════════════
 // MAIN SEED CLASS
 // ════════════════════════════════════════════════════════════
@@ -199,12 +133,12 @@ function generateSpreadDates(start: Date, end: Date, count: number): Date[] {
 class DemoSeed {
   private mgr: any;
   private mgrUser: any;
-  private staff: any[] = [];
+  private juan: any;
+  private coworkers: any[] = [];
   private team: any;
   private clients: any[] = [];
   private roles: any[] = [];
-  private venues: any[] = [];
-  private groups: any[] = [];
+  private venues: VenueData[] = VENUE_DEFS;
   private tokens: { role: string; name: string; email: string; token: string }[] = [];
 
   async run() {
@@ -217,14 +151,11 @@ class DemoSeed {
       await this.seedTeamMembers();
       await this.seedClients();
       await this.seedRoles();
-      await this.seedVenues();
       await this.seedTariffs();
-      await this.seedGroupsAndProfiles();
-      await this.seedPastEvents();
-      await this.seedPublishedEvents();
-      await this.seedDraftEvent();
-      await this.seedStaffEvents();
-      await this.seedChat();
+      await this.seedProfiles();
+      await this.seedApprovedEvents();
+      await this.seedApprovalWorkflowEvents();
+      await this.seedFutureEvents();
       this.genTokens();
       this.report();
       await mongoose.disconnect();
@@ -244,7 +175,6 @@ class DemoSeed {
 
     const dbName = ENV.nodeEnv === 'production' ? 'nexa_prod' : 'nexa_test';
     let uri = ENV.mongoUri.trim().replace(/\/$/, '');
-    // Insert DB name before query string: ...mongodb.net/?opts → ...mongodb.net/dbName?opts
     const qIdx = uri.indexOf('?');
     if (qIdx !== -1) {
       const base = uri.substring(0, qIdx).replace(/\/$/, '');
@@ -282,6 +212,7 @@ class DemoSeed {
     const passwordHash = await bcrypt.hash(d.password, 10);
 
     this.mgrUser = await UserModel.create({
+      _id: FIXED_IDS.managerUser,
       provider: 'email', subject: d.subject,
       email: d.email, name: d.name,
       first_name: d.first_name, last_name: d.last_name,
@@ -290,6 +221,7 @@ class DemoSeed {
     });
 
     this.mgr = await ManagerModel.create({
+      _id: FIXED_IDS.manager,
       provider: 'email', subject: d.subject,
       email: d.email, name: d.name,
       first_name: d.first_name, last_name: d.last_name,
@@ -301,34 +233,50 @@ class DemoSeed {
     console.log(`   + ${d.name} (${d.email}) [${this.mgr._id}]\n`);
   }
 
-  // ── 10 Staff ────────────────────────────────────────────
+  // ── Staff ───────────────────────────────────────────────
   private async seedStaff() {
-    console.log('   CREATING 10 STAFF USERS...');
-    const staffPasswordHash = await bcrypt.hash(DEMO_STAFF_DEF.password, 10);
+    console.log('   CREATING STAFF USERS...');
 
-    const docs = await Promise.all(STAFF_DEFS.map(async (s, i) => {
-      const isDemo = i === 0; // Marcus Johnson = demo staff login
-      return {
-        provider: isDemo ? ('email' as const) : ('google' as const),
-        subject: isDemo ? DEMO_STAFF_DEF.email : `demo-staff-${s.id}`,
-        email: isDemo ? DEMO_STAFF_DEF.email : `${s.first.toLowerCase()}.${s.last.toLowerCase()}@nexademo.com`,
-        name: `${s.first} ${s.last}`,
-        first_name: s.first,
-        last_name: s.last,
-        phone_number: isDemo ? '+15551234567' : undefined,
-        passwordHash: isDemo ? staffPasswordHash : undefined,
+    // Juan — primary test user (provider: 'email', Google auto-links via email match)
+    this.juan = await UserModel.create({
+      _id: FIXED_IDS.staffJuan,
+      provider: 'email',
+      subject: STAFF_DEF.email,
+      email: STAFF_DEF.email,
+      name: STAFF_DEF.name,
+      first_name: STAFF_DEF.first_name,
+      last_name: STAFF_DEF.last_name,
+      subscription_tier: 'pro',
+      subscription_status: 'active',
+    });
+    console.log(`   + ${STAFF_DEF.name} (${STAFF_DEF.email}) — primary test user`);
+
+    // Co-workers
+    const coworkerIds = [FIXED_IDS.staffSofia, FIXED_IDS.staffJames, FIXED_IDS.staffOlivia];
+    for (let i = 0; i < COWORKERS.length; i++) {
+      const cw = COWORKERS[i]!;
+      const user = await UserModel.create({
+        _id: coworkerIds[i],
+        provider: 'google',
+        subject: `demo-staff-${cw.id}`,
+        email: `${cw.first.toLowerCase()}.${cw.last.toLowerCase()}@nexademo.com`,
+        name: `${cw.first} ${cw.last}`,
+        first_name: cw.first,
+        last_name: cw.last,
         subscription_tier: 'free',
         subscription_status: 'active',
-      };
-    }));
-    this.staff = await UserModel.insertMany(docs);
-    console.log(`   + ${this.staff.length} staff created (${DEMO_STAFF_DEF.email} = Marcus Johnson)\n`);
+      });
+      this.coworkers.push(user);
+      console.log(`   + ${cw.first} ${cw.last} (co-worker)`);
+    }
+    console.log('');
   }
 
   // ── Team ────────────────────────────────────────────────
   private async seedTeam() {
     console.log('   CREATING TEAM...');
     this.team = await TeamModel.create({
+      _id: FIXED_IDS.team,
       managerId: this.mgr._id,
       name: MANAGER_DEF.teamName,
       description: 'Core event staff for Rivera Events',
@@ -340,7 +288,8 @@ class DemoSeed {
   // ── Team Members ────────────────────────────────────────
   private async seedTeamMembers() {
     console.log('   CREATING TEAM MEMBERSHIPS...');
-    const docs = this.staff.map((s: any) => ({
+    const allStaff = [this.juan, ...this.coworkers];
+    const docs = allStaff.map((s: any) => ({
       teamId: this.team._id,
       managerId: this.mgr._id,
       provider: s.provider,
@@ -358,8 +307,10 @@ class DemoSeed {
   // ── Clients ─────────────────────────────────────────────
   private async seedClients() {
     console.log('   CREATING CLIENTS...');
-    for (const cd of CLIENT_DEFS) {
-      const c = await ClientModel.create({ managerId: this.mgr._id, name: cd.name });
+    const clientIds = [FIXED_IDS.clientHyatt, FIXED_IDS.clientStellar];
+    for (let i = 0; i < CLIENT_DEFS.length; i++) {
+      const cd = CLIENT_DEFS[i]!;
+      const c = await ClientModel.create({ _id: clientIds[i], managerId: this.mgr._id, name: cd.name });
       this.clients.push(c);
       console.log(`   + ${cd.name}`);
     }
@@ -369,26 +320,13 @@ class DemoSeed {
   // ── Roles ───────────────────────────────────────────────
   private async seedRoles() {
     console.log('   CREATING ROLES...');
-    for (const rd of ROLE_DEFS) {
-      const r = await RoleModel.create({ managerId: this.mgr._id, name: rd.name });
+    const roleIds = [FIXED_IDS.roleServer, FIXED_IDS.roleBartender, FIXED_IDS.roleHost];
+    for (let i = 0; i < ROLE_DEFS.length; i++) {
+      const rd = ROLE_DEFS[i]!;
+      const r = await RoleModel.create({ _id: roleIds[i], managerId: this.mgr._id, name: rd.name });
       this.roles.push(r);
     }
     console.log(`   + ${ROLE_DEFS.map(r => r.name).join(', ')}\n`);
-  }
-
-  // ── Venues ──────────────────────────────────────────────
-  private async seedVenues() {
-    console.log('   CREATING VENUES...');
-    for (const v of VENUE_DEFS) {
-      const doc = await VenueModel.create({
-        managerId: this.mgr._id, name: v.name, address: v.address,
-        city: v.city, state: v.state, country: 'USA',
-        latitude: v.lat, longitude: v.lng, source: 'manual',
-      });
-      this.venues.push(doc);
-      console.log(`   + ${v.name}`);
-    }
-    console.log('');
   }
 
   // ── Tariffs ─────────────────────────────────────────────
@@ -411,554 +349,420 @@ class DemoSeed {
     console.log(`   + ${tariffs.length} tariffs\n`);
   }
 
-  // ── Staff Groups & Profiles ─────────────────────────────
-  private async seedGroupsAndProfiles() {
-    console.log('   CREATING STAFF GROUPS & PROFILES...');
-    for (const gd of GROUP_DEFS) {
-      const g = await StaffGroupModel.create({
-        managerId: this.mgr._id, name: gd.name, color: gd.color,
-      });
-      this.groups.push(g);
-    }
-
-    const profiles = this.staff.map((s: any, i: number) => {
-      const uk = `${s.provider}:${s.subject}`;
-      const isTop = i < 4; // first 4 are top performers
-      return {
-        managerId: this.mgr._id,
-        userKey: uk,
-        notes: isTop ? 'Consistently excellent — top performer.' : '',
-        rating: isTop ? 5 : (i < 7 ? 4 : 3),
-        isFavorite: isTop,
-        groupIds: isTop ? [this.groups[0]._id] : [this.groups[1]._id],
-      };
-    });
-    await StaffProfileModel.insertMany(profiles);
-    console.log(`   + ${GROUP_DEFS.length} groups, ${profiles.length} profiles\n`);
-  }
-
-  // ── 3 Past Completed Events ─────────────────────────────
-  private async seedPastEvents() {
-    console.log('   CREATING 3 PAST COMPLETED EVENTS...');
-    const eventDefs = [
-      { name: 'Corporate Gala',       daysBack: 14, client: 0, venue: 0, startH: 18, dur: 5, uniform: 'Black tie formal' },
-      { name: 'Private Dinner',       daysBack: 7,  client: 1, venue: 1, startH: 19, dur: 4, uniform: 'Formal service attire' },
-      { name: 'Charity Fundraiser',   daysBack: 3,  client: 0, venue: 2, startH: 17, dur: 6, uniform: 'Black pants, white button-down' },
-    ];
-
-    for (const ed of eventDefs) {
-      const eventDate = daysAgo(ed.daysBack);
-      const client = this.clients[ed.client];
-      const venue = this.venues[ed.venue];
-      const endH = ed.startH + ed.dur;
-
-      // Use 6 staff per past event
-      const selStaff = this.staff.slice(0, 6);
-      const rolesArr = [
-        { role: 'Server', count: 3 },
-        { role: 'Bartender', count: 2 },
-        { role: 'Event Coordinator', count: 1 },
-      ];
-      const headcount = rolesArr.reduce((s, r) => s + r.count, 0);
-
-      const roleAssign = ['Server', 'Server', 'Server', 'Bartender', 'Bartender', 'Event Coordinator'];
-      const accepted_staff = selStaff.map((s: any, idx: number) => {
-        const role = roleAssign[idx];
-        const ciDate = new Date(eventDate); ciDate.setHours(ed.startH, 0, 0);
-        const coDate = new Date(eventDate); coDate.setHours(endH, 0, 0);
-        const hrs = ed.dur;
-
-        return {
-          userKey: `${s.provider}:${s.subject}`,
-          provider: s.provider, subject: s.subject,
-          email: s.email, name: s.name,
-          first_name: s.first_name, last_name: s.last_name,
-          role, response: 'accepted',
-          respondedAt: new Date(eventDate.getTime() - 2 * 86400000),
-          attendance: [{
-            clockInAt: ciDate, clockOutAt: coDate,
-            estimatedHours: hrs, approvedHours: hrs,
-            status: 'approved',
-            approvedBy: `${this.mgr.provider}:${this.mgr.subject}`,
-            approvedAt: new Date(eventDate.getTime() + 86400000),
-            clockInLocation: {
-              latitude: venue.latitude, longitude: venue.longitude,
-              accuracy: 10, source: 'geofence' as const,
-            },
-            clockOutLocation: {
-              latitude: venue.latitude, longitude: venue.longitude,
-              accuracy: 12,
-            },
-          }],
-        };
-      });
-
-      const role_stats = rolesArr.map(r => {
-        const taken = accepted_staff.filter((s: any) => s.role === r.role).length;
-        return { role: r.role, capacity: r.count, taken, remaining: 0, is_full: true };
-      });
-
-      await EventModel.create({
-        managerId: this.mgr._id,
-        status: 'completed',
-        publishedAt: new Date(eventDate.getTime() - 5 * 86400000),
-        publishedBy: `${this.mgr.provider}:${this.mgr.subject}`,
-        fulfilledAt: new Date(eventDate.getTime() + ed.dur * 3600000),
-        visibilityType: 'private',
-        shift_name: `${ed.name} - ${client.name}`,
-        client_name: client.name,
-        date: eventDate,
-        start_time: `${String(ed.startH).padStart(2, '0')}:00`,
-        end_time: `${String(endH).padStart(2, '0')}:00`,
-        venue_name: venue.name, venue_address: venue.address,
-        venue_latitude: venue.latitude, venue_longitude: venue.longitude,
-        city: venue.city, state: venue.state, country: 'USA',
-        contact_name: 'Elena Rivera',
-        contact_phone: '+15551234567',
-        contact_email: `events@${client.name.toLowerCase().replace(/\s+/g, '')}.com`,
-        uniform: ed.uniform,
-        notes: `${ed.name} for ${client.name}.`,
-        headcount_total: headcount, roles: rolesArr,
-        accepted_staff, declined_staff: [], role_stats,
-        audience_team_ids: [this.team._id],
-        hoursStatus: 'approved',
-        hoursApprovedBy: `${this.mgr.provider}:${this.mgr.subject}`,
-        hoursApprovedAt: new Date(eventDate.getTime() + 2 * 86400000),
-        chatEnabled: true,
-        chatEnabledAt: new Date(eventDate.getTime() - 86400000),
-        version: 0,
-      });
-      console.log(`   + ${ed.name} (${ed.daysBack} days ago)`);
-    }
-    console.log('');
-  }
-
-  // ── 2 Published Events ──────────────────────────────────
-  private async seedPublishedEvents() {
-    console.log('   CREATING 2 PUBLISHED EVENTS...');
-    const pubDefs = [
-      { name: 'VIP Cocktail Party', daysOut: 5,  client: 1, venue: 0, startH: 19, dur: 4, uniform: 'All black attire' },
-      { name: 'Wedding Reception',  daysOut: 10, client: 0, venue: 1, startH: 16, dur: 7, uniform: 'White shirt, black vest, black pants' },
-    ];
-
-    for (const pd of pubDefs) {
-      const eventDate = daysAhead(pd.daysOut);
-      const client = this.clients[pd.client];
-      const venue = this.venues[pd.venue];
-      const endH = Math.min(pd.startH + pd.dur, 23);
-
-      const rolesArr = [
-        { role: 'Server', count: 4 },
-        { role: 'Bartender', count: 2 },
-        { role: 'Host', count: 1 },
-        { role: 'Event Coordinator', count: 1 },
-      ];
-      const headcount = rolesArr.reduce((s, r) => s + r.count, 0);
-
-      const role_stats = rolesArr.map(r => ({
-        role: r.role, capacity: r.count, taken: 0,
-        remaining: r.count, is_full: false,
-      }));
-
-      await EventModel.create({
-        managerId: this.mgr._id,
-        status: 'published',
-        publishedAt: new Date(),
-        publishedBy: `${this.mgr.provider}:${this.mgr.subject}`,
-        visibilityType: 'public',
-        shift_name: `${pd.name} - ${client.name}`,
-        client_name: client.name,
-        date: eventDate,
-        start_time: `${String(pd.startH).padStart(2, '0')}:00`,
-        end_time: `${String(endH).padStart(2, '0')}:00`,
-        venue_name: venue.name, venue_address: venue.address,
-        venue_latitude: venue.latitude, venue_longitude: venue.longitude,
-        city: venue.city, state: venue.state, country: 'USA',
-        contact_name: 'Elena Rivera',
-        contact_phone: '+15551234567',
-        contact_email: `events@${client.name.toLowerCase().replace(/\s+/g, '')}.com`,
-        uniform: pd.uniform,
-        notes: `${pd.name} for ${client.name}. All team members welcome to apply.`,
-        headcount_total: headcount, roles: rolesArr,
-        accepted_staff: [], declined_staff: [], role_stats,
-        audience_team_ids: [this.team._id],
-        hoursStatus: 'pending',
-        chatEnabled: true, chatEnabledAt: new Date(),
-        pay_rate_info: `$${ROLE_DEFS[2]!.baseRate}-${ROLE_DEFS[3]!.baseRate}/hr depending on role`,
-        version: 0,
-      });
-      console.log(`   + ${pd.name} (${pd.daysOut} days out)`);
-    }
-    console.log('');
-  }
-
-  // ── 1 Draft Event ───────────────────────────────────────
-  private async seedDraftEvent() {
-    console.log('   CREATING 1 DRAFT EVENT...');
-    const client = this.clients[0];
-    const venue = this.venues[2];
-
-    await EventModel.create({
+  // ── Staff Profiles ──────────────────────────────────────
+  private async seedProfiles() {
+    console.log('   CREATING STAFF PROFILES...');
+    const allStaff = [this.juan, ...this.coworkers];
+    const docs = allStaff.map((s: any, i: number) => ({
       managerId: this.mgr._id,
-      status: 'draft',
-      visibilityType: 'private',
-      shift_name: `Upcoming Award Ceremony - ${client.name}`,
-      client_name: client.name,
-      date: daysAhead(21),
-      start_time: '18:00', end_time: '23:00',
-      venue_name: venue.name, venue_address: venue.address,
-      city: venue.city, state: venue.state, country: 'USA',
-      headcount_total: 8,
-      roles: [
-        { role: 'Server', count: 3 },
-        { role: 'Bartender', count: 2 },
-        { role: 'Host', count: 1 },
-        { role: 'Chef', count: 1 },
-        { role: 'Event Coordinator', count: 1 },
-      ],
-      accepted_staff: [], declined_staff: [], role_stats: [],
-      version: 0,
-    });
-    console.log('   + Award Ceremony (draft)\n');
+      userKey: `${s.provider}:${s.subject}`,
+      name: s.name,
+      email: s.email,
+      rating: i === 0 ? 5 : 4, // Juan gets 5-star
+      status: 'active',
+    }));
+    await StaffProfileModel.insertMany(docs);
+    console.log(`   + ${docs.length} profiles\n`);
   }
 
-  // ── 260 Staff-Focused Events ────────────────────────────
-  private async seedStaffEvents() {
-    console.log('   CREATING 260 STAFF-FOCUSED EVENTS (Apr 2025 → Apr 2026)...');
+  // ── Helper: build staff entry for event ─────────────────
+  private staffEntry(user: any, role: string, attendance: any[]) {
+    return {
+      userKey: `${user.provider}:${user.subject}`,
+      provider: user.provider,
+      subject: user.subject,
+      email: user.email,
+      name: user.name,
+      first_name: user.first_name,
+      last_name: user.last_name,
+      role,
+      response: 'accept',
+      respondedAt: daysAgo(3),
+      attendance,
+    };
+  }
 
-    const marcus = this.staff[0]; // Marcus Johnson = demo staff login
-    const marcusKey = `${marcus.provider}:${marcus.subject}`;
+  // ── Helper: build clock attendance session ──────────────
+  private clockSession(
+    date: Date,
+    startH: number,
+    endH: number,
+    status: string,
+    opts: { approvedHours?: number; managerNotes?: string } = {},
+  ) {
     const mgrKey = `${this.mgr.provider}:${this.mgr.subject}`;
+    const ci = new Date(date); ci.setHours(startH, 0, 0);
+    const co = new Date(date); co.setHours(endH, 0, 0);
+    return {
+      clockInAt: ci,
+      clockOutAt: co,
+      estimatedHours: endH - startH,
+      ...(opts.approvedHours != null ? { approvedHours: opts.approvedHours } : {}),
+      status,
+      ...(status === 'approved' ? { approvedBy: mgrKey, approvedAt: new Date() } : {}),
+      ...(opts.managerNotes ? { managerNotes: opts.managerNotes } : {}),
+      clockInLocation: {
+        latitude: 39.7447 + (Math.random() - 0.5) * 0.0002,
+        longitude: -104.9997 + (Math.random() - 0.5) * 0.0002,
+        accuracy: 10,
+        source: 'geofence',
+      },
+      clockOutLocation: {
+        latitude: 39.7447 + (Math.random() - 0.5) * 0.0002,
+        longitude: -104.9997 + (Math.random() - 0.5) * 0.0002,
+        accuracy: 15,
+      },
+    };
+  }
 
-    // Other staff for filling events (2-4 random co-workers per event)
-    const otherStaff = this.staff.slice(1);
+  // ── 8 Past Events with Approved Hours (earnings history) ─
+  private async seedApprovedEvents() {
+    console.log('   CREATING 8 APPROVED EVENTS (earnings history)...');
+    const mgrKey = `${this.mgr.provider}:${this.mgr.subject}`;
+    const juan = this.juan;
+    const cw = this.coworkers;
 
-    const startDate = new Date('2025-04-01');
-    const endDate = new Date('2026-04-30');
-    // "today" for the seed context is 2026-02-17 per plan
-    const today = new Date('2026-02-17');
-    today.setHours(23, 59, 59, 999);
+    const events = [
+      // Event 1 — 14 days ago, Server, Grand Hyatt, 6h
+      {
+        date: daysAgo(14), startH: 10, endH: 16, role: 'Server',
+        name: 'Corporate Luncheon', client: 0, venue: 0, hours: 6,
+      },
+      // Event 2 — 12 days ago, Bartender, Stellar, 5h
+      {
+        date: daysAgo(12), startH: 17, endH: 22, role: 'Bartender',
+        name: 'Cocktail Reception', client: 1, venue: 1, hours: 5,
+      },
+      // Event 3 — 10 days ago, Host, Grand Hyatt, 7h
+      {
+        date: daysAgo(10), startH: 11, endH: 18, role: 'Host',
+        name: 'Wedding Reception', client: 0, venue: 2, hours: 7,
+      },
+      // Event 4 — 21 days ago, Server, Stellar, 8h
+      {
+        date: daysAgo(21), startH: 9, endH: 17, role: 'Server',
+        name: 'Tech Conference Dinner', client: 1, venue: 0, hours: 8,
+      },
+      // Event 5 — 28 days ago, Bartender, Grand Hyatt, 6h
+      {
+        date: daysAgo(28), startH: 18, endH: 24, role: 'Bartender',
+        name: 'Charity Gala', client: 0, venue: 1, hours: 6,
+      },
+      // Event 6 — 35 days ago, Host, Stellar, 5h
+      {
+        date: daysAgo(35), startH: 12, endH: 17, role: 'Host',
+        name: 'Product Launch Party', client: 1, venue: 2, hours: 5,
+      },
+      // Event 7 — 42 days ago, Server, Grand Hyatt, 7h
+      {
+        date: daysAgo(42), startH: 10, endH: 17, role: 'Server',
+        name: 'Annual Awards Banquet', client: 0, venue: 0, hours: 7,
+      },
+      // Event 8 — 49 days ago, Bartender, Stellar, 6h
+      {
+        date: daysAgo(49), startH: 16, endH: 22, role: 'Bartender',
+        name: 'VIP Networking Mixer', client: 1, venue: 1, hours: 6,
+      },
+    ];
 
-    const TOTAL = 260;
-    const eventDates = generateSpreadDates(startDate, endDate, TOTAL);
+    for (const ev of events) {
+      const client = this.clients[ev.client]!;
+      const venue = this.venues[ev.venue]!;
+      const coworker = cw[ev.venue % cw.length]!;
 
-    // Split: dates before today = completed, dates after = future
-    const pastDates = eventDates.filter(d => d <= today);
-    const futureDates = eventDates.filter(d => d > today);
-
-    // Past events: all completed with approved hours (210 planned)
-    const events: any[] = [];
-    let completedCount = 0;
-    let futureAcceptedCount = 0;
-    let futureOpenCount = 0;
-
-    for (const eventDate of pastDates) {
-      const venue = randomPick(this.venues);
-      const clientIdx = randomInt(0, this.clients.length - 1);
-      const client = this.clients[clientIdx]!;
-      const eventName = randomPick(STAFF_EVENT_NAMES);
-      const marcusRoleDef = ROLE_DEFS[randomInt(0, ROLE_DEFS.length - 1)]!;
-      const startHour = randomInt(7, 19);
-      const duration = randomInt(6, 11);
-      const endHour = Math.min(startHour + duration, 23);
-      const actualDuration = endHour - startHour;
-      const uniform = randomPick(UNIFORM_POOL);
-
-      // Build roles array — Marcus's role + 1-2 others
-      const otherRoles = ROLE_DEFS.filter(r => r.name !== marcusRoleDef.name);
-      const extraRole1 = randomPick(otherRoles);
-      const rolesArr = [
-        { role: marcusRoleDef.name, count: randomInt(2, 4) },
-        { role: extraRole1.name, count: randomInt(1, 3) },
-      ];
-      if (rand() > 0.4) {
-        const extraRole2 = randomPick(otherRoles.filter(r => r.name !== extraRole1.name));
-        if (extraRole2) rolesArr.push({ role: extraRole2.name, count: randomInt(1, 2) });
-      }
-      const headcount = rolesArr.reduce((s, r) => s + r.count, 0);
-
-      // Marcus's attendance
-      const ciDate = new Date(eventDate);
-      ciDate.setHours(startHour, randomInt(0, 15), 0);
-      const coDate = new Date(eventDate);
-      coDate.setHours(endHour, randomInt(0, 30), 0);
-
-      // Small variation in approved hours (±0.5)
-      const approvedHours = Math.max(4, actualDuration + (rand() > 0.5 ? 0.5 : 0));
-
-      const marcusStaffEntry = {
-        userKey: marcusKey,
-        provider: marcus.provider, subject: marcus.subject,
-        email: marcus.email, name: marcus.name,
-        first_name: marcus.first_name, last_name: marcus.last_name,
-        role: marcusRoleDef.name, response: 'accepted',
-        respondedAt: new Date(eventDate.getTime() - randomInt(2, 7) * 86400000),
-        attendance: [{
-          clockInAt: ciDate, clockOutAt: coDate,
-          estimatedHours: actualDuration,
-          approvedHours,
-          status: 'approved' as const,
-          approvedBy: mgrKey,
-          approvedAt: new Date(eventDate.getTime() + randomInt(1, 3) * 86400000),
-          clockInLocation: {
-            latitude: venue.latitude + (rand() - 0.5) * 0.0002,
-            longitude: venue.longitude + (rand() - 0.5) * 0.0002,
-            accuracy: randomInt(5, 20),
-            source: 'geofence' as const,
-          },
-          clockOutLocation: {
-            latitude: venue.latitude + (rand() - 0.5) * 0.0002,
-            longitude: venue.longitude + (rand() - 0.5) * 0.0002,
-            accuracy: randomInt(8, 25),
-          },
-        }],
-      };
-
-      // 2-4 other staff on the event
-      const numOthers = randomInt(2, 4);
-      const shuffled = [...otherStaff].sort(() => rand() - 0.5);
-      const eventOthers = shuffled.slice(0, numOthers);
-      const otherEntries = eventOthers.map((s: any) => {
-        const otherRole = randomPick(rolesArr).role;
-        const oCiDate = new Date(eventDate);
-        oCiDate.setHours(startHour, randomInt(0, 20), 0);
-        const oCoDate = new Date(eventDate);
-        oCoDate.setHours(endHour, randomInt(0, 30), 0);
-        return {
-          userKey: `${s.provider}:${s.subject}`,
-          provider: s.provider, subject: s.subject,
-          email: s.email, name: s.name,
-          first_name: s.first_name, last_name: s.last_name,
-          role: otherRole, response: 'accepted',
-          respondedAt: new Date(eventDate.getTime() - randomInt(1, 5) * 86400000),
-          attendance: [{
-            clockInAt: oCiDate, clockOutAt: oCoDate,
-            estimatedHours: actualDuration,
-            approvedHours: actualDuration,
-            status: 'approved' as const,
-            approvedBy: mgrKey,
-            approvedAt: new Date(eventDate.getTime() + randomInt(1, 3) * 86400000),
-            clockInLocation: {
-              latitude: venue.latitude + (rand() - 0.5) * 0.0003,
-              longitude: venue.longitude + (rand() - 0.5) * 0.0003,
-              accuracy: randomInt(5, 25),
-              source: 'geofence' as const,
-            },
-            clockOutLocation: {
-              latitude: venue.latitude + (rand() - 0.5) * 0.0003,
-              longitude: venue.longitude + (rand() - 0.5) * 0.0003,
-              accuracy: randomInt(8, 30),
-            },
-          }],
-        };
-      });
-
-      const accepted_staff = [marcusStaffEntry, ...otherEntries];
-
-      // Build role_stats
-      const role_stats = rolesArr.map(r => {
-        const taken = accepted_staff.filter((s: any) => s.role === r.role).length;
-        return { role: r.role, capacity: r.count, taken, remaining: Math.max(0, r.count - taken), is_full: taken >= r.count };
-      });
-
-      const rate = Math.round(marcusRoleDef.baseRate * CLIENT_DEFS[clientIdx]!.multiplier);
-
-      events.push({
+      await EventModel.create({
         managerId: this.mgr._id,
         status: 'completed',
-        publishedAt: new Date(eventDate.getTime() - randomInt(5, 14) * 86400000),
+        publishedAt: new Date(ev.date.getTime() - 7 * 86400000),
         publishedBy: mgrKey,
-        fulfilledAt: new Date(eventDate.getTime() + actualDuration * 3600000),
-        visibilityType: rand() > 0.5 ? 'private' : 'public',
-        shift_name: `${eventName} - ${client.name}`,
+        fulfilledAt: new Date(ev.date.getTime() + ev.endH * 3600000),
+        visibilityType: 'public',
+        shift_name: `${ev.name} - ${client.name}`,
         client_name: client.name,
-        date: eventDate,
-        start_time: `${String(startHour).padStart(2, '0')}:00`,
-        end_time: `${String(endHour).padStart(2, '0')}:00`,
-        venue_name: venue.name, venue_address: venue.address,
-        venue_latitude: venue.latitude, venue_longitude: venue.longitude,
+        date: ev.date,
+        start_time: `${String(ev.startH).padStart(2, '0')}:00`,
+        end_time: `${String(ev.endH % 24).padStart(2, '0')}:00`,
+        venue_name: venue.name,
+        venue_address: venue.address,
+        venue_latitude: venue.lat,
+        venue_longitude: venue.lng,
         city: venue.city, state: venue.state, country: 'USA',
         contact_name: 'Elena Rivera',
         contact_phone: '+15551234567',
-        contact_email: `events@${client.name.toLowerCase().replace(/\s+/g, '')}.com`,
-        uniform,
-        notes: `${eventName} hosted by ${client.name} at ${venue.name}.`,
-        headcount_total: headcount, roles: rolesArr,
-        accepted_staff, declined_staff: [], role_stats,
+        headcount_total: 3,
+        roles: [{ role: ev.role, count: 2 }, { role: 'Host', count: 1 }],
+        accepted_staff: [
+          this.staffEntry(juan, ev.role, [
+            this.clockSession(ev.date, ev.startH, ev.endH, 'approved', { approvedHours: ev.hours }),
+          ]),
+          this.staffEntry(coworker, ev.role, [
+            this.clockSession(ev.date, ev.startH, ev.endH, 'approved', { approvedHours: ev.hours }),
+          ]),
+        ],
+        declined_staff: [],
+        role_stats: [],
         audience_team_ids: [this.team._id],
         hoursStatus: 'approved',
         hoursApprovedBy: mgrKey,
-        hoursApprovedAt: new Date(eventDate.getTime() + randomInt(1, 4) * 86400000),
+        hoursApprovedAt: new Date(ev.date.getTime() + 2 * 86400000),
         chatEnabled: true,
-        chatEnabledAt: new Date(eventDate.getTime() - 86400000),
-        pay_rate_info: `$${rate}/hr`,
+        pay_rate_info: `$${ROLE_DEFS.find(r => r.name === ev.role)!.baseRate * CLIENT_DEFS[ev.client]!.multiplier}/hr`,
         version: 0,
       });
-      completedCount++;
+      console.log(`   + ${ev.name} (${ev.hours}h, approved)`);
     }
+    console.log('');
+  }
 
-    // Future events: split ~60% accepted by Marcus, ~40% open/pending
-    for (let i = 0; i < futureDates.length; i++) {
-      const eventDate = futureDates[i]!;
-      const venue = randomPick(this.venues);
-      const clientIdx = randomInt(0, this.clients.length - 1);
-      const client = this.clients[clientIdx]!;
-      const eventName = randomPick(STAFF_EVENT_NAMES);
-      const marcusRoleDef = ROLE_DEFS[randomInt(0, ROLE_DEFS.length - 1)]!;
-      const startHour = randomInt(7, 19);
-      const duration = randomInt(6, 11);
-      const endHour = Math.min(startHour + duration, 23);
-      const uniform = randomPick(UNIFORM_POOL);
+  // ── 5 Events Needing Approval (workflow testing) ────────
+  private async seedApprovalWorkflowEvents() {
+    console.log('   CREATING 5 EVENTS NEEDING APPROVAL...');
+    const mgrKey = `${this.mgr.provider}:${this.mgr.subject}`;
+    const juan = this.juan;
+    const cw = this.coworkers;
+    const client = this.clients[0]!; // Grand Hyatt for all
 
-      const otherRoles = ROLE_DEFS.filter(r => r.name !== marcusRoleDef.name);
-      const extraRole1 = randomPick(otherRoles);
-      const rolesArr = [
-        { role: marcusRoleDef.name, count: randomInt(2, 5) },
-        { role: extraRole1.name, count: randomInt(1, 3) },
-      ];
-      if (rand() > 0.3) {
-        const extraRole2 = randomPick(otherRoles.filter(r => r.name !== extraRole1.name));
-        if (extraRole2) rolesArr.push({ role: extraRole2.name, count: randomInt(1, 2) });
-      }
-      const headcount = rolesArr.reduce((s, r) => s + r.count, 0);
+    // ────────────────────────────────────────────────────────
+    // Event A: Clocked out but UNAPPROVED — 2 days ago
+    // Status: 'clocked' — manager needs to review and approve
+    // ────────────────────────────────────────────────────────
+    await EventModel.create({
+      managerId: this.mgr._id,
+      status: 'completed',
+      publishedAt: daysAgo(9), publishedBy: mgrKey,
+      fulfilledAt: daysAgo(2),
+      visibilityType: 'public',
+      shift_name: `Weekend Brunch Service - ${client.name}`,
+      client_name: client.name,
+      date: daysAgo(2),
+      start_time: '08:00', end_time: '14:00',
+      venue_name: this.venues[0]!.name, venue_address: this.venues[0]!.address,
+      venue_latitude: this.venues[0]!.lat, venue_longitude: this.venues[0]!.lng,
+      city: 'Denver', state: 'CO', country: 'USA',
+      contact_name: 'Elena Rivera', contact_phone: '+15551234567',
+      headcount_total: 3,
+      roles: [{ role: 'Server', count: 2 }, { role: 'Bartender', count: 1 }],
+      accepted_staff: [
+        this.staffEntry(juan, 'Server', [this.clockSession(daysAgo(2), 8, 14, 'clocked')]),
+        this.staffEntry(cw[0]!, 'Server', [this.clockSession(daysAgo(2), 8, 14, 'clocked')]),
+        this.staffEntry(cw[1]!, 'Bartender', [this.clockSession(daysAgo(2), 8, 14, 'clocked')]),
+      ],
+      declined_staff: [], role_stats: [],
+      audience_team_ids: [this.team._id],
+      hoursStatus: 'pending',
+      chatEnabled: true,
+      pay_rate_info: '$25/hr', version: 0,
+    });
+    console.log('   + Weekend Brunch Service (CLOCKED — needs approval)');
 
-      const isMarcusAccepted = i < Math.ceil(futureDates.length * 0.6); // first 60% = accepted
+    // ────────────────────────────────────────────────────────
+    // Event B: Clocked out but UNAPPROVED — 3 days ago
+    // Status: 'clocked' — another event waiting for review
+    // ────────────────────────────────────────────────────────
+    await EventModel.create({
+      managerId: this.mgr._id,
+      status: 'completed',
+      publishedAt: daysAgo(10), publishedBy: mgrKey,
+      fulfilledAt: daysAgo(3),
+      visibilityType: 'public',
+      shift_name: `Rooftop Happy Hour - ${client.name}`,
+      client_name: client.name,
+      date: daysAgo(3),
+      start_time: '16:00', end_time: '21:00',
+      venue_name: this.venues[1]!.name, venue_address: this.venues[1]!.address,
+      venue_latitude: this.venues[1]!.lat, venue_longitude: this.venues[1]!.lng,
+      city: 'Denver', state: 'CO', country: 'USA',
+      contact_name: 'Elena Rivera', contact_phone: '+15551234567',
+      headcount_total: 2,
+      roles: [{ role: 'Bartender', count: 2 }],
+      accepted_staff: [
+        this.staffEntry(juan, 'Bartender', [this.clockSession(daysAgo(3), 16, 21, 'clocked')]),
+        this.staffEntry(cw[2]!, 'Bartender', [this.clockSession(daysAgo(3), 16, 21, 'clocked')]),
+      ],
+      declined_staff: [], role_stats: [],
+      audience_team_ids: [this.team._id],
+      hoursStatus: 'pending',
+      chatEnabled: true,
+      pay_rate_info: '$30/hr', version: 0,
+    });
+    console.log('   + Rooftop Happy Hour (CLOCKED — needs approval)');
 
-      let accepted_staff: any[] = [];
-      if (isMarcusAccepted) {
-        accepted_staff.push({
-          userKey: marcusKey,
-          provider: marcus.provider, subject: marcus.subject,
-          email: marcus.email, name: marcus.name,
-          first_name: marcus.first_name, last_name: marcus.last_name,
-          role: marcusRoleDef.name, response: 'accepted',
-          respondedAt: new Date(today.getTime() - randomInt(0, 5) * 86400000),
-          attendance: [],
-        });
-        futureAcceptedCount++;
-      } else {
-        futureOpenCount++;
-      }
+    // ────────────────────────────────────────────────────────
+    // Event C: Sheet submitted but NOT approved — 4 days ago
+    // Status: 'sheet_submitted' — sign-in sheet uploaded
+    // ────────────────────────────────────────────────────────
+    await EventModel.create({
+      managerId: this.mgr._id,
+      status: 'completed',
+      publishedAt: daysAgo(11), publishedBy: mgrKey,
+      fulfilledAt: daysAgo(4),
+      visibilityType: 'public',
+      shift_name: `Art Gallery Opening - ${client.name}`,
+      client_name: client.name,
+      date: daysAgo(4),
+      start_time: '18:00', end_time: '23:00',
+      venue_name: this.venues[2]!.name, venue_address: this.venues[2]!.address,
+      venue_latitude: this.venues[2]!.lat, venue_longitude: this.venues[2]!.lng,
+      city: 'Denver', state: 'CO', country: 'USA',
+      contact_name: 'Elena Rivera', contact_phone: '+15551234567',
+      headcount_total: 3,
+      roles: [{ role: 'Server', count: 2 }, { role: 'Host', count: 1 }],
+      accepted_staff: (() => {
+        // Sheet-submitted attendance: needs clockInAt (required) + sheet times as Dates
+        const sheetDate = daysAgo(4);
+        const sheetIn = new Date(sheetDate); sheetIn.setHours(18, 0, 0);
+        const sheetOut = new Date(sheetDate); sheetOut.setHours(23, 0, 0);
+        const sheetAttendance = {
+          clockInAt: sheetIn, clockOutAt: sheetOut,
+          sheetSignInTime: sheetIn, sheetSignOutTime: sheetOut,
+          estimatedHours: 5, approvedHours: 5,
+          status: 'sheet_submitted',
+        };
+        return [
+          this.staffEntry(juan, 'Server', [sheetAttendance]),
+          this.staffEntry(cw[0]!, 'Server', [sheetAttendance]),
+          this.staffEntry(cw[1]!, 'Host', [sheetAttendance]),
+        ];
+      })(),
+      declined_staff: [], role_stats: [],
+      audience_team_ids: [this.team._id],
+      hoursStatus: 'sheet_submitted',
+      chatEnabled: true,
+      pay_rate_info: '$25/hr', version: 0,
+    });
+    console.log('   + Art Gallery Opening (SHEET SUBMITTED — needs approval)');
 
-      // A few other staff members already accepted on some events
-      if (rand() > 0.4) {
-        const numOthers = randomInt(1, 3);
-        const shuffled = [...otherStaff].sort(() => rand() - 0.5);
-        for (const s of shuffled.slice(0, numOthers)) {
-          const otherRole = randomPick(rolesArr).role;
-          accepted_staff.push({
-            userKey: `${s.provider}:${s.subject}`,
-            provider: s.provider, subject: s.subject,
-            email: s.email, name: s.name,
-            first_name: s.first_name, last_name: s.last_name,
-            role: otherRole, response: 'accepted',
-            respondedAt: new Date(today.getTime() - randomInt(0, 3) * 86400000),
-            attendance: [],
-          });
-        }
-      }
+    // ────────────────────────────────────────────────────────
+    // Event D: Partial approval — 5 days ago
+    // Juan + Sofia approved, James + Olivia still clocked
+    // ────────────────────────────────────────────────────────
+    await EventModel.create({
+      managerId: this.mgr._id,
+      status: 'completed',
+      publishedAt: daysAgo(12), publishedBy: mgrKey,
+      fulfilledAt: daysAgo(5),
+      visibilityType: 'public',
+      shift_name: `Awards Dinner - ${client.name}`,
+      client_name: client.name,
+      date: daysAgo(5),
+      start_time: '16:00', end_time: '23:00',
+      venue_name: this.venues[0]!.name, venue_address: this.venues[0]!.address,
+      venue_latitude: this.venues[0]!.lat, venue_longitude: this.venues[0]!.lng,
+      city: 'Denver', state: 'CO', country: 'USA',
+      contact_name: 'Elena Rivera', contact_phone: '+15551234567',
+      headcount_total: 4,
+      roles: [{ role: 'Server', count: 2 }, { role: 'Bartender', count: 1 }, { role: 'Host', count: 1 }],
+      accepted_staff: [
+        // Juan — APPROVED (7h)
+        this.staffEntry(juan, 'Server', [
+          this.clockSession(daysAgo(5), 16, 23, 'approved', { approvedHours: 7 }),
+        ]),
+        // Sofia — APPROVED (7h)
+        this.staffEntry(cw[0]!, 'Bartender', [
+          this.clockSession(daysAgo(5), 16, 23, 'approved', { approvedHours: 7 }),
+        ]),
+        // James — still CLOCKED (needs approval)
+        this.staffEntry(cw[1]!, 'Server', [
+          this.clockSession(daysAgo(5), 16, 23, 'clocked'),
+        ]),
+        // Olivia — still CLOCKED (needs approval)
+        this.staffEntry(cw[2]!, 'Host', [
+          this.clockSession(daysAgo(5), 16, 23, 'clocked'),
+        ]),
+      ],
+      declined_staff: [], role_stats: [],
+      audience_team_ids: [this.team._id],
+      hoursStatus: 'sheet_submitted', // partially approved
+      hoursApprovedBy: mgrKey,
+      chatEnabled: true,
+      pay_rate_info: '$25/hr', version: 0,
+    });
+    console.log('   + Awards Dinner (PARTIAL — 2/4 approved, 2 clocked)');
 
-      const role_stats = rolesArr.map(r => {
-        const taken = accepted_staff.filter((s: any) => s.role === r.role).length;
-        return { role: r.role, capacity: r.count, taken, remaining: Math.max(0, r.count - taken), is_full: taken >= r.count };
-      });
+    // ────────────────────────────────────────────────────────
+    // Event E: Disputed hours — 6 days ago
+    // Juan says 5h but clock shows 4h
+    // ────────────────────────────────────────────────────────
+    await EventModel.create({
+      managerId: this.mgr._id,
+      status: 'completed',
+      publishedAt: daysAgo(13), publishedBy: mgrKey,
+      fulfilledAt: daysAgo(6),
+      visibilityType: 'public',
+      shift_name: `VIP Reception - ${client.name}`,
+      client_name: client.name,
+      date: daysAgo(6),
+      start_time: '19:00', end_time: '23:00',
+      venue_name: this.venues[1]!.name, venue_address: this.venues[1]!.address,
+      venue_latitude: this.venues[1]!.lat, venue_longitude: this.venues[1]!.lng,
+      city: 'Denver', state: 'CO', country: 'USA',
+      contact_name: 'Elena Rivera', contact_phone: '+15551234567',
+      headcount_total: 2,
+      roles: [{ role: 'Bartender', count: 1 }, { role: 'Server', count: 1 }],
+      accepted_staff: [
+        this.staffEntry(juan, 'Bartender', [
+          this.clockSession(daysAgo(6), 19, 23, 'disputed', {
+            managerNotes: 'Staff claims 5h but clock shows 4h — needs discussion',
+          }),
+        ]),
+        this.staffEntry(cw[0]!, 'Server', [
+          this.clockSession(daysAgo(6), 19, 23, 'disputed'),
+        ]),
+      ],
+      declined_staff: [], role_stats: [],
+      audience_team_ids: [this.team._id],
+      hoursStatus: 'pending',
+      chatEnabled: true,
+      pay_rate_info: '$30/hr', version: 0,
+    });
+    console.log('   + VIP Reception (DISPUTED — needs resolution)');
+    console.log('');
+  }
 
-      const rate = Math.round(marcusRoleDef.baseRate * CLIENT_DEFS[clientIdx]!.multiplier);
+  // ── 3 Future Published Events ───────────────────────────
+  private async seedFutureEvents() {
+    console.log('   CREATING 3 FUTURE EVENTS...');
+    const mgrKey = `${this.mgr.provider}:${this.mgr.subject}`;
+    const juan = this.juan;
 
-      events.push({
+    const futureEvents = [
+      { name: 'Spring Fundraiser Gala', days: 3, startH: 17, endH: 23, role: 'Bartender', client: 0, venue: 0 },
+      { name: 'Corporate Team Building', days: 7, startH: 9, endH: 16, role: 'Server', client: 1, venue: 1 },
+      { name: 'Summer Rooftop Social', days: 14, startH: 18, endH: 23, role: 'Host', client: 1, venue: 2 },
+    ];
+
+    for (const ev of futureEvents) {
+      const evDate = daysAhead(ev.days);
+      const client = this.clients[ev.client]!;
+      const venue = this.venues[ev.venue]!;
+
+      await EventModel.create({
         managerId: this.mgr._id,
         status: 'published',
-        publishedAt: new Date(today.getTime() - randomInt(1, 10) * 86400000),
-        publishedBy: mgrKey,
+        publishedAt: daysAgo(1), publishedBy: mgrKey,
         visibilityType: 'public',
-        shift_name: `${eventName} - ${client.name}`,
+        shift_name: `${ev.name} - ${client.name}`,
         client_name: client.name,
-        date: eventDate,
-        start_time: `${String(startHour).padStart(2, '0')}:00`,
-        end_time: `${String(endHour).padStart(2, '0')}:00`,
+        date: evDate,
+        start_time: `${String(ev.startH).padStart(2, '0')}:00`,
+        end_time: `${String(ev.endH).padStart(2, '0')}:00`,
         venue_name: venue.name, venue_address: venue.address,
-        venue_latitude: venue.latitude, venue_longitude: venue.longitude,
+        venue_latitude: venue.latitude, venue_longitude: venue.lng,
         city: venue.city, state: venue.state, country: 'USA',
-        contact_name: 'Elena Rivera',
-        contact_phone: '+15551234567',
-        contact_email: `events@${client.name.toLowerCase().replace(/\s+/g, '')}.com`,
-        uniform,
-        notes: `${eventName} hosted by ${client.name} at ${venue.name}. All team members welcome.`,
-        headcount_total: headcount, roles: rolesArr,
-        accepted_staff, declined_staff: [], role_stats,
+        contact_name: 'Elena Rivera', contact_phone: '+15551234567',
+        headcount_total: 4,
+        roles: [{ role: ev.role, count: 3 }, { role: 'Server', count: 1 }],
+        accepted_staff: [
+          this.staffEntry(juan, ev.role, []),
+        ],
+        declined_staff: [], role_stats: [],
         audience_team_ids: [this.team._id],
         hoursStatus: 'pending',
         chatEnabled: true,
-        chatEnabledAt: new Date(today.getTime() - randomInt(0, 5) * 86400000),
-        pay_rate_info: `$${rate}/hr`,
+        pay_rate_info: `$${ROLE_DEFS.find(r => r.name === ev.role)!.baseRate}/hr`,
         version: 0,
       });
-    }
-
-    // Insert in batches of 50
-    for (let i = 0; i < events.length; i += 50) {
-      const batch = events.slice(i, i + 50);
-      await EventModel.insertMany(batch);
-    }
-
-    console.log(`   + ${completedCount} completed events (past, with approved hours)`);
-    console.log(`   + ${futureAcceptedCount} published events (future, Marcus accepted)`);
-    console.log(`   + ${futureOpenCount} published events (future, open/pending)`);
-    console.log(`   = ${events.length} total staff-focused events\n`);
-  }
-
-  // ── 3 Chat Conversations ────────────────────────────────
-  private async seedChat() {
-    console.log('   CREATING 3 CHAT CONVERSATIONS...');
-    const chatStaff = this.staff.slice(0, 3);
-
-    const mgrMessages = [
-      'Hi! Great work at the gala last week. Are you available for the cocktail party this Friday?',
-      'Just a reminder — the dress code for the upcoming wedding is white shirt and black vest.',
-      'Thanks for confirming! Looking forward to working with you again.',
-    ];
-    const staffMessages = [
-      'Thank you! Yes, I\'m available Friday evening. What time should I arrive?',
-      'Got it, I\'ll make sure to have the right attire ready. Thanks!',
-      'Sounds great, see you there!',
-    ];
-
-    for (let i = 0; i < chatStaff.length; i++) {
-      const s = chatStaff[i];
-      const uk = `${s.provider}:${s.subject}`;
-
-      // Stagger message times so they sort correctly (manager first, staff reply 5 min later)
-      const baseTime = daysAgo(i);
-      baseTime.setHours(14, 0, 0, 0); // 2:00 PM
-      const replyTime = new Date(baseTime.getTime() + 5 * 60 * 1000); // 2:05 PM
-
-      const conv = await ConversationModel.create({
-        managerId: this.mgr._id,
-        userKey: uk,
-        lastMessageAt: replyTime,
-        lastMessagePreview: staffMessages[i]!.slice(0, 200),
-        unreadCountManager: i === 0 ? 1 : 0,
-        unreadCountUser: 0,
-      });
-
-      const msgs = [
-        {
-          conversationId: conv._id, managerId: this.mgr._id, userKey: uk,
-          senderType: 'manager', senderName: MANAGER_DEF.name,
-          message: mgrMessages[i]!, messageType: 'text',
-          readByManager: true, readByUser: true,
-          createdAt: baseTime,
-        },
-        {
-          conversationId: conv._id, managerId: this.mgr._id, userKey: uk,
-          senderType: 'user', senderName: s.name,
-          message: staffMessages[i]!, messageType: 'text',
-          readByManager: i !== 0, readByUser: true,
-          createdAt: replyTime,
-        },
-      ];
-      await ChatMessageModel.insertMany(msgs);
-      console.log(`   + Conversation with ${s.name} (${msgs.length} messages)`);
+      console.log(`   + ${ev.name} (${ev.days} days from now)`);
     }
     console.log('');
   }
@@ -980,8 +784,19 @@ class DemoSeed {
     );
     this.tokens.push({ role: 'MANAGER', name: d.name, email: d.email, token: mgrToken });
 
-    // Staff tokens (all 10)
-    for (const s of this.staff) {
+    // Juan staff token
+    const juanToken = jwt.sign(
+      {
+        sub: STAFF_DEF.email, provider: 'email',
+        email: STAFF_DEF.email, name: STAFF_DEF.name,
+      },
+      ENV.jwtSecret,
+      { algorithm: 'HS256', expiresIn: '30d' },
+    );
+    this.tokens.push({ role: 'STAFF', name: STAFF_DEF.name, email: STAFF_DEF.email, token: juanToken });
+
+    // Co-worker tokens
+    for (const s of this.coworkers) {
       const token = jwt.sign(
         { sub: s.subject, provider: s.provider, email: s.email, name: s.name },
         ENV.jwtSecret,
@@ -995,25 +810,54 @@ class DemoSeed {
   private report() {
     console.log('\n');
     console.log('='.repeat(65));
-    console.log('        DEMO SEED COMPLETE - APPLE REVIEW DATASET');
+    console.log('     DEMO SEED COMPLETE — APPROVAL WORKFLOW TESTING');
     console.log('='.repeat(65));
     console.log('');
     console.log('DATA CREATED:');
-    console.log('   Manager:            1 (Elena Rivera)');
-    console.log('   Staff Users:        10');
-    console.log('   Team:               1 (Rivera Events Team)');
-    console.log('   Team Members:       10');
-    console.log('   Clients:            4 (Grand Hyatt, Stellar, Rocky Mountain, Mile High)');
-    console.log('   Roles:              5 (Server, Bartender, Host, Chef, Event Coordinator)');
-    console.log('   Venues:             10 (Denver metro area)');
-    console.log(`   Tariffs:            ${this.clients.length * this.roles.length}`);
-    console.log('   Staff Groups:       2 (Top Performers, Reliable Staff)');
-    console.log('   Staff Profiles:     10 (4 rated 5-star, 3 rated 4-star, 3 rated 3-star)');
-    console.log('   Manager Events:     6 (3 past + 2 published + 1 draft)');
-    console.log('   Staff Events:       ~260 (Apr 2025 → Apr 2026 for Marcus Johnson)');
-    console.log('   Total Events:       ~266');
-    console.log('   Chat Conversations: 3 (with message history)');
+    console.log('   Manager:         1 (Elena Rivera — demo@flowshift.work)');
+    console.log(`   Staff Users:     ${1 + this.coworkers.length} (Juan Suarez + ${this.coworkers.length} co-workers)`);
+    console.log('   Team:            1 (Rivera Events Team)');
+    console.log(`   Clients:         ${this.clients.length}`);
+    console.log(`   Roles:           ${this.roles.length} (${ROLE_DEFS.map(r => r.name).join(', ')})`);
+    console.log(`   Venues:          ${this.venues.length}`);
+    console.log(`   Tariffs:         ${this.clients.length * this.roles.length}`);
     console.log('');
+    console.log('EVENTS:');
+    console.log('   8 completed + approved (earnings history)');
+    console.log('   5 needing approval:');
+    console.log('     - 2× clocked out, unapproved (CLOCKED)');
+    console.log('     - 1× sign-in sheet uploaded (SHEET_SUBMITTED)');
+    console.log('     - 1× partially approved (2/4 approved)');
+    console.log('     - 1× disputed hours');
+    console.log('   3 future published (Juan accepted)');
+    console.log('');
+
+    console.log('-'.repeat(65));
+    console.log('APPROVAL TESTING GUIDE:');
+    console.log('-'.repeat(65));
+    console.log('');
+    console.log('1. LOG IN AS MANAGER (demo@flowshift.work / FlowShift2024!)');
+    console.log('2. Go to Payroll Export → select current month');
+    console.log('   → Should see WARNING: "X staff across Y events have');
+    console.log('     unapproved hours" (the 5 workflow events)');
+    console.log('   → Only the 8 approved events should count toward earnings');
+    console.log('3. Open an event with CLOCKED status → Approve hours');
+    console.log('   → Refresh payroll → warning count decreases');
+    console.log('4. Try Bulk Approve on partial event → should only approve');
+    console.log('   eligible staff, not stamp all');
+    console.log('5. Try individual approve with negative hours → should get 400');
+    console.log('');
+
+    console.log('-'.repeat(65));
+    console.log('STAFF AI TEST:');
+    console.log('-'.repeat(65));
+    console.log('');
+    console.log('1. LOG IN AS STAFF (juansegz07s@gmail.com via Google)');
+    console.log('2. Ask AI: "How much did I earn this month?"');
+    console.log('   → Should only count the approved events (NOT clocked/disputed)');
+    console.log('   → Should match the Earnings page exactly');
+    console.log('');
+
     console.log('-'.repeat(65));
     console.log('JWT TOKENS (Authorization: Bearer <token>):');
     console.log('-'.repeat(65));
@@ -1022,35 +866,13 @@ class DemoSeed {
       console.log(`   ${t.token}`);
     }
     console.log('');
+
     console.log('-'.repeat(65));
-    console.log('DEMO LOGIN CREDENTIALS:');
+    console.log('LOGIN CREDENTIALS:');
     console.log('-'.repeat(65));
     console.log('');
     console.log(`   Manager:  ${MANAGER_DEF.email} / ${MANAGER_DEF.password}`);
-    console.log(`   Staff:    ${DEMO_STAFF_DEF.email} / ${DEMO_STAFF_DEF.password}`);
-    console.log('');
-    console.log('-'.repeat(65));
-    console.log('APPLE REVIEW TESTING GUIDE:');
-    console.log('-'.repeat(65));
-    console.log('');
-    console.log('1. MANAGER FLOW:');
-    console.log('   - Login as Elena Rivera (manager token above)');
-    console.log('   - View completed events with earnings data');
-    console.log('   - View published events awaiting staff');
-    console.log('   - Edit/publish the draft Award Ceremony');
-    console.log('   - Chat with staff members');
-    console.log('');
-    console.log('2. STAFF FLOW (Marcus Johnson — staff@flowshift.work):');
-    console.log('   - ~210 completed events with approved hours (Apr 2025 → Feb 2026)');
-    console.log('   - ~30 upcoming accepted events (Feb → Apr 2026)');
-    console.log('   - ~20 open events available to accept');
-    console.log('   - Rich earnings history across 5 roles, 4 clients, 10 Denver venues');
-    console.log('');
-    console.log('3. EARNINGS DATA:');
-    console.log('   - ~210 completed events × avg 8.5 hrs × avg $32/hr ≈ $57,000+');
-    console.log('   - Monthly breakdown spanning 13 months');
-    console.log('   - Role distribution: Server, Bartender, Host, Chef, Event Coordinator');
-    console.log('   - 4 clients with different pay rate multipliers');
+    console.log(`   Staff:    ${STAFF_DEF.email} (Google Sign-In — auto-links by email)`);
     console.log('');
     console.log('='.repeat(65));
   }
