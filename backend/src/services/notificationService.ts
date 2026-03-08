@@ -191,7 +191,9 @@ class NotificationService {
   }
 
   /**
-   * Send notification to multiple users
+   * Send notification to multiple users in a single batch.
+   * Uses one DB query, one insertMany, and one OneSignal API call
+   * instead of N individual calls.
    */
   async sendToMultipleUsers(
     userIds: string[],
@@ -201,10 +203,120 @@ class NotificationService {
     userType: 'user' | 'manager' = 'user',
     accentColor?: string
   ): Promise<NotificationDocument[]> {
-    const results = await Promise.all(
-      userIds.map(userId => this.sendToUser(userId, title, body, data, userType, accentColor))
-    );
-    return results.filter(r => r !== null) as NotificationDocument[];
+    if (userIds.length === 0) return [];
+
+    // For very small batches, the overhead of batching isn't worth it
+    if (userIds.length <= 2) {
+      const results = await Promise.all(
+        userIds.map(userId => this.sendToUser(userId, title, body, data, userType, accentColor))
+      );
+      return results.filter(r => r !== null) as NotificationDocument[];
+    }
+
+    try {
+      // 1. Batch-fetch all users to check preferences and devices
+      const Model = userType === 'manager' ? ManagerModel : UserModel;
+      const users = await Model.find(
+        { _id: { $in: userIds.map(id => new mongoose.Types.ObjectId(id)) } },
+        { _id: 1, devices: 1, notificationPreferences: 1 }
+      ).lean();
+
+      // 2. Filter: must have devices and notification preferences allow this type
+      const eligible = users.filter((u: any) =>
+        this.shouldSendNotification(u as any, data.type) &&
+        u.devices && u.devices.length > 0
+      );
+
+      if (eligible.length === 0) {
+        console.log(`[Notification] No eligible recipients out of ${userIds.length} ${userType}s`);
+        return [];
+      }
+
+      // 3. Batch-insert notification records
+      const notifDocs = await NotificationModel.insertMany(
+        eligible.map((u: any) => ({
+          userId: u._id,
+          userType,
+          type: data.type,
+          title,
+          body,
+          data,
+          status: 'pending',
+        }))
+      );
+
+      // 4. Send to OneSignal in chunks (max 2000 aliases per call)
+      const eligibleIds = eligible.map((u: any) => u._id.toString());
+      const apiKey = userType === 'manager' ? ONESIGNAL_REST_API_KEY_MANAGER : ONESIGNAL_REST_API_KEY_STAFF;
+      const appId = userType === 'manager' ? ONESIGNAL_APP_ID_MANAGER : ONESIGNAL_APP_ID_STAFF;
+
+      const CHUNK_SIZE = 500;
+      for (let i = 0; i < eligibleIds.length; i += CHUNK_SIZE) {
+        const chunk = eligibleIds.slice(i, i + CHUNK_SIZE);
+
+        const payload: any = {
+          app_id: appId,
+          include_aliases: { external_id: chunk },
+          target_channel: 'push',
+          contents: { en: body },
+          headings: { en: title },
+          data,
+          ios_sound: 'notification.wav',
+          android_sound: 'notification',
+          ios_badgeType: 'Increase',
+          ios_badgeCount: 1,
+        };
+        if (accentColor) payload.android_accent_color = accentColor;
+
+        try {
+          const response = await fetch('https://onesignal.com/api/v1/notifications', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Basic ${apiKey}`,
+            },
+            body: JSON.stringify(payload),
+          });
+          const responseData = await response.json();
+
+          if (!response.ok) {
+            console.error(`[Notification] OneSignal batch error: ${response.status}`, responseData);
+          } else {
+            console.log(`[Notification] Batch sent to ${chunk.length} ${userType}s: ${responseData.id}`);
+          }
+
+          // Batch-update notification records
+          const chunkUserIdSet = new Set(chunk);
+          const chunkNotifIds = notifDocs
+            .filter((n: any) => chunkUserIdSet.has(n.userId.toString()))
+            .map((n: any) => n._id);
+
+          await NotificationModel.updateMany(
+            { _id: { $in: chunkNotifIds } },
+            {
+              $set: {
+                status: response.ok ? 'sent' : 'failed',
+                sentAt: new Date(),
+                ...(responseData.id ? { oneSignalNotificationId: responseData.id } : {}),
+                ...(!response.ok ? { error: JSON.stringify(responseData) } : {}),
+              },
+            }
+          );
+        } catch (err) {
+          console.error(`[Notification] Batch send failed for ${chunk.length} ${userType}s:`, err);
+        }
+      }
+
+      return notifDocs;
+
+    } catch (error) {
+      console.error('[Notification] sendToMultipleUsers batch error:', error);
+      // Fallback to individual sends if batch fails
+      const results = await Promise.all(
+        userIds.map(userId => this.sendToUser(userId, title, body, data, userType, accentColor))
+      );
+      return results.filter(r => r !== null) as NotificationDocument[];
+    }
   }
 
   /**
