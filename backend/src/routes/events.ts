@@ -3234,8 +3234,13 @@ router.get('/positions', requireAuth, async (req, res) => {
   try {
     const manager = await resolveManagerForRequest(req as any);
     const managerId = manager._id as mongoose.Types.ObjectId;
-    const events = await EventModel.find({ managerId })
-      .sort({ createdAt: -1 })
+    const events = await EventModel.find({
+      managerId,
+      status: { $in: ['draft', 'published', 'confirmed', 'fulfilled', 'in_progress'] },
+    })
+      .sort({ date: -1 })
+      .limit(200)
+      .select('_id event_name date venue_name roles accepted_staff')
       .lean();
     const positions = (events || []).flatMap((ev: any) => {
       const accepted = ev.accepted_staff || [];
@@ -3463,14 +3468,24 @@ router.post('/events/:id/respond', requireAuth, requireActiveSubscription, event
 
       // Broadcast real-time update to all connected clients viewing this event
       try {
+        // Send lightweight payload — clients only need counts + the staff who responded,
+        // not the full 200-member accepted_staff array.
         const eventUpdate = {
           eventId,
           userId: userKey,
           response: responseVal,
           role: roleVal,
-          acceptedStaff: mapped.accepted_staff || [],
-          declinedStaff: mapped.declined_staff || [],
+          acceptedCount: (mapped.accepted_staff || []).length,
+          declinedCount: (mapped.declined_staff || []).length,
           roleStats: mapped.role_stats || [],
+          respondedStaff: {
+            userKey,
+            name: mapped.accepted_staff?.find((s: any) => s.userKey === userKey)?.name
+              || mapped.declined_staff?.find((s: any) => s.userKey === userKey)?.name
+              || '',
+            response: responseVal,
+            role: roleVal,
+          },
           timestamp: new Date().toISOString(),
         };
 
@@ -4851,10 +4866,13 @@ router.get('/events/debug/my-past-events', requireAuth, async (req, res) => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    // Find all events where user is in accepted_staff
+    // Find recent events where user is in accepted_staff
     const allUserEvents = await EventModel.find({
       'accepted_staff.userKey': userKey
-    }).lean();
+    })
+      .sort({ date: -1 })
+      .limit(200)
+      .lean();
 
     console.log(`[DEBUG] User: ${userKey}`);
     console.log(`[DEBUG] Total user events: ${allUserEvents.length}`);

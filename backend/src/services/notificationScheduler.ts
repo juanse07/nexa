@@ -116,6 +116,15 @@ class NotificationScheduler {
       // Enrich with staff data from EventStaff collection
       await enrichEventsWithStaff(upcomingEvents);
 
+      // Batch-resolve all staff userKeys → user IDs in one query
+      const allUserKeys = new Set<string>();
+      for (const event of upcomingEvents) {
+        for (const staff of event.accepted_staff || []) {
+          if (staff.userKey) allUserKeys.add(staff.userKey as string);
+        }
+      }
+      const userIdMap = await this.batchResolveUserIds(Array.from(allUserKeys));
+
       for (const event of upcomingEvents) {
         const acceptedStaff = event.accepted_staff || [];
 
@@ -123,8 +132,7 @@ class NotificationScheduler {
           const userKey = staff.userKey as string;
           if (!userKey) continue;
 
-          // Extract user ID from userKey (format: "provider:sub")
-          const userId = await this.getUserIdFromKey(userKey);
+          const userId = userIdMap.get(userKey);
           if (!userId) continue;
 
           // Calculate time until shift
@@ -225,11 +233,15 @@ class NotificationScheduler {
             clockOutAt: null,
           }).lean();
 
+          // Batch-resolve userKeys for this event's active sessions
+          const sessionKeys = activeSessions.map(s => s.userKey).filter(Boolean) as string[];
+          const sessionUserIdMap = await this.batchResolveUserIds(sessionKeys);
+
           for (const session of activeSessions) {
             const userKey = session.userKey;
             if (!userKey) continue;
 
-            const userId = await this.getUserIdFromKey(userKey);
+            const userId = sessionUserIdMap.get(userKey);
             if (!userId) continue;
 
             const hoursSinceEnd = Math.round((now.getTime() - endDateTime.getTime()) / (60 * 60 * 1000));
@@ -258,40 +270,45 @@ class NotificationScheduler {
           console.warn('[NotificationScheduler] AttendanceLog query failed, falling back to nested data:', err);
 
           const acceptedStaff = event.accepted_staff || [];
+
+          // Collect userKeys of staff who forgot to clock out, then batch-resolve
+          const forgotKeys: string[] = [];
           for (const staff of acceptedStaff) {
             const userKey = staff.userKey as string;
             if (!userKey) continue;
-
-            // Check if staff clocked in but never clocked out
             const attendance = staff.attendance as any[] || [];
             const lastAttendance = attendance.length > 0 ? attendance[attendance.length - 1] : null;
-
             if (lastAttendance && lastAttendance.clockInAt && !lastAttendance.clockOutAt) {
-              // Staff forgot to clock out!
-              const userId = await this.getUserIdFromKey(userKey);
-              if (!userId) continue;
-
-              const hoursSinceEnd = Math.round((now.getTime() - endDateTime.getTime()) / (60 * 60 * 1000));
-
-              await notificationService.sendToUser(
-                userId,
-                'Clock Out Reminder',
-                `Your shift at ${event.venue_name || 'venue'} ended ${hoursSinceEnd}h ago`,
-                {
-                  type: 'event',
-                  eventId: event._id.toString(),
-                  action: 'forgot_clock_out',
-                  eventName: event.event_name || 'Shift',
-                  venueName: event.venue_name || '',
-                  endTime: endDateTime.toISOString(),
-                },
-                'user',
-                'F59E0B'
-              );
-
-              sentNotificationCount++;
-              console.log(`[NotificationScheduler] ✅ Sent forgot-clock-out reminder to ${userId} for event ${event._id}`);
+              forgotKeys.push(userKey);
             }
+          }
+
+          const fallbackUserIdMap = await this.batchResolveUserIds(forgotKeys);
+
+          for (const userKey of forgotKeys) {
+            const userId = fallbackUserIdMap.get(userKey);
+            if (!userId) continue;
+
+            const hoursSinceEnd = Math.round((now.getTime() - endDateTime.getTime()) / (60 * 60 * 1000));
+
+            await notificationService.sendToUser(
+              userId,
+              'Clock Out Reminder',
+              `Your shift at ${event.venue_name || 'venue'} ended ${hoursSinceEnd}h ago`,
+              {
+                type: 'event',
+                eventId: event._id.toString(),
+                action: 'forgot_clock_out',
+                eventName: event.event_name || 'Shift',
+                venueName: event.venue_name || '',
+                endTime: endDateTime.toISOString(),
+              },
+              'user',
+              'F59E0B'
+            );
+
+            sentNotificationCount++;
+            console.log(`[NotificationScheduler] ✅ Sent forgot-clock-out reminder to ${userId} for event ${event._id}`);
           }
         }
 
@@ -518,6 +535,37 @@ class NotificationScheduler {
       console.error('[NotificationScheduler] getUserIdFromKey error:', error);
       return null;
     }
+  }
+
+  /**
+   * Batch-resolve an array of userKeys to a Map<userKey, userId>.
+   * Single DB query instead of N sequential findOne calls.
+   */
+  private async batchResolveUserIds(userKeys: string[]): Promise<Map<string, string>> {
+    const result = new Map<string, string>();
+    if (userKeys.length === 0) return result;
+
+    const orClauses: { provider: string; sub: string }[] = [];
+    for (const uk of userKeys) {
+      const sepIdx = uk.indexOf(':');
+      if (sepIdx < 1) continue;
+      orClauses.push({ provider: uk.substring(0, sepIdx), sub: uk.substring(sepIdx + 1) });
+    }
+
+    if (orClauses.length === 0) return result;
+
+    try {
+      const users = await UserModel.find(
+        { $or: orClauses },
+        { _id: 1, provider: 1, sub: 1 }
+      ).lean();
+      for (const u of users) {
+        result.set(`${(u as any).provider}:${(u as any).sub}`, u._id.toString());
+      }
+    } catch (error) {
+      console.error('[NotificationScheduler] batchResolveUserIds error:', error);
+    }
+    return result;
   }
 
   /**
