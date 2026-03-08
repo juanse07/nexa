@@ -26,6 +26,9 @@ import {
   DEFAULT_GEOFENCE_RADIUS_METERS,
 } from '../utils/geolocation';
 import { FlaggedAttendanceModel, FlagType, FlagSeverity } from '../models/flaggedAttendance';
+import { AttendanceLogModel } from '../models/attendanceLog';
+import { enrichEventWithAttendance, enrichEventsWithAttendance } from '../utils/attendanceHelper';
+import { clockInLimiter, clockOutLimiter, eventRespondLimiter } from '../middleware/redisRateLimiter';
 import {
   sanitizeTeamIds,
   timeToMinutes,
@@ -223,6 +226,14 @@ const eventSchema = z.object({
 
 // computeRoleStats is imported from shared utility
 import { computeRoleStats } from '../utils/eventCapacity';
+import {
+  acceptStaffToEvent,
+  declineStaffFromEvent,
+  removeStaffFromEvent,
+  addInitialStaff,
+  clearEventStaff,
+} from '../utils/eventStaffWriter';
+import { enrichEventWithStaff, enrichEventsWithStaff } from '../utils/eventStaffHelper';
 
 function toObjectId(value: unknown): mongoose.Types.ObjectId | undefined {
   if (!value) return undefined;
@@ -433,6 +444,15 @@ router.post('/events', requireAuth, async (req, res) => {
       status: normalized.status || 'draft',
     });
 
+    // Dual-write: persist initial staff to EventStaff collection
+    if (Array.isArray(normalized.accepted_staff) && normalized.accepted_staff.length > 0) {
+      try {
+        await addInitialStaff(String(created._id), managerId, normalized.accepted_staff);
+      } catch (staffErr) {
+        console.error('[create event] addInitialStaff failed (non-fatal):', staffErr);
+      }
+    }
+
     // Auto-populate manager's cities array from event city
     const eventCity = (created as any).city;
     if (eventCity && typeof eventCity === 'string') {
@@ -539,6 +559,18 @@ router.post('/events/batch', requireAuth, async (req, res) => {
       const createdEvents = await EventModel.insertMany(validatedEvents, { session });
 
       await session.commitTransaction();
+
+      // Dual-write: persist initial staff to EventStaff collection
+      for (const event of createdEvents) {
+        const staffArr = (event as any).accepted_staff || [];
+        if (staffArr.length > 0) {
+          try {
+            await addInitialStaff(String(event._id), managerId, staffArr);
+          } catch (staffErr) {
+            console.error(`[batch create] addInitialStaff failed for event ${event._id} (non-fatal):`, staffErr);
+          }
+        }
+      }
 
       // Convert to response format
       const responseEvents = createdEvents.map(event => {
@@ -1057,6 +1089,9 @@ router.post('/events/:id/unpublish', requireAuth, async (req, res) => {
         targetUserKeys.push(`${staff.provider}:${staff.subject}`);
       }
     }
+
+    // Clear EventStaff collection for this event (source of truth) + dual-write embedded
+    await clearEventStaff(String(event._id));
 
     // Update event back to draft status
     event.status = 'draft';
@@ -1685,7 +1720,7 @@ router.get('/events/attendance-report', requireAuth, async (req, res) => {
       eventFilter._id = new mongoose.Types.ObjectId(eventId);
     }
 
-    // Fetch events with attendance data
+    // Fetch events for staff info (names, roles, pictures)
     const events = await EventModel.find(eventFilter, {
       _id: 1,
       event_name: 1,
@@ -1693,43 +1728,85 @@ router.get('/events/attendance-report', requireAuth, async (req, res) => {
       accepted_staff: 1,
     }).lean();
 
-    // Extract all attendance records with staff info
-    const report: any[] = [];
+    // Build lookup maps for staff info and event info
+    const eventMap = new Map<string, any>();
+    const staffMap = new Map<string, any>(); // key: "eventId:userKey"
     for (const event of events) {
-      const acceptedStaff = (event.accepted_staff || []) as any[];
-      for (const staff of acceptedStaff) {
-        const attendance = (staff.attendance || []) as any[];
-        for (const record of attendance) {
-          if (record.clockInAt) {
-            const clockInAt = new Date(record.clockInAt);
-            const clockOutAt = record.clockOutAt ? new Date(record.clockOutAt) : null;
-            const hoursWorked = clockOutAt
-              ? (clockOutAt.getTime() - clockInAt.getTime()) / (1000 * 60 * 60)
-              : null;
-
-            report.push({
-              eventId: String(event._id),
-              eventName: event.event_name,
-              eventDate: event.date,
-              userKey: staff.userKey,
-              staffName: staff.name || `${staff.first_name || ''} ${staff.last_name || ''}`.trim() || 'Unknown',
-              role: staff.role,
-              picture: staff.picture,
-              email: staff.email,
-              clockInAt: record.clockInAt,
-              clockOutAt: record.clockOutAt,
-              hoursWorked: hoursWorked !== null ? Math.round(hoursWorked * 100) / 100 : null,
-              autoClockOut: record.autoClockOut || false,
-              clockInLocation: record.clockInLocation,
-              clockOutLocation: record.clockOutLocation,
-            });
-          }
+      eventMap.set(String(event._id), event);
+      for (const staff of (event.accepted_staff || []) as any[]) {
+        if (staff.userKey) {
+          staffMap.set(`${String(event._id)}:${staff.userKey}`, staff);
         }
       }
     }
 
-    // Sort by clock-in time (most recent first)
-    report.sort((a, b) => new Date(b.clockInAt).getTime() - new Date(a.clockInAt).getTime());
+    // Query AttendanceLog for attendance records (with fallback to nested data)
+    const eventIds = events.map((e) => e._id);
+    const logs = await AttendanceLogModel.find({ eventId: { $in: eventIds } }).sort({ clockInAt: -1 }).lean();
+
+    const report: any[] = [];
+
+    if (logs.length > 0) {
+      // Use AttendanceLog data
+      for (const log of logs) {
+        const event = eventMap.get(String(log.eventId));
+        const staff = staffMap.get(`${String(log.eventId)}:${log.userKey}`);
+        const clockInAt = new Date(log.clockInAt);
+        const clockOutAt = log.clockOutAt ? new Date(log.clockOutAt) : null;
+        const hoursWorked = clockOutAt
+          ? (clockOutAt.getTime() - clockInAt.getTime()) / (1000 * 60 * 60)
+          : null;
+
+        report.push({
+          eventId: String(log.eventId),
+          eventName: event?.event_name,
+          eventDate: event?.date,
+          userKey: log.userKey,
+          staffName: staff?.name || `${staff?.first_name || ''} ${staff?.last_name || ''}`.trim() || 'Unknown',
+          role: staff?.role,
+          picture: staff?.picture,
+          email: staff?.email,
+          clockInAt: log.clockInAt,
+          clockOutAt: log.clockOutAt,
+          hoursWorked: hoursWorked !== null ? Math.round(hoursWorked * 100) / 100 : null,
+          autoClockOut: log.autoClockOut || false,
+          clockInLocation: log.clockInLocation,
+          clockOutLocation: log.clockOutLocation,
+        });
+      }
+    } else {
+      // Fallback: extract from nested data
+      for (const event of events) {
+        for (const staff of (event.accepted_staff || []) as any[]) {
+          for (const record of (staff.attendance || []) as any[]) {
+            if (record.clockInAt) {
+              const clockInAt = new Date(record.clockInAt);
+              const clockOutAt = record.clockOutAt ? new Date(record.clockOutAt) : null;
+              const hoursWorked = clockOutAt
+                ? (clockOutAt.getTime() - clockInAt.getTime()) / (1000 * 60 * 60)
+                : null;
+              report.push({
+                eventId: String(event._id),
+                eventName: event.event_name,
+                eventDate: event.date,
+                userKey: staff.userKey,
+                staffName: staff.name || `${staff.first_name || ''} ${staff.last_name || ''}`.trim() || 'Unknown',
+                role: staff.role,
+                picture: staff.picture,
+                email: staff.email,
+                clockInAt: record.clockInAt,
+                clockOutAt: record.clockOutAt,
+                hoursWorked: hoursWorked !== null ? Math.round(hoursWorked * 100) / 100 : null,
+                autoClockOut: record.autoClockOut || false,
+                clockInLocation: record.clockInLocation,
+                clockOutLocation: record.clockOutLocation,
+              });
+            }
+          }
+        }
+      }
+      report.sort((a, b) => new Date(b.clockInAt).getTime() - new Date(a.clockInAt).getTime());
+    }
 
     return res.json({ report });
   } catch (err) {
@@ -1756,43 +1833,82 @@ router.get('/events/currently-clocked-in', requireAuth, async (req, res) => {
       return res.status(403).json({ message: 'Manager access required' });
     }
 
-    // Get all events for this manager from the last 48 hours
+    // Query AttendanceLog directly for active sessions (much more efficient)
+    const activeLogs = await AttendanceLogModel.find({
+      managerId: manager._id,
+      clockOutAt: null,
+    }).lean();
+
+    if (activeLogs.length > 0) {
+      // Get event info for the active sessions
+      const eventIds = [...new Set(activeLogs.map((l) => l.eventId))];
+      const events = await EventModel.find(
+        { _id: { $in: eventIds } },
+        { _id: 1, event_name: 1, venue_address: 1, accepted_staff: 1 }
+      ).lean();
+
+      const eventMap = new Map<string, any>();
+      const staffMap = new Map<string, any>();
+      for (const event of events) {
+        eventMap.set(String(event._id), event);
+        for (const s of (event.accepted_staff || []) as any[]) {
+          if (s.userKey) staffMap.set(`${String(event._id)}:${s.userKey}`, s);
+        }
+      }
+
+      const clockedInStaff: any[] = [];
+      for (const log of activeLogs) {
+        const event = eventMap.get(String(log.eventId));
+        const staff = staffMap.get(`${String(log.eventId)}:${log.userKey}`);
+        const clockInTime = new Date(log.clockInAt);
+        const elapsed = Date.now() - clockInTime.getTime();
+        const MAX_SESSION_MS = 16 * 60 * 60 * 1000;
+        const isStale = elapsed > MAX_SESSION_MS;
+
+        clockedInStaff.push({
+          userKey: log.userKey,
+          name: staff?.name || `${staff?.first_name || ''} ${staff?.last_name || ''}`.trim() || 'Unknown',
+          picture: staff?.picture,
+          role: staff?.role,
+          email: staff?.email,
+          eventId: String(log.eventId),
+          eventName: event?.event_name,
+          venueAddress: event?.venue_address,
+          clockInTime: log.clockInAt,
+          elapsedMs: elapsed,
+          elapsedFormatted: formatElapsedTime(elapsed),
+          clockInLocation: log.clockInLocation,
+          stale: isStale,
+        });
+      }
+
+      clockedInStaff.sort(
+        (a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime()
+      );
+      const staleCount = clockedInStaff.filter((s) => s.stale).length;
+      return res.json({ count: clockedInStaff.length, staleCount, staff: clockedInStaff });
+    }
+
+    // Fallback: read from nested data
     const cutoffDate = new Date();
     cutoffDate.setHours(cutoffDate.getHours() - 48);
 
     const events = await EventModel.find(
-      {
-        managerId: manager._id,
-        date: { $gte: cutoffDate },
-      },
-      {
-        _id: 1,
-        event_name: 1,
-        date: 1,
-        accepted_staff: 1,
-        venue_address: 1,
-      }
+      { managerId: manager._id, date: { $gte: cutoffDate } },
+      { _id: 1, event_name: 1, date: 1, accepted_staff: 1, venue_address: 1 }
     ).lean();
 
     const clockedInStaff: any[] = [];
-
     for (const event of events) {
-      const acceptedStaff = (event.accepted_staff || []) as any[];
-
-      for (const staff of acceptedStaff) {
-        const attendance = (staff.attendance || []) as any[];
-
-        // Find active clock-in (has clockInAt but no clockOutAt)
-        const activeSession = attendance.find(
+      for (const staff of (event.accepted_staff || []) as any[]) {
+        const activeSession = ((staff.attendance || []) as any[]).find(
           (a: any) => a.clockInAt && !a.clockOutAt
         );
-
         if (activeSession) {
           const clockInTime = new Date(activeSession.clockInAt);
           const elapsed = Date.now() - clockInTime.getTime();
-          const MAX_SESSION_MS = 16 * 60 * 60 * 1000; // 16 hours
+          const MAX_SESSION_MS = 16 * 60 * 60 * 1000;
           const isStale = elapsed > MAX_SESSION_MS;
-
           clockedInStaff.push({
             userKey: staff.userKey,
             name: staff.name || `${staff.first_name || ''} ${staff.last_name || ''}`.trim() || 'Unknown',
@@ -1812,18 +1928,11 @@ router.get('/events/currently-clocked-in', requireAuth, async (req, res) => {
       }
     }
 
-    // Sort by clock-in time (most recent first)
     clockedInStaff.sort(
       (a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime()
     );
-
     const staleCount = clockedInStaff.filter((s) => s.stale).length;
-
-    return res.json({
-      count: clockedInStaff.length,
-      staleCount,
-      staff: clockedInStaff,
-    });
+    return res.json({ count: clockedInStaff.length, staleCount, staff: clockedInStaff });
   } catch (err) {
     console.error('[currently-clocked-in] GET failed:', err);
     return res.status(500).json({ message: 'Failed to fetch currently clocked-in staff' });
@@ -1860,20 +1969,27 @@ router.get('/events/attendance-analytics', requireAuth, async (req, res) => {
       }
     ).lean();
 
-    // Separate query for currentlyWorking: use 48-hour window (matches currently-clocked-in endpoint)
-    const cutoff48h = new Date();
-    cutoff48h.setHours(cutoff48h.getHours() - 48);
-    const recentEvents = await EventModel.find(
-      { managerId: manager._id, date: { $gte: cutoff48h } },
-      { 'accepted_staff.userKey': 1, 'accepted_staff.attendance': 1, 'accepted_staff.response': 1 }
-    ).lean();
-
+    // Count currently working staff — efficient query on AttendanceLog
     let currentlyWorking = 0;
-    for (const ev of recentEvents) {
-      for (const s of (ev.accepted_staff || []) as any[]) {
-        if (s.response !== 'accepted' && s.response !== 'accept') continue;
-        for (const a of (s.attendance || []) as any[]) {
-          if (a.clockInAt && !a.clockOutAt) currentlyWorking++;
+    try {
+      currentlyWorking = await AttendanceLogModel.countDocuments({
+        managerId: manager._id,
+        clockOutAt: null,
+      });
+    } catch {
+      // Fallback: count from nested data
+      const cutoff48h = new Date();
+      cutoff48h.setHours(cutoff48h.getHours() - 48);
+      const recentEvents = await EventModel.find(
+        { managerId: manager._id, date: { $gte: cutoff48h } },
+        { 'accepted_staff.userKey': 1, 'accepted_staff.attendance': 1, 'accepted_staff.response': 1 }
+      ).lean();
+      for (const ev of recentEvents) {
+        for (const s of (ev.accepted_staff || []) as any[]) {
+          if (s.response !== 'accepted' && s.response !== 'accept') continue;
+          for (const a of (s.attendance || []) as any[]) {
+            if (a.clockInAt && !a.clockOutAt) currentlyWorking++;
+          }
         }
       }
     }
@@ -2114,7 +2230,12 @@ router.get('/events/my-shifts', requireAuth, async (req, res) => {
       }
     }
 
-    const events = await EventModel.find(filter).sort({ date: -1 }).lean();
+    let events = await EventModel.find(filter).sort({ date: -1 }).lean();
+
+    // Enrich with staff data from EventStaff collection (must be before attendance enrichment)
+    events = await enrichEventsWithStaff(events);
+    // Enrich with attendance data from AttendanceLog
+    events = await enrichEventsWithAttendance(events);
 
     // Enrich with tariff data
     const enrichedEvents = await enrichEventsWithTariffs(events);
@@ -2440,6 +2561,10 @@ router.get('/events/expired', requireAuth, async (req, res) => {
     const totalCount = result[0]?.totalCount[0]?.count ?? 0;
     const events = result[0]?.events ?? [];
 
+    // Enrich expired events with staff + attendance data
+    await enrichEventsWithStaff(events);
+    await enrichEventsWithAttendance(events);
+
     return res.json({
       events,
       totalCount,
@@ -2521,7 +2646,12 @@ router.get('/events/completed', requireAuth, async (req, res) => {
     ]);
 
     const totalCount = result[0]?.totalCount[0]?.count ?? 0;
-    const events = (result[0]?.events ?? []).map((e: any) => {
+    // Enrich completed events with staff + attendance data
+    const rawEvents = result[0]?.events ?? [];
+    await enrichEventsWithStaff(rawEvents);
+    await enrichEventsWithAttendance(rawEvents);
+
+    const events = rawEvents.map((e: any) => {
       // Compute approvalCategory (mirrors main GET /events logic)
       const acceptedStaff = e.accepted_staff || [];
       let clockedOutCount = 0;
@@ -2689,7 +2819,7 @@ router.get('/events/:id', requireAuth, async (req, res) => {
       return res.status(403).json({ message: 'Unauthorized: Manager access required' });
     }
 
-    const event = await EventModel.findOne({
+    let event = await EventModel.findOne({
       _id: eventId,
       managerId: manager._id,
     }).lean();
@@ -2697,6 +2827,10 @@ router.get('/events/:id', requireAuth, async (req, res) => {
     if (!event) {
       return res.status(404).json({ message: 'Event not found' });
     }
+
+    // Enrich with staff + attendance data
+    event = await enrichEventWithStaff(event);
+    event = await enrichEventWithAttendance(event);
 
     // Return with string IDs
     const teamIds = Array.isArray(event.audience_team_ids)
@@ -3154,35 +3288,14 @@ router.delete('/events/:id/staff/:userKey', requireAuth, async (req, res) => {
     const event = await EventModel.findById(eventId).lean();
     if (!event) return res.status(404).json({ message: 'Event not found' });
 
-    // Remove the staff member from accepted_staff array
-    const result = await EventModel.updateOne(
-      { _id: new mongoose.Types.ObjectId(eventId), managerId },
-      {
-        $pull: { accepted_staff: { userKey } } as any,
-        $set: { updatedAt: new Date() }
-      }
-    );
-
-    if (result.matchedCount === 0) {
-      return res.status(404).json({ message: 'Event not found' });
-    }
-
-    // Recompute and persist role_stats
-    const updatedEvent = await EventModel.findOne({
-      _id: new mongoose.Types.ObjectId(eventId),
-      managerId,
-    }).lean();
-    if (!updatedEvent) return res.status(404).json({ message: 'Event not found' });
-    const role_stats = computeRoleStats((updatedEvent.roles as any[]) || [], (updatedEvent.accepted_staff as any[]) || []);
-    await EventModel.updateOne(
-      { _id: new mongoose.Types.ObjectId(eventId), managerId },
-      { $set: { role_stats, updatedAt: new Date() } }
-    );
+    // Remove from EventStaff collection (source of truth) + dual-write embedded
+    await removeStaffFromEvent(eventId, managerId, userKey);
 
     const finalDoc = await EventModel.findOne({
       _id: new mongoose.Types.ObjectId(eventId),
       managerId,
     }).lean();
+    if (!finalDoc) return res.status(404).json({ message: 'Event not found' });
     return res.json(finalDoc);
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -3191,7 +3304,7 @@ router.delete('/events/:id/staff/:userKey', requireAuth, async (req, res) => {
   }
 });
 
-router.post('/events/:id/respond', requireAuth, requireActiveSubscription, async (req, res) => {
+router.post('/events/:id/respond', requireAuth, requireActiveSubscription, eventRespondLimiter, async (req, res) => {
   try {
     const eventId = req.params.id ?? '';
     const responseVal = (req.body?.response ?? '') as string;
@@ -3242,39 +3355,25 @@ router.post('/events/:id/respond', requireAuth, requireActiveSubscription, async
       respondedAt: new Date(),
     };
 
-    // Atomic operations (no transaction wrapper needed)
     let updatedEvent: any = null;
 
     try {
       if (responseVal === 'decline') {
-        // DECLINE: Simple atomic operation (no capacity check needed)
-        updatedEvent = await EventModel.findOneAndUpdate(
-          { _id: new mongoose.Types.ObjectId(eventId) },
-          {
-            // Remove from accepted_staff (in case user previously accepted)
-            $pull: {
-              accepted_staff: { userKey }
-            } as any,
-            // Add to declined_staff
-            $push: { declined_staff: staffDoc } as any,
-            $inc: { version: 1 },
-            $set: { updatedAt: new Date() }
-          },
-          { new: true }
-        );
+        // DECLINE: Write to EventStaff collection (source of truth) + dual-write embedded
+        const event = await EventModel.findById(eventId).lean();
+        if (!event) throw new Error('EVENT_NOT_FOUND');
 
-        if (!updatedEvent) {
-          throw new Error('EVENT_NOT_FOUND');
-        }
+        await declineStaffFromEvent(eventId, event.managerId, staffDoc);
+
+        updatedEvent = await EventModel.findById(eventId).lean();
+        if (!updatedEvent) throw new Error('EVENT_NOT_FOUND');
 
       } else {
-        // ACCEPT: Atomic operation with embedded capacity check
+        // ACCEPT: Transactional capacity check via EventStaff collection
 
-        // First, validate that the role exists on this event
-        const event = await EventModel.findById(eventId, { roles: 1 }).lean();
-        if (!event) {
-          throw new Error('EVENT_NOT_FOUND');
-        }
+        // Validate that the role exists on this event
+        const event = await EventModel.findById(eventId, { roles: 1, managerId: 1, status: 1 }).lean();
+        if (!event) throw new Error('EVENT_NOT_FOUND');
 
         const roleReq = (event.roles || []).find((r: any) =>
           (r?.role || '').toLowerCase() === roleVal.toLowerCase()
@@ -3286,75 +3385,24 @@ router.post('/events/:id/respond', requireAuth, requireActiveSubscription, async
 
         const roleCapacity = roleReq.count || 0;
 
-        // ATOMIC OPERATION: Update only if capacity available AND user not already accepted
-        // This query ensures:
-        // 1. User isn't already in accepted_staff (prevents duplicates)
-        // 2. Current accepted count for role < capacity (prevents overflow)
-        // 3. All in a single atomic database operation (no race conditions)
-        updatedEvent = await EventModel.findOneAndUpdate(
-          {
-            _id: new mongoose.Types.ObjectId(eventId),
-            // Ensure user not already accepted for this event
-            'accepted_staff.userKey': { $ne: userKey },
-            // Embedded capacity check using MongoDB aggregation expressions
-            $expr: {
-              $lt: [
-                // Count accepted staff with matching role (case-insensitive)
-                {
-                  $size: {
-                    $filter: {
-                      input: { $ifNull: ['$accepted_staff', []] },
-                      as: 'staff',
-                      cond: {
-                        $eq: [
-                          { $toLower: { $ifNull: ['$$staff.role', ''] } },
-                          roleVal.toLowerCase()
-                        ]
-                      }
-                    }
-                  }
-                },
-                roleCapacity
-              ]
-            }
-          },
-          {
-            // Remove from declined_staff (in case user previously declined)
-            // NOTE: We don't pull from accepted_staff because the query filter already ensures userKey not in it
-            $pull: {
-              declined_staff: { userKey }
-            } as any,
-            // Add to accepted_staff
-            $push: { accepted_staff: staffDoc } as any,
-            $inc: { version: 1 },
-            $set: { updatedAt: new Date() }
-          },
-          { new: true }
-        );
-
-        if (!updatedEvent) {
-          // Query didn't match - either event not found, user already accepted, or capacity full
-          // Check which scenario to provide better error message
-          const checkEvent = await EventModel.findById(eventId).lean();
-
-          if (!checkEvent) {
-            throw new Error('EVENT_NOT_FOUND');
+        try {
+          await acceptStaffToEvent(eventId, event.managerId, staffDoc, roleCapacity, roleVal);
+        } catch (acceptErr: any) {
+          if (acceptErr.code === 'CAPACITY_FULL') {
+            throw new Error(`CAPACITY_FULL:${roleVal}`);
           }
-
-          // Check if user already accepted
-          const alreadyAccepted = (checkEvent.accepted_staff || []).some(
-            (s: any) => s.userKey === userKey
-          );
-          if (alreadyAccepted) {
+          // Duplicate key error from unique index means already accepted
+          if (acceptErr.code === 11000 || acceptErr.code === 'ALREADY_ACCEPTED') {
             throw new Error('ALREADY_ACCEPTED');
           }
-
-          // Must be capacity full
-          throw new Error(`CAPACITY_FULL:${roleVal}`);
+          throw acceptErr;
         }
+
+        updatedEvent = await EventModel.findById(eventId).lean();
+        if (!updatedEvent) throw new Error('EVENT_NOT_FOUND');
       }
 
-      // Recompute role_stats (separate operation, not critical for atomicity)
+      // Recompute role_stats (already done by dual-write, but re-read for response)
       const role_stats = computeRoleStats(
         (updatedEvent.roles as any[]) || [],
         (updatedEvent.accepted_staff as any[]) || []
@@ -3407,7 +3455,7 @@ router.post('/events/:id/respond', requireAuth, requireActiveSubscription, async
         throw new Error('Update completed but event not found');
       }
 
-      const mapped = { id: String(updatedEvent._id), ...updatedEvent.toObject() } as any;
+      const mapped = { id: String(updatedEvent._id), ...(typeof updatedEvent.toObject === 'function' ? updatedEvent.toObject() : updatedEvent) } as any;
       delete mapped._id;
 
       // eslint-disable-next-line no-console
@@ -3597,7 +3645,16 @@ router.get('/events/:id/attendance/me', requireAuth, async (req, res) => {
     if (!event) return res.status(404).json({ message: 'Event not found' });
     const member = (event.accepted_staff || []).find((m: any) => (m?.userKey || '') === userKey);
     if (!member) return res.status(404).json({ message: 'Attendance record not found' });
-    const attendance = (member.attendance || []) as any[];
+
+    // Read from AttendanceLog (with fallback to nested data)
+    let attendance: any[];
+    const logs = await AttendanceLogModel.find({ eventId, userKey }).sort({ clockInAt: 1 }).lean();
+    if (logs.length > 0) {
+      attendance = logs;
+    } else {
+      attendance = (member.attendance || []) as any[];
+    }
+
     const last = attendance.length > 0 ? attendance[attendance.length - 1] : undefined;
     const isClockedIn = !!(last && !last.clockOutAt);
     return res.json({
@@ -3624,7 +3681,7 @@ const clockInSchema = z.object({
 });
 
 // Clock in to an event (with optional server-side geofence validation)
-router.post('/events/:id/clock-in', requireAuth, requireActiveSubscription, async (req, res) => {
+router.post('/events/:id/clock-in', requireAuth, requireActiveSubscription, clockInLimiter, async (req, res) => {
   try {
     const eventId = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(eventId)) {
@@ -3732,6 +3789,20 @@ router.post('/events/:id/clock-in', requireAuth, requireActiveSubscription, asyn
       });
     }
 
+    // Dual-write: also insert into AttendanceLog collection
+    try {
+      await AttendanceLogModel.create({
+        eventId: new mongoose.Types.ObjectId(eventId),
+        managerId: event.managerId,
+        userKey,
+        clockInAt: clockInTime,
+        clockInLocation: newAttendanceRecord.clockInLocation,
+        status: 'clocked',
+      });
+    } catch (alErr) {
+      console.error('[clock-in] AttendanceLog write failed (nested write succeeded):', alErr);
+    }
+
     // Gamification points (future feature - disabled for now)
     const gamification: any = null;
 
@@ -3764,7 +3835,7 @@ const clockOutSchema = z.object({
 });
 
 // Clock out from an event (with optional location storage)
-router.post('/events/:id/clock-out', requireAuth, requireActiveSubscription, async (req, res) => {
+router.post('/events/:id/clock-out', requireAuth, requireActiveSubscription, clockOutLimiter, async (req, res) => {
   try {
     const eventId = req.params.id ?? '';
     if (!mongoose.Types.ObjectId.isValid(eventId)) {
@@ -3844,6 +3915,28 @@ router.post('/events/:id/clock-out', requireAuth, requireActiveSubscription, asy
     if (result.modifiedCount === 0) {
       // Document matched but no session was updated — already clocked out (race condition)
       return res.status(409).json({ message: 'Not clocked in' });
+    }
+
+    // Dual-write: also update AttendanceLog
+    try {
+      const alUpdate: any = {
+        clockOutAt: clockOutTime,
+        estimatedHours,
+        status: 'clocked',
+      };
+      if (latitude !== undefined && longitude !== undefined && isValidCoordinate(latitude, longitude)) {
+        alUpdate.clockOutLocation = { latitude, longitude, accuracy: accuracy ?? undefined };
+      }
+      if (autoClockOut) {
+        alUpdate.autoClockOut = true;
+        alUpdate.autoClockOutReason = autoClockOutReason ?? 'shift_end_buffer';
+      }
+      await AttendanceLogModel.findOneAndUpdate(
+        { eventId: new mongoose.Types.ObjectId(eventId), userKey, clockOutAt: null },
+        { $set: alUpdate }
+      );
+    } catch (alErr) {
+      console.error('[clock-out] AttendanceLog write failed (nested write succeeded):', alErr);
     }
 
     // Build the updated record for pattern checking and response
@@ -4018,6 +4111,22 @@ router.post('/events/:id/bulk-clock-in', requireAuth, async (req, res) => {
           staffName: staff.name || `${staff.first_name || ''} ${staff.last_name || ''}`.trim(),
         });
         continue;
+      }
+
+      // Dual-write: also insert into AttendanceLog
+      try {
+        await AttendanceLogModel.create({
+          eventId: new mongoose.Types.ObjectId(eventId),
+          managerId: manager._id,
+          userKey,
+          clockInAt: clockInTime,
+          clockInLocation: newAttendanceRecord.clockInLocation,
+          status: 'clocked',
+          overrideBy: managerKey,
+          overrideNote: note || 'Bulk clock-in by manager',
+        });
+      } catch (alErr) {
+        console.error(`[bulk-clock-in] AttendanceLog write failed for ${userKey}:`, alErr);
       }
 
       results.push({
@@ -4392,6 +4501,30 @@ router.post('/events/:id/submit-hours', requireAuth, async (req, res) => {
 
     await event.save();
 
+    // Dual-write: update AttendanceLog records with sheet data
+    try {
+      for (const staff of acceptedStaff) {
+        if (!staff.userKey || !staff.attendance?.length) continue;
+        const lastSession = staff.attendance[staff.attendance.length - 1];
+        if (!lastSession || lastSession.status !== 'sheet_submitted') continue;
+        await AttendanceLogModel.findOneAndUpdate(
+          { eventId: event._id, userKey: staff.userKey },
+          {
+            $set: {
+              ...(lastSession.sheetSignInTime && { sheetSignInTime: lastSession.sheetSignInTime }),
+              ...(lastSession.sheetSignOutTime && { sheetSignOutTime: lastSession.sheetSignOutTime }),
+              ...(lastSession.approvedHours != null && { approvedHours: lastSession.approvedHours }),
+              ...(lastSession.managerNotes && { managerNotes: lastSession.managerNotes }),
+              status: 'sheet_submitted',
+            },
+          },
+          { sort: { clockInAt: -1 } }
+        );
+      }
+    } catch (alErr) {
+      console.error('[submit-hours] AttendanceLog write failed:', alErr);
+    }
+
     // Count how many staff have approved hours set
     const staffWithHours = acceptedStaff.filter((s: any) => {
       return s.attendance && s.attendance.some((a: any) => a.approvedHours != null);
@@ -4471,6 +4604,25 @@ router.post('/events/:id/approve-hours/:userKey', requireAuth, async (req, res) 
     }
 
     await event.save();
+
+    // Dual-write: update AttendanceLog
+    try {
+      await AttendanceLogModel.findOneAndUpdate(
+        { eventId: event._id, userKey },
+        {
+          $set: {
+            approvedHours,
+            approvedBy,
+            approvedAt: new Date(),
+            status: 'approved',
+            ...(notes && { managerNotes: notes }),
+          },
+        },
+        { sort: { clockInAt: -1 } }
+      );
+    } catch (alErr) {
+      console.error('[approve-hours] AttendanceLog write failed:', alErr);
+    }
 
     return res.json({ message: 'Hours approved', staffMember });
   } catch (err) {
@@ -4590,6 +4742,37 @@ router.post('/events/:id/bulk-approve-hours', requireAuth, async (req, res) => {
     }
 
     await event.save();
+
+    // Dual-write: bulk-update AttendanceLog records
+    try {
+      const bulkOps = (event.accepted_staff || [])
+        .filter((s: any) => {
+          const last = s.attendance?.[s.attendance.length - 1];
+          return last?.status === 'approved' && s.userKey;
+        })
+        .map((s: any) => {
+          const last = s.attendance[s.attendance.length - 1];
+          return {
+            updateOne: {
+              filter: { eventId: event._id, userKey: s.userKey },
+              update: {
+                $set: {
+                  approvedHours: last.approvedHours,
+                  approvedBy: last.approvedBy,
+                  approvedAt: last.approvedAt,
+                  status: 'approved',
+                },
+              },
+              sort: { clockInAt: -1 },
+            },
+          };
+        });
+      if (bulkOps.length > 0) {
+        await AttendanceLogModel.bulkWrite(bulkOps);
+      }
+    } catch (alErr) {
+      console.error('[bulk-approve-hours] AttendanceLog write failed:', alErr);
+    }
 
     return res.json({
       message: `Bulk approved ${approvedCount} staff hours`,
@@ -4860,6 +5043,24 @@ router.post('/events/:id/force-clock-out/:userKey', requireAuth, async (req, res
 
     if (result.modifiedCount === 0) {
       return res.status(500).json({ message: 'Failed to update attendance' });
+    }
+
+    // Dual-write: update AttendanceLog
+    try {
+      await AttendanceLogModel.findOneAndUpdate(
+        { eventId: event._id, userKey, clockOutAt: null },
+        {
+          $set: {
+            clockOutAt: now,
+            autoClockOut: true,
+            autoClockOutReason: 'manager_override',
+            overrideBy: String(manager._id),
+            overrideNote: note || 'Force clock-out by manager',
+          },
+        }
+      );
+    } catch (alErr) {
+      console.error('[force-clock-out] AttendanceLog write failed:', alErr);
     }
 
     // Notify the staff member

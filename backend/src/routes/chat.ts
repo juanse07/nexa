@@ -1299,33 +1299,27 @@ router.post('/invitations/:messageId/respond', requireAuth, async (req, res) => 
         );
       }
 
-      // Also add user to accepted_staff array so they appear in "My Events"
-      const acceptedStaff = event.accepted_staff || [];
-      const existingStaffMember = acceptedStaff.find((s: any) => s.userKey === userKey);
+      // Add user to EventStaff collection (source of truth) + dual-write to embedded accepted_staff
+      const { acceptStaffToEvent } = await import('../utils/eventStaffWriter');
+      const newStaffMember = {
+        userKey,
+        provider,
+        subject: sub,
+        email: (req as AuthenticatedRequest).authUser.email,
+        name: name || '',
+        picture: (req as AuthenticatedRequest).authUser.picture,
+        role: role.role_name || role.role,
+        respondedAt: new Date()
+      };
 
-      if (!existingStaffMember) {
-        // Add new staff member to accepted_staff
-        const newStaffMember = {
-          userKey,
-          provider,
-          subject: sub,
-          email: (req as AuthenticatedRequest).authUser.email,
-          name: name || '',
-          picture: (req as AuthenticatedRequest).authUser.picture,
-          role: role.role_name || role.role,
-          response: 'accept',
-          respondedAt: new Date()
-        };
-
-        console.log('[ACCEPT DEBUG] Adding to accepted_staff:', newStaffMember);
-        console.log('[ACCEPT DEBUG] Event ID:', eventId);
-        const updateResult = await EventModel.updateOne(
-          { _id: eventId },
-          { $push: { accepted_staff: newStaffMember }, $set: { updatedAt: new Date() } }
-        );
-        console.log('[ACCEPT DEBUG] Update result:', updateResult);
-      } else {
-        console.log('[ACCEPT DEBUG] User already in accepted_staff');
+      try {
+        await acceptStaffToEvent(eventId, event.managerId, newStaffMember, Infinity, role.role_name || role.role);
+        console.log('[ACCEPT] Added to EventStaff + embedded:', userKey);
+      } catch (acceptErr: any) {
+        // Duplicate key = already accepted, safe to ignore
+        if (acceptErr.code !== 11000) {
+          console.error('[ACCEPT] acceptStaffToEvent failed:', acceptErr);
+        }
       }
 
       updatedEvent = await EventModel.findById(eventId).lean();
@@ -1411,53 +1405,55 @@ router.post('/invitations/:messageId/respond', requireAuth, async (req, res) => 
       }
     }
 
-    // Handle declination - check if event should revert from 'fulfilled' to 'draft'
+    // Handle declination - write to EventStaff + check if event should revert from 'fulfilled'
     if (!accept) {
       const { EventModel: EventModelDecline } = await import('../models/event');
+      const { declineStaffFromEvent: declineStaffChat } = await import('../utils/eventStaffWriter');
+
+      // Decline in EventStaff collection (source of truth) + dual-write embedded
+      await declineStaffChat(eventId, message.managerId, {
+        userKey,
+        provider,
+        subject: sub,
+        email: (req as AuthenticatedRequest).authUser.email,
+        name: name || '',
+        picture: (req as AuthenticatedRequest).authUser.picture,
+      });
+
       const eventDoc = await EventModelDecline.findById(eventId);
 
       if (eventDoc && eventDoc.status === 'fulfilled') {
         console.log('[INVITATION] Staff declined - checking if event should reopen');
 
-        // Remove user from accepted_staff if they were there
-        await EventModelDecline.updateOne(
-          { _id: eventId },
-          { $pull: { accepted_staff: { userKey } } as any }
-        );
+        const { checkIfEventFulfilled: checkFulfilled } = await import('../utils/eventCapacity');
+        const stillFulfilled = checkFulfilled(eventDoc);
 
-        // Reload event and check if still fulfilled
-        const reloadedEvent = await EventModelDecline.findById(eventId);
-        if (reloadedEvent) {
-          const { checkIfEventFulfilled: checkFulfilled } = await import('../utils/eventCapacity');
-          const stillFulfilled = checkFulfilled(reloadedEvent);
+        if (!stillFulfilled) {
+          console.log('[INVITATION] Event no longer fulfilled - reopening to draft');
+          eventDoc.status = 'draft';
+          eventDoc.fulfilledAt = undefined;
+          await eventDoc.save();
 
-          if (!stillFulfilled) {
-            console.log('[INVITATION] Event no longer fulfilled - reopening to draft');
-            reloadedEvent.status = 'draft';
-            reloadedEvent.fulfilledAt = undefined;
-            await reloadedEvent.save();
+          // Emit socket event for reopened status
+          const { emitToManager: emitManager } = await import('../socket/server');
+          emitManager(message.managerId.toString(), 'event:reopened', {
+            eventId: String(eventId),
+          });
 
-            // Emit socket event for reopened status
-            const { emitToManager: emitManager } = await import('../socket/server');
-            emitManager(message.managerId.toString(), 'event:reopened', {
+          // Send notification to manager
+          await notificationService.sendToUser(
+            message.managerId.toString(),
+            'Event Reopened',
+            `Position available in ${(eventDoc as any).event_name || 'your event'} - staff member declined`,
+            {
+              type: 'event',
               eventId: String(eventId),
-            });
+              action: 'reopened',
+            },
+            'manager'
+          );
 
-            // Send notification to manager
-            await notificationService.sendToUser(
-              message.managerId.toString(),
-              'Event Reopened',
-              `Position available in ${(reloadedEvent as any).event_name || 'your event'} - staff member declined`,
-              {
-                type: 'event',
-                eventId: String(eventId),
-                action: 'reopened',
-              },
-              'manager'
-            );
-
-            updatedEvent = reloadedEvent.toObject();
-          }
+          updatedEvent = eventDoc.toObject();
         }
       }
     }

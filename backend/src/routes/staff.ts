@@ -8,6 +8,8 @@ import { StaffProfileModel } from '../models/staffProfile';
 import { StaffGroupModel } from '../models/staffGroup';
 import { EventModel } from '../models/event';
 import { UserModel } from '../models/user';
+import { enrichEventsWithAttendance, enrichEventWithAttendance } from '../utils/attendanceHelper';
+import { enrichEventsWithStaff } from '../utils/eventStaffHelper';
 
 const router = Router();
 
@@ -341,7 +343,7 @@ router.get('/staff/:userKey', requireAuth, async (req: Request, res: Response) =
     const profile = await StaffProfileModel.findOne({ managerId, userKey }).lean();
 
     // Get recent shifts (last 10)
-    const recentEvents = await EventModel.find({
+    let recentEvents = await EventModel.find({
       managerId,
       'accepted_staff.userKey': userKey,
       'accepted_staff.response': { $in: ['accepted', 'accept'] },
@@ -350,6 +352,14 @@ router.get('/staff/:userKey', requireAuth, async (req: Request, res: Response) =
       .sort({ date: -1 })
       .limit(10)
       .lean();
+
+    // Enrich with AttendanceLog data (falls back to nested data on failure)
+    try {
+      recentEvents = await enrichEventsWithStaff(recentEvents);
+      recentEvents = await enrichEventsWithAttendance(recentEvents);
+    } catch (err) {
+      console.warn('[GET /staff/:userKey] AttendanceLog enrichment failed, using nested data:', err);
+    }
 
     const recentShifts = recentEvents.map((event: any) => {
       const staffEntry = (event.accepted_staff || []).find((s: any) => s.userKey === userKey);
@@ -447,12 +457,20 @@ router.get('/staff/:userKey/hours', requireAuth, async (req: Request, res: Respo
 
     const computeHours = async (period: string) => {
       const { start, end } = getDateRange(period);
-      const events = await EventModel.find({
+      let events = await EventModel.find({
         managerId,
         'accepted_staff.userKey': userKey,
         status: { $ne: 'cancelled' },
         date: { $gte: start, $lte: end },
       }).lean();
+
+      // Enrich with AttendanceLog data (falls back to nested data on failure)
+      try {
+        events = await enrichEventsWithStaff(events);
+        events = await enrichEventsWithAttendance(events);
+      } catch (err) {
+        console.warn('[GET /staff/:userKey/hours] AttendanceLog enrichment failed, using nested data:', err);
+      }
 
       let totalHours = 0;
       let shiftCount = 0;

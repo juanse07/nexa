@@ -1,7 +1,14 @@
 /**
  * Shared performance metrics utilities.
  * Extracted from ai.ts so both AI chat tools and staffMatchingService can reuse them.
+ *
+ * IMPORTANT: Events passed to computePunctuality must have attendance data populated.
+ * Callers should enrich events via enrichEventsWithAttendance() from '../utils/attendanceHelper'
+ * before calling computePunctuality().
  */
+
+import { enrichEventsWithAttendance } from './attendanceHelper';
+import { enrichEventsWithStaff } from './eventStaffHelper';
 
 export interface PunctualityEventDetail {
   date: string;
@@ -152,4 +159,24 @@ export function computePunctuality(
   }
 
   return Array.from(recordMap.values());
+}
+
+/**
+ * Convenience wrapper: enriches events with AttendanceLog data, then computes punctuality.
+ * Falls back to nested attendance data if enrichment fails.
+ */
+export async function computePunctualityWithAttendance(
+  events: any[],
+  staffUserKey?: string | null,
+  staffNamePattern?: string | null,
+  thresholdMinutes: number = 5
+): Promise<PunctualityRecord[]> {
+  let enrichedEvents = events;
+  try {
+    enrichedEvents = await enrichEventsWithStaff(events);
+    enrichedEvents = await enrichEventsWithAttendance(enrichedEvents);
+  } catch (err) {
+    console.warn('[computePunctualityWithAttendance] AttendanceLog enrichment failed, using nested data:', err);
+  }
+  return computePunctuality(enrichedEvents, staffUserKey, staffNamePattern, thresholdMinutes);
 }

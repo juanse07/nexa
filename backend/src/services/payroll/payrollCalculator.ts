@@ -10,6 +10,8 @@ import { TariffModel } from '../../models/tariff';
 import { RoleModel } from '../../models/role';
 import { ClientModel } from '../../models/client';
 import { UserModel } from '../../models/user';
+import { enrichEventsWithAttendance } from '../../utils/attendanceHelper';
+import { enrichEventsWithStaff } from '../../utils/eventStaffHelper';
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -100,7 +102,7 @@ export async function calculatePayroll(
   end: Date,
 ): Promise<PayrollResult> {
   // Fetch events and reference data in parallel
-  const [events, allTariffs, allRoles, allClients] = await Promise.all([
+  const [rawEvents, allTariffs, allRoles, allClients] = await Promise.all([
     EventModel.find({
       managerId,
       status: { $in: ['completed', 'in_progress', 'fulfilled', 'published'] },
@@ -110,6 +112,15 @@ export async function calculatePayroll(
     RoleModel.find({ managerId }).lean(),
     ClientModel.find({ managerId }).lean(),
   ]);
+
+  // Enrich with staff + attendance data (falls back to nested data on failure)
+  let events = rawEvents;
+  try {
+    events = await enrichEventsWithStaff(rawEvents);
+    events = await enrichEventsWithAttendance(rawEvents);
+  } catch (err) {
+    console.warn('[payrollCalculator] AttendanceLog enrichment failed, using nested data:', err);
+  }
 
   // Build lookup maps
   const roleIdToName: Record<string, string> = {};

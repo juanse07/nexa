@@ -1,10 +1,32 @@
 import * as cron from 'node-cron';
+import os from 'os';
 import { EventModel } from '../models/event';
 import { UserModel } from '../models/user';
 import { EventChatMessageModel } from '../models/eventChatMessage';
 import { notificationService } from './notificationService';
 import { formatNotifDate, formatStartTime12h } from '../utils/eventHelpers';
 import { emitToManager } from '../socket/server';
+import { AttendanceLogModel } from '../models/attendanceLog';
+import { getRedisClient } from '../db/redis';
+import { enrichEventsWithStaff } from '../utils/eventStaffHelper';
+
+const instanceId = `${os.hostname()}:${process.pid}`;
+
+/**
+ * Acquire a distributed lock using Redis SET NX EX.
+ * Returns true if this instance acquired the lock, false otherwise.
+ * Lock auto-expires after `ttlSeconds` so a dead instance's lock is reclaimed.
+ */
+async function acquireCronLock(name: string, ttlSeconds: number): Promise<boolean> {
+  const redis = getRedisClient();
+  if (!redis) return true; // No Redis = single instance, always run
+  try {
+    const result = await redis.set(`lock:cron:${name}`, instanceId, 'EX', ttlSeconds, 'NX');
+    return result === 'OK';
+  } catch {
+    return true; // Redis error = degrade to allowing execution
+  }
+}
 
 class NotificationScheduler {
   private tasks: cron.ScheduledTask[] = [];
@@ -17,7 +39,8 @@ class NotificationScheduler {
 
     // Run every 5 minutes to check for upcoming shifts
     this.tasks.push(
-      cron.schedule('*/5 * * * *', () => {
+      cron.schedule('*/5 * * * *', async () => {
+        if (!(await acquireCronLock('upcoming_shifts', 4 * 60))) return;
         this.checkUpcomingShifts().catch(err => {
           console.error('[NotificationScheduler] Upcoming shifts check failed:', err);
         });
@@ -26,7 +49,8 @@ class NotificationScheduler {
 
     // Run every 15 minutes to check for forgotten clock-outs
     this.tasks.push(
-      cron.schedule('*/15 * * * *', () => {
+      cron.schedule('*/15 * * * *', async () => {
+        if (!(await acquireCronLock('forgotten_clockouts', 14 * 60))) return;
         this.checkForgottenClockOuts().catch(err => {
           console.error('[NotificationScheduler] Forgotten clock-outs check failed:', err);
         });
@@ -35,7 +59,8 @@ class NotificationScheduler {
 
     // Run daily at 9 AM to send timesheet reminders
     this.tasks.push(
-      cron.schedule('0 9 * * *', () => {
+      cron.schedule('0 9 * * *', async () => {
+        if (!(await acquireCronLock('timesheet_reminders', 23 * 60 * 60))) return;
         this.sendTimesheetReminders().catch(err => {
           console.error('[NotificationScheduler] Timesheet reminders failed:', err);
         });
@@ -44,7 +69,8 @@ class NotificationScheduler {
 
     // Run every 5 minutes to auto-enable chat 1 hour before events
     this.tasks.push(
-      cron.schedule('*/5 * * * *', () => {
+      cron.schedule('*/5 * * * *', async () => {
+        if (!(await acquireCronLock('auto_enable_chat', 4 * 60))) return;
         this.autoEnableEventChat().catch(err => {
           console.error('[NotificationScheduler] Auto-enable chat failed:', err);
         });
@@ -53,7 +79,8 @@ class NotificationScheduler {
 
     // Run daily at midnight to auto-complete past events
     this.tasks.push(
-      cron.schedule('0 0 * * *', () => {
+      cron.schedule('0 0 * * *', async () => {
+        if (!(await acquireCronLock('auto_complete', 23 * 60 * 60))) return;
         this.autoCompleteEvents().catch(err => {
           console.error('[NotificationScheduler] Auto-complete events failed:', err);
         });
@@ -85,6 +112,9 @@ class NotificationScheduler {
       }).lean();
 
       console.log(`[NotificationScheduler] Found ${upcomingEvents.length} upcoming shifts`);
+
+      // Enrich with staff data from EventStaff collection
+      await enrichEventsWithStaff(upcomingEvents);
 
       for (const event of upcomingEvents) {
         const acceptedStaff = event.accepted_staff || [];
@@ -186,19 +216,19 @@ class NotificationScheduler {
         // Skip if event hasn't ended yet or ended less than 2 hours ago
         if (endDateTime > twoHoursAgo) continue;
 
-        const acceptedStaff = event.accepted_staff || [];
         let sentNotificationCount = 0;
 
-        for (const staff of acceptedStaff) {
-          const userKey = staff.userKey as string;
-          if (!userKey) continue;
+        // Primary: query AttendanceLog for active sessions (no clockOutAt) on this event
+        try {
+          const activeSessions = await AttendanceLogModel.find({
+            eventId: event._id,
+            clockOutAt: null,
+          }).lean();
 
-          // Check if staff clocked in but never clocked out
-          const attendance = staff.attendance as any[] || [];
-          const lastAttendance = attendance.length > 0 ? attendance[attendance.length - 1] : null;
+          for (const session of activeSessions) {
+            const userKey = session.userKey;
+            if (!userKey) continue;
 
-          if (lastAttendance && lastAttendance.clockInAt && !lastAttendance.clockOutAt) {
-            // Staff forgot to clock out!
             const userId = await this.getUserIdFromKey(userKey);
             if (!userId) continue;
 
@@ -222,6 +252,46 @@ class NotificationScheduler {
 
             sentNotificationCount++;
             console.log(`[NotificationScheduler] ✅ Sent forgot-clock-out reminder to ${userId} for event ${event._id}`);
+          }
+        } catch (err) {
+          // Fallback: scan nested accepted_staff[].attendance[] if AttendanceLog query fails
+          console.warn('[NotificationScheduler] AttendanceLog query failed, falling back to nested data:', err);
+
+          const acceptedStaff = event.accepted_staff || [];
+          for (const staff of acceptedStaff) {
+            const userKey = staff.userKey as string;
+            if (!userKey) continue;
+
+            // Check if staff clocked in but never clocked out
+            const attendance = staff.attendance as any[] || [];
+            const lastAttendance = attendance.length > 0 ? attendance[attendance.length - 1] : null;
+
+            if (lastAttendance && lastAttendance.clockInAt && !lastAttendance.clockOutAt) {
+              // Staff forgot to clock out!
+              const userId = await this.getUserIdFromKey(userKey);
+              if (!userId) continue;
+
+              const hoursSinceEnd = Math.round((now.getTime() - endDateTime.getTime()) / (60 * 60 * 1000));
+
+              await notificationService.sendToUser(
+                userId,
+                'Clock Out Reminder',
+                `Your shift at ${event.venue_name || 'venue'} ended ${hoursSinceEnd}h ago`,
+                {
+                  type: 'event',
+                  eventId: event._id.toString(),
+                  action: 'forgot_clock_out',
+                  eventName: event.event_name || 'Shift',
+                  venueName: event.venue_name || '',
+                  endTime: endDateTime.toISOString(),
+                },
+                'user',
+                'F59E0B'
+              );
+
+              sentNotificationCount++;
+              console.log(`[NotificationScheduler] ✅ Sent forgot-clock-out reminder to ${userId} for event ${event._id}`);
+            }
           }
         }
 
@@ -299,6 +369,9 @@ class NotificationScheduler {
       }).lean();
 
       console.log(`[NotificationScheduler] Found ${events.length} candidate events for chat`);
+
+      // Enrich with staff data from EventStaff collection
+      await enrichEventsWithStaff(events);
 
       for (const event of events) {
         try {

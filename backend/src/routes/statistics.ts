@@ -12,6 +12,8 @@ import { generateReport, ReportFormat, BrandConfig, TemplateDesign } from '../se
 import { ManagerModel } from '../models/manager';
 import { calculatePayroll } from '../services/payroll/payrollCalculator';
 import { getPresignedUrl, extractKeyFromUrl } from '../services/storageService';
+import { enrichEventsWithAttendance, enrichEventWithAttendance } from '../utils/attendanceHelper';
+import { enrichEventsWithStaff, enrichEventWithStaff } from '../utils/eventStaffHelper';
 
 const router = Router();
 
@@ -179,11 +181,19 @@ router.get('/statistics/staff/summary', requireAuth, async (req: Request, res: R
     console.log(`[statistics/staff/summary] Getting stats for userKey ${userKey}, period ${period}`);
 
     // Query events where user is in accepted_staff
-    const events = await EventModel.find({
+    let events = await EventModel.find({
       'accepted_staff.userKey': userKey,
       status: { $ne: 'cancelled' },
       date: { $gte: start, $lte: end }
     }).lean();
+
+    // Enrich with AttendanceLog data (falls back to nested data on failure)
+    try {
+      events = await enrichEventsWithStaff(events);
+      events = await enrichEventsWithAttendance(events);
+    } catch (err) {
+      console.warn('[statistics/staff/summary] AttendanceLog enrichment failed, using nested data:', err);
+    }
 
     console.log(`[statistics/staff/summary] Found ${events.length} events`);
 
@@ -330,7 +340,7 @@ router.get('/statistics/staff/shifts', requireAuth, async (req: Request, res: Re
     });
 
     // Query events with pagination
-    const events = await EventModel.find({
+    let events = await EventModel.find({
       'accepted_staff.userKey': userKey,
       status: { $ne: 'cancelled' },
       date: { $gte: start, $lte: end }
@@ -339,6 +349,14 @@ router.get('/statistics/staff/shifts', requireAuth, async (req: Request, res: Re
       .skip(skip)
       .limit(limitNum)
       .lean();
+
+    // Enrich with AttendanceLog data (falls back to nested data on failure)
+    try {
+      events = await enrichEventsWithStaff(events);
+      events = await enrichEventsWithAttendance(events);
+    } catch (err) {
+      console.warn('[statistics/staff/shifts] AttendanceLog enrichment failed, using nested data:', err);
+    }
 
     // Format shift records
     const shifts = events.map((event: any) => {
@@ -426,11 +444,18 @@ router.get('/statistics/staff/performance', requireAuth, async (req: Request, re
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const recentEvents = await EventModel.find({
+    let recentEvents = await EventModel.find({
       'accepted_staff.userKey': userKey,
       status: { $in: ['completed', 'in_progress'] },
       date: { $gte: thirtyDaysAgo }
     }).lean();
+
+    // Enrich with AttendanceLog data (falls back to nested data on failure)
+    try {
+      recentEvents = await enrichEventsWithAttendance(recentEvents);
+    } catch (err) {
+      console.warn('[statistics/staff/performance] AttendanceLog enrichment failed, using nested data:', err);
+    }
 
     let onTimeCount = 0;
     let totalWithClockIn = 0;
@@ -520,10 +545,18 @@ router.get('/statistics/manager/summary', requireAuth, async (req: Request, res:
     console.log(`[statistics/manager/summary] Getting stats for manager ${manager._id}, period ${period}`);
 
     // Get all events in period
-    const events = await EventModel.find({
+    let events = await EventModel.find({
       managerId: manager._id,
       date: { $gte: start, $lte: end }
     }).lean();
+
+    // Enrich with AttendanceLog data (falls back to nested data on failure)
+    try {
+      events = await enrichEventsWithStaff(events);
+      events = await enrichEventsWithAttendance(events);
+    } catch (err) {
+      console.warn('[statistics/manager/summary] AttendanceLog enrichment failed, using nested data:', err);
+    }
 
     // Pre-load tariff rate lookup: "clientName|roleName" → rate
     const [allTariffs, allRoles, allClients] = await Promise.all([
@@ -695,11 +728,19 @@ router.get('/statistics/manager/top-performers', requireAuth, async (req: Reques
     const { start, end } = getDateRange(period as string);
 
     // Get completed events
-    const events = await EventModel.find({
+    let events = await EventModel.find({
       managerId: manager._id,
       status: { $in: ['completed', 'in_progress', 'fulfilled'] },
       date: { $gte: start, $lte: end }
     }).lean();
+
+    // Enrich with AttendanceLog data (falls back to nested data on failure)
+    try {
+      events = await enrichEventsWithStaff(events);
+      events = await enrichEventsWithAttendance(events);
+    } catch (err) {
+      console.warn('[statistics/manager/top-performers] AttendanceLog enrichment failed, using nested data:', err);
+    }
 
     // Aggregate staff performance
     const staffPerformance: Record<string, {
@@ -903,11 +944,19 @@ router.get('/exports/staff-shifts', requireAuth, async (req: Request, res: Respo
     );
 
     // Query all events in period
-    const events = await EventModel.find({
+    let events = await EventModel.find({
       'accepted_staff.userKey': userKey,
       status: { $ne: 'cancelled' },
       date: { $gte: start, $lte: end }
     }).sort({ date: -1 }).lean();
+
+    // Enrich with AttendanceLog data (falls back to nested data on failure)
+    try {
+      events = await enrichEventsWithStaff(events);
+      events = await enrichEventsWithAttendance(events);
+    } catch (err) {
+      console.warn('[exports/staff-shifts] AttendanceLog enrichment failed, using nested data:', err);
+    }
 
     // Build shift records
     const records = events.map((event: any) => {
@@ -1050,11 +1099,19 @@ router.get('/exports/team-report', requireAuth, async (req: Request, res: Respon
     );
 
     // Get completed events
-    const events = await EventModel.find({
+    let events = await EventModel.find({
       managerId: manager._id,
       status: { $in: ['completed', 'in_progress', 'fulfilled'] },
       date: { $gte: start, $lte: end }
     }).lean();
+
+    // Enrich with AttendanceLog data (falls back to nested data on failure)
+    try {
+      events = await enrichEventsWithStaff(events);
+      events = await enrichEventsWithAttendance(events);
+    } catch (err) {
+      console.warn('[exports/team-report] AttendanceLog enrichment failed, using nested data:', err);
+    }
 
     if (reportType === 'payroll') {
       // Aggregate by staff
@@ -1354,13 +1411,21 @@ router.post('/events/:eventId/working-hours-sheet', requireAuth, async (req: Req
     const { format, template_design: whTemplateDesign } = parsed.data;
 
     // Fetch the event
-    const event = await EventModel.findOne({
+    let event = await EventModel.findOne({
       _id: eventId,
       managerId: manager._id,
     }).lean();
 
     if (!event) {
       return res.status(404).json({ message: 'Event not found' });
+    }
+
+    // Enrich with AttendanceLog data (falls back to nested data on failure)
+    try {
+      event = await enrichEventWithStaff(event);
+      event = await enrichEventWithAttendance(event);
+    } catch (err) {
+      console.warn('[events/working-hours-sheet] AttendanceLog enrichment failed, using nested data:', err);
     }
 
     const acceptedStaff = ((event as any).accepted_staff || []).filter(

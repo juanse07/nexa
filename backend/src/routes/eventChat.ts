@@ -7,6 +7,7 @@ import { ManagerModel } from '../models/manager';
 import { requireAuth } from '../middleware/requireAuth';
 import { emitToEventChat } from '../socket/server';
 import { notificationService } from '../services/notificationService';
+import { enrichEventWithStaff } from '../utils/eventStaffHelper';
 
 const router = express.Router();
 
@@ -25,10 +26,11 @@ router.get('/events/:eventId/chat/messages', requireAuth, async (req: Request, r
     }
 
     // Verify user has access to this event
-    const event = await EventModel.findById(eventId).lean();
+    let event = await EventModel.findById(eventId).lean() as any;
     if (!event) {
       return res.status(404).json({ message: 'Event not found' });
     }
+    event = await enrichEventWithStaff(event);
 
     const authUser = (req as any).authUser;
     const userKey = `${authUser.provider}:${authUser.sub}`;

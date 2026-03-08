@@ -6,7 +6,8 @@ services:
       context: .
       dockerfile: Dockerfile
     image: nexa-api:latest
-    container_name: nexa-api
+    # NOTE: container_name omitted to allow replicas > 1
+    # Scale horizontally: docker compose up -d --scale api=2
     restart: unless-stopped
     expose:
       - "4000"
@@ -22,7 +23,12 @@ services:
     depends_on:
       doc-service:
         condition: service_healthy
-    # Enable rolling updates
+      redis:
+        condition: service_healthy
+    # Horizontal scaling: increase replicas for multiple API instances.
+    # Redis adapter handles Socket.io cross-instance pub/sub.
+    # Cron locks prevent duplicate scheduled tasks.
+    # Caddy auto-discovers replicas via Docker DNS round-robin.
     deploy:
       replicas: 1
       update_config:
@@ -84,6 +90,23 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+  # ─── Redis (caching, rate limiting, Socket.io adapter) ──────────────────────
+
+  redis:
+    image: redis:7-alpine
+    container_name: flowshift-redis
+    restart: unless-stopped
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # ─── Monitoring Stack ────────────────────────────────────────────────────────
 
@@ -151,6 +174,8 @@ services:
       - "--compatible-mode"
 
 volumes:
+  redis_data:
+    name: flowshift_redis_data
   caddy_data:
     name: nexa_caddy_data
   caddy_config:

@@ -1,5 +1,7 @@
 import http from 'http';
 import { Server as IOServer, Socket } from 'socket.io';
+import { createAdapter } from '@socket.io/redis-adapter';
+import Redis from 'ioredis';
 import jwt from 'jsonwebtoken';
 
 import { ENV } from '../config/env';
@@ -37,6 +39,18 @@ export function initSocket(server: http.Server): IOServer {
       credentials: true,
     },
   });
+
+  // Redis adapter for cross-instance pub/sub (horizontal scaling)
+  if (ENV.redisUrl) {
+    try {
+      const pubClient = new Redis(ENV.redisUrl);
+      const subClient = pubClient.duplicate();
+      io.adapter(createAdapter(pubClient, subClient));
+      console.log('[Socket.io] Redis adapter attached for cross-instance pub/sub');
+    } catch (err) {
+      console.warn('[Socket.io] Failed to attach Redis adapter, using in-memory:', (err as Error).message);
+    }
+  }
 
   io.on('connection', (socket) => {
     socketConnectionsActive.inc();

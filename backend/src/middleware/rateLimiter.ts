@@ -1,4 +1,20 @@
 import rateLimit from 'express-rate-limit';
+import { RedisStore } from 'rate-limit-redis';
+import { getRedisClient } from '../db/redis';
+
+/**
+ * Creates a Redis-backed store config, or empty object for in-memory fallback.
+ */
+function redisStoreConfig(prefix: string) {
+  const client = getRedisClient();
+  if (!client) return {};
+  return {
+    store: new RedisStore({
+      sendCommand: (...args: string[]) => (client as any).call(...args),
+      prefix: `rl:${prefix}:`,
+    }),
+  };
+}
 
 /**
  * Rate limiter for invite redemption endpoint.
@@ -12,8 +28,9 @@ export const inviteRedeemLimiter = rateLimit({
     message: 'Please try again later',
     retryAfter: '15 minutes',
   },
-  standardHeaders: true, // Return rate limit info in `RateLimit-*` headers
-  legacyHeaders: false, // Disable `X-RateLimit-*` headers
+  standardHeaders: true,
+  legacyHeaders: false,
+  ...redisStoreConfig('invite_redeem'),
 });
 
 /**
@@ -29,6 +46,7 @@ export const inviteValidateLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  ...redisStoreConfig('invite_validate'),
 });
 
 /**
@@ -44,4 +62,5 @@ export const inviteCreateLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  ...redisStoreConfig('invite_create'),
 });

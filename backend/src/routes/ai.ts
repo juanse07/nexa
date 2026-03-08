@@ -10,6 +10,7 @@ import fs from 'fs';
 import { getDateTimeContext, getWelcomeDateContext, getFullSystemContext } from '../utils/dateContext';
 import { getProviderConfig } from '../utils/aiProvider';
 import { extractLastUserMessage } from '../utils/cascadeRouter';
+import { aiChatLimiter } from '../middleware/redisRateLimiter';
 import { EventModel } from '../models/event';
 import { ClientModel } from '../models/client';
 import { TeamMemberModel } from '../models/teamMember';
@@ -30,6 +31,9 @@ import { logAIUsage } from '../utils/logAIUsage';
 import { shareEventPublic, shareEventPrivate, sendDirectInvitation } from '../services/eventShareService';
 import { computePunctuality, PunctualityRecord, PunctualityEventDetail } from '../utils/performanceMetrics';
 import { rankStaffForRole } from '../services/staffMatchingService';
+import { AttendanceLogModel } from '../models/attendanceLog';
+import { enrichEventsWithAttendance } from '../utils/attendanceHelper';
+import { enrichEventsWithStaff } from '../utils/eventStaffHelper';
 
 const router = Router();
 
@@ -2064,23 +2068,84 @@ async function executeFunctionCall(
         }
 
         if (metric === 'hours_worked') {
-          const results = await EventModel.aggregate([
-            { $match: matchFilter },
-            { $unwind: '$accepted_staff' },
-            ...(role_name ? [{ $match: { 'accepted_staff.role': new RegExp(role_name, 'i') } }] : []),
-            { $unwind: { path: '$accepted_staff.attendance', preserveNullAndEmptyArrays: true } },
-            {
-              $group: {
-                _id: '$accepted_staff.userKey',
-                name: { $first: '$accepted_staff.name' },
-                totalHours: { $sum: { $ifNull: ['$accepted_staff.attendance.approvedHours', '$accepted_staff.attendance.estimatedHours'] } },
-                eventsCount: { $addToSet: '$_id' }
+          // Primary: query AttendanceLog collection directly for hours
+          let results: any[] = [];
+          try {
+            // Get event IDs matching the filter
+            const matchedEvents = await EventModel.find(matchFilter).select('_id accepted_staff').lean();
+            const eventIds = matchedEvents.map(e => e._id);
+
+            if (eventIds.length > 0) {
+              // Build userKey filter for role if needed
+              let roleUserKeys: Set<string> | null = null;
+              if (role_name) {
+                roleUserKeys = new Set<string>();
+                for (const ev of matchedEvents) {
+                  for (const s of ev.accepted_staff || []) {
+                    if (s.role && new RegExp(role_name, 'i').test(s.role) && s.userKey) {
+                      roleUserKeys.add(s.userKey);
+                    }
+                  }
+                }
               }
-            },
-            { $addFields: { eventCount: { $size: '$eventsCount' } } },
-            { $sort: { totalHours: -1 } },
-            { $limit: maxLimit }
-          ]);
+
+              const logFilter: any = { eventId: { $in: eventIds } };
+              if (roleUserKeys) {
+                logFilter.userKey = { $in: Array.from(roleUserKeys) };
+              }
+
+              results = await AttendanceLogModel.aggregate([
+                { $match: logFilter },
+                {
+                  $group: {
+                    _id: '$userKey',
+                    totalHours: { $sum: { $ifNull: ['$approvedHours', '$estimatedHours'] } },
+                    eventsCount: { $addToSet: '$eventId' }
+                  }
+                },
+                { $addFields: { eventCount: { $size: '$eventsCount' } } },
+                { $sort: { totalHours: -1 } },
+                { $limit: maxLimit }
+              ]);
+
+              // Hydrate names from events
+              const nameMap = new Map<string, string>();
+              for (const ev of matchedEvents) {
+                for (const s of ev.accepted_staff || []) {
+                  if (s.userKey && s.name && !nameMap.has(s.userKey)) {
+                    nameMap.set(s.userKey, s.name);
+                  }
+                }
+              }
+              for (const r of results) {
+                r.name = nameMap.get(r._id) || 'Unknown';
+              }
+            }
+          } catch (err) {
+            console.warn('[ai/get_top_staff] AttendanceLog query failed, falling back to nested:', err);
+            results = [];
+          }
+
+          // Fallback: legacy nested aggregation if AttendanceLog yielded no results
+          if (results.length === 0) {
+            results = await EventModel.aggregate([
+              { $match: matchFilter },
+              { $unwind: '$accepted_staff' },
+              ...(role_name ? [{ $match: { 'accepted_staff.role': new RegExp(role_name, 'i') } }] : []),
+              { $unwind: { path: '$accepted_staff.attendance', preserveNullAndEmptyArrays: true } },
+              {
+                $group: {
+                  _id: '$accepted_staff.userKey',
+                  name: { $first: '$accepted_staff.name' },
+                  totalHours: { $sum: { $ifNull: ['$accepted_staff.attendance.approvedHours', '$accepted_staff.attendance.estimatedHours'] } },
+                  eventsCount: { $addToSet: '$_id' }
+                }
+              },
+              { $addFields: { eventCount: { $size: '$eventsCount' } } },
+              { $sort: { totalHours: -1 } },
+              { $limit: maxLimit }
+            ]);
+          }
 
           if (results.length === 0) {
             return `No staff data found for the last ${days} days${role_name ? ` with role "${role_name}"` : ''}.`;
@@ -2146,12 +2211,20 @@ async function executeFunctionCall(
 
         if (metric === 'punctuality') {
           // Reuse same matchFilter already constructed above
-          const punctEvents = await EventModel.find(matchFilter)
+          let punctEvents = await EventModel.find(matchFilter)
             .select('accepted_staff date start_time roles client_name status')
             .lean();
 
           if (punctEvents.length === 0) {
             return `No completed events found for the last ${days} days${role_name ? ` with role "${role_name}"` : ''}.`;
+          }
+
+          // Enrich with AttendanceLog data (falls back to nested data on failure)
+          try {
+            punctEvents = await enrichEventsWithStaff(punctEvents);
+            punctEvents = await enrichEventsWithAttendance(punctEvents);
+          } catch (err) {
+            console.warn('[ai/get_top_staff/punctuality] AttendanceLog enrichment failed, using nested data:', err);
           }
 
           const punctRecords = computePunctuality(punctEvents, null, null, 5);
@@ -2214,12 +2287,20 @@ async function executeFunctionCall(
           staffFilter['accepted_staff.name'] = new RegExp(staff_name, 'i');
         }
 
-        const events = await EventModel.find(staffFilter)
+        let events = await EventModel.find(staffFilter)
           .select('_id accepted_staff client_name start_time end_time date status roles')
           .lean();
 
         if (events.length === 0) {
           return `No events found for staff member "${staff_name}" in the last ${days} days.`;
+        }
+
+        // Enrich with staff + attendance data (falls back to nested data on failure)
+        try {
+          events = await enrichEventsWithStaff(events);
+          events = await enrichEventsWithAttendance(events);
+        } catch (err) {
+          console.warn('[ai/get_staff_stats] AttendanceLog enrichment failed, using nested data:', err);
         }
 
         // Calculate stats
@@ -2350,7 +2431,7 @@ async function executeFunctionCall(
         startDate.setDate(startDate.getDate() - days);
 
         // Find events for this client
-        const events = await EventModel.find({
+        let events = await EventModel.find({
           managerId,
           client_name: new RegExp(client_name, 'i'),
           date: { $gte: startDate }
@@ -2360,6 +2441,14 @@ async function executeFunctionCall(
 
         if (events.length === 0) {
           return `No events found for client "${client_name}" in the last ${days} days.`;
+        }
+
+        // Enrich with staff + attendance data (falls back to nested data on failure)
+        try {
+          events = await enrichEventsWithStaff(events);
+          events = await enrichEventsWithAttendance(events);
+        } catch (err) {
+          console.warn('[ai/get_client_stats] AttendanceLog enrichment failed, using nested data:', err);
         }
 
         // Calculate stats
@@ -2440,19 +2529,59 @@ async function executeFunctionCall(
         }
 
         if (metric === 'hours') {
-          const results = await EventModel.aggregate([
-            { $match: matchFilter },
-            { $unwind: '$accepted_staff' },
-            { $unwind: { path: '$accepted_staff.attendance', preserveNullAndEmptyArrays: true } },
-            {
-              $group: {
-                _id: '$client_name',
-                totalHours: { $sum: { $ifNull: ['$accepted_staff.attendance.approvedHours', '$accepted_staff.attendance.estimatedHours'] } }
+          // Primary: query AttendanceLog joined to events for hours by client
+          let results: any[] = [];
+          try {
+            const matchedEvents = await EventModel.find(matchFilter).select('_id client_name').lean();
+            const eventIds = matchedEvents.map(e => e._id);
+            if (eventIds.length > 0) {
+              const clientByEvent = new Map<string, string>();
+              for (const ev of matchedEvents) {
+                clientByEvent.set(ev._id.toString(), (ev as any).client_name || 'Unknown');
               }
-            },
-            { $sort: { totalHours: -1 } },
-            { $limit: maxLimit }
-          ]);
+
+              const logResults = await AttendanceLogModel.aggregate([
+                { $match: { eventId: { $in: eventIds } } },
+                {
+                  $group: {
+                    _id: '$eventId',
+                    totalHours: { $sum: { $ifNull: ['$approvedHours', '$estimatedHours'] } }
+                  }
+                }
+              ]);
+
+              // Aggregate by client name
+              const clientHours = new Map<string, number>();
+              for (const r of logResults) {
+                const cName = clientByEvent.get(r._id.toString()) || 'Unknown';
+                clientHours.set(cName, (clientHours.get(cName) || 0) + (r.totalHours || 0));
+              }
+              results = Array.from(clientHours.entries())
+                .map(([name, hours]) => ({ _id: name, totalHours: hours }))
+                .sort((a, b) => b.totalHours - a.totalHours)
+                .slice(0, maxLimit);
+            }
+          } catch (err) {
+            console.warn('[ai/get_top_clients/hours] AttendanceLog query failed, falling back to nested:', err);
+            results = [];
+          }
+
+          // Fallback: legacy nested aggregation
+          if (results.length === 0) {
+            results = await EventModel.aggregate([
+              { $match: matchFilter },
+              { $unwind: '$accepted_staff' },
+              { $unwind: { path: '$accepted_staff.attendance', preserveNullAndEmptyArrays: true } },
+              {
+                $group: {
+                  _id: '$client_name',
+                  totalHours: { $sum: { $ifNull: ['$accepted_staff.attendance.approvedHours', '$accepted_staff.attendance.estimatedHours'] } }
+                }
+              },
+              { $sort: { totalHours: -1 } },
+              { $limit: maxLimit }
+            ]);
+          }
 
           if (results.length === 0) {
             return `No client data found for the last ${days} days.`;
@@ -2516,12 +2645,20 @@ async function executeFunctionCall(
         }
 
         // Get events with hours
-        const events = await EventModel.find(matchFilter)
+        let events = await EventModel.find(matchFilter)
           .select('_id client_name accepted_staff date')
           .lean();
 
         if (events.length === 0) {
           return `No completed events found for the last ${days} days${client_name ? ` for client "${client_name}"` : ''}.`;
+        }
+
+        // Enrich with staff + attendance data (falls back to nested data on failure)
+        try {
+          events = await enrichEventsWithStaff(events);
+          events = await enrichEventsWithAttendance(events);
+        } catch (err) {
+          console.warn('[ai/get_revenue_summary] AttendanceLog enrichment failed, using nested data:', err);
         }
 
         const revenueByGroup = new Map<string, { hours: number; revenue: number }>();
@@ -2578,10 +2715,18 @@ Total: $${totalRevenue.toFixed(2)} (${totalHours.toFixed(1)} hours)`;
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
 
-        const events = await EventModel.find({
+        let events = await EventModel.find({
           managerId,
           date: { $gte: startDate }
         }).lean();
+
+        // Enrich with staff + attendance data (falls back to nested data on failure)
+        try {
+          events = await enrichEventsWithStaff(events);
+          events = await enrichEventsWithAttendance(events);
+        } catch (err) {
+          console.warn('[ai/get_billing_status] AttendanceLog enrichment failed, using nested data:', err);
+        }
 
         const statusCounts: Record<string, { count: number; hours: number }> = {
           pending: { count: 0, hours: 0 },
@@ -3826,7 +3971,7 @@ router.post('/ai/extract', requireAuth, async (req, res) => {
  * Proxy endpoint for AI chat completions (OpenAI or Claude)
  * Used for conversational AI event creation
  */
-router.post('/ai/chat/message', requireAuth, async (req, res) => {
+router.post('/ai/chat/message', requireAuth, aiChatLimiter, async (req, res) => {
   try {
     const validated = chatMessageSchema.parse(req.body);
     const { messages, temperature, maxTokens, provider, model } = validated;

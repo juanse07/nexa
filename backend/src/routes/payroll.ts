@@ -25,6 +25,8 @@ import {
 } from '../services/payroll/exportFormatters';
 import { applyOvertime } from '../services/payroll/overtimeCalculator';
 import { uploadDocument, getPresignedUrl } from '../services/storageService';
+import { enrichEventWithAttendance } from '../utils/attendanceHelper';
+import { enrichEventWithStaff } from '../utils/eventStaffHelper';
 
 const router = Router();
 
@@ -393,9 +395,17 @@ router.get('/exports/event-csv', requireAuth, async (req: Request, res: Response
     }
 
     // Load the event and verify ownership
-    const event = await EventModel.findOne({ _id: eventId, managerId: manager._id }).lean();
+    let event = await EventModel.findOne({ _id: eventId, managerId: manager._id }).lean();
     if (!event) {
       return res.status(404).json({ message: 'Event not found' });
+    }
+
+    // Enrich with staff + attendance data (falls back to nested data on failure)
+    try {
+      event = await enrichEventWithStaff(event);
+      event = await enrichEventWithAttendance(event);
+    } catch (err) {
+      console.warn('[exports/event-csv] AttendanceLog enrichment failed, using nested data:', err);
     }
 
     const acceptedStaff = ((event as any).accepted_staff || []).filter(

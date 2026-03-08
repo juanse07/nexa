@@ -41,6 +41,9 @@ export const ENV = {
   docServiceUrl: process.env.DOC_SERVICE_URL || 'http://doc-service:5000',
   docServiceSecret: process.env.DOC_SERVICE_SECRET || '',
 
+  // Redis (caching, rate limiting, Socket.io adapter)
+  redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
+
   // Stripe (B2B org billing)
   stripeSecretKey: process.env.STRIPE_SECRET_KEY || '',
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',

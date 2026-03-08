@@ -8,6 +8,7 @@ import pinoHttp from 'pino-http';
 
 import { ENV } from './config/env';
 import { connectToDatabase } from './db/mongoose';
+import { getRedisClient, closeRedis, isRedisHealthy } from './db/redis';
 import { EventModel } from './models/event';
 import { UserModel } from './models/user';
 import { TariffModel } from './models/tariff';
@@ -48,6 +49,7 @@ import { metricsMiddleware } from './metrics/metricsMiddleware';
 import metricsRoute from './metrics/metricsRoute';
 import { enableMongooseMetrics } from './metrics/mongooseMetrics';
 import { startBusinessMetricsCollector } from './metrics/businessMetricsCollector';
+import { globalApiLimiter } from './middleware/redisRateLimiter';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 
@@ -110,6 +112,9 @@ export async function createServer() {
 
   // Metrics scrape endpoint (at root, not under /api)
   app.use(metricsRoute);
+
+  // Global API rate limiter (300 req/min per user, Redis-backed)
+  app.use('/api', globalApiLimiter);
 
   app.use('/api', healthRouter);
   app.use('/api', eventsRouter);
@@ -410,10 +415,18 @@ export async function createServer() {
     res.send('Tie backend is running');
   });
 
-  // Health check route
-app.get('/healthz', (_req, res) => {
-  res.status(200).send('ok');
-});
+  // Health check route (enhanced with Redis + instance info)
+  const healthInstanceId = `${require('os').hostname()}:${process.pid}`;
+  app.get('/healthz', async (_req, res) => {
+    const redisHealthy = await isRedisHealthy();
+    res.status(200).json({
+      status: 'ok',
+      instance: healthInstanceId,
+      redis: redisHealthy,
+      uptime: Math.floor(process.uptime()),
+      timestamp: new Date().toISOString(),
+    });
+  });
 
   return app;
 }
@@ -422,6 +435,14 @@ async function start() {
   try {
     await connectToDatabase();
     logger.info('DB initialized');
+
+    // Initialize Redis (non-blocking — app works without it)
+    const redisClient = getRedisClient();
+    if (redisClient) {
+      logger.info('Redis client initialized');
+    } else {
+      logger.warn('Redis not configured — caching, rate limiting, and Socket.io adapter will use in-memory fallbacks');
+    }
 
     // Enable Mongoose query metrics and start business gauge collector
     enableMongooseMetrics();
@@ -438,6 +459,18 @@ async function start() {
     server.listen(ENV.port, '0.0.0.0', () => {
       logger.info(`Server listening on http://localhost:${ENV.port}`);
     });
+
+    // Graceful shutdown
+    const shutdown = async (signal: string) => {
+      logger.info(`${signal} received — shutting down gracefully`);
+      server.close(() => {
+        logger.info('HTTP server closed');
+      });
+      await closeRedis();
+      process.exit(0);
+    };
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
   } catch (err) {
     logger.error({ err }, 'Failed to start server');
     process.exit(1);

@@ -1,0 +1,55 @@
+# FlowShift Production Caddyfile
+# Reverse proxy with automatic HTTPS, WebSocket support, and load balancing.
+#
+# When running multiple API instances (docker compose up --scale api=2),
+# Docker DNS automatically round-robins across all healthy replicas.
+# The ip_hash policy ensures WebSocket upgrades hit the same backend
+# (required for Socket.io handshake before Redis adapter takes over).
+
+api.nexapymesoft.com {
+	# API routes — proxy to backend service(s)
+	handle /api/* {
+		reverse_proxy api:4000 {
+			lb_policy ip_hash
+
+			# Health-check: only route to healthy instances
+			health_uri /healthz
+			health_interval 10s
+			health_timeout 5s
+
+			# WebSocket support (Socket.io)
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+
+	# Socket.io endpoint — same backend, explicit WebSocket upgrade
+	handle /socket.io/* {
+		reverse_proxy api:4000 {
+			lb_policy ip_hash
+
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+
+	# Health check endpoint for external monitors
+	handle /health {
+		respond "OK" 200
+	}
+
+	# Default: proxy everything else
+	handle {
+		reverse_proxy api:4000 {
+			lb_policy ip_hash
+		}
+	}
+}
+
+# Metrics subdomain (internal access only)
+metrics.flowshift.work {
+	# Grafana
+	reverse_proxy grafana:3000
+}

@@ -12,6 +12,7 @@ import fs from 'fs';
 import { getDateTimeContext, getWelcomeDateContext, getFullSystemContext } from '../utils/dateContext';
 import { getProviderConfig } from '../utils/aiProvider';
 import { extractLastUserMessage } from '../utils/cascadeRouter';
+import { aiChatLimiter } from '../middleware/redisRateLimiter';
 import { EventModel } from '../models/event';
 import { UserModel } from '../models/user';
 import { AvailabilityModel } from '../models/availability';
@@ -24,6 +25,9 @@ import { emitToManager } from '../socket/server';
 import { computeRoleStats } from '../utils/eventCapacity';
 import { logAIUsage } from '../utils/logAIUsage';
 import { enrichEventsWithTariffs } from './events';
+import { enrichEventsWithAttendance } from '../utils/attendanceHelper';
+import { enrichEventsWithStaff, enrichEventWithStaff } from '../utils/eventStaffHelper';
+import { acceptStaffToEvent, declineStaffFromEvent } from '../utils/eventStaffWriter';
 
 const router = Router();
 
@@ -1690,7 +1694,15 @@ async function executeGetEarningsSummary(
     .lean();
 
     // Enrich events with tariff rates (same as Flutter earnings page)
-    const events = await enrichEventsWithTariffs(rawEvents);
+    let events = await enrichEventsWithTariffs(rawEvents);
+
+    // Enrich with AttendanceLog data (falls back to nested data on failure)
+    try {
+      events = await enrichEventsWithStaff(events);
+      events = await enrichEventsWithAttendance(events);
+    } catch (err) {
+      console.warn('[executeGetEarningsSummary] AttendanceLog enrichment failed, using nested data:', err);
+    }
 
     let totalEarnings = 0;
     let totalHoursWorked = 0;
@@ -1986,35 +1998,24 @@ async function executeAcceptShift(
       respondedAt: new Date(),
     };
 
-    // Atomic update: push to accepted_staff, pull from declined_staff
+    // Accept via EventStaff collection (source of truth) + dual-write to embedded
     const roleCapacity = roleReq.count || 0;
-    const updatedEvent = await EventModel.findOneAndUpdate(
-      {
-        _id: eventId,
-        'accepted_staff.userKey': { $ne: userKey },
-        $expr: {
-          $lt: [
-            { $size: { $filter: { input: { $ifNull: ['$accepted_staff', []] }, as: 'staff', cond: { $eq: [{ $toLower: { $ifNull: ['$$staff.role', ''] } }, resolvedRole!.toLowerCase()] } } } },
-            roleCapacity
-          ]
-        }
-      },
-      {
-        $pull: { declined_staff: { userKey } } as any,
-        $push: { accepted_staff: staffDoc } as any,
-        $inc: { version: 1 },
-        $set: { updatedAt: new Date() }
-      },
-      { new: true }
-    );
-
-    if (!updatedEvent) {
-      return { success: false, message: `No spots left for role '${resolvedRole}'` };
+    try {
+      await acceptStaffToEvent(eventId, event.managerId, staffDoc, roleCapacity, resolvedRole!);
+    } catch (acceptErr: any) {
+      if (acceptErr.code === 'CAPACITY_FULL') {
+        return { success: false, message: `No spots left for role '${resolvedRole}'` };
+      }
+      if (acceptErr.code === 11000) {
+        return { success: false, message: `You already accepted this shift` };
+      }
+      throw acceptErr;
     }
 
-    // Update role_stats
-    const newRoleStats = computeRoleStats((updatedEvent.roles as any[]) || [], (updatedEvent.accepted_staff as any[]) || []);
-    await EventModel.updateOne({ _id: eventId }, { $set: { role_stats: newRoleStats } });
+    const updatedEvent = await EventModel.findById(eventId).lean();
+    if (!updatedEvent) {
+      return { success: false, message: 'Event not found after accept' };
+    }
 
     const eventName = (updatedEvent as any).shift_name || (updatedEvent as any).event_name || (updatedEvent as any).client_name || 'shift';
     return {
@@ -2068,25 +2069,13 @@ async function executeDeclineShift(
       respondedAt: new Date(),
     };
 
-    // Atomic: pull from accepted_staff, push to declined_staff
-    const updatedEvent = await EventModel.findOneAndUpdate(
-      { _id: eventId },
-      {
-        $pull: { accepted_staff: { userKey } } as any,
-        $push: { declined_staff: staffDoc } as any,
-        $inc: { version: 1 },
-        $set: { updatedAt: new Date() }
-      },
-      { new: true }
-    );
+    // Decline via EventStaff collection (source of truth) + dual-write to embedded
+    await declineStaffFromEvent(eventId, event.managerId, staffDoc);
 
+    const updatedEvent = await EventModel.findById(eventId).lean();
     if (!updatedEvent) {
       return { success: false, message: 'Event not found' };
     }
-
-    // Update role_stats
-    const newRoleStats = computeRoleStats((updatedEvent.roles as any[]) || [], (updatedEvent.accepted_staff as any[]) || []);
-    await EventModel.updateOne({ _id: eventId }, { $set: { role_stats: newRoleStats } });
 
     const eventName = (updatedEvent as any).shift_name || (updatedEvent as any).event_name || (updatedEvent as any).client_name || 'shift';
     return {
@@ -2171,7 +2160,15 @@ async function executeGetPerformance(
     }).lean();
 
     // Enrich with tariff rates (same as Flutter earnings page)
-    const events = await enrichEventsWithTariffs(rawEvents);
+    let events = await enrichEventsWithTariffs(rawEvents);
+
+    // Enrich with AttendanceLog data (falls back to nested data on failure)
+    try {
+      events = await enrichEventsWithStaff(events);
+      events = await enrichEventsWithAttendance(events);
+    } catch (err) {
+      console.warn('[executeGetPerformance] AttendanceLog enrichment failed, using nested data:', err);
+    }
 
     console.log(`[executeGetPerformance] Found ${events.length} events`);
 
@@ -3205,7 +3202,7 @@ async function executeStaffFunction(
  * Staff AI chat endpoint (OpenAI or Claude)
  * Scoped to staff user's own data
  */
-router.post('/ai/staff/chat/message', requireAuth, requireActiveSubscription, async (req, res) => {
+router.post('/ai/staff/chat/message', requireAuth, requireActiveSubscription, aiChatLimiter, async (req, res) => {
   try {
     const oauthProvider = (req as any).user?.provider;
     const subject = (req as any).user?.sub;
