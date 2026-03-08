@@ -34,6 +34,7 @@ import { rankStaffForRole } from '../services/staffMatchingService';
 import { AttendanceLogModel } from '../models/attendanceLog';
 import { enrichEventsWithAttendance } from '../utils/attendanceHelper';
 import { enrichEventsWithStaff } from '../utils/eventStaffHelper';
+import { EventStaffModel } from '../models/eventStaff';
 
 const router = Router();
 
@@ -2126,25 +2127,44 @@ async function executeFunctionCall(
             results = [];
           }
 
-          // Fallback: legacy nested aggregation if AttendanceLog yielded no results
+          // Fallback: query EventStaff collection directly (avoids $unwind on embedded array)
           if (results.length === 0) {
-            results = await EventModel.aggregate([
-              { $match: matchFilter },
-              { $unwind: '$accepted_staff' },
-              ...(role_name ? [{ $match: { 'accepted_staff.role': new RegExp(role_name, 'i') } }] : []),
-              { $unwind: { path: '$accepted_staff.attendance', preserveNullAndEmptyArrays: true } },
-              {
-                $group: {
-                  _id: '$accepted_staff.userKey',
-                  name: { $first: '$accepted_staff.name' },
-                  totalHours: { $sum: { $ifNull: ['$accepted_staff.attendance.approvedHours', '$accepted_staff.attendance.estimatedHours'] } },
-                  eventsCount: { $addToSet: '$_id' }
-                }
-              },
-              { $addFields: { eventCount: { $size: '$eventsCount' } } },
-              { $sort: { totalHours: -1 } },
-              { $limit: maxLimit }
-            ]);
+            // Get event IDs matching the filter
+            const fallbackEventIds = (await EventModel.find(matchFilter).select('_id').lean()).map(e => e._id);
+            if (fallbackEventIds.length > 0) {
+              const staffMatch: any = {
+                eventId: { $in: fallbackEventIds },
+                response: 'accept',
+              };
+              if (role_name) staffMatch.role = new RegExp(role_name, 'i');
+
+              results = await EventStaffModel.aggregate([
+                { $match: staffMatch },
+                {
+                  $lookup: {
+                    from: 'attendancelogs',
+                    let: { eid: '$eventId', uk: '$userKey' },
+                    pipeline: [
+                      { $match: { $expr: { $and: [{ $eq: ['$eventId', '$$eid'] }, { $eq: ['$userKey', '$$uk'] }] } } },
+                      { $project: { approvedHours: 1, estimatedHours: 1 } }
+                    ],
+                    as: 'attendance'
+                  }
+                },
+                { $unwind: { path: '$attendance', preserveNullAndEmptyArrays: true } },
+                {
+                  $group: {
+                    _id: '$userKey',
+                    name: { $first: '$name' },
+                    totalHours: { $sum: { $ifNull: ['$attendance.approvedHours', '$attendance.estimatedHours'] } },
+                    eventsCount: { $addToSet: '$eventId' }
+                  }
+                },
+                { $addFields: { eventCount: { $size: '$eventsCount' } } },
+                { $sort: { totalHours: -1 } },
+                { $limit: maxLimit }
+              ]);
+            }
           }
 
           if (results.length === 0) {
@@ -2159,20 +2179,29 @@ async function executeFunctionCall(
         }
 
         if (metric === 'events_completed') {
-          const results = await EventModel.aggregate([
-            { $match: matchFilter },
-            { $unwind: '$accepted_staff' },
-            ...(role_name ? [{ $match: { 'accepted_staff.role': new RegExp(role_name, 'i') } }] : []),
-            {
-              $group: {
-                _id: '$accepted_staff.userKey',
-                name: { $first: '$accepted_staff.name' },
-                eventCount: { $sum: 1 }
-              }
-            },
-            { $sort: { eventCount: -1 } },
-            { $limit: maxLimit }
-          ]);
+          // Query EventStaff collection directly (avoids $unwind on embedded array)
+          const ecEventIds = (await EventModel.find(matchFilter).select('_id').lean()).map(e => e._id);
+          let results: any[] = [];
+          if (ecEventIds.length > 0) {
+            const ecMatch: any = {
+              eventId: { $in: ecEventIds },
+              response: 'accept',
+            };
+            if (role_name) ecMatch.role = new RegExp(role_name, 'i');
+
+            results = await EventStaffModel.aggregate([
+              { $match: ecMatch },
+              {
+                $group: {
+                  _id: '$userKey',
+                  name: { $first: '$name' },
+                  eventCount: { $sum: 1 }
+                }
+              },
+              { $sort: { eventCount: -1 } },
+              { $limit: maxLimit }
+            ]);
+          }
 
           if (results.length === 0) {
             return `No staff data found for the last ${days} days${role_name ? ` with role "${role_name}"` : ''}.`;
@@ -2566,21 +2595,38 @@ async function executeFunctionCall(
             results = [];
           }
 
-          // Fallback: legacy nested aggregation
+          // Fallback: query EventStaff + AttendanceLog (avoids $unwind on embedded array)
           if (results.length === 0) {
-            results = await EventModel.aggregate([
-              { $match: matchFilter },
-              { $unwind: '$accepted_staff' },
-              { $unwind: { path: '$accepted_staff.attendance', preserveNullAndEmptyArrays: true } },
-              {
-                $group: {
-                  _id: '$client_name',
-                  totalHours: { $sum: { $ifNull: ['$accepted_staff.attendance.approvedHours', '$accepted_staff.attendance.estimatedHours'] } }
-                }
-              },
-              { $sort: { totalHours: -1 } },
-              { $limit: maxLimit }
-            ]);
+            const fbEventIds = (await EventModel.find(matchFilter).select('_id client_name').lean());
+            if (fbEventIds.length > 0) {
+              const eidList = fbEventIds.map(e => e._id);
+              const clientByEvt = new Map<string, string>();
+              for (const ev of fbEventIds) clientByEvt.set(ev._id.toString(), (ev as any).client_name || 'Unknown');
+
+              // Get accepted staff per event from EventStaff
+              const staffDocs = await EventStaffModel.find(
+                { eventId: { $in: eidList }, response: 'accept' },
+                { eventId: 1, userKey: 1 }
+              ).lean();
+
+              // Get hours from AttendanceLog
+              const attLogs = await AttendanceLogModel.aggregate([
+                { $match: { eventId: { $in: eidList } } },
+                { $group: { _id: '$eventId', totalHours: { $sum: { $ifNull: ['$approvedHours', '$estimatedHours'] } } } }
+              ]);
+              const hoursByEvent = new Map<string, number>();
+              for (const a of attLogs) hoursByEvent.set(a._id.toString(), a.totalHours || 0);
+
+              const clientHrs = new Map<string, number>();
+              for (const eid of eidList) {
+                const cName = clientByEvt.get(eid.toString()) || 'Unknown';
+                clientHrs.set(cName, (clientHrs.get(cName) || 0) + (hoursByEvent.get(eid.toString()) || 0));
+              }
+              results = Array.from(clientHrs.entries())
+                .map(([name, hours]) => ({ _id: name, totalHours: hours }))
+                .sort((a, b) => b.totalHours - a.totalHours)
+                .slice(0, maxLimit);
+            }
           }
 
           if (results.length === 0) {
@@ -2592,18 +2638,31 @@ async function executeFunctionCall(
         }
 
         if (metric === 'staff_used') {
-          const results = await EventModel.aggregate([
-            { $match: matchFilter },
-            { $unwind: '$accepted_staff' },
-            {
-              $group: {
-                _id: '$client_name',
-                staffCount: { $sum: 1 }
-              }
-            },
-            { $sort: { staffCount: -1 } },
-            { $limit: maxLimit }
-          ]);
+          // Query EventStaff + events (avoids $unwind on embedded array)
+          const suEventIds = (await EventModel.find(matchFilter).select('_id client_name').lean());
+          let results: any[] = [];
+          if (suEventIds.length > 0) {
+            const suEidList = suEventIds.map(e => e._id);
+            const suClientByEvt = new Map<string, string>();
+            for (const ev of suEventIds) suClientByEvt.set(ev._id.toString(), (ev as any).client_name || 'Unknown');
+
+            // Count accepted staff per event from EventStaff collection
+            const staffCounts = await EventStaffModel.aggregate([
+              { $match: { eventId: { $in: suEidList }, response: 'accept' } },
+              { $group: { _id: '$eventId', count: { $sum: 1 } } }
+            ]);
+
+            // Aggregate by client name
+            const clientStaff = new Map<string, number>();
+            for (const sc of staffCounts) {
+              const cName = suClientByEvt.get(sc._id.toString()) || 'Unknown';
+              clientStaff.set(cName, (clientStaff.get(cName) || 0) + sc.count);
+            }
+            results = Array.from(clientStaff.entries())
+              .map(([name, count]) => ({ _id: name, staffCount: count }))
+              .sort((a, b) => b.staffCount - a.staffCount)
+              .slice(0, maxLimit);
+          }
 
           if (results.length === 0) {
             return `No client data found for the last ${days} days.`;

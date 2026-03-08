@@ -10,6 +10,7 @@ import { EventModel } from '../models/event';
 import { UserModel } from '../models/user';
 import { enrichEventsWithAttendance, enrichEventWithAttendance } from '../utils/attendanceHelper';
 import { enrichEventsWithStaff } from '../utils/eventStaffHelper';
+import { EventStaffModel } from '../models/eventStaff';
 
 const router = Router();
 
@@ -205,26 +206,19 @@ router.get('/staff', requireAuth, async (req: Request, res: Response) => {
     // Collect all userKeys for batch event query
     const userKeys = members.map((m: any) => m.userKey);
 
-    // Batch query: get distinct roles + shift count per user from events
-    const eventStats = await EventModel.aggregate([
+    // Batch query: get distinct roles + shift count per user from EventStaff collection
+    const eventStats = await EventStaffModel.aggregate([
       {
         $match: {
           managerId,
-          'accepted_staff.userKey': { $in: userKeys },
-          status: { $ne: 'cancelled' },
-        },
-      },
-      { $unwind: '$accepted_staff' },
-      {
-        $match: {
-          'accepted_staff.userKey': { $in: userKeys },
-          'accepted_staff.response': { $in: ['accepted', 'accept'] },
+          userKey: { $in: userKeys },
+          response: 'accept',
         },
       },
       {
         $group: {
-          _id: '$accepted_staff.userKey',
-          roles: { $addToSet: '$accepted_staff.role' },
+          _id: '$userKey',
+          roles: { $addToSet: '$role' },
           shiftCount: { $sum: 1 },
         },
       },
@@ -375,18 +369,16 @@ router.get('/staff/:userKey', requireAuth, async (req: Request, res: Response) =
       };
     });
 
-    // Get distinct roles
-    const roleAgg = await EventModel.aggregate([
+    // Get distinct roles from EventStaff collection (avoids $unwind on embedded array)
+    const roleAgg = await EventStaffModel.aggregate([
       {
         $match: {
           managerId,
-          'accepted_staff.userKey': userKey,
-          status: { $ne: 'cancelled' },
+          userKey,
+          response: 'accept',
         },
       },
-      { $unwind: '$accepted_staff' },
-      { $match: { 'accepted_staff.userKey': userKey, 'accepted_staff.response': { $in: ['accepted', 'accept'] } } },
-      { $group: { _id: null, roles: { $addToSet: '$accepted_staff.role' } } },
+      { $group: { _id: null, roles: { $addToSet: '$role' } } },
     ]);
 
     const roles = (roleAgg[0]?.roles || []).filter(Boolean);
@@ -596,31 +588,38 @@ router.get('/staff/:userKey/venue-history', requireAuth, async (req: Request, re
     const managerId = manager._id as mongoose.Types.ObjectId;
     const userKey = decodeURIComponent(req.params.userKey as string);
 
-    const venues = await EventModel.aggregate([
+    // Query EventStaff + $lookup to events for venue/client/date info (avoids $unwind on embedded array)
+    const venues = await EventStaffModel.aggregate([
       {
         $match: {
           managerId,
-          'accepted_staff.userKey': userKey,
-          status: { $ne: 'cancelled' },
+          userKey,
+          response: 'accept',
         },
       },
-      { $unwind: '$accepted_staff' },
       {
-        $match: {
-          'accepted_staff.userKey': userKey,
-          'accepted_staff.response': { $in: ['accepted', 'accept'] },
-        },
+        $lookup: {
+          from: 'shifts',
+          localField: 'eventId',
+          foreignField: '_id',
+          pipeline: [
+            { $match: { status: { $ne: 'cancelled' } } },
+            { $project: { venue_name: 1, client_name: 1, date: 1 } }
+          ],
+          as: 'event'
+        }
       },
+      { $unwind: '$event' },
       {
         $group: {
           _id: {
-            venueName: { $ifNull: ['$venue_name', 'Unknown Venue'] },
-            clientName: { $ifNull: ['$client_name', ''] },
+            venueName: { $ifNull: ['$event.venue_name', 'Unknown Venue'] },
+            clientName: { $ifNull: ['$event.client_name', ''] },
           },
           timesWorked: { $sum: 1 },
-          lastWorked: { $max: '$date' },
-          firstWorked: { $min: '$date' },
-          roles: { $addToSet: '$accepted_staff.role' },
+          lastWorked: { $max: '$event.date' },
+          firstWorked: { $min: '$event.date' },
+          roles: { $addToSet: '$role' },
         },
       },
       { $sort: { timesWorked: -1 } },

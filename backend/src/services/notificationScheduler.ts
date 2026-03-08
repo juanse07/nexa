@@ -338,14 +338,16 @@ class NotificationScheduler {
       // Find all active staff users
       const users = await UserModel.find({
         role: 'staff',
-        // Optionally filter by last active date
       }).select('_id').lean();
 
       console.log(`[NotificationScheduler] Sending timesheet reminders to ${users.length} staff members`);
 
-      for (const user of users) {
-        await notificationService.sendToUser(
-          user._id.toString(),
+      const userIds = users.map(u => u._id.toString());
+
+      // Use batch notification delivery (1 DB query + 1 OneSignal call per 500 users)
+      if (userIds.length > 0) {
+        await notificationService.sendToMultipleUsers(
+          userIds,
           'Timesheet Reminder',
           'You have hours pending approval this week',
           {

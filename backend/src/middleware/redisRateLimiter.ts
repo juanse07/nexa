@@ -32,8 +32,8 @@ function createRedisLimiter(opts: {
     max: opts.max,
     standardHeaders: true,
     legacyHeaders: false,
-    // Disable IPv6 validation — we prefer authenticated userKey over IP
-    validate: { ipAddress: false },
+    // Disable validations — our keyGenerator uses authenticated userKey (not IP-dependent)
+    validate: false,
     keyGenerator: (req) => {
       // Prefer authenticated user key over IP
       const authUser = (req as any).user || (req as any).authUser;

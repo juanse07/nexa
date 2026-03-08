@@ -166,15 +166,14 @@ router.post('/events/:eventId/chat/messages', requireAuth, async (req: Request, 
       const recipientIds: string[] = [];
 
       // Batch-resolve all staff userKeys → user IDs in one query
-      const orClauses = acceptedStaff
-        .map((staff: any) => {
-          const uk = staff.userKey as string;
-          if (!uk) return null;
-          const sepIdx = uk.indexOf(':');
-          if (sepIdx < 1) return null;
-          return { provider: uk.substring(0, sepIdx), sub: uk.substring(sepIdx + 1) };
-        })
-        .filter(Boolean);
+      const orClauses: { provider: string; sub: string }[] = [];
+      for (const staff of acceptedStaff) {
+        const uk = staff.userKey as string;
+        if (!uk) continue;
+        const sepIdx = uk.indexOf(':');
+        if (sepIdx < 1) continue;
+        orClauses.push({ provider: uk.substring(0, sepIdx), sub: uk.substring(sepIdx + 1) });
+      }
 
       if (orClauses.length > 0) {
         const staffUsers = await UserModel.find(
